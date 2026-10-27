@@ -18,6 +18,7 @@
 #define LOG_LIMIT (64 * 1024)
 #define FRAMES_MAX 48
 #define ALT_STACK_BYTES (64 * 1024)
+#define FRAME_SCAN_BYTES 4096
 
 /* set before the handlers are installed and only read by them */
 static char sPath[1024];
@@ -138,6 +139,23 @@ static BOOL ExteriaCopyCrashMemory(uintptr_t address, void *out, size_t size) {
     return vm_read_overwrite(mach_task_self(), (vm_address_t)address, (vm_size_t)size, (vm_address_t)out, &copied) == KERN_SUCCESS && copied == size;
 }
 
+/* ios 6.1.3 armv7 calls the handler with (signal, 1, signal) instead of the siginfo and ucontext pointers, so both
+   copies fail. the kernel still lays the frame out as siginfo, ucontext, mcontext above the handler's own frame; it is
+   found by the ucontext that names a mcontext right behind it and the siginfo before it that names the signal */
+static BOOL ExteriaFindSignalFrame(int signal_number, siginfo_t *info, void *context, siginfo_t *details, ucontext_t *saved, _STRUCT_MCONTEXT *machine) {
+    if (ExteriaCopyCrashMemory((uintptr_t)info, details, sizeof(*details)) && ExteriaCopyCrashMemory((uintptr_t)context, saved, sizeof(*saved)) &&
+        ExteriaCopyCrashMemory((uintptr_t)saved->uc_mcontext, machine, sizeof(*machine))) return YES;
+    uintptr_t start = (uintptr_t)__builtin_frame_address(0);
+    for (uintptr_t at = (start + sizeof(uintptr_t) - 1) & ~(uintptr_t)(sizeof(uintptr_t) - 1); at - start < FRAME_SCAN_BYTES; at += sizeof(uintptr_t)) {
+        if (!ExteriaCopyCrashMemory(at, saved, sizeof(*saved)) || saved->uc_mcsize != sizeof(*machine)) continue;
+        uintptr_t mcontext = (uintptr_t)saved->uc_mcontext;
+        if (mcontext <= at || mcontext - at > 1024) continue;
+        if (!ExteriaCopyCrashMemory(at - sizeof(*details), details, sizeof(*details)) || details->si_signo != signal_number) continue;
+        if (ExteriaCopyCrashMemory(mcontext, machine, sizeof(*machine))) return YES;
+    }
+    return NO;
+}
+
 static void ExteriaFaultSignal(int signal_number, siginfo_t *info, void *context) {
     int fd = open(sPath, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd >= 0) {
@@ -148,14 +166,11 @@ static void ExteriaFaultSignal(int signal_number, siginfo_t *info, void *context
         ExteriaPut(fd, pthread_main_np() ? " main" : " worker");
         ExteriaPutImage(fd);
         siginfo_t details;
-        if (ExteriaCopyCrashMemory((uintptr_t)info, &details, sizeof(details))) {
-            ExteriaPut(fd, " address");
-            ExteriaPutHex(fd, (uintptr_t)details.si_addr);
-        }
         ucontext_t saved;
         _STRUCT_MCONTEXT machine;
-        if (ExteriaCopyCrashMemory((uintptr_t)context, &saved, sizeof(saved)) &&
-            ExteriaCopyCrashMemory((uintptr_t)saved.uc_mcontext, &machine, sizeof(machine))) {
+        if (ExteriaFindSignalFrame(signal_number, info, context, &details, &saved, &machine)) {
+            ExteriaPut(fd, " address");
+            ExteriaPutHex(fd, (uintptr_t)details.si_addr);
             uintptr_t pc, lr, sp, fp;
 #if defined(__LP64__)
             pc = (uintptr_t)machine.__ss.__pc;
