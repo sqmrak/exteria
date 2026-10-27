@@ -618,6 +618,7 @@
 "report.comment" = "Что не так?";
 "report.send" = "Отправить";
 "report.sent" = "Жалоба отправлена. Спасибо.";
+"developer.promotion" = "Большое спасибо за продвижение клиента!";
 "report.refused" = "Telegram не принял жалобу";
 "chat.join" = "Вступить";
 "chat.msg.react" = "Реакция";

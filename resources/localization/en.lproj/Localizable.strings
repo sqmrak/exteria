@@ -974,6 +974,7 @@
 "channel.error.banned" = "This person is on the blacklist of the channel.";
 "channel.error.unknown" = "It did not work: %@";
 "welcome.senko.title" = "thanks for choosing senko :3";
+"developer.promotion" = "Thank you so much for promoting the client!";
 "welcome.senko.message" = "we noticed senko on your phone. enjoy a fast connection!\nby sqmrak :3";
 "welcome.network.title" = "Poor connection";
 "welcome.network.message" = "Telegram is not answering. We recommend turning on a VPN: the built-in Shiro is one tap away.";
