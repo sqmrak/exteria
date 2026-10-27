@@ -3,6 +3,8 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_emoji_label.h"
+#import "exteria_link_router.h"
+#include "exteria_links.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 
@@ -54,6 +56,23 @@ static ExteriaEmojiLabel *ExteriaInfoLabel(UIColor *color, CGFloat size) {
     return label;
 }
 
+static NSArray *ExteriaInfoMentions(NSString *text) {
+    static NSRegularExpression *pattern;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        pattern = [[NSRegularExpression alloc] initWithPattern:@"(?<![A-Za-z0-9_@])@[A-Za-z0-9_]{1,32}(?![A-Za-z0-9_])" options:0 error:NULL];
+    });
+    NSMutableArray *entities = [NSMutableArray array];
+    for (NSTextCheckingResult *match in [pattern matchesInString:text options:0 range:NSMakeRange(0, text.length)]) {
+        NSString *name = [text substringWithRange:match.range];
+        char checked[EXTERIA_LINK_NAME_MAX];
+        if (exteria_mention_name(name.UTF8String, checked, sizeof(checked)) != EXTERIA_OK) continue;
+        ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleMention range:match.range url:nil] autorelease];
+        [entities addObject:entity];
+    }
+    return entities;
+}
+
 - (void)setRows:(NSArray *)rows {
     for (UIView *row in _rows) [row removeFromSuperview];
     [_rows removeAllObjects];
@@ -64,13 +83,17 @@ static ExteriaEmojiLabel *ExteriaInfoLabel(UIColor *color, CGFloat size) {
         ExteriaEmojiLabel *value = ExteriaInfoLabel(ExteriaColorTitle(), 17);
         value.numberOfLines = 0;
         value.text = text;
+        if ([caption isEqualToString:NSLocalizedString(@"profile.about", nil)] || [caption isEqualToString:NSLocalizedString(@"channel.description", nil)]) {
+            value.entities = ExteriaInfoMentions(text);
+            value.linkColor = ExteriaColorAccent();
+        }
         value.tag = 1;
         ExteriaEmojiLabel *small = ExteriaInfoLabel(ExteriaColorSecondary(), 13);
         small.text = caption;
         small.tag = 2;
         [row addSubview:value];
         [row addSubview:small];
-        [row addTarget:self action:@selector(copyRow:) forControlEvents:UIControlEventTouchUpInside];
+        [row addTarget:self action:@selector(copyRow:event:) forControlEvents:UIControlEventTouchUpInside];
         if (_codeHandler && [caption isEqualToString:_codeCaption]) {
             UIButton *code = [UIButton buttonWithType:UIButtonTypeCustom];
             code.tag = 3;
@@ -149,8 +172,14 @@ static ExteriaEmojiLabel *ExteriaInfoLabel(UIColor *color, CGFloat size) {
     if (_codeHandler) _codeHandler();
 }
 
-- (void)copyRow:(UIControl *)row {
+- (void)copyRow:(UIControl *)row event:(UIEvent *)event {
     ExteriaEmojiLabel *value = (ExteriaEmojiLabel *)[row viewWithTag:1];
+    UITouch *touch = [[event allTouches] anyObject];
+    NSString *link = touch ? [value linkAtPoint:[touch locationInView:value]] : nil;
+    if (link.length) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaOpenLinkNotification object:self userInfo:[NSDictionary dictionaryWithObject:link forKey:@"url"]];
+        return;
+    }
     [UIPasteboard generalPasteboard].string = value.text;
     if (_copyHandler) _copyHandler();
 }

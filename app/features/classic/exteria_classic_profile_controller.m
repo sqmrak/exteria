@@ -13,6 +13,7 @@
 #import "exteria_profile_qr_controller.h"
 #import "exteria_profile_edit_controller.h"
 #import "exteria_profile_photo_picker.h"
+#import "exteria_music_list_controller.h"
 #import "exteria_symbol.h"
 #import "exteria_session_profile.h"
 #import "exteria_star_gift.h"
@@ -327,13 +328,13 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
     switch (section) {
     case SectionActions: return 2;
     case SectionInfo: return (NSInteger)_infoRows.count;
-    case SectionLists: return 4 + (_full.channel ? 1 : 0);
+    case SectionLists: return 5 + (_full.channel ? 1 : 0);
     default: return 1;
     }
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    BOOL channelRow = indexPath.section == SectionLists && indexPath.row == 4;
+    BOOL channelRow = indexPath.section == SectionLists && indexPath.row == 5;
     NSString *identifier = indexPath.section == SectionInfo ? @"info" : (indexPath.section == SectionSignOut ? @"signout" : (channelRow ? @"channel" : @"row"));
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
     if (!cell) {
@@ -361,6 +362,7 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
     case SectionLists: {
         NSString *keys[4] = {@"profile.tab.stories", @"profile.tab.archive", @"gifts.title", @"profile.qr"};
         if (indexPath.row < 4) cell.textLabel.text = NSLocalizedString(keys[indexPath.row], nil);
+        else if (indexPath.row == 4) cell.textLabel.text = NSLocalizedString(@"music.title", nil);
         else {
             ExteriaDialog *channel = _full.channel.dialog;
             NSArray *entities = nil;
@@ -420,6 +422,9 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
         if (indexPath.row == 3) {
             [navigation pushViewController:[[[ExteriaProfileQrController alloc] initWithSession:_session person:_person avatars:_avatars media:_media] autorelease] animated:YES];
         } else if (indexPath.row == 4) {
+            ExteriaMusicListController *list = [[[ExteriaMusicListController alloc] initWithSession:_session dialog:own first:_full.music avatars:_avatars media:_media] autorelease];
+            [navigation pushViewController:list animated:YES];
+        } else if (indexPath.row == 5) {
             [navigation pushViewController:[[[ExteriaChatController alloc] initWithSession:_session dialog:_full.channel.dialog avatars:_avatars media:_media
                                                                                   stickers:_stickerLibrary] autorelease] animated:YES];
         } else if (indexPath.row == 2) {
