@@ -1,0 +1,18 @@
+zbar is vendored here for reading QR codes from camera frames, because ios 5 and 6 have no system QR detector.
+
+source: https://github.com/mchehab/zbar
+revision: 2ea2ca585b10a07e528af08ddf8890756e059b5b
+license: LGPL-2.1-or-later, see COPYING
+
+Only the QR reader is built: no video, window, image-file or other barcode backend. The camera capture is in
+app/features/settings/exteria_qr_scan_controller.m. The copy comes from the Senko tree (ios/senko/app/third_party/zbar),
+and the macro SENKO_ZBAR_IOS that zbar/timer.h tests is the one that tree names; the build defines it so the timer uses
+no POSIX timers, which ios lacks.
+
+Local patch: zbar/img_scanner.c movedelta() steps the pixel pointer with a signed offset. Upstream adds a negative dx to
+an uintptr_t product, so every backward scan step moved the pointer by an overflowed unsigned offset.
+
+Local patch: zbar/scanner.c interpolates the zero crossing with a multiplication instead of shifting a negative value left.
+
+Local patch: zbar/qrcode/util.h QR_MINI and QR_MAXI compare instead of subtracting, which overflowed int when the line
+fit seeded its bounds with INT_MIN and INT_MAX.

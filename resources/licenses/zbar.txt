@@ -1,0 +1,10 @@
+exteria includes a QR-only build of ZBar at commit 2ea2ca585b10a07e528af08ddf8890756e059b5b.
+
+The covered source is in third_party/zbar and at:
+https://github.com/mchehab/zbar/tree/2ea2ca585b10a07e528af08ddf8890756e059b5b
+
+The QR-only configuration, the local patches (third_party/zbar/README.exteria) and the camera integration
+(app/features/settings/exteria_qr_scan_controller.m) are part of this source tree.
+
+ZBar is distributed under the GNU Lesser General Public License, version 2.1 or later. Its license text is
+installed beside this notice as zbar-COPYING.txt.

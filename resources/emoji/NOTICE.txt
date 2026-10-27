@@ -1,0 +1,12 @@
+emoji.pack holds the pictures of every emoji, so the app shows one set on every system.
+The pictures are Apple's iOS 26.4 emoji (Unicode 17), taken from the font in
+https://github.com/Keinta15/Magisk-iOS-Emoji (system/fonts/NotoColorEmoji.ttf), reduced to 56 pixels and stored as WebP.
+They are Apple's artwork and are not licensed for redistribution: do not publish an ipa or a repository that carries this pack.
+The 19 emoji of Unicode 18.0 that the font lacks keep the Noto Emoji 3D pictures, Copyright Google LLC,
+licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+tools/make_emoji.py builds the pack and the emoji table.
+
+The emoji table follows the Unicode emoji data files, Copyright Unicode, Inc.,
+https://www.unicode.org/terms_of_use.html
+
+WebP pictures are decoded with libwebp, Copyright Google Inc., BSD license, third_party/libwebp/COPYING.

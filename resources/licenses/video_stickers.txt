@@ -1,0 +1,21 @@
+video stickers
+
+core/video/exteria_video_sticker.c adapts the bounded input and decode loop from
+references/twelve/demo/TGVideoStickerDecoder.c in ios/exteria-lol.
+source sha256: 887a9a6db0b8cbc05eee15587915e7a9258f54ea57da28408cc4a3b0cc54e2db
+local changes: packet and stream bounds, cancellation, single-frame posters,
+finite-rate validation, 8-bit YUV420 to premultiplied BGRA conversion instead of
+libswscale. This application is distributed under GPLv3, see LICENSE.
+
+ffmpeg 7.1.1, LGPLv2.1 or later: https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz
+source sha256: 733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1
+libvpx 1.15.0, BSD: https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.0.tar.gz
+source sha256: e935eded7d81631a538bfae703fd1e293aad1c7fd3407ba00440c95105d2011e
+
+scripts/build_sticker_codecs.sh builds the Matroska demuxer, VP9 parser,
+libvpx VP9 decoder and their utility code for the stickers, and the libvpx VP8
+encoder and decoder for video calls (core/video/exteria_vp8.c). Networking, the
+VP9 encoder, other codecs, assembly, libswscale and newer-runtime hardware
+integration are disabled.
+The complete corresponding library sources and build script must accompany a
+distribution, or be made available as required by their licenses.
