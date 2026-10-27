@@ -178,6 +178,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize replyPeerId = _replyPeerId;
 @synthesize replyQuote = _replyQuote;
 @synthesize topicId = _topicId;
+@synthesize threadId = _threadId;
 @synthesize fromId = _fromId;
 @synthesize fromChannel = _fromChannel;
 @synthesize views = _views;
@@ -312,6 +313,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_replyPeerId = row->reply_peer_id;
     message->_replyQuote = [[NSString stringWithUTF8String:row->reply_quote] copy];
     message->_topicId = row->topic_id;
+    message->_threadId = row->thread_id;
     message->_fromId = row->from_id;
     message->_fromChannel = row->from_channel;
     message->_views = row->views;

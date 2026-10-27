@@ -16,6 +16,7 @@ extern NSString *const ExteriaDialogsChangedNotification;
     NSString *_username;
     NSString *_inviteLink;
     BOOL _megagroup;
+    BOOL _membershipKnown;
     BOOL _verified;
     BOOL _muted;
     BOOL _giftsAvailable;
@@ -34,6 +35,7 @@ extern NSString *const ExteriaDialogsChangedNotification;
 @property (nonatomic, readonly, retain) ExteriaDialog *dialog;
 /* the discussion group of a broadcast channel, nil when it has none */
 @property (nonatomic, readonly, retain) ExteriaDialog *linked;
+@property (nonatomic, readonly) BOOL membershipKnown;
 @property (nonatomic, readonly, copy) NSString *about;
 /* empty for a private channel */
 @property (nonatomic, readonly, copy) NSString *username;
@@ -105,6 +107,7 @@ typedef enum {
 @interface ExteriaSession (Channels)
 
 - (void)loadFullChannelOfDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaFullChannel *channel, NSString *errorName))completion;
+- (void)loadDiscussionOfPost:(int32_t)postId dialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaDialog *discussion, NSString *errorName))completion;
 /* one message of a channel by id, such as its pinned one; the completion gets nil and an error name when it is gone */
 - (void)loadMessage:(int32_t)messageId ofChannelDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaMessage *message, NSString *errorName))completion;
 /* the signed in account joins the public channel or group */

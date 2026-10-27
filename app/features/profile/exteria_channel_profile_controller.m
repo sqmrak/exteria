@@ -136,6 +136,7 @@
     ExteriaFullChannel *_full;
     BOOL _muteBusy;
     BOOL _joinBusy;
+    BOOL _joined;
     CGFloat _headHeight;
     CGFloat _headWidth;
 }
@@ -354,7 +355,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
 /* who is in the channel gets sound and, in a group, the chat; mute needs a member, so it waits for the full
    channel instead of showing a button that would fail */
 - (BOOL)isMember {
-    return _full != nil && !_full.dialog.left;
+    return _full != nil && (_joined || !(_full.membershipKnown ? _full.dialog.left : _dialog.left));
 }
 
 - (void)refreshActions {
@@ -618,6 +619,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
             return;
         }
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+        profile->_joined = YES;
         /* the answer carries no new state, so the screen asks the server again for the full channel */
         [profile load];
     }];

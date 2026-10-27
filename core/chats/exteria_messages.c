@@ -610,6 +610,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     header = exteria_tl_get(m, "reply_to");
     if (header) {
         exteria_tl_get_i32(header, "reply_to_msg_id", &out->reply_to);
+        if (exteria_tl_get_i32(header, "reply_to_top_id", &out->thread_id) != EXTERIA_OK || out->thread_id <= 0) out->thread_id = out->reply_to;
         const exteria_tl_value *reply_peer = exteria_tl_get(header, "reply_to_peer_id");
         if (reply_peer) {
             exteria_peer origin;

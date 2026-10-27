@@ -177,6 +177,7 @@ typedef enum {
     long long _replyPeerId;
     NSString *_replyQuote;
     int32_t _topicId;
+    int32_t _threadId;
     long long _fromId;
     long long _fromChannel;
     long long _targetId;
@@ -242,6 +243,7 @@ typedef enum {
 @property (nonatomic, readonly, copy) NSString *replyQuote;
 /* the forum topic the message was written in; 1, General, for a message of a chat without topics too */
 @property (nonatomic, readonly) int32_t topicId;
+@property (nonatomic, readonly) int32_t threadId;
 @property (nonatomic, readonly) long long fromId;
 /* the channel a group message was written as, zero when a user wrote it */
 @property (nonatomic, readonly) long long fromChannel;

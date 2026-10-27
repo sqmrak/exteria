@@ -233,6 +233,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     NSMutableDictionary *_itemCache;
     NSCache *_replyCache;
     BOOL _loadingReplies;
+    BOOL _openingComments;
     NSUInteger _replyGeneration;
     int32_t _oldestId;
     /* the ids the store page held the last time it arrived, so what it stops holding can be told from what it never held */
@@ -617,9 +618,11 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [root addSubview:_retry];
 
     _input = [[ExteriaInputBar alloc] init];
-    _input.delegate = self;
     _input.session = _session;
     _input.formatHost = root;
+    _joinPending = _dialog.peerKind == 3 && _dialog.left && !_pinnedList;
+    if (_joinPending) _input.actionTitle = NSLocalizedString(@"chat.join", nil);
+    _input.delegate = self;
     if (_dialog.kind == EXTERIA_DIALOG_CHANNEL && !_dialog.canPost) {
         _input.writable = NO;
         _input.readOnlyNote = NSLocalizedString(@"chat.readonly", nil);
@@ -801,10 +804,17 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         return;
     }
     /* the name and the status open the profile as the picture does */
-    for (UIView *label in [NSArray arrayWithObjects:_title, _subtitle, nil]) {
-        label.userInteractionEnabled = YES;
-        [label addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
-    }
+    _title.userInteractionEnabled = YES;
+    [_title addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(chatTitleTapped:)] autorelease]];
+    _subtitle.userInteractionEnabled = YES;
+    [_subtitle addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
+}
+
+- (void)chatTitleTapped:(UITapGestureRecognizer *)tap {
+    CGPoint point = [tap locationInView:_title];
+    NSUInteger mark = ExteriaMarkForDocument([_title customEmojiAtPoint:point]);
+    if (mark) ExteriaShowMarkNotice(_dialog.title, mark);
+    else [self openProfileGifts];
 }
 
 /* the ring round the picture follows the stories of the person: arcs coloured while unseen, grey once seen */
@@ -1118,7 +1128,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [chat->_channelFull release];
         chat->_channelFull = [channel retain];
         /* a channel or group the account is not in shows the way in where the field would be */
-        chat->_joinPending = channel.dialog.left && !chat->_pinnedList && (chat->_dialog.kind == EXTERIA_DIALOG_CHANNEL || chat->_dialog.kind == EXTERIA_DIALOG_GROUP);
+        if (channel.membershipKnown) chat->_joinPending = channel.dialog.left && !chat->_pinnedList;
         chat->_input.actionTitle = chat->_joinPending ? NSLocalizedString(@"chat.join", nil) : nil;
         [chat refreshStatusLine];
         /* the full channel is the authority on posting rights, whatever the chat list's entry said */
@@ -1352,6 +1362,8 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
             return;
         }
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+        chat->_joinPending = NO;
+        chat->_input.actionTitle = nil;
         /* the full channel is the authority on posting rights and on membership, so it decides what the bar shows now */
         [chat loadChannelFull];
     }];
@@ -1617,14 +1629,23 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [self toast:NSLocalizedString(@"profile.copied", nil)];
 }
 
-/* the comments of a post live in the discussion group of the channel; its chat opens, which is the same chat the comments are in */
 - (void)messageCellDidTapComments:(ExteriaMessageCell *)cell {
-    (void)cell;
-    if (!_channelFull.linked) {
-        ExteriaGiftAlert(nil, NSLocalizedString(@"chat.comments.unavailable", nil));
-        return;
-    }
-    [self openDiscussion];
+    if (_openingComments || cell.item.message.messageId <= 0) return;
+    _openingComments = YES;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadDiscussionOfPost:cell.item.message.messageId dialog:_dialog completion:^(ExteriaDialog *thread, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        chat->_openingComments = NO;
+        if (!thread) {
+            NSLog(@"exteria: post discussion did not load: %@", errorName);
+            ExteriaGiftAlert(nil, NSLocalizedString(@"chat.comments.unavailable", nil));
+            return;
+        }
+        if (!chat->_visible) return;
+        ExteriaChatController *discussion = [[[ExteriaChatController alloc] initWithSession:chat->_session dialog:thread avatars:chat->_avatars media:chat->_media stickers:chat->_stickers] autorelease];
+        [chat.navigationController pushViewController:discussion animated:YES];
+    }];
 }
 
 - (void)openDiscussion {

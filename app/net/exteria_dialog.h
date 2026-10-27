@@ -29,6 +29,7 @@
     BOOL _communityCollapsed;
     BOOL _left;
     int32_t _topicId;
+    BOOL _discussion;
     long long _topicIconEmoji;
     int32_t _topicIconColor;
     BOOL _topicClosed;
@@ -78,6 +79,7 @@
 @property (nonatomic, readonly) BOOL left;
 /* a topic of a forum, which reads, sends and marks read inside that thread alone; zero for a whole chat */
 @property (nonatomic, readonly) int32_t topicId;
+@property (nonatomic, assign) BOOL discussion;
 /* the custom emoji document that is the icon of the topic, zero for the plain hash drawn in topicIconColor (0xRRGGBB) */
 @property (nonatomic, readonly) long long topicIconEmoji;
 @property (nonatomic, readonly) int32_t topicIconColor;

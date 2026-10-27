@@ -43,6 +43,29 @@ static exteria_tl_value *answer_for(exteria_tl_value *full, exteria_tl_value **c
     return a;
 }
 
+static void test_discussion(void) {
+    exteria_peer_ref peer = {3, 500, 3500, 0, 0};
+    exteria_dialog_row row;
+    exteria_tl_value *request = NULL, *answer = obj("messages.discussionMessage");
+    exteria_tl_value *group = channel(600, "discussion", 1), *message = obj("message"), *target = obj("peerChannel");
+    exteria_tl_value *messages[1] = {message}, *chats[1] = {group};
+    set_i64(target, "channel_id", 600);
+    set(message, "peer_id", target);
+    set_i32(message, "id", 47);
+    set(answer, "messages", vec_of(messages, 1));
+    set(answer, "chats", vec_of(chats, 1));
+    CHECK_EQ_INT(exteria_discussion_request(&arena, &peer, 12, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_messages_getDiscussionMessage);
+    CHECK_EQ_INT(exteria_discussion_request(&arena, &peer, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_discussion_parse(answer, 500, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.peer_id, 600);
+    CHECK_EQ_INT(row.topic_id, 47);
+    CHECK_EQ_INT(row.peer_hash, 4200);
+    CHECK_EQ_INT(exteria_discussion_parse(answer, 600, &row), EXTERIA_E_NOTFOUND);
+    CHECK_EQ_INT(row.topic_id, 0);
+    CHECK_EQ_INT(exteria_discussion_parse(obj("boolTrue"), 500, &row), EXTERIA_E_MALFORMED);
+}
+
 static void test_parse(void) {
     exteria_full_channel full;
     exteria_tl_value *f = obj("channelFull"), *chats[2], *invite = obj("chatInviteExported"), *notify = obj("peerNotifySettings");
@@ -67,6 +90,7 @@ static void test_parse(void) {
     CHECK_EQ_INT(exteria_full_channel_parse(answer_for(f, chats, 2), 500, 1000, &full), EXTERIA_OK);
     CHECK(!strcmp(full.dialog.title, "samrak"));
     CHECK_EQ_INT(full.dialog.kind, EXTERIA_DIALOG_CHANNEL);
+    CHECK_EQ_INT(full.membership_known, 1);
     CHECK_EQ_INT(full.dialog.peer_hash, 3500);
     CHECK_EQ_INT(full.dialog.photo.photo_id, 1500);
     CHECK_EQ_INT(full.megagroup, 0);
@@ -85,6 +109,9 @@ static void test_parse(void) {
     CHECK(!strcmp(full.linked.title, "Legacy iOS Community"));
     CHECK_EQ_INT(full.linked.kind, EXTERIA_DIALOG_GROUP);
     CHECK_EQ_INT(full.linked.peer_id, 600);
+    set_flag(main_channel, "min");
+    CHECK_EQ_INT(exteria_full_channel_parse(answer_for(f, chats, 2), 500, 1000, &full), EXTERIA_OK);
+    CHECK_EQ_INT(full.membership_known, 0);
     /* a mute that has run out does not count */
     CHECK_EQ_INT(exteria_full_channel_parse(answer_for(f, chats, 2), 500, 6000, &full), EXTERIA_OK);
     CHECK_EQ_INT(full.muted, 0);
@@ -468,6 +495,7 @@ static void test_settings_requests(void) {
 int main(void) {
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
     test_parse();
+    test_discussion();
     test_username_list();
     test_malformed();
     test_requests();

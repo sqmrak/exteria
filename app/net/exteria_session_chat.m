@@ -693,12 +693,13 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
 
 #pragma mark history
 
-static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic);
+static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discussion);
 
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion {
     ExteriaHistoryCompletion done = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     int32_t topic = dialog.topicId;
+    BOOL discussion = dialog.discussion;
     ExteriaDialog *source = dialog.savedSource;
     exteria_peer_ref sourcePeer = source ? ExteriaPeerRefOfDialog(source) : peer;
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
@@ -750,7 +751,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic);
             for (ExteriaMessage *message in messages) lowest = MIN(lowest, message.messageId);
             exteria_peer storedPeer = {peer.kind, peer.id};
             NSMutableArray *kept = ExteriaSavedDeletedOfPeer([self workerStore], storedPeer, messages.count ? lowest : 1, beforeId > 0 ? beforeId - 1 : INT32_MAX);
-            ExteriaKeepTopic(kept, topic);
+            ExteriaKeepTopic(kept, topic, discussion);
             [messages addObjectsFromArray:kept];
         }
         NSArray *deliveredMessages = [[messages copy] autorelease];
@@ -837,12 +838,13 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic);
 static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria_tl_value *value);
 
 /* the store keeps a forum as one chat, so a topic takes its own messages out of the newest page of the whole forum */
-static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic) {
+static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discussion) {
     if (topic <= 0) return;
     NSIndexSet *others = [messages indexesOfObjectsPassingTest:^BOOL(id message, NSUInteger index, BOOL *stop) {
         (void)index;
         (void)stop;
-        return [(ExteriaMessage *)message topicId] != topic;
+        ExteriaMessage *item = message;
+        return discussion ? (item.messageId != topic && item.threadId != topic) : item.topicId != topic;
     }];
     [messages removeObjectsAtIndexes:others];
 }
@@ -904,18 +906,19 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic) {
     ExteriaHistoryCompletion done = [completion copy];
     exteria_peer peer = {dialog.peerKind, dialog.peerId};
     int32_t topic = dialog.topicId;
+    BOOL discussion = dialog.discussion;
     [self post:^{
         NSMutableArray *messages = [NSMutableArray array];
         NSMutableDictionary *people = [NSMutableDictionary dictionary];
         exteria_status status = exteria_store_page([self workerStore], EXTERIA_RECORD_MESSAGE, peer, INT64_MAX, WATCH_PAGE,
                                                   ExteriaCollectMessage, messages);
         if (status != EXTERIA_OK) NSLog(@"exteria: cannot read the kept chat %lld: %s", (long long)peer.id, exteria_status_name(status));
-        ExteriaKeepTopic(messages, topic);
+        ExteriaKeepTopic(messages, topic, discussion);
         if (messages.count) {
             int32_t lowest = INT32_MAX;
             for (ExteriaMessage *message in messages) lowest = MIN(lowest, message.messageId);
             NSMutableArray *kept = ExteriaSavedDeletedOfPeer([self workerStore], peer, lowest, INT32_MAX);
-            ExteriaKeepTopic(kept, topic);
+            ExteriaKeepTopic(kept, topic, discussion);
             [messages addObjectsFromArray:kept];
         }
         [people addEntriesFromDictionary:[self storedPeopleForMessages:messages]];
@@ -1353,6 +1356,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
     void (^deliver)(NSArray *, NSDictionary *) = [handler copy];
     exteria_peer peer = {dialog.peerKind, dialog.peerId};
     int32_t topic = dialog.topicId;
+    BOOL discussion = dialog.discussion;
     /* the same page twice in a row is not worth a trip to the main thread */
     NSMutableString *signature = [[NSMutableString alloc] init];
     /* the store counts the writes that touch this chat, so a change elsewhere (every update of every other chat
@@ -1371,12 +1375,12 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
                 NSLog(@"exteria: reading chat %lld from the store failed: %s", (long long)peer.id, exteria_status_name(status));
                 return;
             }
-            ExteriaKeepTopic(messages, topic);
+            ExteriaKeepTopic(messages, topic, discussion);
             /* what the person asked to keep stays in the chat among the live messages: the kept ones that fall inside the page */
             int32_t lowest = INT32_MAX;
             for (ExteriaMessage *message in messages) lowest = MIN(lowest, message.messageId);
             NSMutableArray *deleted = ExteriaSavedDeletedOfPeer(store, peer, messages.count ? lowest : 0, INT32_MAX);
-            ExteriaKeepTopic(deleted, topic);
+            ExteriaKeepTopic(deleted, topic, discussion);
             [messages addObjectsFromArray:deleted];
             NSMutableString *sum = [NSMutableString string];
             NSDictionary *people = [self storedPeopleForMessages:messages];

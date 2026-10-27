@@ -22,6 +22,7 @@ NSString *const ExteriaDialogsChangedNotification = @"ExteriaDialogsChanged";
 @synthesize username = _username;
 @synthesize inviteLink = _inviteLink;
 @synthesize megagroup = _megagroup;
+@synthesize membershipKnown = _membershipKnown;
 @synthesize verified = _verified;
 @synthesize muted = _muted;
 @synthesize giftsAvailable = _giftsAvailable;
@@ -49,6 +50,7 @@ NSString *const ExteriaDialogsChangedNotification = @"ExteriaDialogsChanged";
     _username = [ExteriaChannelUtf8(row->username) copy];
     _inviteLink = [ExteriaChannelUtf8(row->link) copy];
     _megagroup = row->megagroup;
+    _membershipKnown = row->membership_known;
     _verified = row->verified;
     _muted = row->muted;
     _giftsAvailable = row->gifts_available;
@@ -153,6 +155,32 @@ static void ExteriaChannelWrite(ExteriaSession *session, exteria_status (^build)
 }
 
 @implementation ExteriaSession (Channels)
+
+- (void)loadDiscussionOfPost:(int32_t)postId dialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaDialog *, NSString *))completion {
+    void (^done)(ExteriaDialog *, NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_discussion_request(arena, &peer, postId, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        ExteriaDialog *discussion = nil;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) error = ExteriaRpcErrorName(result);
+        else {
+            exteria_dialog_row row;
+            exteria_status status = exteria_discussion_parse(result->value, peer.id, &row);
+            if (status == EXTERIA_OK) {
+                discussion = [[[ExteriaDialog alloc] initWithRow:&row] autorelease];
+                discussion.discussion = YES;
+            } else {
+                NSLog(@"exteria: discussion of post %d rejected: %s", postId, exteria_status_name(status));
+                error = @"INTERNAL";
+            }
+        }
+        [self noteRpcError:error];
+        NSString *delivered = [[error copy] autorelease];
+        [self deliverMain:^{ done(discussion, delivered); [done release]; }];
+    }];
+}
 
 - (void)loadFullChannelOfDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaFullChannel *, NSString *))completion {
     void (^done)(ExteriaFullChannel *, NSString *) = [completion copy];

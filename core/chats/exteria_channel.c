@@ -92,6 +92,44 @@ exteria_status exteria_full_channel_request(exteria_arena *arena, const exteria_
     return channel_call(arena, channel, "channels.getFullChannel", out);
 }
 
+exteria_status exteria_discussion_request(exteria_arena *arena, const exteria_peer_ref *channel, int32_t post_id, exteria_tl_value **out) {
+    exteria_tl_value *input, *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !channel || !out || post_id <= 0 || channel->kind != 3) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, channel, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.getDiscussionMessage");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "msg_id", post_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_discussion_parse(const exteria_tl_value *answer, int64_t channel_id, exteria_dialog_row *out) {
+    const exteria_tl_value *messages, *chats;
+    uint32_t i;
+    if (!out) return EXTERIA_E_ARG;
+    memset(out, 0, sizeof(*out));
+    if (channel_id <= 0 || !exteria_tl_is(answer, EXTERIA_TL_ID_messages_discussionMessage)) return EXTERIA_E_MALFORMED;
+    messages = exteria_tl_get(answer, "messages");
+    chats = exteria_tl_get(answer, "chats");
+    if (!messages || messages->kind != EXTERIA_TL_V_VEC) return EXTERIA_E_MALFORMED;
+    for (i = 0; i < messages->u.vec.count; ++i) {
+        const exteria_tl_value *message = messages->u.vec.items[i];
+        exteria_peer peer;
+        int32_t id = 0;
+        if (exteria_peer_from_tl(exteria_tl_get(message, "peer_id"), &peer) != EXTERIA_OK || peer.kind != 3 || peer.id == channel_id ||
+            exteria_tl_get_i32(message, "id", &id) != EXTERIA_OK || id <= 0 || !find_channel(chats, peer.id)) continue;
+        read_dialog(out, peer.id, chats);
+        if (!out->peer_hash) { memset(out, 0, sizeof(*out)); return EXTERIA_E_MALFORMED; }
+        out->topic_id = id;
+        return EXTERIA_OK;
+    }
+    return EXTERIA_E_NOTFOUND;
+}
+
 exteria_status exteria_channel_join_request(exteria_arena *arena, const exteria_peer_ref *channel, exteria_tl_value **out) {
     return channel_call(arena, channel, "channels.joinChannel", out);
 }
@@ -145,6 +183,7 @@ exteria_status exteria_full_channel_parse(const exteria_tl_value *answer, int64_
         return EXTERIA_E_MALFORMED;
     }
     read_dialog(&out->dialog, channel_id, chats);
+    out->membership_known = exteria_tl_has(entity, "min") ? 0 : 1;
     out->megagroup = exteria_tl_has(entity, "megagroup") ? 1 : 0;
     out->creator = exteria_tl_has(entity, "creator") ? 1 : 0;
     out->signatures = exteria_tl_has(entity, "signatures") ? 1 : 0;

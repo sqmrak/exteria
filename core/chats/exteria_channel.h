@@ -35,6 +35,7 @@
 typedef struct exteria_full_channel {
     exteria_dialog_row dialog;      /* the channel as a chat: title, picture, access hash */
     uint8_t megagroup;              /* a group built on a channel, as opposed to a broadcast channel */
+    uint8_t membership_known;       /* a min channel does not carry the account's membership */
     uint8_t verified;
     uint8_t muted;                  /* notifications are off now */
     uint8_t can_view_stats;
@@ -59,6 +60,8 @@ typedef struct exteria_full_channel {
 
 /* channels.getFullChannel for a channel (kind 3 with an access hash) */
 exteria_status exteria_full_channel_request(exteria_arena *arena, const exteria_peer_ref *channel, exteria_tl_value **out);
+exteria_status exteria_discussion_request(exteria_arena *arena, const exteria_peer_ref *channel, int32_t post_id, exteria_tl_value **out);
+exteria_status exteria_discussion_parse(const exteria_tl_value *answer, int64_t channel_id, exteria_dialog_row *out);
 /* a messages.chatFull of that channel; now (unix seconds) decides whether a mute is still running; anything else,
    or a full chat that is not a channel, is EXTERIA_E_MALFORMED. out is always initialised */
 exteria_status exteria_full_channel_parse(const exteria_tl_value *answer, int64_t channel_id, int32_t now, exteria_full_channel *out);

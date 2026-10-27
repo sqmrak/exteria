@@ -25,6 +25,7 @@
 @synthesize communityCollapsed = _communityCollapsed;
 @synthesize left = _left;
 @synthesize topicId = _topicId;
+@synthesize discussion = _discussion;
 @synthesize topicIconEmoji = _topicIconEmoji;
 @synthesize topicIconColor = _topicIconColor;
 @synthesize topicClosed = _topicClosed;

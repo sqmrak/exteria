@@ -140,6 +140,7 @@ typedef struct exteria_message_row {
     char reply_quote[1024];
     int32_t reply_to;           /* id of the replied message, zero without one, or when it is only the root of its forum topic */
     int32_t topic_id;           /* the forum topic it belongs to; 1 (General) for a message with no topic header */
+    int32_t thread_id;          /* the top reply in a discussion, or the direct reply when there is no top */
     int64_t from_id;            /* the user who wrote it, zero for a channel post or an anonymous sender */
     int64_t from_channel;       /* the channel it was written as in a group, zero when a user wrote it */
     int64_t target_id;          /* the user a service message is about */

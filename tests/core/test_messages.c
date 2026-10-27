@@ -990,6 +990,11 @@ static void test_topic_of_message(void) {
     CHECK_EQ_INT(exteria_message_read(topic_message(9, 0, 4, 0), &row), EXTERIA_OK);
     CHECK_EQ_INT(row.topic_id, 1);
     CHECK_EQ_INT(row.reply_to, 4);
+    CHECK_EQ_INT(row.thread_id, 4);
+    CHECK_EQ_INT(exteria_message_read(topic_message(13, 0, 10, 7), &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.topic_id, 1);
+    CHECK_EQ_INT(row.thread_id, 7);
+    CHECK_EQ_INT(row.reply_to, 10);
     /* the first answer to the topic root is not a reply the reader should see */
     CHECK_EQ_INT(exteria_message_read(topic_message(10, 1, 7, 0), &row), EXTERIA_OK);
     CHECK_EQ_INT(row.topic_id, 7);
