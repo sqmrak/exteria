@@ -92,6 +92,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     ExteriaTextLayout *_senderTagLayout;
     ExteriaTextLayout *_forwardLayout;
     ExteriaTextLayout *_fileTitleLayout;
+    ExteriaTextLayout *_fileDetailLayout;
     CGFloat _layoutWidth;
     CGFloat _height;
     CGRect _bubbleFrame;
@@ -229,6 +230,7 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly, retain) ExteriaTextLayout *senderLayout;
 @property (nonatomic, readonly, retain) ExteriaTextLayout *forwardLayout;
 @property (nonatomic, readonly, retain) ExteriaTextLayout *fileTitleLayout;
+@property (nonatomic, readonly, retain) ExteriaTextLayout *fileDetailLayout;
 @property (nonatomic, readonly) CGSize timeSize;
 
 @property (nonatomic, readonly) CGFloat height;

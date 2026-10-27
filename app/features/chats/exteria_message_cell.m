@@ -289,7 +289,8 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
     CGFloat textX = icon.origin.x + 44 + 10, textWidth = frame.size.width - 44 - 10;
     [_item.fileTitleLayout drawAtPoint:CGPointMake(textX, frame.origin.y + 6)];
     [quiet set];
-    ExteriaDrawStringIn(_fileProgressText ? _fileProgressText : _item.fileDetail, ExteriaFontRegular(13), CGRectMake(textX, frame.origin.y + 25, textWidth, 18), ExteriaStringTailTruncate, ExteriaTextAlignmentLeft);
+    if (!_fileProgressText && _item.fileDetailLayout) [_item.fileDetailLayout drawAtPoint:CGPointMake(textX, frame.origin.y + 25)];
+    else ExteriaDrawStringIn(_fileProgressText ? _fileProgressText : _item.fileDetail, ExteriaFontRegular(13), CGRectMake(textX, frame.origin.y + 25, textWidth, 18), ExteriaStringTailTruncate, ExteriaTextAlignmentLeft);
 }
 
 /* the outline of a classic bubble; with a tail the outer bottom corner runs out into a small point beside the bubble */
@@ -802,6 +803,7 @@ static float ExteriaSpoilerRandom(void) {
 @interface ExteriaMessageCell () <UIGestureRecognizerDelegate> {
     ExteriaSpoilerCover *_spoilerCover;
     UIPanGestureRecognizer *_swipe;
+    UIPanGestureRecognizer *_seekPan;
     UIView *_swipeDisc;
     BOOL _swipeCrossed;
     UIControl *_selectCover;
@@ -962,6 +964,10 @@ static float ExteriaSpoilerRandom(void) {
     _swipe = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(swiped:)];
     _swipe.delegate = self;
     [self.contentView addGestureRecognizer:_swipe];
+    _seekPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(seekDragged:)];
+    _seekPan.delegate = self;
+    [self.contentView addGestureRecognizer:_seekPan];
+    [_swipe requireGestureRecognizerToFail:_seekPan];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged:) name:ExteriaMusicPlayerDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerTicked:) name:ExteriaMusicPlayerDidTickNotification object:nil];
     return self;
@@ -991,6 +997,8 @@ static ExteriaMessageCell *sPlayingRound = nil;
     [self stopGif];
     _swipe.delegate = nil;
     [_swipe release];
+    _seekPan.delegate = nil;
+    [_seekPan release];
     [_swipeDisc release];
     [_selectCover release];
     [_selectMark release];
@@ -1332,7 +1340,8 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     /* the marks are the last of the name, and a tap on one says why it is there instead of opening the profile */
     if (_item.senderDeveloper && control == _senderButton) {
         CGPoint point = [[[event touchesForView:control] anyObject] locationInView:control];
-        NSUInteger mark = ExteriaMarkAtDistance(_item.senderDeveloper, control.bounds.size.width - point.x);
+        point.y -= 3;
+        NSUInteger mark = ExteriaMarkForDocument([_item.senderLayout customEmojiAtPoint:point]);
         if (mark) {
             ExteriaShowMarkNotice(_item.senderName, mark);
             return;
@@ -2134,10 +2143,49 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 /* every message is answered by a leftward swipe; vertical movement stays with the table */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer {
+    if (recognizer == _seekPan) {
+        if (_selecting || !_item.message) return NO;
+        CGPoint point = [recognizer locationInView:self.contentView];
+        if (_item.kind == ExteriaChatItemRound && _roundPlayer) {
+            CGFloat x = point.x - CGRectGetMidX(_picture.frame), y = point.y - CGRectGetMidY(_picture.frame);
+            CGFloat radius = _picture.frame.size.width / 2;
+            CGFloat distance = hypot(x, y);
+            return distance >= MAX(0, radius - 32) && distance <= radius + 12;
+        }
+        if (_item.content == ExteriaChatItemContentFile && _item.message.media.kind == EXTERIA_PREVIEW_VOICE) {
+            ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
+            CGPoint body = [recognizer locationInView:_body];
+            if (!_item.message.outgoing) body.x -= _body.tailWidth;
+            return [player isCurrentTrack:_item.message.media] &&
+                (player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStatePaused) &&
+                CGRectContainsPoint(CGRectInset([_body waveRect], 0, -8), body);
+        }
+        return NO;
+    }
     if (recognizer != _swipe) return YES;
     if (_selecting || !_item.message || _item.kind == ExteriaChatItemPill || ![_delegate messageCellCanSwipeReply:self]) return NO;
     CGPoint velocity = [_swipe velocityInView:self];
     return exteria_motion_reply_swipe_begins(velocity.x, velocity.y);
+}
+
+- (void)seekDragged:(UIPanGestureRecognizer *)pan {
+    if (pan.state != UIGestureRecognizerStateBegan && pan.state != UIGestureRecognizerStateChanged && pan.state != UIGestureRecognizerStateEnded) return;
+    if (_item.kind == ExteriaChatItemRound && _roundPlayer) {
+        CGPoint point = [pan locationInView:self.contentView];
+        CGFloat angle = atan2(point.y - CGRectGetMidY(_picture.frame), point.x - CGRectGetMidX(_picture.frame)) + (CGFloat)M_PI / 2;
+        if (angle < 0) angle += (CGFloat)(2 * M_PI);
+        NSTimeInterval duration = CMTimeGetSeconds(_roundItem.duration);
+        if (isfinite(duration) && duration > 0) {
+            CGFloat fraction = angle / (CGFloat)(2 * M_PI);
+            _roundRing.strokeEnd = fraction;
+            [_roundPlayer seekToTime:CMTimeMakeWithSeconds(duration * fraction, 600)];
+        }
+    } else if (_item.message.media.kind == EXTERIA_PREVIEW_VOICE) {
+        CGPoint point = [pan locationInView:_body];
+        if (!_item.message.outgoing) point.x -= _body.tailWidth;
+        CGRect wave = [_body waveRect];
+        if (wave.size.width > 0) [[ExteriaMusicPlayer sharedPlayer] seekToFraction:(float)((point.x - wave.origin.x) / wave.size.width)];
+    }
 }
 
 /* the row of somebody else sits right of the selection circle while messages are picked */

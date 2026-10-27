@@ -40,7 +40,7 @@
     _note = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMusic, 16, ExteriaColorAccent())];
     _note.contentMode = UIViewContentModeCenter;
     [self addSubview:_note];
-    _toggle = [[ExteriaMusicKey alloc] initWithFrame:CGRectZero];
+    _toggle = [[ExteriaMusicKey buttonWithType:UIButtonTypeCustom] retain];
     _toggle.backgroundColor = ExteriaColorAccent();
     [_toggle setRestRadius:TOGGLE_SIDE / 2 animated:NO];
     [_toggle addTarget:self action:@selector(togglePlayback) forControlEvents:UIControlEventTouchUpInside];
@@ -110,7 +110,7 @@
     if (active) {
         BOOL playing = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading;
         [_toggle setImage:ExteriaSymbolImage(playing ? ExteriaSymbolPause : ExteriaSymbolPlay, 14, [UIColor whiteColor]) forState:UIControlStateNormal];
-        [_toggle setRestRadius:playing ? 10 : TOGGLE_SIDE / 2 animated:self.window != nil];
+        [_toggle setRestRadius:TOGGLE_SIDE / 2 animated:self.window != nil];
         _toggle.accessibilityLabel = NSLocalizedString(playing ? @"music.pause" : @"music.play", nil);
     }
     self.accessibilityLabel = _line.text;

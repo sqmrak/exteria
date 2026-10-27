@@ -119,6 +119,7 @@
 @synthesize senderLayout = _senderLayout;
 @synthesize forwardLayout = _forwardLayout;
 @synthesize fileTitleLayout = _fileTitleLayout;
+@synthesize fileDetailLayout = _fileDetailLayout;
 @synthesize timeSize = _timeSize;
 @synthesize height = _height;
 @synthesize bubbleFrame = _bubbleFrame;
@@ -526,6 +527,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_senderLayout release];
     [_forwardLayout release];
     [_fileTitleLayout release];
+    [_fileDetailLayout release];
     [super dealloc];
 }
 
@@ -698,7 +700,7 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     _height = top + picture.height + 1;
 }
 
-/* the circle the clients draw a round video in: no bubble, the time on the picture */
+/* the time sits below the circle, clear of the playback ring */
 - (void)layoutRoundForWidth:(CGFloat)width {
     CGFloat side = MIN(ROUND_SIDE_MAX, floor(width * 0.62));
     CGFloat top = _joinsPrevious ? SPACING_NEAR : SPACING_FAR;
@@ -707,8 +709,8 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     _pictureFrame = CGRectMake(0, 0, side, side);
     CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + (_message.outgoing ? CHECK_WIDTH : 0);
     _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
-    _timeOrigin = CGPointMake(side - _timeSize.width - 10, side - _timeSize.height - 10);
-    _height = top + side + 1;
+    _timeOrigin = CGPointMake(side - _timeSize.width, side + 2);
+    _height = top + side + _timeSize.height + 3;
 }
 
 #pragma mark poll
@@ -890,7 +892,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         [_forwardLayout release];
         /* the line may take a second row, so a long name does not push the date of the original off its end as three dots */
         _forwardLayout = [[ExteriaTextLayout layoutForText:_forwardText entities:nil font:ExteriaFontRegular(12) color:forwardColor
-                                                 linkColor:forwardColor width:textMax maxLines:2 flush:0] retain];
+                                                 linkColor:forwardColor width:textMax maxLines:2 flush:0 dropsUndrawable:YES] retain];
         _forwardOrigin = CGPointMake(PAD_X, y);
         contentWidth = MAX(contentWidth, _forwardLayout.size.width);
         y += 16 + (_forwardLayout.lineCount > 1 ? ceil(_forwardLayout.size.height / _forwardLayout.lineCount) * (_forwardLayout.lineCount - 1) : 0);
@@ -910,8 +912,15 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         [_fileTitleLayout release];
         _fileTitleLayout = [[ExteriaTextLayout layoutForText:_fileTitle entities:nil font:ExteriaFontMedium(15) color:textColor
                                                    linkColor:textColor width:MAX(40, textMax - 54) maxLines:1 flush:0] retain];
+        [_fileDetailLayout release];
+        _fileDetailLayout = nil;
+        if (_message.media.kind == EXTERIA_PREVIEW_AUDIO) {
+            UIColor *detailColor = ExteriaColorBubbleMeta(outgoing);
+            _fileDetailLayout = [[ExteriaTextLayout layoutForText:_fileDetail entities:nil font:ExteriaFontRegular(13) color:detailColor
+                linkColor:detailColor width:MAX(40, textMax - 54) maxLines:1 flush:0] retain];
+        }
         CGFloat titleWidth = ceil(_fileTitleLayout.size.width);
-        CGFloat detailWidth = ceil(ExteriaStringSize(_fileDetail, ExteriaFontRegular(13)).width);
+        CGFloat detailWidth = _fileDetailLayout ? ceil(_fileDetailLayout.size.width) : ceil(ExteriaStringSize(_fileDetail, ExteriaFontRegular(13)).width);
         if (_message.media.kind == EXTERIA_PREVIEW_FILE) {
             NSString *progress = [NSString stringWithFormat:@"%@ / %@", _fileDetail, _fileDetail];
             detailWidth = MAX(detailWidth, ceil(ExteriaStringSize(progress, ExteriaFontRegular(13)).width));
