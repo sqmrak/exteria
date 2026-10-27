@@ -6,8 +6,10 @@
 
 #include <errno.h>
 #include <spawn.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "exteria_icon_environment.h"
 
 /* the app is an executable, so the environment is a symbol it links against; the headers of the sdk do not declare it */
 extern char **environ;
@@ -40,8 +42,14 @@ static BOOL ExteriaBundleWritable(void) {
     return access([[[NSBundle mainBundle] bundlePath] fileSystemRepresentation], W_OK) == 0 && access([ExteriaBundlePlistPath() fileSystemRepresentation], W_OK) == 0;
 }
 
+static const char *ExteriaKillallPath(void) {
+    if (access("/usr/bin/killall", X_OK) == 0) return "/usr/bin/killall";
+    if (access("/bin/killall", X_OK) == 0) return "/bin/killall";
+    return NULL;
+}
+
 BOOL ExteriaAppIconCanRewrite(void) {
-    return ExteriaBundleWritable() && access("/usr/bin/uicache", X_OK) == 0 && access("/usr/bin/killall", X_OK) == 0;
+    return ExteriaBundleWritable() && access("/usr/bin/uicache", X_OK) == 0 && ExteriaKillallPath() != NULL;
 }
 
 static dispatch_queue_t ExteriaIconQueue(void) {
@@ -64,9 +72,22 @@ static NSError *ExteriaIconFailure(NSInteger code, NSString *reason) {
 }
 
 /* runs a program with an argument vector and waits for it; nil when it exited with status 0 */
-static NSError *ExteriaRunProgram(const char *path, char *const argv[]) {
+static NSError *ExteriaRunProgram(const char *path, char *const argv[], BOOL mobileHome) {
     pid_t pid = 0;
-    int started = posix_spawn(&pid, path, NULL, NULL, argv, environ);
+    char **environment = environ;
+    if (mobileHome) {
+        size_t count = 0;
+        while (count < 4096 && environ[count]) ++count;
+        if (count == 4096) return ExteriaIconFailure(8, @"the environment is too large for uicache");
+        environment = calloc(count + 3, sizeof(*environment));
+        if (!environment) return ExteriaIconFailure(ENOMEM, @"the uicache environment could not be allocated");
+        if (!exteria_icon_cache_environment(environ, environment, count + 3)) {
+            free(environment);
+            return ExteriaIconFailure(8, @"the uicache environment could not be prepared");
+        }
+    }
+    int started = posix_spawn(&pid, path, NULL, NULL, argv, environment);
+    if (mobileHome) free(environment);
     if (started != 0) return ExteriaIconFailure(started, [NSString stringWithFormat:@"%s did not start (%d)", path, started]);
     int status = 0;
     while (waitpid(pid, &status, 0) < 0) {
@@ -79,8 +100,12 @@ static NSError *ExteriaRunProgram(const char *path, char *const argv[]) {
 /* the home screen reads icons from its own cache of the app, which only uicache fills again, and SpringBoard shows
    the new icon after it starts again. uicache registers the app anew */
 static NSError *ExteriaRefreshHomeScreen(void) {
-    char *argv[] = {"sh", "-c", "/usr/bin/uicache && /usr/bin/killall SpringBoard", NULL};
-    return ExteriaRunProgram("/bin/sh", argv);
+    char *cache[] = {"uicache", NULL};
+    char *restart[] = {"killall", "SpringBoard", NULL};
+    NSError *error = ExteriaRunProgram("/usr/bin/uicache", cache, YES);
+    if (error) return error;
+    const char *killall = ExteriaKillallPath();
+    return killall ? ExteriaRunProgram(killall, restart, NO) : ExteriaIconFailure(4, @"SpringBoard cannot be restarted");
 }
 
 /* the icon entries a plist keeps: the iphone and ipad dictionaries and the flat list of the oldest systems */
@@ -336,13 +361,27 @@ void ExteriaRewriteAppIcon(NSString *name, void (^completion)(NSError *)) {
         return;
     }
     NSString *chosen = [[name copy] autorelease];
+    NSString *previous = [[ExteriaAlternateIconName() copy] autorelease];
     UIColor *screen = ExteriaColorScreen();
     dispatch_async(ExteriaIconQueue(), ^{
         @autoreleasepool {
             NSError *error = ExteriaRewriteIconPlist(chosen);
             if (!error) ExteriaKeepIconChoice(chosen);
             if (!error) ExteriaSyncLaunchImages(chosen, screen);
-            if (!error) error = ExteriaRefreshHomeScreen();
+            if (!error) {
+                error = ExteriaRefreshHomeScreen();
+                if (error) {
+                    NSError *rollback = ExteriaRewriteIconPlist(previous);
+                    if (rollback) NSLog(@"exteria: the previous icon could not be restored: %@", rollback);
+                    else {
+                        ExteriaKeepIconChoice(previous);
+                        ExteriaSyncLaunchImages(previous, screen);
+                        char *cache[] = {"uicache", NULL};
+                        NSError *refresh = ExteriaRunProgram("/usr/bin/uicache", cache, YES);
+                        if (refresh) NSLog(@"exteria: the restored icon cache was not refreshed: %@", refresh);
+                    }
+                }
+            }
             ExteriaFinishIcon(done, error);
         }
     });
