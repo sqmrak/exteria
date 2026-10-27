@@ -2,6 +2,7 @@
 
 #import "exteria_platform.h"
 #import "exteria_theme.h"
+#import "exteria_emoji_label.h"
 
 #define HEIGHT 44.0
 #define SIDE 12.0
@@ -11,8 +12,8 @@
 @interface ExteriaComposeContext () {
     UIImageView *_icon;
     UIView *_stripe;
-    UILabel *_title;
-    UILabel *_text;
+    ExteriaEmojiLabel *_title;
+    ExteriaEmojiLabel *_text;
     UIButton *_close;
     UIView *_line;
     void (^_closeHandler)(void);
@@ -27,8 +28,8 @@
     return HEIGHT;
 }
 
-static UILabel *ExteriaContextLabel(UIColor *color, UIFont *font) {
-    UILabel *label = [[[UILabel alloc] init] autorelease];
+static ExteriaEmojiLabel *ExteriaContextLabel(UIColor *color, UIFont *font) {
+    ExteriaEmojiLabel *label = [[[ExteriaEmojiLabel alloc] init] autorelease];
     label.backgroundColor = [UIColor clearColor];
     label.textColor = color;
     label.font = font;
@@ -46,6 +47,7 @@ static UILabel *ExteriaContextLabel(UIColor *color, UIFont *font) {
     _stripe.backgroundColor = ExteriaColorAccent();
     [self addSubview:_stripe];
     _title = [ExteriaContextLabel(ExteriaColorAccent(), ExteriaFontSemibold(13)) retain];
+    _title.dropsUndrawable = YES;
     [self addSubview:_title];
     _text = [ExteriaContextLabel(ExteriaColorSecondary(), ExteriaFontRegular(14)) retain];
     [self addSubview:_text];
