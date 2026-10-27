@@ -57,5 +57,6 @@ extern NSString *const ExteriaSpoilerTarget;
 - (void)drawAtPoint:(CGPoint)origin;
 /* the address of the link under point (relative to the text box), nil when there is none */
 - (NSString *)linkAtPoint:(CGPoint)point;
+- (long long)customEmojiAtPoint:(CGPoint)point;
 
 @end

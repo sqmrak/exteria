@@ -28,7 +28,9 @@ static NSString *const ExteriaTesterNames[] = {@"s3dativee", @"inraxx", @"Vladus
                                                     @"vladosik228", @"xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", @"Lineysom", @"KirillPro671488", @"kfrom7", @"Maks_097", @"QuaIcomm"};
 #define TESTER_COUNT (sizeof(ExteriaTesterNames) / sizeof(ExteriaTesterNames[0]))
 static NSString *const ExteriaCautionName = @"cmp_73";
-#define LOOKUP_COUNT (DEVELOPER_COUNT + TESTER_COUNT + 1)
+static NSString *const ExteriaPromotionNames[] = {@"merwleem", @"Radickdz", @"Xmas_UnrealKot"};
+#define PROMOTION_COUNT (sizeof(ExteriaPromotionNames) / sizeof(ExteriaPromotionNames[0]))
+#define LOOKUP_COUNT (DEVELOPER_COUNT + TESTER_COUNT + 1 + PROMOTION_COUNT)
 
 static NSString *const ExteriaDeveloperIdsKey = @"exteria.developers.ids";
 static NSString *const ExteriaDeveloperCheckedKey = @"exteria.developers.checked";
@@ -78,6 +80,7 @@ static NSUInteger ExteriaMarksOfUsername(NSString *username) {
     if ([ExteriaSenkoDeveloper caseInsensitiveCompare:username ? username : @""] == NSOrderedSame) marks = (marks & ~(NSUInteger)ExteriaMarkDeveloper) | ExteriaMarkSenko | ExteriaMarkLead;
     if (ExteriaNameIn(username, ExteriaTesterNames, TESTER_COUNT)) marks |= ExteriaMarkTester;
     if (ExteriaNameIn(username, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
+    if (ExteriaNameIn(username, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
     return marks;
 }
 
@@ -87,6 +90,7 @@ NSUInteger ExteriaMarksOfId(long long userId) {
     if (ExteriaIdIn(userId, &ExteriaSenkoDeveloper, 1)) marks = (marks & ~(NSUInteger)ExteriaMarkDeveloper) | ExteriaMarkSenko | ExteriaMarkLead;
     if (ExteriaIdIn(userId, ExteriaTesterNames, TESTER_COUNT)) marks |= ExteriaMarkTester;
     if (ExteriaIdIn(userId, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
+    if (ExteriaIdIn(userId, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
     return marks;
 }
 
@@ -99,19 +103,13 @@ NSUInteger ExteriaPersonIsDeveloper(ExteriaPerson *person) {
     return ExteriaMarksOfUsername(person.username) | ExteriaMarksOfId(person.userId);
 }
 
-/* each mark takes a space and a 24 point picture, about this much of the end of the line */
-#define MARK_WIDTH 30.0
-
-NSUInteger ExteriaMarkAtDistance(NSUInteger marks, CGFloat distanceFromEnd) {
-    if (distanceFromEnd < -8) return 0;
-    /* the line ends with the tester's net, the fox tail before it, the hammer before that */
-    NSUInteger order[5] = {ExteriaMarkCaution, ExteriaMarkTester, ExteriaMarkSenko, ExteriaMarkLead, ExteriaMarkDeveloper};
-    CGFloat edge = 0;
-    for (int i = 0; i < 5; ++i) {
-        if (!(marks & order[i])) continue;
-        edge += MARK_WIDTH + (order[i] == ExteriaMarkCaution ? 24.0 * (EXTERIA_CAUTION_BADGE_RATIO - 1) : 0);
-        if (distanceFromEnd < edge) return order[i];
-    }
+NSUInteger ExteriaMarkForDocument(long long document) {
+    if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaMarkPromotion;
+    if (document == EXTERIA_DEVELOPER_DOCUMENT) return ExteriaMarkDeveloper;
+    if (document == EXTERIA_LEAD_DOCUMENT) return ExteriaMarkLead;
+    if (document == EXTERIA_SENKO_DOCUMENT) return ExteriaMarkSenko;
+    if (document == EXTERIA_TESTER_DOCUMENT) return ExteriaMarkTester;
+    if (document == EXTERIA_CAUTION_DOCUMENT) return ExteriaMarkCaution;
     return 0;
 }
 
@@ -120,13 +118,18 @@ void ExteriaLearnDevelopers(ExteriaSession *session) {
     NSMutableDictionary *ids = ExteriaDeveloperIds();
     NSDate *checked = [defaults objectForKey:ExteriaDeveloperCheckedKey];
     if (!session) return;
-    if (checked && -[checked timeIntervalSinceNow] < RECHECK_SECONDS && ids.count >= LOOKUP_COUNT &&
+    BOOL promotionsKnown = YES;
+    for (NSUInteger i = 0; i < PROMOTION_COUNT; ++i) {
+        if (![ids objectForKey:ExteriaPromotionNames[i].lowercaseString]) promotionsKnown = NO;
+    }
+    if (checked && -[checked timeIntervalSinceNow] < RECHECK_SECONDS && ids.count >= LOOKUP_COUNT && promotionsKnown &&
         [ids objectForKey:ExteriaCautionName.lowercaseString]) return;
     /* the date moves first, so a screen that is opened again does not send the requests twice while they are on their way */
     [defaults setObject:[NSDate date] forKey:ExteriaDeveloperCheckedKey];
     for (NSUInteger i = 0; i < LOOKUP_COUNT; ++i) {
         NSString *name = i < DEVELOPER_COUNT ? ExteriaDeveloperNames[i] :
-            (i < DEVELOPER_COUNT + TESTER_COUNT ? ExteriaTesterNames[i - DEVELOPER_COUNT] : ExteriaCautionName);
+            (i < DEVELOPER_COUNT + TESTER_COUNT ? ExteriaTesterNames[i - DEVELOPER_COUNT] :
+             (i == DEVELOPER_COUNT + TESTER_COUNT ? ExteriaCautionName : ExteriaPromotionNames[i - DEVELOPER_COUNT - TESTER_COUNT - 1]));
         /* a name that was resolved within the week is not asked again, so a name added to the lists costs one request, not nineteen */
         if (checked && -[checked timeIntervalSinceNow] < RECHECK_SECONDS && [ids objectForKey:name.lowercaseString]) continue;
         [session resolveUsername:name completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
@@ -189,7 +192,7 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     plate.layer.shadowOpacity = 0.28f;
     plate.layer.shadowRadius = 14;
     plate.layer.shadowOffset = CGSizeMake(0, 4);
-    UIImage *badge = mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
+    UIImage *badge = mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] : mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
         [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:mark == ExteriaMarkTester ? @"badge_tester" : (mark == ExteriaMarkSenko ? @"badge_senko" : (mark == ExteriaMarkLead ? @"badge_lead" : @"badge_developer")) ofType:@"png"]];
     UIImageView *hammer = [[[UIImageView alloc] initWithImage:badge] autorelease];
     hammer.contentMode = UIViewContentModeScaleAspectFit;
@@ -207,7 +210,7 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     what.textColor = ExteriaColorSecondary();
     what.numberOfLines = 0;
     what.lineBreakMode = UILineBreakModeWordWrap;
-    what.text = NSLocalizedString(mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice"))), nil);
+    what.text = NSLocalizedString(mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice")))), nil);
     CGFloat textHeight = MAX(34, ceil([what sizeThatFits:CGSizeMake(textWidth, CGFLOAT_MAX)].height));
     CGFloat height = MAX(84, 41 + textHeight + 9);
     what.frame = CGRectMake(textX, 41, textWidth, textHeight);

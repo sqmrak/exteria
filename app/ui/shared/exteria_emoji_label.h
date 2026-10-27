@@ -5,6 +5,7 @@
     NSString *_text;
     UIFont *_font;
     UIColor *_textColor;
+    UIColor *_linkColor;
     NSInteger _textAlignment;
     NSInteger _numberOfLines;
     NSArray *_entities;
@@ -17,6 +18,7 @@
 @property (nonatomic, copy) NSString *text;
 @property (nonatomic, retain) UIFont *font;
 @property (nonatomic, retain) UIColor *textColor;
+@property (nonatomic, retain) UIColor *linkColor;
 /* one of the ExteriaTextAlignment values */
 @property (nonatomic, assign) NSInteger textAlignment;
 @property (nonatomic, assign) NSInteger numberOfLines;
@@ -30,5 +32,7 @@
 
 /* the first prefixLength characters are drawn in prefixColor, such as the red "Draft:" before the words of a draft; zero length draws one color */
 - (void)setPrefixLength:(NSUInteger)length color:(UIColor *)color;
+- (NSString *)linkAtPoint:(CGPoint)point;
+- (long long)customEmojiAtPoint:(CGPoint)point;
 
 @end

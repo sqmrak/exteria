@@ -88,7 +88,8 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
 
 + (UIImage *)imageForDocument:(long long)document {
     if (document == EXTERIA_PREMIUM_STAR_DOCUMENT) return ExteriaPremiumStarImage();
-    static UIImage *hammer, *fox, *net, *hammers, *caution;
+    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion;
+    if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaBundledBadge(@"badge_promotion", &promotion);
     if (document == EXTERIA_CAUTION_DOCUMENT) {
         if (!caution) {
             NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_caution" ofType:@"png"];

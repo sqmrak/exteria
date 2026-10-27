@@ -14,7 +14,8 @@ enum {
     ExteriaMarkTester = 4,
     /* the crossed hammers of the lead developer, worn in the place of the plain hammer */
     ExteriaMarkLead = 8,
-    ExteriaMarkCaution = 16
+    ExteriaMarkCaution = 16,
+    ExteriaMarkPromotion = 32
 };
 
 BOOL ExteriaIsDeveloperUsername(NSString *username);
@@ -23,8 +24,7 @@ NSUInteger ExteriaMarksOfId(long long userId);
 /* a chat row or a chat header: a private chat or a bot chat with one of them; zero when the person wears nothing */
 NSUInteger ExteriaDialogIsDeveloper(ExteriaDialog *dialog);
 NSUInteger ExteriaPersonIsDeveloper(ExteriaPerson *person);
-/* which mark a tap hit, given how far from the end of the name (past the last mark) it landed, zero for none; the last mark is the one nearest the end */
-NSUInteger ExteriaMarkAtDistance(NSUInteger marks, CGFloat distanceFromEnd);
+NSUInteger ExteriaMarkForDocument(long long document);
 
 /* looks the usernames up once, keeps the ids between runs, and asks again after a week; posts ExteriaDevelopersDidChangeNotification when a new id arrives */
 void ExteriaLearnDevelopers(ExteriaSession *session);

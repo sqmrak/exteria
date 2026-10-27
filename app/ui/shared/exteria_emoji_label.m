@@ -39,6 +39,7 @@
     [_text release];
     [_font release];
     [_textColor release];
+    [_linkColor release];
     [_entities release];
     [_shadowColor release];
     [_prefixColor release];
@@ -70,6 +71,14 @@
     if (color == _textColor) return;
     [_textColor release];
     _textColor = [color retain];
+    [self invalidate];
+}
+
+- (UIColor *)linkColor { return _linkColor; }
+- (void)setLinkColor:(UIColor *)color {
+    if (color == _linkColor) return;
+    [_linkColor release];
+    _linkColor = [color retain];
     [self invalidate];
 }
 
@@ -134,9 +143,10 @@ static NSCache *ExteriaLabelLayoutCache(void) {
        and a cell measures a title at its maximum width and then draws it at its own */
     if (_layout && _textAlignment == ExteriaTextAlignmentLeft && width >= _layout.size.width && width <= _layoutWidth) return _layout;
     NSMutableString *custom = [NSMutableString string];
-    for (ExteriaTextEntity *entity in _entities) [custom appendFormat:@"%lld:%lu:%lu;", entity.documentId, (unsigned long)entity.range.location, (unsigned long)entity.range.length];
-    NSString *key = [NSString stringWithFormat:@"%.2f|%ld|%ld|%d|%@ %.2f|%@|%@|%@|%lu %@", width, (long)_textAlignment, (long)_numberOfLines, _dropsUndrawable,
+    for (ExteriaTextEntity *entity in _entities) [custom appendFormat:@"%ld:%lld:%lu:%lu:%@;", (long)entity.style, entity.documentId, (unsigned long)entity.range.location, (unsigned long)entity.range.length, entity.url];
+    NSMutableString *key = [NSMutableString stringWithFormat:@"%.2f|%ld|%ld|%d|%@ %.2f|%@|%@|%@|%lu %@", width, (long)_textAlignment, (long)_numberOfLines, _dropsUndrawable,
                      _font.fontName, _font.pointSize, _textColor, custom, _text, (unsigned long)_prefixLength, _prefixColor];
+    [key appendFormat:@"|%@", _linkColor];
     ExteriaTextLayout *layout = [ExteriaLabelLayoutCache() objectForKey:key];
     if (!layout) {
         CGFloat flush = _textAlignment == ExteriaTextAlignmentCenter ? 0.5 : (_textAlignment == ExteriaTextAlignmentRight ? 1.0 : 0.0);
@@ -147,7 +157,7 @@ static NSCache *ExteriaLabelLayoutCache(void) {
             entities = [NSArray arrayWithObject:span];
             if (_entities.count) entities = [entities arrayByAddingObjectsFromArray:_entities];
         }
-        layout = [ExteriaTextLayout layoutForText:_text entities:entities font:_font color:_textColor linkColor:_prefixLength ? _prefixColor : _textColor width:MAX(1, width)
+        layout = [ExteriaTextLayout layoutForText:_text entities:entities font:_font color:_textColor linkColor:_prefixLength ? _prefixColor : (_linkColor ? _linkColor : _textColor) width:MAX(1, width)
                                          maxLines:(NSUInteger)(_numberOfLines > 0 ? _numberOfLines : 0) flush:flush dropsUndrawable:_dropsUndrawable];
         [ExteriaLabelLayoutCache() setObject:layout forKey:key];
     }
@@ -156,6 +166,18 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     _layout = layout;
     _layoutWidth = width;
     return _layout;
+}
+
+- (NSString *)linkAtPoint:(CGPoint)point {
+    ExteriaTextLayout *layout = [self layoutForWidth:self.bounds.size.width];
+    point.y -= floor((self.bounds.size.height - layout.size.height) / 2);
+    return [layout linkAtPoint:point];
+}
+
+- (long long)customEmojiAtPoint:(CGPoint)point {
+    ExteriaTextLayout *layout = [self layoutForWidth:self.bounds.size.width];
+    point.y -= floor((self.bounds.size.height - layout.size.height) / 2);
+    return [layout customEmojiAtPoint:point];
 }
 
 - (CGSize)sizeThatFits:(CGSize)size {

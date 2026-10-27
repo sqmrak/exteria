@@ -304,10 +304,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 - (void)headTapped:(UITapGestureRecognizer *)tap {
     if (tap.state != UIGestureRecognizerStateEnded || !ExteriaDialogIsDeveloper(_dialog)) return;
     CGPoint point = [tap locationInView:_name];
-    CGFloat box = _name.bounds.size.width, text = [_name sizeThatFits:CGSizeMake(box, CGFLOAT_MAX)].width;
-    /* the text is centered, and the marks are the last of it */
-    CGFloat end = (box + text) / 2;
-    NSUInteger mark = ExteriaMarkAtDistance(ExteriaDialogIsDeveloper(_dialog), end - point.x);
+    NSUInteger mark = ExteriaMarkForDocument([_name customEmojiAtPoint:point]);
     if (point.y < -8 || point.y > _name.bounds.size.height + 8 || !mark) return;
     ExteriaShowMarkNotice(_dialog.title, mark);
 }

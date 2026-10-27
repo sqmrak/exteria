@@ -16,6 +16,7 @@ extern NSString *const ExteriaCustomEmojiDidLoadNotification;
 /* the crossed hammers of the lead developer */
 #define EXTERIA_LEAD_DOCUMENT (-5LL)
 #define EXTERIA_CAUTION_DOCUMENT (-6LL)
+#define EXTERIA_PROMOTION_DOCUMENT (-7LL)
 #define EXTERIA_CAUTION_BADGE_RATIO 2.7
 
 @interface ExteriaCustomEmoji : NSObject

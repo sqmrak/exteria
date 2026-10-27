@@ -456,4 +456,24 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
     return nil;
 }
 
+- (long long)customEmojiAtPoint:(CGPoint)point {
+    for (NSUInteger i = 0; i < _lineCount; ++i) {
+        if (point.y < _origins[i].y - _ascents[i] - 2 || point.y > _origins[i].y + _descents[i] + 2) continue;
+        CFArrayRef runs = CTLineGetGlyphRuns(_lines[i]);
+        for (CFIndex j = 0; j < CFArrayGetCount(runs); ++j) {
+            CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, j);
+            NSDictionary *attributes = (NSDictionary *)CTRunGetAttributes(run);
+            NSNumber *document = [attributes objectForKey:ExteriaCustomEmojiAttribute];
+            if (!document || CTRunGetGlyphCount(run) == 0) continue;
+            CGPoint position;
+            CTRunGetPositions(run, CFRangeMake(0, 1), &position);
+            CGFloat x = _origins[i].x + position.x;
+            CGFloat width = (CGFloat)CTRunGetTypographicBounds(run, CFRangeMake(0, 0), NULL, NULL, NULL);
+            if (point.x >= x && point.x < x + width) return document.longLongValue;
+        }
+        return 0;
+    }
+    return 0;
+}
+
 @end

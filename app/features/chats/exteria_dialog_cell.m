@@ -18,6 +18,7 @@
 #import "exteria_time.h"
 #import "exteria_topic_icon.h"
 #import "exteria_developers.h"
+#import "exteria_custom_emoji.h"
 #import "exteria_name_badge.h"
 
 #define MINI_SIDE 16.0
@@ -63,6 +64,9 @@
     UIButton *_communityHit;
     void (^_communityHandler)(void);
     ExteriaEmojiLabel *_title;
+    UIButton *_markHit;
+    NSString *_markName;
+    NSUInteger _marks;
     UIImageView *_mutedIcon;
     UILabel *_time;
     UIImageView *_checks;
@@ -83,6 +87,14 @@
 
 @synthesize swipeDelegate = _swipeDelegate;
 @synthesize media = _media;
+
+- (void)markTapped:(UIControl *)control event:(UIEvent *)event {
+    UITouch *touch = [[event touchesForView:control] anyObject];
+    if (!touch) return;
+    CGPoint point = [touch locationInView:_title];
+    NSUInteger mark = ExteriaMarkForDocument([_title customEmojiAtPoint:point]);
+    if (mark) ExteriaShowMarkNotice(_markName, mark);
+}
 
 + (CGFloat)rowHeight {
     return ROW_HEIGHT;
@@ -177,6 +189,9 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _title = [ExteriaCellEmojiLabel(ExteriaFontSemibold(15.5), ExteriaColorTitle(), ExteriaTextAlignmentLeft) retain];
     _title.dropsUndrawable = YES;
     [_slider addSubview:_title];
+    _markHit = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    [_markHit addTarget:self action:@selector(markTapped:event:) forControlEvents:UIControlEventTouchUpInside];
+    [_slider addSubview:_markHit];
     _mutedIcon = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBellSlash, 13, ExteriaColorMuted())];
     [_slider addSubview:_mutedIcon];
     _time = [ExteriaCellLabel(ExteriaFontRegular(12.5), ExteriaColorSecondary(), ExteriaTextAlignmentRight) retain];
@@ -209,7 +224,6 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     /* the at sign is a picture set on the middle of the disc: the glyph of a font sits low and to the left in a label, whatever the alignment says */
     UIImageView *atMark = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolAt, 12, [UIColor whiteColor])] autorelease];
     atMark.center = CGPointMake(BADGE_HEIGHT / 2, BADGE_HEIGHT / 2);
-    atMark.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     [_mention addSubview:atMark];
     [_slider addSubview:_mention];
     _pin = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPin, 14, ExteriaColorMuted())];
@@ -238,6 +252,8 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_communityHit release];
     [_communityHandler release];
     [_title release];
+    [_markHit release];
+    [_markName release];
     [_mutedIcon release];
     [_time release];
     [_checks release];
@@ -278,7 +294,10 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_communityHandler release];
     _communityHandler = nil;
     NSArray *badge = nil;
-    _title.text = ExteriaNameWithBadges(dialog.title, dialog.saved ? 0 : ExteriaBadgeDocument(dialog.emojiStatus, dialog.premium), ExteriaDialogIsDeveloper(dialog), &badge);
+    _marks = ExteriaDialogIsDeveloper(dialog);
+    [_markName release];
+    _markName = [dialog.title copy];
+    _title.text = ExteriaNameWithBadges(dialog.title, dialog.saved ? 0 : ExteriaBadgeDocument(dialog.emojiStatus, dialog.premium), _marks, &badge);
     _title.entities = badge;
     _mutedIcon.hidden = !dialog.muted;
     _time.text = ExteriaListTimeText(dialog.date);
@@ -586,6 +605,12 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     CGSize titleSize = [_title sizeThatFits:CGSizeMake(titleMax, 20)];
     CGFloat titleWidth = MIN(titleSize.width, titleMax);
     _title.frame = CGRectMake(textX, titleY, titleWidth, 20);
+    CGFloat fullTitleWidth = [_title sizeThatFits:CGSizeMake(4096, 20)].width;
+    NSUInteger markCount = 0;
+    for (NSUInteger bit = 1; bit <= ExteriaMarkPromotion; bit <<= 1) if (_marks & bit) ++markCount;
+    CGFloat markWidth = markCount * 30.0 + (_marks & ExteriaMarkCaution ? 24.0 * (EXTERIA_CAUTION_BADGE_RATIO - 1) : 0);
+    _markHit.hidden = !markCount || fullTitleWidth > titleMax;
+    _markHit.frame = CGRectMake(textX + MAX(0, titleWidth - markWidth), titleY - 4, MIN(titleWidth, markWidth), 28);
     _mutedIcon.frame = CGRectMake(textX + titleWidth + 4, titleY + (20 - _mutedIcon.image.size.height) / 2,
                                   _mutedIcon.image.size.width, _mutedIcon.image.size.height);
 

@@ -20,7 +20,6 @@
     UIActivityIndicatorView *_spinner;
     ExteriaEmojiLabel *_name;
     NSString *_developerName;
-    NSUInteger _marks;
     UILabel *_line;
 }
 @end
@@ -90,7 +89,6 @@
 - (void)setName:(NSString *)name developer:(NSUInteger)marks {
     NSArray *entities = nil;
     _name.text = ExteriaNameWithBadges(name, 0, marks, &entities);
-    _marks = marks;
     _name.entities = entities;
     [_developerName release];
     _developerName = marks ? [name copy] : nil;
@@ -105,9 +103,7 @@
 - (void)nameTapped:(UITapGestureRecognizer *)tap {
     if (tap.state != UIGestureRecognizerStateEnded || !_developerName) return;
     CGPoint point = [tap locationInView:_name];
-    CGFloat box = _name.bounds.size.width, text = [_name sizeThatFits:CGSizeMake(box, CGFLOAT_MAX)].width;
-    CGFloat end = (box + text) / 2;
-    NSUInteger mark = ExteriaMarkAtDistance(_marks, end - point.x);
+    NSUInteger mark = ExteriaMarkForDocument([_name customEmojiAtPoint:point]);
     if (point.y < -8 || point.y > _name.bounds.size.height + 8 || !mark) return;
     ExteriaShowMarkNotice(_developerName, mark);
 }

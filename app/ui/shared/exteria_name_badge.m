@@ -22,10 +22,10 @@ NSString *ExteriaNameWithBadges(NSString *name, long long document, NSUInteger m
     if ((!document && !marks) || !name.length) return name;
     NSMutableString *text = [NSMutableString stringWithString:name];
     NSMutableArray *list = [NSMutableArray array];
-    long long documents[6] = {document, marks & ExteriaMarkDeveloper ? EXTERIA_DEVELOPER_DOCUMENT : 0, marks & ExteriaMarkLead ? EXTERIA_LEAD_DOCUMENT : 0,
+    long long documents[7] = {document, marks & ExteriaMarkDeveloper ? EXTERIA_DEVELOPER_DOCUMENT : 0, marks & ExteriaMarkLead ? EXTERIA_LEAD_DOCUMENT : 0,
                               marks & ExteriaMarkSenko ? EXTERIA_SENKO_DOCUMENT : 0, marks & ExteriaMarkTester ? EXTERIA_TESTER_DOCUMENT : 0,
-                              marks & ExteriaMarkCaution ? EXTERIA_CAUTION_DOCUMENT : 0};
-    for (int i = 0; i < 6; ++i) {
+                              marks & ExteriaMarkCaution ? EXTERIA_CAUTION_DOCUMENT : 0, marks & ExteriaMarkPromotion ? EXTERIA_PROMOTION_DOCUMENT : 0};
+    for (int i = 0; i < 7; ++i) {
         if (!documents[i]) continue;
         [text appendString:@" "];
         ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
