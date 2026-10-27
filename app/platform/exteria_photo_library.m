@@ -49,6 +49,14 @@ NSURL *ExteriaPhotoURL(id asset) {
     return identifier.length ? [NSURL URLWithString:[@"exteria-photo:" stringByAppendingString:identifier]] : nil;
 }
 
+BOOL ExteriaPhotoURLIsVideo(NSURL *url) {
+    if (!ExteriaPhotosAvailable() || ![url.scheme isEqualToString:@"exteria-photo"]) return NO;
+    id result = ((id (*)(id, SEL, id, id))objc_msgSend)(NSClassFromString(@"PHAsset"), NSSelectorFromString(@"fetchAssetsWithLocalIdentifiers:options:"),
+        [NSArray arrayWithObject:url.resourceSpecifier], nil);
+    id asset = [result count] ? [result objectAtIndex:0] : nil;
+    return [[asset valueForKey:@"mediaType"] integerValue] == 2;
+}
+
 NSTimeInterval ExteriaPhotoVideoDuration(id asset) {
     if ([[asset valueForKey:@"mediaType"] integerValue] != 2) return 0;
     return [[asset valueForKey:@"duration"] doubleValue];
@@ -87,7 +95,7 @@ int ExteriaPhotoPreview(NSURL *url, void (^completion)(UIImage *, NSURL *, NSStr
             dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, movie, movie ? nil : @"VIDEO_UNAVAILABLE"); });
         }];
     } else {
-        return [(id<ExteriaPhotosManager>)photo_manager() requestImageForAsset:asset targetSize:CGSizeMake(1280, 1280) contentMode:0 options:image_options(YES)
+        return [(id<ExteriaPhotosManager>)photo_manager() requestImageForAsset:asset targetSize:CGSizeMake(2560, 2560) contentMode:0 options:image_options(YES)
             resultHandler:^(UIImage *image, NSDictionary *info) {
                 if ([[info objectForKey:@"PHImageResultIsDegradedKey"] boolValue]) return;
                 dispatch_async(dispatch_get_main_queue(), ^{ completion(image, nil, image ? nil : @"PHOTO_UNAVAILABLE"); });

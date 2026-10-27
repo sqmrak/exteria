@@ -3,6 +3,7 @@
 BOOL ExteriaPhotosAvailable(void);
 void ExteriaRecentPhotos(NSUInteger limit, void (^completion)(NSArray *assets, NSString *error));
 NSURL *ExteriaPhotoURL(id asset);
+BOOL ExteriaPhotoURLIsVideo(NSURL *url);
 /* the length in seconds of the video this asset is, 0 for a picture */
 NSTimeInterval ExteriaPhotoVideoDuration(id asset);
 void ExteriaPhotoThumbnail(id asset, CGFloat side, void (^completion)(UIImage *image));

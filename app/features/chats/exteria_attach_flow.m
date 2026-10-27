@@ -32,8 +32,8 @@ static UIImage *ExteriaOutgoingThumbnail(UIImage *image) {
 }
 
 /* a photo is sent at the size a small screen shows; a larger one only slows the upload of an old phone, so the larger size is the person's choice */
-#define PHOTO_SIDE_MAX (ExteriaChatFlagGet(ExteriaChatFlagAlwaysHD) ? 2560.0 : 1280.0)
-#define PHOTO_QUALITY 0.82
+#define PHOTO_SIDE_MAX ((ExteriaChatFlagGet(ExteriaChatFlagAlwaysHD) || ExteriaPhotosAvailable()) ? 2560.0 : 1280.0)
+#define PHOTO_QUALITY (ExteriaPhotosAvailable() ? 0.90 : 0.82)
 /* the standard quality of the gallery sheet's menu: a smaller side and a lighter jpeg than usual */
 #define PHOTO_SIDE_STANDARD 800.0
 #define PHOTO_QUALITY_STANDARD 0.7
@@ -227,7 +227,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     if (direct) [self takeCaptionForNextItem];
     if ([url.scheme isEqualToString:@"exteria-photo"]) {
         [self showBusy];
-        if (direct && _options->asFiles) {
+        if (direct && _options->asFiles && !ExteriaPhotoURLIsVideo(url)) {
             _photoRequest = ExteriaPhotoOriginal(url, ^(NSData *data, NSString *extension, NSString *name, NSString *error) {
                 _photoRequest = 0;
                 if (_cancelled) return;
@@ -263,7 +263,8 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
             if (_cancelled) return;
             if (!asset) { [self endQueue]; [self alert:NSLocalizedString(@"attach.failed", nil)]; return; }
             if ([[asset valueForProperty:ALAssetPropertyType] isEqualToString:ALAssetTypeVideo]) {
-                [self presentOrPrepareMovie:url];
+                if (direct && _options->asFiles) [self prepareOriginalOfAsset:asset];
+                else [self presentOrPrepareMovie:url];
             } else if (direct && _options->asFiles) {
                 [self prepareOriginalOfAsset:asset];
             } else {
@@ -534,22 +535,23 @@ static NSString *ExteriaMimeOfPath(NSString *path);
     });
 }
 
-/* the library hands over a quicktime movie; clients play an mp4 everywhere, so it is exported to one first */
+/* normal videos are exported to mp4; files keep their encoded tracks */
 - (void)prepareMovieAtURL:(NSURL *)url {
     [self showBusy];
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
-    NSString *path = ExteriaTemporaryFile(@"mp4");
-    /* the usual medium preset, a light one for standard quality, and the best the device has for a send without compression */
-    NSString *preset = AVAssetExportPresetMediumQuality;
+    BOOL asFile = _options && _options->asFiles;
+    NSString *path = ExteriaTemporaryFile(asFile ? @"mov" : @"mp4");
+    NSString *preset = ExteriaPhotosAvailable() ? AVAssetExportPresetHighestQuality : AVAssetExportPresetMediumQuality;
     if (_options && _options->standard) preset = AVAssetExportPresetLowQuality;
-    else if (_options && _options->asFiles) preset = AVAssetExportPresetHighestQuality;
+    if (asFile) preset = AVAssetExportPresetPassthrough;
     AVAssetExportSession *export = [[AVAssetExportSession alloc] initWithAsset:asset presetName:preset];
-    if (!export || ![export.supportedFileTypes containsObject:AVFileTypeMPEG4]) {
+    NSString *fileType = asFile ? AVFileTypeQuickTimeMovie : AVFileTypeMPEG4;
+    if (!export || ![export.supportedFileTypes containsObject:fileType]) {
         [export release]; [self hideBusy]; [self alert:NSLocalizedString(@"attach.failed", nil)]; return;
     }
     _export = [export retain];
     export.outputURL = [NSURL fileURLWithPath:path];
-    export.outputFileType = AVFileTypeMPEG4;
+    export.outputFileType = fileType;
     export.shouldOptimizeForNetworkUse = YES;
     [export exportAsynchronouslyWithCompletionHandler:^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -578,11 +580,12 @@ static NSString *ExteriaMimeOfPath(NSString *path);
             [_export release]; _export = nil;
             if (!_cancelled && done && track && isfinite(seconds) && seconds > 0 && seconds <= INT32_MAX / 1000.0 && fabs(natural.width) > 0 && fabs(natural.height) > 0 && fabs(natural.width) <= INT32_MAX && fabs(natural.height) <= INT32_MAX) {
                 outgoing = [[[ExteriaOutgoing alloc] init] autorelease];
-                outgoing->kind = ExteriaOutgoingVideo;
+                outgoing->kind = asFile ? ExteriaOutgoingFile : ExteriaOutgoingVideo;
                 outgoing->spoiler = _options && _options->spoiler;
                 outgoing->caption = [_caption copy];
                 outgoing->path = [path copy];
                 outgoing->name = [path.lastPathComponent copy];
+                if (asFile) outgoing->mime = [@"video/quicktime" copy];
                 outgoing->durationMs = (int32_t)(seconds * 1000);
                 outgoing->width = (int32_t)fabs(natural.width);
                 outgoing->height = (int32_t)fabs(natural.height);
