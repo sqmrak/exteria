@@ -164,9 +164,8 @@
     int64_t _account;
     NSMutableDictionary *_handlers;
     NSMutableDictionary *_links;
-    void (^_storeObserver)(void);
+    NSMutableDictionary *_storeObservers;
     /* who put the observer there, compared by address and never used: a screen that is gone must not remove the observer of the one that took its place */
-    void *_storeObserverOwner;
     void (^_changeHook)(void);
     void *_voip;
     ExteriaShiro *_shiro;
@@ -292,7 +291,7 @@ static NSString *ExteriaMachineName(void) {
     [_typing release];
     [_drafts release];
     [_calls release];
-    [_storeObserver release];
+    [_storeObservers release];
     [_deviceModel release];
     [_systemVersion release];
     [_appVersion release];
@@ -623,20 +622,21 @@ static NSString *ExteriaMachineName(void) {
 }
 
 - (void)setStoreObserver:(void (^)(void))observer {
-    void (^old)(void) = _storeObserver;
-    _storeObserver = [observer copy];
-    [old release];
+    [self setStoreObserver:observer owner:NULL];
 }
 
 - (void)setStoreObserver:(void (^)(void))observer owner:(void *)owner {
-    [self setStoreObserver:observer];
-    _storeObserverOwner = observer ? owner : NULL;
+    if (!_storeObservers) _storeObservers = [[NSMutableDictionary alloc] init];
+    NSValue *key = [NSValue valueWithPointer:owner];
+    if (observer) {
+        void (^copied)(void) = [observer copy];
+        [_storeObservers setObject:copied forKey:key];
+        [copied release];
+    } else [_storeObservers removeObjectForKey:key];
 }
 
 - (void)clearStoreObserverOwnedBy:(void *)owner {
-    if (!owner || _storeObserverOwner != owner) return;
-    [self setStoreObserver:nil];
-    _storeObserverOwner = NULL;
+    if (owner) [_storeObservers removeObjectForKey:[NSValue valueWithPointer:owner]];
 }
 
 - (void)setChangeHook:(void (^)(void))hook {
@@ -650,7 +650,11 @@ static NSString *ExteriaMachineName(void) {
 }
 
 - (void)storeChanged {
-    if (_storeObserver && _store) _storeObserver();
+    if (_store) {
+        NSArray *observers = [[_storeObservers allValues] copy];
+        for (void (^observer)(void) in observers) observer();
+        [observers release];
+    }
     /* presence and typing change nothing a notification could say, and a contact list sends them all day */
     if (_changeHook && _store && !(_clientLive && _client.change_quiet)) _changeHook();
 }
