@@ -288,8 +288,6 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:_tag notes:_notes ipaURL:_ipaURL digestURL:_digestURL size:_size] autorelease];
     notice.frame = host.bounds;
     [host addSubview:notice];
-    [[NSUserDefaults standardUserDefaults] setObject:_tag forKey:@"exteria.release.shown"];
-    if (![[NSUserDefaults standardUserDefaults] synchronize]) NSLog(@"exteria: release notice could not be saved");
     [_tag release]; _tag = nil;
     [_notes release]; _notes = nil;
     [_ipaURL release]; _ipaURL = nil;
@@ -335,7 +333,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         if (status != EXTERIA_OK) NSLog(@"exteria: release check failed: %s", exteria_status_name(status));
         exteria_https_response_free(&response);
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (tag.length && ![tag isEqualToString:[[NSUserDefaults standardUserDefaults] stringForKey:@"exteria.release.shown"]]) {
+            if (tag.length) {
                 _tag = [tag copy];
                 _notes = [notes copy];
                 _ipaURL = [ipaURL copy];
