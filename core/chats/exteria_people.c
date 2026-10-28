@@ -110,6 +110,7 @@ exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person
     copy_text(out->phone, sizeof(out->phone), user, "phone");
     exteria_photo_ref_read(user, 1, out->id, &out->photo);
     exteria_presence_read(exteria_tl_get(user, "status"), &out->presence, &out->seen);
+    if (out->id == EXTERIA_TELEGRAM_SERVICE_USER_ID) { out->presence = EXTERIA_PRESENCE_UNKNOWN; out->seen = 0; }
     if (out->deleted) {
         out->presence = EXTERIA_PRESENCE_DELETED;
         out->seen = 0;

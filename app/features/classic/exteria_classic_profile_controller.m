@@ -226,7 +226,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 - (void)showPerson {
     NSArray *hammer = nil;
     /* the mark after the name is the one the lists and the chat show: the status the person chose, or the Premium star */
-    long long badge = ExteriaBadgeDocument(_person.emojiStatus, _person.premium);
+    long long badge = ExteriaPersonBadgeDocument(_person);
     _name.text = ExteriaNameWithBadges(_person.name, badge, ExteriaPersonIsDeveloper(_person), &hammer);
     _name.entities = hammer;
     ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
@@ -237,7 +237,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     NSMutableArray *parts = [NSMutableArray array];
     if (_person.phone.length) [parts addObject:ExteriaOwnPhoneText(_person.phone)];
     if (_person.username.length) [parts addObject:[@"@" stringByAppendingString:_person.username]];
-    _detail.text = [parts componentsJoinedByString:@"  "];
+    _detail.text = _person.userId == EXTERIA_TELEGRAM_SERVICE_USER_ID ? NSLocalizedString(@"chat.status.telegram", nil) : [parts componentsJoinedByString:@"  "];
     _avatar.initials = _person.initials;
     _avatar.deleted = _person.deleted;
     _avatar.seed = (NSUInteger)(_person.userId % 1000003);

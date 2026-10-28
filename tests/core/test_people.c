@@ -53,6 +53,18 @@ static void test_person(void) {
     CHECK_EQ_INT(row.presence, EXTERIA_PRESENCE_OFFLINE);
     CHECK_EQ_INT(row.seen, 1234);
 
+    {
+        exteria_tl_value *service = user(EXTERIA_TELEGRAM_SERVICE_USER_ID, "Telegram", NULL);
+        exteria_tl_value *online = obj("userStatusOnline");
+        set_i32(online, "expires", 9999);
+        set(service, "status", online);
+        CHECK_EQ_INT(exteria_person_parse(service, &row), EXTERIA_OK);
+        CHECK_EQ_INT(row.presence, EXTERIA_PRESENCE_UNKNOWN);
+        CHECK_EQ_INT(row.seen, 0);
+        CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+        CHECK_EQ_INT(row.presence, EXTERIA_PRESENCE_OFFLINE);
+    }
+
     set_flag(u, "premium");
     CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
     CHECK_EQ_INT(row.premium, 1);

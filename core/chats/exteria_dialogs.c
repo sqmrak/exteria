@@ -147,6 +147,7 @@ static void fill_user(exteria_dialog_row *row, const exteria_tl_value *users, co
     exteria_emoji_status_read(user, &row->emoji_status, &row->emoji_status_until);
     if (exteria_tl_has(user, "deleted")) row->deleted = 1;
     exteria_presence_read(exteria_tl_get(user, "status"), &row->presence, &row->seen);
+    if (row->peer_id == EXTERIA_TELEGRAM_SERVICE_USER_ID) { row->presence = EXTERIA_PRESENCE_UNKNOWN; row->seen = 0; }
     if (row->deleted) {
         row->presence = EXTERIA_PRESENCE_DELETED;
         row->seen = 0;

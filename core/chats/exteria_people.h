@@ -8,6 +8,8 @@
 #include "exteria_tl.h"
 
 #define EXTERIA_PEOPLE_MAX 2000
+/* telegram delivers service notifications in this account's chat */
+#define EXTERIA_TELEGRAM_SERVICE_USER_ID 777000LL
 #define EXTERIA_PERSON_NAME_MAX 128
 #define EXTERIA_PERSON_USERNAME_MAX 64
 #define EXTERIA_PERSON_PHONE_MAX 32
