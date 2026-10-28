@@ -258,12 +258,11 @@ static NSString *ExteriaSenderTag(ExteriaMessage *message, ExteriaPerson *person
     return tag;
 }
 
-/* the color of the tag after a name: the owner of the group in gold, an administrator (by role or by a title the owners gave) in green, a bot in blue, and the
-   quiet grey for anything else; the tag then says who it is at a glance */
-static UIColor *ExteriaSenderTagColor(ExteriaMessage *message, ExteriaPerson *person, NSString *role) {
-    if ([role isEqualToString:NSLocalizedString(@"chat.role.owner", nil)]) return [UIColor colorWithRed:0.89f green:0.62f blue:0.10f alpha:1];
-    if (message.senderRank.length || [role isEqualToString:NSLocalizedString(@"chat.role.admin", nil)]) return [UIColor colorWithRed:0.16f green:0.68f blue:0.40f alpha:1];
-    if (person.bot) return [UIColor colorWithRed:0.20f green:0.55f blue:0.93f alpha:1];
+/* the color of the tag after a name goes by the role in the group and nothing else: the owner is purple and an administrator green, and every other tag (a title
+   the owners gave, a bot) keeps the quiet grey; a title on an administrator is still green, since the role is what it says */
+static UIColor *ExteriaSenderTagColor(NSString *role) {
+    if ([role isEqualToString:NSLocalizedString(@"chat.role.owner", nil)]) return [UIColor colorWithRed:0.60f green:0.34f blue:0.88f alpha:1];
+    if ([role isEqualToString:NSLocalizedString(@"chat.role.admin", nil)]) return [UIColor colorWithRed:0.16f green:0.68f blue:0.40f alpha:1];
     return ExteriaColorSecondary();
 }
 
@@ -434,7 +433,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
             item->_senderBadge = ExteriaBadgeDocument(ExteriaChatFlagGet(ExteriaChatFlagShowMessageEmojiStatus) ? person.emojiStatus : 0, person.premium);
             item->_senderDeveloper = ExteriaPersonIsDeveloper(person);
             item->_senderTag = [ExteriaSenderTag(message, person, role) copy];
-            item->_senderTagColor = [ExteriaSenderTagColor(message, person, role) retain];
+            item->_senderTagColor = [ExteriaSenderTagColor(role) retain];
             item->_senderColor = [ExteriaSenderColor(person, llabs(message.senderKey)) retain];
         }
     }
