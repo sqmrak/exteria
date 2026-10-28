@@ -8,8 +8,11 @@ extern NSString *const ExteriaLanguageDidChangeNotification;
 NSArray *ExteriaInterfaceLanguageCodes(void);
 /* what the person chose: a code from that list, or an empty string for the system */
 NSString *ExteriaInterfaceLanguageChoice(void);
-/* the code in force: the choice, or else the first language of the system that the app has, or English */
+/* the code in force: the choice, or else the first language of the system that the app has, or English. The playful russian answers "ru" here, since it
+   behaves as russian everywhere but in its texts */
 NSString *ExteriaInterfaceLanguage(void);
+/* the row of the language screen in force: the choice as it was made, the playful russian included, or else the same as ExteriaInterfaceLanguage */
+NSString *ExteriaInterfaceLanguageVariant(void);
 /* stores the choice (empty for the system) and makes the main bundle answer in it; posts ExteriaLanguageDidChangeNotification */
 void ExteriaSetInterfaceLanguage(NSString *code);
 /* puts the stored choice in force; called once at launch, before any text is asked for */

@@ -50,7 +50,7 @@
 - (ExteriaSettingsRow *)rowForCode:(NSString *)code {
     ExteriaWeakReference *weak = _weak;
     return [ExteriaSettingsRow checkRowWithTitle:ExteriaNativeLanguageName(code) subtitle:ExteriaEnglishLanguageName(code)
-                                         checked:[code isEqualToString:ExteriaInterfaceLanguage()]
+                                         checked:[code isEqualToString:ExteriaInterfaceLanguageVariant()]
                                              tap:^{ [(ExteriaLanguageSettingsController *)weak.target choose:code]; }];
 }
 
@@ -82,8 +82,8 @@
 }
 
 - (void)choose:(NSString *)code {
+    if ([ExteriaInterfaceLanguageVariant() isEqualToString:code]) return;
     NSString *previous = ExteriaInterfaceLanguage();
-    if ([previous isEqualToString:code]) return;
     ExteriaSetInterfaceLanguage(code);
     ExteriaTranslateInterfaceLanguageChanged(previous, ExteriaInterfaceLanguage());
 }

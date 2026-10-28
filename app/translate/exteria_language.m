@@ -6,8 +6,11 @@ NSString *const ExteriaLanguageDidChangeNotification = @"ExteriaLanguageDidChang
 
 static NSString *const ExteriaLanguageKey = @"exteria.language";
 
+/* the playful russian: its texts have an lproj of their own, and everything that is not a text (plurals, dates, the translator, the notifications) treats it as russian */
+static NSString *const ExteriaPlayfulRussian = @"sqmrak";
+
 NSArray *ExteriaInterfaceLanguageCodes(void) {
-    return [NSArray arrayWithObjects:@"en", @"ru", nil];
+    return [NSArray arrayWithObjects:@"en", @"ru", ExteriaPlayfulRussian, nil];
 }
 
 NSString *ExteriaInterfaceLanguageChoice(void) {
@@ -17,6 +20,7 @@ NSString *ExteriaInterfaceLanguageChoice(void) {
 
 NSString *ExteriaInterfaceLanguage(void) {
     NSString *choice = ExteriaInterfaceLanguageChoice();
+    if ([choice isEqualToString:ExteriaPlayfulRussian]) return @"ru";
     if (choice.length) return choice;
     for (NSString *language in [NSLocale preferredLanguages]) {
         NSString *base = [[language componentsSeparatedByString:@"-"] objectAtIndex:0];
@@ -38,6 +42,11 @@ static NSBundle *ExteriaChosenBundle;
     return chosen ? [chosen localizedStringForKey:key value:value table:table] : [super localizedStringForKey:key value:value table:table];
 }
 @end
+
+NSString *ExteriaInterfaceLanguageVariant(void) {
+    NSString *choice = ExteriaInterfaceLanguageChoice();
+    return choice.length ? choice : ExteriaInterfaceLanguage();
+}
 
 void ExteriaApplyInterfaceLanguage(void) {
     NSString *choice = ExteriaInterfaceLanguageChoice();
@@ -107,10 +116,12 @@ NSString *ExteriaLanguageName(NSString *code) {
 }
 
 NSString *ExteriaNativeLanguageName(NSString *code) {
+    if ([code isEqualToString:ExteriaPlayfulRussian]) return @"русский by sqmrak :3";
     return ExteriaNameIn(code, code);
 }
 
 NSString *ExteriaEnglishLanguageName(NSString *code) {
+    if ([code isEqualToString:ExteriaPlayfulRussian]) return @"Russian by sqmrak";
     return ExteriaNameIn(code, @"en");
 }
 
