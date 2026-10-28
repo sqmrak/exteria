@@ -41,6 +41,15 @@ typedef struct exteria_person_row {
     uint8_t deleted;
     uint8_t has_name_color;     /* the user chose the color of the name in group chats (a PeerColor with a color id) */
     int32_t name_color;         /* its id, 0 to 6 free for everyone and above them for Premium accounts */
+    /* the backdrop of the profile, from a collectible profile color or else a collectible emoji status: the radial colors as 0xRRGGBB, the color of the
+       tiles and of the text over it, and the emoji that tiles it */
+    uint8_t has_backdrop;
+    uint32_t backdrop_center;
+    uint32_t backdrop_edge;
+    uint32_t backdrop_pattern;
+    uint32_t backdrop_text;
+    int64_t backdrop_pattern_document;  /* zero without one */
+    char backdrop_title[EXTERIA_PERSON_NAME_MAX];   /* the name of the collectible and its number ("Cookie Heart #5916"), empty without one */
     exteria_presence presence;
     int32_t seen;
     exteria_photo_ref photo;

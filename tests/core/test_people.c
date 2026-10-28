@@ -168,6 +168,65 @@ static void test_emoji_status(void) {
     exteria_emoji_status_read(obj("boolTrue"), NULL, NULL);
 }
 
+static void test_backdrop(void) {
+    exteria_person_row row;
+    exteria_tl_value *u = user(31, "Gift", NULL), *status, *color, *items[3];
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_backdrop, 0);
+    /* a collectible status gives the colors, the tiles and the name with the number from the slug */
+    status = obj("emojiStatusCollectible");
+    set_i64(status, "collectible_id", 5);
+    set_i64(status, "document_id", 88);
+    set_str(status, "title", "Cookie Heart");
+    set_str(status, "slug", "CookieHeart-5916");
+    set_i64(status, "pattern_document_id", 4242);
+    set_i32(status, "center_color", 0xD79A3C);
+    set_i32(status, "edge_color", 0xB5602F);
+    set_i32(status, "pattern_color", 0xFFE0A0);
+    set_i32(status, "text_color", 0xFFFFFF);
+    set(u, "emoji_status", status);
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_backdrop, 1);
+    CHECK_EQ_INT(row.backdrop_center, 0xD79A3Cu);
+    CHECK_EQ_INT(row.backdrop_edge, 0xB5602Fu);
+    CHECK_EQ_INT(row.backdrop_pattern, 0xFFE0A0u);
+    CHECK_EQ_INT(row.backdrop_text, 0xFFFFFFu);
+    CHECK_EQ_INT(row.backdrop_pattern_document, 4242);
+    CHECK(!strcmp(row.backdrop_title, "Cookie Heart #5916"));
+    /* a slug with no number after its dash leaves the title as it is */
+    set_str(status, "slug", "CookieHeart-x");
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK(!strcmp(row.backdrop_title, "Cookie Heart"));
+    /* a collectible profile color wins over the status, and takes its colors from the list */
+    color = obj("peerColorCollectible");
+    set_i64(color, "collectible_id", 6);
+    set_i64(color, "gift_emoji_id", 7);
+    set_i64(color, "background_emoji_id", 9001);
+    set_i32(color, "accent_color", 0x112233);
+    items[0] = exteria_tl_new_i32(&arena, 0x445566);
+    items[1] = exteria_tl_new_i32(&arena, 0x778899);
+    set(color, "colors", vec_of(items, 2));
+    set(u, "profile_color", color);
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_backdrop, 1);
+    CHECK_EQ_INT(row.backdrop_center, 0x445566u);
+    CHECK_EQ_INT(row.backdrop_edge, 0x778899u);
+    CHECK_EQ_INT(row.backdrop_pattern, 0x112233u);
+    CHECK_EQ_INT(row.backdrop_pattern_document, 9001);
+    CHECK_EQ_INT(row.backdrop_title[0], 0);
+    /* one color is both ends, and a list with none is no backdrop; a plain status and a plain color index give none either */
+    set(color, "colors", vec_of(items, 1));
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.backdrop_edge, 0x445566u);
+    set(color, "colors", vec_of(items, 0));
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_backdrop, 0);
+    set(u, "profile_color", obj("peerColor"));
+    set(u, "emoji_status", obj("emojiStatusEmpty"));
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_backdrop, 0);
+}
+
 static void test_contacts(void) {
     exteria_person_row rows[3];
     size_t count;
@@ -344,6 +403,7 @@ int main(void) {
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
     test_person();
     test_emoji_status();
+    test_backdrop();
     test_contacts();
     test_channel_person();
     test_sender_kinds();

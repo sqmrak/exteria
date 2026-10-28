@@ -73,6 +73,58 @@ void exteria_emoji_status_read(const exteria_tl_value *user, int64_t *document, 
     if (until) *until = id ? end : 0;
 }
 
+static int vec_i32(const exteria_tl_value *vec, uint32_t index, int32_t *out) {
+    if (!vec || vec->kind != EXTERIA_TL_V_VEC || index >= vec->u.vec.count) return 0;
+    if (!vec->u.vec.items[index] || vec->u.vec.items[index]->kind != EXTERIA_TL_V_I32) return 0;
+    *out = vec->u.vec.items[index]->u.i32;
+    return 1;
+}
+
+/* a collectible profile color wins over a collectible emoji status; a plain color index has no colors of its own here and leaves the profile as it is */
+static void backdrop_read(const exteria_tl_value *user, exteria_person_row *out) {
+    const exteria_tl_value *color = exteria_tl_get(user, "profile_color"), *status = exteria_tl_get(user, "emoji_status");
+    int32_t center = 0, edge = 0, pattern = 0, text = 0xFFFFFF;
+    int64_t pattern_document = 0;
+    out->has_backdrop = 0;
+    if (exteria_tl_is(color, EXTERIA_TL_ID_peerColorCollectible)) {
+        const exteria_tl_value *colors = exteria_tl_get(color, "colors");
+        if (!vec_i32(colors, 0, &center)) return;
+        if (!vec_i32(colors, 1, &edge)) edge = center;
+        if (exteria_tl_get_i32(color, "accent_color", &pattern) != EXTERIA_OK) pattern = 0xFFFFFF;
+        exteria_tl_get_i64(color, "background_emoji_id", &pattern_document);
+    } else if (exteria_tl_is(status, EXTERIA_TL_ID_emojiStatusCollectible)) {
+        const uint8_t *slug = NULL;
+        size_t slug_len = 0, at;
+        if (exteria_tl_get_i32(status, "center_color", &center) != EXTERIA_OK || exteria_tl_get_i32(status, "edge_color", &edge) != EXTERIA_OK) return;
+        if (exteria_tl_get_i32(status, "pattern_color", &pattern) != EXTERIA_OK) pattern = 0xFFFFFF;
+        if (exteria_tl_get_i32(status, "text_color", &text) != EXTERIA_OK) text = 0xFFFFFF;
+        exteria_tl_get_i64(status, "pattern_document_id", &pattern_document);
+        copy_text(out->backdrop_title, sizeof(out->backdrop_title), status, "title");
+        /* the number of the collectible is what follows the last dash of its slug */
+        if (exteria_tl_get_bytes(status, "slug", &slug, &slug_len) == EXTERIA_OK && slug_len > 0) {
+            for (at = slug_len; at > 0 && slug[at - 1] != '-'; --at) {}
+            if (at > 0 && at < slug_len) {
+                size_t used = strlen(out->backdrop_title), digits = 0;
+                while (at + digits < slug_len && slug[at + digits] >= '0' && slug[at + digits] <= '9') ++digits;
+                if (digits && at + digits == slug_len && used + 2 + digits < sizeof(out->backdrop_title)) {
+                    out->backdrop_title[used++] = ' ';
+                    out->backdrop_title[used++] = '#';
+                    memcpy(out->backdrop_title + used, slug + at, digits);
+                    out->backdrop_title[used + digits] = 0;
+                }
+            }
+        }
+    } else {
+        return;
+    }
+    out->has_backdrop = 1;
+    out->backdrop_center = (uint32_t)center & 0xFFFFFFu;
+    out->backdrop_edge = (uint32_t)edge & 0xFFFFFFu;
+    out->backdrop_pattern = (uint32_t)pattern & 0xFFFFFFu;
+    out->backdrop_text = (uint32_t)text & 0xFFFFFFu;
+    out->backdrop_pattern_document = pattern_document > 0 ? pattern_document : 0;
+}
+
 exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person_row *out) {
     if (!out) return EXTERIA_E_ARG;
     memset(out, 0, sizeof(*out));
@@ -95,6 +147,7 @@ exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person
     out->mutual = exteria_tl_has(user, "mutual_contact") ? 1 : 0;
     out->premium = exteria_tl_has(user, "premium") ? 1 : 0;
     exteria_emoji_status_read(user, &out->emoji_status, &out->emoji_status_until);
+    backdrop_read(user, out);
     out->deleted = exteria_tl_has(user, "deleted") ? 1 : 0;
     {
         /* a collectible color has no id of its own and leaves the name to the default */
