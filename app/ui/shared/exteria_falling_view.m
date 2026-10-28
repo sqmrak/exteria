@@ -16,6 +16,7 @@ typedef struct {
     CGFloat scale, alpha, size, width;
     CGFloat phase, vphase, sway;
     CGFloat rotation, spin;
+    CGFloat age, lifetime;
     CALayer *layer;
 } snow_flake;
 
@@ -33,25 +34,45 @@ typedef struct {
 }
 @end
 
-/* a soft white dot with a faint blue edge, so a flake still shows on a light screen */
+/* snowflake geometry adapted from telegram for android, copyright nikolai kudashov, gpl v2 or later */
 static UIImage *ExteriaSnowSprite(void) {
     static UIImage *sprite;
     if (sprite) return sprite;
-    const CGFloat side = 32.0f;
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 1.0);
+    const CGFloat side = 10.0f;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, ExteriaScreenScale());
     CGContextRef context = UIGraphicsGetCurrentContext();
-    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGFloat colors[8] = {1, 1, 1, 1, 1, 1, 1, 0};
-    CGFloat locations[2] = {0.35f, 1.0f};
-    CGGradientRef gradient = CGGradientCreateWithColorComponents(space, colors, locations, 2);
-    CGContextSetShadowWithColor(context, CGSizeZero, 2.0f, [UIColor colorWithRed:0.45f green:0.58f blue:0.78f alpha:0.55f].CGColor);
-    CGPoint center = CGPointMake(side / 2, side / 2);
-    CGContextDrawRadialGradient(context, gradient, center, 0, center, side / 2 - 3.0f, 0);
-    CGGradientRelease(gradient);
-    CGColorSpaceRelease(space);
+    CGContextSetRGBStrokeColor(context, 1, 1, 1, 1);
+    CGContextSetLineWidth(context, 0.5f);
+    CGContextSetLineCap(context, kCGLineCapRound);
+    for (int i = 0; i < 6; ++i) {
+        CGFloat angle = -(CGFloat)M_PI / 2 + (CGFloat)i * (CGFloat)M_PI / 3;
+        CGFloat x = cosf(angle) * 4, y = sinf(angle) * 4;
+        CGFloat branch = angle - (CGFloat)M_PI / 2;
+        CGContextMoveToPoint(context, 5, 5);
+        CGContextAddLineToPoint(context, 5 + x, 5 + y);
+        for (int sign = -1; sign <= 1; sign += 2) {
+            CGFloat px = sign * -1.14f, py = 3.10f;
+            CGContextMoveToPoint(context, 5 + x * 0.66f, 5 + y * 0.66f);
+            CGContextAddLineToPoint(context, 5 + cosf(branch) * px - sinf(branch) * py,
+                                    5 + sinf(branch) * px + cosf(branch) * py);
+        }
+    }
+    CGContextStrokePath(context);
     sprite = [UIGraphicsGetImageFromCurrentImageContext() retain];
     UIGraphicsEndImageContext();
     return sprite;
+}
+
+static UIImage *ExteriaSnowDot(void) {
+    static UIImage *dot;
+    if (dot) return dot;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(10, 10), NO, ExteriaScreenScale());
+    [[UIColor whiteColor] setFill];
+    UIBezierPath *circle = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(4.25f, 4.25f, 1.5f, 1.5f)];
+    [circle fill];
+    dot = [UIGraphicsGetImageFromCurrentImageContext() retain];
+    UIGraphicsEndImageContext();
+    return dot;
 }
 
 /* the picture is scaled once, with the soft shadow of senko, so a flake never decodes the png */
@@ -138,21 +159,25 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
         f->spin = ExteriaSnowRandom(-0.28f, 0.28f);
         f->rotation = ExteriaSnowRandom(-0.18f, 0.18f);
     } else {
-        f->scale = ExteriaSnowRandom(0.45f, 1.5f);
-        f->alpha = ExteriaSnowRandom(0.55f, 1.0f);
-        /* small flakes fall slower than big ones, which reads as depth */
-        f->vy = ExteriaSnowRandom(26.0f, 40.0f) + 22.0f * f->scale;
-        f->vx = ExteriaSnowRandom(-5.0f, 5.0f);
-        f->sway = ExteriaSnowRandom(6.0f, 18.0f);
+        f->layer.contents = (id)(arc4random_uniform(2) ? ExteriaSnowSprite().CGImage : ExteriaSnowDot().CGImage);
+        f->scale = ExteriaSnowRandom(0.3f, 1.2f);
+        f->alpha = 0;
+        CGFloat angle = ExteriaSnowRandom(70, 110) * (CGFloat)M_PI / 180;
+        CGFloat speed = ExteriaSnowRandom(40, 48);
+        f->vx = cosf(angle) * speed;
+        f->vy = sinf(angle) * speed;
+        f->sway = 0;
         f->spin = 0;
         f->rotation = 0;
+        f->age = scatter ? ExteriaSnowRandom(0, 3) : 0;
+        f->lifetime = ExteriaSnowRandom(3, 5);
     }
     f->phase = ExteriaSnowRandom(0.0f, 6.2832f);
     f->vphase = ExteriaSnowRandom(0.6f, 1.6f);
     f->size = _base * f->scale;
     f->width = _sprite && _sprite.size.height > 1 ? f->size * (_sprite.size.width / _sprite.size.height) : f->size;
     f->x = ExteriaSnowRandom(24, MAX(25, width - 24));
-    f->y = scatter ? ExteriaSnowRandom(-20, height) : ExteriaSnowRandom(-(_base + 40.0f), -36.0f);
+    f->y = _sprite ? (scatter ? ExteriaSnowRandom(-20, height) : ExteriaSnowRandom(-(_base + 40.0f), -36.0f)) : ExteriaSnowRandom(0, height);
     f->layer.bounds = CGRectMake(0, 0, f->width, f->size);
     f->layer.position = CGPointMake(f->x, f->y);
     f->layer.opacity = (float)f->alpha;
@@ -175,6 +200,12 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
     CGFloat width = self.bounds.size.width, height = self.bounds.size.height;
     for (int i = 0; i < _count; ++i) {
         snow_flake *f = &_flakes[i];
+        if (!_sprite) {
+            f->age += dt;
+            if (f->age >= f->lifetime) { [self resetFlake:f scatter:NO]; continue; }
+            CGFloat fade = f->age < 0.2f ? f->age / 0.2f : MIN(1, (f->lifetime - f->age) / 2);
+            f->layer.opacity = (float)(f->age < 0.2f ? fade * fade : 1 - (1 - fade) * (1 - fade));
+        }
         f->phase += f->vphase * dt;
         f->y += f->vy * dt;
         f->x += (f->vx + sinf(f->phase) * f->sway) * dt;

@@ -1,0 +1,6 @@
+snowflakes
+
+the snowflake drawing and movement in exteria_falling_view.m are adapted from
+SnowflakesEffect.java in telegram for android, as found in exteraless.
+copyright nikolai kudashov, 2013-2018. licensed under gnu gpl version 2 or
+later. the gpl version 3 text is in LICENSE.gpl-3.0 in the source repository.

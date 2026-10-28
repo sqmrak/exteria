@@ -82,7 +82,7 @@
     [self.layer addSublayer:_top];
     [self.layer addSublayer:_bottom];
     /* the classic style is flat, so the login of that style has no waves either */
-    _top.hidden = _bottom.hidden = ExteriaThemeIsClassic();
+    [self syncWaveVisibility];
     return self;
 }
 
@@ -105,8 +105,7 @@
 - (void)setPlain:(BOOL)plain {
     if (plain == _plain) return;
     _plain = plain;
-    _bottom.hidden = plain || ExteriaThemeIsClassic();
-    _top.hidden = ExteriaThemeIsClassic();
+    [self syncWaveVisibility];
     [self configureTopColors];
     [self refreshMotion];
     [self setNeedsDisplay];
@@ -273,6 +272,13 @@ static void ExteriaRipple(ExteriaWaveLayer *layer, CGPathRef opposite, CFTimeInt
     [self applyScrolling];
 }
 
+/* the classic style is flat and the setting of the person can take the waves away; the plain look keeps only the top one */
+- (void)syncWaveVisibility {
+    BOOL none = ExteriaThemeIsClassic() || ExteriaChatFlagGet(ExteriaChatFlagHideWaves);
+    _top.hidden = none;
+    _bottom.hidden = none || _plain;
+}
+
 /* the setting of the person gives the corners of the screen to boykissers that fall in place of the waves */
 - (void)syncBoykisser {
     BOOL on = ExteriaChatFlagGet(ExteriaChatFlagBoykisser) && self.window &&
@@ -295,8 +301,7 @@ static void ExteriaRipple(ExteriaWaveLayer *layer, CGPathRef opposite, CFTimeInt
         [_boys release];
         _boys = nil;
         /* the waves come back as the plain or the welcome look wants them */
-        _top.hidden = ExteriaThemeIsClassic();
-        _bottom.hidden = _plain || ExteriaThemeIsClassic();
+        [self syncWaveVisibility];
     }
 }
 
