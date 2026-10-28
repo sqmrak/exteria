@@ -28,6 +28,9 @@ long long ExteriaLiveEmojiStatus(long long document, int32_t until);
     NSString *_phone;
     NSString *_initials;
     ExteriaPhoto *_photo;
+    BOOL _hasProfileColor;
+    NSInteger _profileColorId;
+    long long _profileColorEmoji;
     BOOL _hasBackdrop;
     uint32_t _backdropCenter, _backdropEdge, _backdropPattern, _backdropText;
     long long _backdropPatternDocument;
@@ -54,6 +57,10 @@ long long ExteriaLiveEmojiStatus(long long document, int32_t until);
 /* the id of the color the person chose for their name in groups, -1 when they chose none and the id decides */
 @property (nonatomic, readonly) NSInteger nameColor;
 /* the colored ground of the profile from a collectible profile color or status; the colors as 0xRRGGBB, the emoji that tiles it, and the name of the collectible */
+/* the profile color the person picked from the server's list: its id, and the emoji that tiles it; the colors are in ExteriaProfileColors */
+@property (nonatomic, readonly) BOOL hasProfileColor;
+@property (nonatomic, readonly) NSInteger profileColorId;
+@property (nonatomic, readonly) long long profileColorEmoji;
 @property (nonatomic, readonly) BOOL hasBackdrop;
 @property (nonatomic, readonly) uint32_t backdropCenter;
 @property (nonatomic, readonly) uint32_t backdropEdge;

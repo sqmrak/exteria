@@ -23,6 +23,8 @@
 #import "exteria_popup_menu.h"
 #import "exteria_profile_action.h"
 #import "exteria_profile_backdrop_view.h"
+#import "exteria_profile_colors.h"
+#import "exteria_custom_emoji.h"
 #import "exteria_profile_chat.h"
 #import "exteria_profile_qr_controller.h"
 #import "exteria_alert.h"
@@ -65,6 +67,9 @@
     /* the colored ground behind the head when the person wears a collectible color or status */
     ExteriaProfileBackdropView *_backdrop;
     CGFloat _backdropBottom;
+    /* the name of the collectible the person wears and the emoji status it belongs to: a tap on the emoji says the name */
+    NSString *_backdropTitle;
+    long long _backdropStatusDocument;
     /* the emoji status of the user when it moves: drawn over the still picture the name already holds, at the place the name leaves for it */
     ExteriaLottieView *_statusAnimation;
     long long _statusAnimationDocument;
@@ -121,6 +126,7 @@
     [_name release];
     [_statusAnimation release];
     [_backdrop release];
+    [_backdropTitle release];
     [_status release];
     [_messageAction release];
     [_soundAction release];
@@ -315,13 +321,19 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 /* the recognizer takes the touches over the name only: one that took every touch of the header cancelled the controls under it, the pill of the music among them */
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
     (void)recognizer;
-    return ExteriaDialogIsDeveloper(_dialog) && CGRectContainsPoint(CGRectInset(_name.frame, 0, -8), [touch locationInView:_head]);
+    return (ExteriaDialogIsDeveloper(_dialog) || _backdropTitle.length) && CGRectContainsPoint(CGRectInset(_name.frame, 0, -8), [touch locationInView:_head]);
 }
 
 - (void)headTapped:(UITapGestureRecognizer *)tap {
-    if (tap.state != UIGestureRecognizerStateEnded || !ExteriaDialogIsDeveloper(_dialog)) return;
+    if (tap.state != UIGestureRecognizerStateEnded) return;
     CGPoint point = [tap locationInView:_name];
-    NSUInteger mark = ExteriaMarkForDocument([_name customEmojiAtPoint:point]);
+    long long document = [_name customEmojiAtPoint:point];
+    if (_backdropTitle.length && document && document == _backdropStatusDocument && point.y >= -8 && point.y <= _name.bounds.size.height + 8) {
+        [self toast:_backdropTitle];
+        return;
+    }
+    if (!ExteriaDialogIsDeveloper(_dialog)) return;
+    NSUInteger mark = ExteriaMarkForDocument(document);
     if (point.y < -8 || point.y > _name.bounds.size.height + 8 || !mark) return;
     ExteriaShowMarkNotice(_dialog.title, mark);
 }
@@ -456,22 +468,56 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     [_statusAnimation setPlaying:NO];
 }
 
-/* the head takes the colors of the person: the blend behind the photo, the text over it in the color they gave it, and the action cards as veils with the same ink */
+/* the head takes the colors of the person: a collectible's own, or those of the color they picked from the server's list, which are asked for once */
 - (void)applyBackdropOfPerson:(ExteriaPerson *)person {
-    if (!person.hasBackdrop) return;
+    if (person.hasBackdrop) {
+        [_backdropTitle release];
+        _backdropTitle = [person.backdropTitle copy];
+        _backdropStatusDocument = person.emojiStatus;
+        [self showBackdropCenter:person.backdropCenter edge:person.backdropEdge pattern:person.backdropPattern text:person.backdropText document:person.backdropPatternDocument];
+        return;
+    }
+    if (!person.hasProfileColor) return;
+    ExteriaWeakReference *weak = _weak;
+    int32_t colorId = (int32_t)person.profileColorId;
+    long long emoji = person.profileColorEmoji;
+    [ExteriaProfileColors loadWithSession:self.session completion:^{
+        ExteriaUserProfileController *profile = weak.target;
+        uint32_t center = 0, edge = 0;
+        if (!profile || ![ExteriaProfileColors blendForColorId:colorId dark:ExteriaThemeIsDark() center:&center edge:&edge]) return;
+        [profile showBackdropCenter:center edge:edge pattern:0xFFFFFF text:0xFFFFFF document:emoji];
+    }];
+}
+
+/* the blend behind the photo, the text over it, the action cards as veils with the same ink, and the emoji that tiles the ground */
+- (void)showBackdropCenter:(uint32_t)center edge:(uint32_t)edge pattern:(uint32_t)pattern text:(uint32_t)text document:(long long)document {
     if (!_backdrop) {
         _backdrop = [[ExteriaProfileBackdropView alloc] init];
         [_head insertSubview:_backdrop atIndex:0];
     }
-    _backdrop.centerColor = ExteriaColorOfRGB(person.backdropCenter);
-    _backdrop.edgeColor = ExteriaColorOfRGB(person.backdropEdge);
-    UIColor *ink = ExteriaColorOfRGB(person.backdropText);
+    _backdrop.centerColor = ExteriaColorOfRGB(center);
+    _backdrop.edgeColor = ExteriaColorOfRGB(edge);
+    _backdrop.patternColor = ExteriaColorOfRGB(pattern);
+    _backdrop.photoRadius = AVATAR / 2;
+    UIColor *ink = ExteriaColorOfRGB(text);
     _name.textColor = ink;
     _status.plainColor = [ink colorWithAlphaComponent:0.78f];
     _status.activeColor = ink;
     for (ExteriaUserAction *action in [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil]) [action setInk:ink];
+    if (document > 0) {
+        ExteriaWeakReference *weak = _weak;
+        ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:document]], self.session, self.media, ^{
+            [(ExteriaUserProfileController *)weak.target showPatternOfDocument:document];
+        });
+        [self showPatternOfDocument:document];
+    }
     [self.view setNeedsLayout];
     [_name setNeedsDisplay];
+}
+
+- (void)showPatternOfDocument:(long long)document {
+    UIImage *picture = [ExteriaCustomEmoji imageForDocument:document];
+    if (picture) _backdrop.patternImage = picture;
 }
 
 - (void)showFull {

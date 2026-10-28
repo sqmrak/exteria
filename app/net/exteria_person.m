@@ -72,6 +72,9 @@ NSString *ExteriaInitialsOfName(NSString *name) {
     _phone = [ExteriaUtf8(row->phone) copy];
     _initials = [(row->deleted ? @"" : ExteriaInitialsOfName(_name)) copy];
     _photo = [[ExteriaPhoto photoWithRef:&row->photo] retain];
+    _hasProfileColor = row->has_profile_color != 0;
+    _profileColorId = row->profile_color_id;
+    _profileColorEmoji = row->profile_color_emoji;
     _hasBackdrop = row->has_backdrop != 0;
     _backdropCenter = row->backdrop_center;
     _backdropEdge = row->backdrop_edge;
@@ -82,6 +85,9 @@ NSString *ExteriaInitialsOfName(NSString *name) {
     return self;
 }
 
+- (BOOL)hasProfileColor { return _hasProfileColor; }
+- (NSInteger)profileColorId { return _profileColorId; }
+- (long long)profileColorEmoji { return _profileColorEmoji; }
 - (BOOL)hasBackdrop { return _hasBackdrop; }
 - (uint32_t)backdropCenter { return _backdropCenter; }
 - (uint32_t)backdropEdge { return _backdropEdge; }
