@@ -120,6 +120,11 @@ typedef enum {
     ExteriaChatSwipeFolders
 } ExteriaChatSwipe;
 ExteriaChatSwipe ExteriaChatSwipeStored(void);
+
+/* how many seconds a held record button waits before the recording locks by itself; zero never locks it by itself. The choices are 0, 3, 5, 10 and 15, and 5 is the
+   default */
+NSInteger ExteriaChatRecordLockSeconds(void);
+void ExteriaChatSetRecordLockSeconds(NSInteger seconds);
 void ExteriaChatSetSwipe(ExteriaChatSwipe swipe);
 
 /* back to the defaults of the size and the corners, the "Reset settings" of the menu of the screen */

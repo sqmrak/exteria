@@ -35,8 +35,6 @@ static CGFloat ExteriaInputIdleHeight(void) {
 /* a hold that ends this soon after it began locks the recording instead of ending it; a swipe up is the only other way to lock, and a gesture tweak on the phone
    takes that swipe for itself */
 #define QUICK_LOCK_SECONDS 0.5
-/* a hold that lasts this long without a slide locks the recording by itself: the person means to go on, and the swipe up it would take is the one a gesture tweak steals */
-#define AUTO_LOCK_SECONDS 5.0
 
 static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
@@ -918,7 +916,10 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _holdStartY = [hold locationInView:self].y;
         [self setRecordingElapsed:0];
         [self showRecordingAnimated];
-        [self performSelector:@selector(lockTapped) withObject:nil afterDelay:AUTO_LOCK_SECONDS];
+        /* a hold that lasts as long as the person chose in the chat settings, without a slide, locks the recording by itself: they mean to go on, and the swipe up it would
+           take is the one a gesture tweak steals */
+        NSInteger autoLock = ExteriaChatRecordLockSeconds();
+        if (autoLock > 0) [self performSelector:@selector(lockTapped) withObject:nil afterDelay:(NSTimeInterval)autoLock];
         break;
     case UIGestureRecognizerStateChanged: {
         if (!_holding) return;

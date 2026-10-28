@@ -244,6 +244,7 @@ static NSString *ExteriaNightStateText(void) {
     }
 
     [sections addObject:[self swipeSection]];
+    [sections addObject:[self recordLockSection]];
     /* ios 10.3 has the call; older systems change the icon only through a bundle the app can write, which a jailbreak install gives, and the row says so
        where it does not */
     if (ExteriaAlternateIconNames().count > 0) {
@@ -331,6 +332,23 @@ static NSString *ExteriaNightStateText(void) {
         }]];
     }
     return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.swipe.header", nil) footer:NSLocalizedString(@"chatset.swipe.info", nil) rows:rows];
+}
+
+/* how long a held record button waits before the recording locks by itself */
+- (ExteriaSettingsSection *)recordLockSection {
+    ExteriaWeakReference *weak = _weak;
+    NSInteger current = ExteriaChatRecordLockSeconds();
+    static const NSInteger seconds[] = {0, 3, 5, 10, 15};
+    static NSString *const keys[] = {@"chatset.reclock.off", @"chatset.reclock.3", @"chatset.reclock.5", @"chatset.reclock.10", @"chatset.reclock.15"};
+    NSMutableArray *rows = [NSMutableArray array];
+    for (NSUInteger i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+        NSInteger value = seconds[i];
+        [rows addObject:[ExteriaSettingsRow checkRowWithTitle:NSLocalizedString(keys[i], nil) subtitle:nil checked:current == value tap:^{
+            ExteriaChatSetRecordLockSeconds(value);
+            [(ExteriaChatSettingsController *)weak.target rebuild];
+        }]];
+    }
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.reclock.header", nil) footer:NSLocalizedString(@"chatset.reclock.info", nil) rows:rows];
 }
 
 /* media and sound; the ear features only exist where there is a sensor to hear the ear with, "raise to speak"

@@ -1973,3 +1973,10 @@
 "viewonce.seen" = "The other side has already opened this one.";
 "viewonce.sent" = "Not opened yet, tap to preview";
 "chat.voice.failed" = "The voice message could not be prepared, so it was not sent.";
+"chatset.reclock.header" = "Locking a recording";
+"chatset.reclock.info" = "Hold the record button this long without sliding and the voice or round message locks by itself, so the finger can come off.";
+"chatset.reclock.off" = "Never by itself";
+"chatset.reclock.3" = "After 3 seconds";
+"chatset.reclock.5" = "After 5 seconds";
+"chatset.reclock.10" = "After 10 seconds";
+"chatset.reclock.15" = "After 15 seconds";

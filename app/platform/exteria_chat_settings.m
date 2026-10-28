@@ -393,6 +393,19 @@ ExteriaChatSwipe ExteriaChatSwipeStored(void) {
     return value >= ExteriaChatSwipeArchive && value <= ExteriaChatSwipeFolders ? (ExteriaChatSwipe)value : ExteriaChatSwipeArchive;
 }
 
+static NSString *const ExteriaChatRecordLockKey = @"exteria.chat.recordlock";
+
+NSInteger ExteriaChatRecordLockSeconds(void) {
+    NSNumber *stored = ExteriaStoredNumber(ExteriaChatRecordLockKey);
+    if (!stored) return 5;
+    NSInteger value = stored.integerValue;
+    return value == 0 || value == 3 || value == 5 || value == 10 || value == 15 ? value : 5;
+}
+
+void ExteriaChatSetRecordLockSeconds(NSInteger seconds) {
+    ExteriaStoreNumber(ExteriaChatRecordLockKey, seconds);
+}
+
 void ExteriaChatSetSwipe(ExteriaChatSwipe swipe) {
     ExteriaStoreNumber(ExteriaChatSwipeKey, swipe);
 }
