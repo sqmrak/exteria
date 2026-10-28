@@ -32,6 +32,9 @@
     AVAssetWriterInput *_audioInput;
     BOOL _sessionStarted;
     BOOL _stopped;
+    /* sound the writer was not ready for: while the camera swaps no pictures arrive, the writer keeps the two tracks close in time and stops taking sound, which
+       cut the phrase that was being said; the sound waits here for the next turn of the writer */
+    NSMutableArray *_pendingAudio;
     CMTime _first;
     CMTime _last;
 }
@@ -334,12 +337,41 @@ static BOOL ExteriaDeviceZooms(AVCaptureDevice *device) {
         _sessionStarted = YES;
     }
     if (_writer.status != AVAssetWriterStatusWriting) return;
-    AVAssetWriterInput *input = video ? _videoInput : _audioInput;
-    if (!input.readyForMoreMediaData) return;
+    [self appendPendingAudio];
+    if (!video) {
+        if (_pendingAudio.count || !_audioInput.readyForMoreMediaData) [self holdAudio:buffer];
+        else [self appendSample:buffer time:time toInput:_audioInput];
+        return;
+    }
+    if (_videoInput.readyForMoreMediaData) [self appendSample:buffer time:time toInput:_videoInput];
+}
+
+/* capture queue: a picture the writer is not ready for is dropped, the next one comes in a frame; sound is never dropped, since a gap in it is heard */
+- (void)appendSample:(CMSampleBufferRef)buffer time:(CMTime)time toInput:(AVAssetWriterInput *)input {
     if ([input appendSampleBuffer:buffer]) {
         if (CMTimeCompare(time, _last) > 0) _last = time;
     } else {
         NSLog(@"exteria: a clip sample was refused: %@", _writer.error);
+    }
+}
+
+/* about four seconds of sound at the size of a capture buffer; a camera that takes longer than that to swap loses the oldest part, which is logged */
+#define PENDING_AUDIO_MAX 200
+
+- (void)holdAudio:(CMSampleBufferRef)buffer {
+    if (!_pendingAudio) _pendingAudio = [[NSMutableArray alloc] init];
+    if (_pendingAudio.count >= PENDING_AUDIO_MAX) {
+        NSLog(@"exteria: the writer took no sound for too long, the oldest part is dropped");
+        [_pendingAudio removeObjectAtIndex:0];
+    }
+    [_pendingAudio addObject:(id)buffer];
+}
+
+- (void)appendPendingAudio {
+    while (_pendingAudio.count && _audioInput.readyForMoreMediaData) {
+        CMSampleBufferRef held = (CMSampleBufferRef)[_pendingAudio objectAtIndex:0];
+        [self appendSample:held time:CMSampleBufferGetPresentationTimeStamp(held) toInput:_audioInput];
+        [_pendingAudio removeObjectAtIndex:0];
     }
 }
 
@@ -388,6 +420,7 @@ static BOOL ExteriaDeviceZooms(AVCaptureDevice *device) {
         BOOL ok = NO;
         if (_sessionStarted && _writer.status == AVAssetWriterStatusWriting) {
             durationMs = (int32_t)(CMTimeGetSeconds(CMTimeSubtract(_last, _first)) * 1000.0);
+            [self appendPendingAudio];
             [_videoInput markAsFinished];
             [_audioInput markAsFinished];
             ok = [_writer finishWriting] && _writer.status == AVAssetWriterStatusCompleted;
@@ -438,6 +471,8 @@ static BOOL ExteriaDeviceZooms(AVCaptureDevice *device) {
     _videoInput = nil;
     [_audioInput release];
     _audioInput = nil;
+    [_pendingAudio release];
+    _pendingAudio = nil;
     [_videoOutput release];
     _videoOutput = nil;
     [_cameraInput release];

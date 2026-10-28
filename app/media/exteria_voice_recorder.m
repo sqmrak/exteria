@@ -16,10 +16,13 @@
 @interface ExteriaVoiceRecorder () {
     AVAudioRecorder *_recorder;
     NSString *_wavPath;
+    BOOL _failed;
 }
 @end
 
 @implementation ExteriaVoiceRecorder
+
+@synthesize failed = _failed;
 
 static NSString *ExteriaTemporaryPath(NSString *extension) {
     return [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-%08x%08x.%@", arc4random(), arc4random(), extension]];
@@ -93,9 +96,13 @@ static BOOL ExteriaEncode(NSString *wavPath, NSString *oggPath, int32_t *duratio
         NSLog(@"exteria: the recording is not usable: %s", exteria_status_name(status));
         return NO;
     }
-    int16_t *samples = malloc(count * sizeof(int16_t));
-    if (!samples) return NO;
-    memcpy(samples, (const uint8_t *)wav.bytes + offset, count * sizeof(int16_t));
+    /* the samples are read from the mapped file, since a copy of half an hour of them is 57 MB on a phone that has little to spare; the data chunk of a wav
+       starts on an even byte, which is what a 16 bit read needs */
+    if (offset % sizeof(int16_t)) {
+        NSLog(@"exteria: the recording has its samples at an odd offset %zu", offset);
+        return NO;
+    }
+    const int16_t *samples = (const int16_t *)((const uint8_t *)wav.bytes + offset);
     FILE *out = fopen(oggPath.fileSystemRepresentation, "wb");
     exteria_voice_encoder *encoder = NULL;
     status = out ? exteria_voice_encoder_new(&encoder, ExteriaWriteOgg, out) : EXTERIA_E_IO;
@@ -106,7 +113,6 @@ static BOOL ExteriaEncode(NSString *wavPath, NSString *oggPath, int32_t *duratio
     else exteria_voice_encoder_free(encoder);
     if (out && fclose(out) != 0 && status == EXTERIA_OK) status = EXTERIA_E_IO;
     if (status == EXTERIA_OK) status = exteria_waveform_build(samples, count, waveform.mutableBytes, waveform.length);
-    free(samples);
     if (status != EXTERIA_OK) {
         NSLog(@"exteria: the voice note was not encoded: %s", exteria_status_name(status));
         [[NSFileManager defaultManager] removeItemAtPath:oggPath error:NULL];
@@ -143,6 +149,7 @@ static BOOL ExteriaEncode(NSString *wavPath, NSString *oggPath, int32_t *duratio
         NSData *delivered = [[waveform copy] autorelease];
         NSString *deliveredPath = ok ? [[oggPath copy] autorelease] : nil;
         dispatch_async(dispatch_get_main_queue(), ^{
+            _failed = !ok;
             done(deliveredPath, durationMs, delivered);
             [done release];
             [wavPath release];

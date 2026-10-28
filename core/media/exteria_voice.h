@@ -11,8 +11,9 @@
 #define EXTERIA_WAVEFORM_BARS 100
 /* five bits per bar, packed as the Telegram clients read them */
 #define EXTERIA_WAVEFORM_BYTES ((EXTERIA_WAVEFORM_BARS * 5 + 7) / 8)
-/* the longest note the encoder accepts, in seconds; keeps the sample counters and the upload bounded */
-#define EXTERIA_VOICE_SECONDS_MAX 600
+/* the longest note the encoder accepts, in seconds, and the length at which the recorder stops by itself so a note is never refused after it was made; keeps the
+   sample counters and the upload bounded (about 5 MB of Opus at the most) */
+#define EXTERIA_VOICE_SECONDS_MAX 1800
 
 typedef struct exteria_voice_encoder exteria_voice_encoder;
 
