@@ -292,7 +292,9 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                 return;
             }
             const exteria_tl_value *list = exteria_tl_get(result->value, "dialogs");
-            BOOL more = exteria_tl_is(result->value, EXTERIA_TL_ID_messages_dialogsSlice) && list && list->kind == EXTERIA_TL_V_VEC && list->u.vec.count >= 100;
+            /* a slice that is shorter than the hundred asked for can still have older pages behind it (the server cuts a page that holds dialogs it cannot show), so the
+               pages go on until one comes back empty or is the one before it; stopping at a short page left the folder without its older chats */
+            BOOL more = exteria_tl_is(result->value, EXTERIA_TL_ID_messages_dialogsSlice) && list && list->kind == EXTERIA_TL_V_VEC && list->u.vec.count > 0;
             if (more) {
                 if (!last.top_message ||
                     (last.peer_kind == _offset.kind && last.peer_id == _offset.id && last.top_message == _offsetId && last.date == _offsetDate)) {

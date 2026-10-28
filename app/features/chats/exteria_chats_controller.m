@@ -50,6 +50,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 @interface ExteriaChatsController () <ExteriaDialogCellDelegate, UIAlertViewDelegate> {
     ExteriaWeakReference *_badgeWeak;
     int32_t _folderId;
+    /* the picture of the old rows that is leaving while a change of folder slides the new ones in */
+    UIView *_leavingRows;
     /* a pull on the list shows the hidden archive until the screen is left */
     BOOL _archiveRevealed;
     BOOL _archiveHidden;
@@ -242,6 +244,16 @@ static CGFloat ExteriaChatsHeaderTop(void) {
    room for rows or the person asked for no motion */
 - (UIView *)snapshotOfRowsForSlide {
     UITableView *table = self.table;
+    /* a change of folder while the last one still slides: its picture goes at once and the rows that were moving stand still, or the two lists lay over each other and
+       the picture taken of the rows held half of the old slide */
+    [_leavingRows.layer removeAllAnimations];
+    [_leavingRows removeFromSuperview];
+    [_leavingRows release];
+    _leavingRows = nil;
+    for (UITableViewCell *cell in [table visibleCells]) {
+        [cell.layer removeAllAnimations];
+        cell.transform = CGAffineTransformIdentity;
+    }
     if (ExteriaReduceMotionEnabled() || !self.isViewLoaded || !table.window || !_folders.slideDirection) return nil;
     CGFloat top = MAX(0, CGRectGetMaxY(_header.frame) - table.contentOffset.y);
     CGSize size = CGSizeMake(table.bounds.size.width, table.bounds.size.height - top);
@@ -264,6 +276,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     if (!leaving) return;
     CGFloat width = leaving.bounds.size.width;
     CGFloat boundary = leaving.frame.origin.y - self.table.frame.origin.y;
+    [_leavingRows release];
+    _leavingRows = [leaving retain];
     [self.view insertSubview:leaving aboveSubview:self.table];
     for (UITableViewCell *cell in [self.table visibleCells]) {
         if (CGRectGetMaxY(cell.frame) - self.table.contentOffset.y <= boundary) continue;
@@ -272,6 +286,10 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     ExteriaAnimateView(leaving, CGAffineTransformMakeTranslation((CGFloat)-direction * width, 0), 1, EXTERIA_MOTION_ENTER, ^(BOOL finished) {
         (void)finished;
         [leaving removeFromSuperview];
+        if (_leavingRows == leaving) {
+            [_leavingRows release];
+            _leavingRows = nil;
+        }
     });
 }
 
@@ -293,6 +311,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_mainDialogs release];
     [_folderSnapshots release];
     [_folderSnapshotDates release];
+    [_leavingRows removeFromSuperview];
+    [_leavingRows release];
     [_shown release];
     [_displayedKeys release];
     [_folderLoad cancel];
