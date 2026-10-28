@@ -55,6 +55,7 @@
 #import "exteria_message_cell.h"
 #import "exteria_chat_settings.h"
 #import "exteria_music_player.h"
+#import "exteria_voice.h"
 #import "exteria_proximity.h"
 #import "exteria_popup_menu.h"
 #import "exteria_session_profile.h"
@@ -130,6 +131,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
 - (void)fire:(NSTimer *)timer { (void)timer; [(ExteriaChatController *)_weak.target pollReactions]; }
 - (void)display:(CADisplayLink *)link { (void)link; [(ExteriaChatController *)_weak.target flushLiveMessages]; }
 - (void)follow:(CADisplayLink *)link { [(ExteriaChatController *)_weak.target advanceBottom:link]; }
+- (void)jump:(CADisplayLink *)link { [(ExteriaChatController *)_weak.target advanceJump:link]; }
 @end
 
 @interface ExteriaReaderRowView : UIView {
@@ -254,11 +256,29 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _livePending;
     CADisplayLink *_liveLink;
     CADisplayLink *_followLink;
+    /* the quick scroll to a message that was asked for (a reply, a search result, a pinned message, a bookmark): its own frame clock, so the rows load as it moves */
+    CADisplayLink *_jumpLink;
+    CFTimeInterval _jumpBegan;
+    CFTimeInterval _jumpLength;
+    CGFloat _jumpFrom;
+    CGFloat _jumpTo;
+    int32_t _jumpMessageId;
     CFTimeInterval _followTime;
     CFTimeInterval _followBegan;
     BOOL _loadedFirst;
+    /* what the chat had read when it was opened, or -1 when it had nothing unread: the line of unread messages stays where it was while they are read */
+    int32_t _unreadAnchor;
     BOOL _loading;
     int32_t _markedRead;
+    NSMutableSet *_readMentionIds;
+    /* ids of the one-time messages opened on this phone, which read as expired at once, before the server's edit of the message comes */
+    NSMutableSet *_openedOnce;
+    /* the "1" chip of the input bar as it stood when the recording that is being finished ended */
+    BOOL _recordingOneTime;
+    /* the one-time voice note that plays now: the track, the message, and whether the server was told yet */
+    ExteriaMedia *_onceVoice;
+    int32_t _onceVoiceId;
+    BOOL _onceVoiceOpened;
     BOOL _stickToBottom;
     /* the chat is still settling on its newest message: the kept page and the first fresh page land without a scroll animation, so the list never visibly travels */
     BOOL _opening;
@@ -393,8 +413,11 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     _replyCache = [[NSCache alloc] init];
     _replyCache.countLimit = 200;
     _reactionSending = [[NSMutableSet alloc] init];
+    _readMentionIds = [[NSMutableSet alloc] init];
+    _openedOnce = [[NSMutableSet alloc] init];
     _stickToBottom = YES;
     _opening = YES;
+    _unreadAnchor = dialog.unreadCount > 0 ? dialog.readInboxMaxId : -1;
     _router = [[ExteriaLinkRouter alloc] initWithSession:session avatars:avatars media:media stickers:stickers];
     _router.anchor = self;
     _bots = [[ExteriaChatBots alloc] initWithSession:session dialog:dialog router:_router media:media host:self];
@@ -497,6 +520,10 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_senderRoles release];
     [_items release];
     [_replyCache release];
+    [_readMentionIds release];
+    [_openedOnce release];
+    [_onceVoice release];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markVisibleMentionsRead) object:nil];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(loadReplyPreviews) object:nil];
     [_itemCache release];
     [super dealloc];
@@ -523,12 +550,14 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 - (ExteriaStatusKind)statusKind {
+    if (_dialog.peerKind == 1 && _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID) return ExteriaStatusPlain;
     if (!_session.connected) return ExteriaStatusPlain;
     if ([self typingText]) return ExteriaStatusTyping;
     return _dialog.kind == EXTERIA_DIALOG_USER && !_dialog.saved && _dialog.presence == EXTERIA_PRESENCE_ONLINE ? ExteriaStatusOnline : ExteriaStatusPlain;
 }
 
 - (NSString *)statusLine {
+    if (_dialog.peerKind == 1 && _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID) return NSLocalizedString(@"chat.status.telegram", nil);
     /* a last seen time read off a dead link is stale, so the original client shows the connecting state instead */
     if (!_session.connected) return ExteriaConnectingText(3);
     NSString *typing = [self typingText];
@@ -621,6 +650,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _input.session = _session;
     _input.formatHost = root;
     _joinPending = _dialog.peerKind == 3 && _dialog.left && !_pinnedList;
+    _input.actionWithInput = _joinPending && _dialog.kind == EXTERIA_DIALOG_GROUP;
     if (_joinPending) _input.actionTitle = NSLocalizedString(@"chat.join", nil);
     _input.delegate = self;
     if (_dialog.kind == EXTERIA_DIALOG_CHANNEL && !_dialog.canPost) {
@@ -836,6 +866,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(developersChanged) name:ExteriaDevelopersDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(readOutboxChanged:) name:ExteriaReadOutboxDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(timesChanged) name:ExteriaTimeDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(uploadProgressed:) name:ExteriaUploadProgressNotification object:_session];
     if (_dialog.saved) {
         ExteriaWeakReference *weak = _weak;
         [self whenPremiumKnown:^(BOOL premium) {
@@ -1129,6 +1160,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         chat->_channelFull = [channel retain];
         /* a channel or group the account is not in shows the way in where the field would be */
         if (channel.membershipKnown) chat->_joinPending = channel.dialog.left && !chat->_pinnedList;
+        chat->_input.actionWithInput = chat->_joinPending && chat->_dialog.kind == EXTERIA_DIALOG_GROUP;
         chat->_input.actionTitle = chat->_joinPending ? NSLocalizedString(@"chat.join", nil) : nil;
         [chat refreshStatusLine];
         /* the full channel is the authority on posting rights, whatever the chat list's entry said */
@@ -1220,6 +1252,73 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 /* a message that is in the list is scrolled to; one that is older asks for pages of older history until it comes or the pages run out */
+- (void)stopJump {
+    [_jumpLink invalidate];
+    [_jumpLink release];
+    _jumpLink = nil;
+}
+
+/* the row of a message that was asked for comes to the middle of the screen in a fraction of a second and is lit for a moment. A message far off is first jumped to the
+   edge of a screen's distance from it, so the part that is seen is always a short, quick move, and the rows are made as it goes since the offset is set each frame */
+- (void)scrollQuicklyToRow:(NSUInteger)row {
+    int32_t messageId = ((ExteriaChatItem *)[_items objectAtIndex:row]).message.messageId;
+    [self stopJump];
+    [_table layoutIfNeeded];
+    UIEdgeInsets inset = _table.contentInset;
+    CGRect rect = [_table rectForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)row inSection:0]];
+    CGFloat visible = MAX(1, _table.bounds.size.height - inset.top - inset.bottom);
+    CGFloat low = -inset.top;
+    CGFloat high = MAX(low, _table.contentSize.height - _table.bounds.size.height + inset.bottom);
+    /* a message taller than the screen shows its beginning */
+    CGFloat aim = rect.size.height >= visible * 0.9 ? rect.origin.y - inset.top - 8 : CGRectGetMidY(rect) - visible / 2 - inset.top;
+    aim = MIN(high, MAX(low, aim));
+    CGFloat from = _table.contentOffset.y;
+    if (ExteriaReduceMotionEnabled() || fabs(aim - from) < 1) {
+        [_table setContentOffset:CGPointMake(0, aim) animated:NO];
+        [self flashRowOfMessage:messageId];
+        return;
+    }
+    CGFloat reach = visible * 1.2f;
+    if (fabs(aim - from) > reach) {
+        from = MIN(high, MAX(low, aim + (aim > from ? -reach : reach)));
+        [_table setContentOffset:CGPointMake(0, from) animated:NO];
+        [_table layoutIfNeeded];
+    }
+    _jumpFrom = from;
+    _jumpTo = aim;
+    _jumpMessageId = messageId;
+    _jumpBegan = 0;
+    _jumpLength = 0.2 + 0.14 * MIN(1.0, fabs(aim - from) / reach);
+    ExteriaReactionPollTarget *target = [[[ExteriaReactionPollTarget alloc] initWithReference:_weak] autorelease];
+    _jumpLink = [[CADisplayLink displayLinkWithTarget:target selector:@selector(jump:)] retain];
+    [_jumpLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+}
+
+- (void)advanceJump:(CADisplayLink *)link {
+    /* a finger on the list takes it over */
+    if (_table.tracking || _table.dragging) {
+        [self stopJump];
+        return;
+    }
+    if (!_jumpBegan) _jumpBegan = link.timestamp;
+    double t = MIN(1.0, (link.timestamp - _jumpBegan) / _jumpLength);
+    double eased = t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
+    [_table setContentOffset:CGPointMake(0, (CGFloat)(_jumpFrom + (_jumpTo - _jumpFrom) * eased)) animated:NO];
+    if (t < 1.0) return;
+    int32_t messageId = _jumpMessageId;
+    [self stopJump];
+    [self flashRowOfMessage:messageId];
+}
+
+- (void)flashRowOfMessage:(int32_t)messageId {
+    for (ExteriaMessageCell *cell in _table.visibleCells) {
+        if ([cell isKindOfClass:[ExteriaMessageCell class]] && cell.item.message.messageId == messageId) {
+            [cell flashHighlight];
+            return;
+        }
+    }
+}
+
 - (void)scrollToTargetOrLoadMore {
     if (_scrollTarget <= 0) return;
     for (NSUInteger i = 0; i < _items.count; ++i) {
@@ -1227,7 +1326,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         _scrollTarget = 0;
         [self stopFollowingBottom];
         _stickToBottom = NO;
-        [_table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:0] atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
+        [self scrollQuicklyToRow:i];
         return;
     }
     if (_canLoadMore && !_loadingOlder && _scrollPages++ < PINNED_SEARCH_PAGES) [self loadOlder];
@@ -1241,7 +1340,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
 
 /* a call goes to a person: not to a bot, a group, a channel or the saved messages */
 - (BOOL)canCall {
-    if (_dialog.kind != EXTERIA_DIALOG_USER || _dialog.saved || _pinnedList) return NO;
+    if (_dialog.kind != EXTERIA_DIALOG_USER || _dialog.saved || _pinnedList || _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID) return NO;
     /* a dialog made from a mention or a link may not know yet that the user is a bot; the user object the history brings does */
     ExteriaPerson *person = [_people objectForKey:[NSNumber numberWithLongLong:_dialog.peerId]];
     return !person.bot;
@@ -1306,7 +1405,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         MENU_ROW(ExteriaSymbolHelp, @"chat.menu.bot.help", ExteriaChatMenuBotHelp);
         if (!_dialog.saved) MENU_ROW(ExteriaSymbolReport, @"report.title", ExteriaChatMenuReport);
     }
-    if (_dialog.kind == EXTERIA_DIALOG_USER || bot || channelLike) {
+    if (_dialog.kind == EXTERIA_DIALOG_USER || bot || (channelLike && !_joinPending)) {
         MENU_ROW(channelLike ? ExteriaSymbolLogout : ExteriaSymbolTrash,
                  channelLike ? (_dialog.kind == EXTERIA_DIALOG_GROUP ? @"channel.menu.leave.group" : @"channel.menu.leave") : @"chat.menu.delete", ExteriaChatMenuDelete);
     }
@@ -1338,7 +1437,11 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         case ExteriaChatMenuBotSettings: [chat sendText:@"/settings" entities:nil]; break;
         case ExteriaChatMenuBotHelp: [chat sendText:@"/help" entities:nil]; break;
         case ExteriaChatMenuReport: [ExteriaReportFlow startForDialog:chat->_dialog session:chat->_session host:chat done:nil]; break;
-        case ExteriaChatMenuDelete: [chat askWithMessage:NSLocalizedString(@"chat.delete.confirm", nil) action:[titles lastObject] tag:ExteriaChatAlertDelete]; break;
+        case ExteriaChatMenuDelete: {
+            NSString *message = chat->_dialog.peerKind == 3 ? [NSString stringWithFormat:NSLocalizedString(@"chats.swipe.leave.confirm", nil), chat->_dialog.title] : NSLocalizedString(@"chat.delete.confirm", nil);
+            [chat askWithMessage:message action:[titles lastObject] tag:ExteriaChatAlertDelete];
+            break;
+        }
         }
     }] autorelease];
     menu.bottomInset = _keyboardOverlap;
@@ -1363,6 +1466,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         }
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
         chat->_joinPending = NO;
+        chat->_input.actionWithInput = NO;
         chat->_input.actionTitle = nil;
         /* the full channel is the authority on posting rights and on membership, so it decides what the bar shows now */
         [chat loadChannelFull];
@@ -2142,6 +2246,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [self mergeMessages:kept];
     _table.hidden = NO;
     [self rebuildItems];
+    /* a network failure can arrive before the cached page */
+    [self showStatus:nil retry:NO];
 }
 
 - (void)didLoadNewest:(NSArray *)messages people:(NSDictionary *)people error:(NSString *)errorName {
@@ -2329,11 +2435,39 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 - (void)markReadIfNeeded {
+    [self scheduleVisibleMentionsRead];
     int32_t newest = 0;
     for (ExteriaMessage *message in [_server allValues]) if (!message.outgoing && message.messageId > newest) newest = message.messageId;
     if (newest <= _markedRead || newest <= _dialog.readInboxMaxId || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
     _markedRead = newest;
     [_session markDialogRead:_dialog upTo:newest];
+}
+
+- (void)scheduleVisibleMentionsRead {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markVisibleMentionsRead) object:nil];
+    [self performSelector:@selector(markVisibleMentionsRead) withObject:nil afterDelay:0];
+}
+
+- (void)markVisibleMentionsRead {
+    if (!_visible || _pinnedList || ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead) || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+    NSMutableArray *ids = [NSMutableArray array];
+    for (NSIndexPath *path in [_table indexPathsForVisibleRows]) {
+        if ((NSUInteger)path.row >= _items.count) continue;
+        ExteriaMessage *message = ((ExteriaChatItem *)[_items objectAtIndex:(NSUInteger)path.row]).message;
+        NSNumber *key = [NSNumber numberWithInt:message.messageId];
+        if (!message.unreadMention || message.outgoing || message.messageId <= 0 || [_readMentionIds containsObject:key]) continue;
+        [ids addObject:key];
+        [_readMentionIds addObject:key];
+        if (ids.count == EXTERIA_MESSAGES_MAX) break;
+    }
+    if (!ids.count) return;
+    ExteriaWeakReference *weak = _weak;
+    [_session markMentionsRead:ids dialog:_dialog completion:^(NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) [chat->_readMentionIds minusSet:[NSSet setWithArray:ids]];
+        else [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+    }];
 }
 
 #pragma mark items
@@ -2412,13 +2546,27 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date) {
     if (_loadedFirst) [self rebuildItems];
 }
 
+/* the ring on the cross of a message that is going up; the row is touched in place, since a rebuild of the list for every part of a file would redraw the screen */
+- (void)uploadProgressed:(NSNotification *)note {
+    long long randomId = [[note.userInfo objectForKey:@"randomId"] longLongValue];
+    float fraction = [[note.userInfo objectForKey:@"fraction"] floatValue];
+    for (ExteriaMessage *message in _local) {
+        if (message.randomId != randomId) continue;
+        message.uploadProgress = fraction;
+        for (ExteriaMessageCell *cell in _table.visibleCells) {
+            if ([cell isKindOfClass:[ExteriaMessageCell class]] && cell.item.message == message) [cell showUploadProgress];
+        }
+        return;
+    }
+}
+
 - (void)developersChanged {
     [self showTitleBadge];
     if (_loadedFirst) [self rebuildItems];
 }
 
 - (void)showTitleBadge {
-    long long badge = _dialog.saved ? 0 : ExteriaBadgeDocument(_dialog.emojiStatus, _dialog.premium);
+    long long badge = ExteriaDialogBadgeDocument(_dialog);
     NSArray *entities = nil;
     _title.text = ExteriaNameWithBadges(_dialog.title, badge, ExteriaDialogIsDeveloper(_dialog), &entities);
     _title.entities = entities;
@@ -2611,8 +2759,10 @@ static void ExteriaRedrawTree(UIView *view) {
     ExteriaChatItem *previousItem = nil;
     NSCalendar *calendar = ExteriaDisplayCalendar();
     NSInteger previousDay = 0;
+    BOOL unreadShown = _unreadAnchor < 0 || _pinnedList || _startMessageId > 0;
     for (NSUInteger at = 0; at < messages.count; ++at) {
         ExteriaMessage *message = [messages objectAtIndex:at];
+        if (message.messageId > 0 && [_openedOnce containsObject:[NSNumber numberWithInt:message.messageId]]) message.viewOnceOpened = YES;
         /* photos and videos sent together are one item: the run of messages that share an album number, from one sender on one day */
         NSMutableArray *album = nil;
         if (message.groupedId && [self isAlbumPicture:message]) {
@@ -2633,6 +2783,16 @@ static void ExteriaRedrawTree(UIView *view) {
             previousItem.joinsNext = NO;
             previousItem = nil;
         }
+        /* with older history still unloaded the first row is not known to be the first unread one */
+        if (!unreadShown && !message.outgoing && message.messageId > _unreadAnchor) {
+            unreadShown = YES;
+            if (at > 0 || !_canLoadMore) {
+                [items addObject:[ExteriaChatItem pillWithText:NSLocalizedString(@"chat.unread.line", nil)]];
+                previous = nil;
+                previousItem.joinsNext = NO;
+                previousItem = nil;
+            }
+        }
         [self assignFacesOfMessage:message];
         NSNumber *key = [self cacheKeyForMessage:message];
         ExteriaChatItem *item = [_itemCache objectForKey:key];
@@ -2648,6 +2808,11 @@ static void ExteriaRedrawTree(UIView *view) {
         if (replyId > 0 && message.replyQuote.length) replyText = message.replyQuote;
         replyText = [[replyText stringByReplacingOccurrencesOfString:@"\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\r" withString:@" "];
         NSArray *replyEntities = original && !message.replyQuote.length ? original.entities : nil;
+        if (replyEntities.count && !ExteriaChatFlagGet(ExteriaChatFlagShowReplyCustomEmoji)) {
+            NSMutableArray *visible = [NSMutableArray array];
+            for (ExteriaTextEntity *entity in replyEntities) if (entity.style != ExteriaTextStyleCustomEmoji) [visible addObject:entity];
+            replyEntities = visible;
+        }
         UIColor *replyColor = ExteriaColorBubbleLink(message.outgoing);
         if (original && !message.outgoing) {
             ExteriaPerson *author = [_people objectForKey:[NSNumber numberWithLongLong:original.senderKey]];
@@ -2932,6 +3097,7 @@ static void ExteriaRedrawTree(UIView *view) {
 }
 
 - (void)stopFollowingBottom {
+    [self stopJump];
     [_followLink invalidate];
     [_followLink release];
     _followLink = nil;
@@ -3086,6 +3252,7 @@ static void ExteriaRedrawTree(UIView *view) {
     [self loadOlderIfNeeded];
     [self prepareAhead:NO];
     [self refreshAnimationsIfRowsChanged];
+    [self scheduleVisibleMentionsRead];
 }
 
 /* pulling past the end of a channel offers the next channel with unread posts; letting go far enough opens it */
@@ -3838,6 +4005,9 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     if (message.edited && !message.deletedLocally && ExteriaChatFlagGet(ExteriaChatFlagAyuSaveEdits)) mask |= EXTERIA_ACTION_EDIT_HISTORY;
     /* what was deleted is only read: it cannot be answered, changed, pinned or sent on, since the server no longer has it */
     if (message.deletedLocally) mask &= EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE | EXTERIA_ACTION_SELECT;
+    /* a one-time file must not be kept, sent on or sent again by this client */
+    if (ExteriaMessageIsViewOnce(message)) mask &= ~(uint32_t)(EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_SAVE | EXTERIA_ACTION_GALLERY |
+                                                              EXTERIA_ACTION_COPY_PHOTO | EXTERIA_ACTION_REPEAT | EXTERIA_ACTION_BOOKMARK | EXTERIA_ACTION_UNBOOKMARK);
     if (!mask) return;
     [self dismissInput];
     ExteriaWeakReference *weak = _weak;
@@ -3959,7 +4129,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
 }
 
 - (BOOL)messageCellCanSwipeReply:(ExteriaMessageCell *)cell {
-    if (_pinnedList || _joinPending || !cell.item.message) return NO;
+    if (_pinnedList || (_joinPending && _dialog.kind != EXTERIA_DIALOG_GROUP) || !cell.item.message) return NO;
     exteria_action_context context = [self actionContextOfMessage:cell.item.message];
     return (exteria_message_actions_for(&context) & EXTERIA_ACTION_REPLY) != 0;
 }
@@ -5089,7 +5259,8 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 - (void)recordTick {
     NSTimeInterval elapsed = _voice ? _voice.elapsed : _roundRecorder.elapsed;
     [_input setRecordingElapsed:elapsed];
-    if (_roundRecorder && elapsed >= ROUND_SECONDS_MAX) {
+    /* a note that reaches the limit of the encoder goes by itself, a second short of it */
+    if ((_roundRecorder && elapsed >= ROUND_SECONDS_MAX) || (_voice && elapsed >= EXTERIA_VOICE_SECONDS_MAX - 1)) {
         /* the minute is up: the clip goes now, and the hold that is still down ends without a second send */
         [self finishRecordingCancelled:NO];
         [_input releaseHold];
@@ -5124,7 +5295,9 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)inputBar:(ExteriaInputBar *)bar didFinishRecordingCancelled:(BOOL)cancelled {
-    (void)bar;
+    /* the choice of the chip belongs to this recording alone: it is read now and the chip goes back to off */
+    _recordingOneTime = !cancelled && bar.oneTimeRecording;
+    [bar clearOneTimeRecording];
     [self finishRecordingCancelled:cancelled];
 }
 
@@ -5136,6 +5309,8 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         return;
     }
     ExteriaWeakReference *weak = _weak;
+    BOOL once = _recordingOneTime;
+    _recordingOneTime = NO;
     ExteriaVoiceRecorder *voice = _voice;
     ExteriaRoundRecorder *round = _roundRecorder;
     _voice = nil;
@@ -5145,32 +5320,33 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     if (voice) {
         [voice finishWithCompletion:^(NSString *path, int32_t durationMs, NSData *waveform) {
             ExteriaChatController *chat = weak.target;
-            if (path && chat) [chat sendRecordingAtPath:path durationMs:durationMs side:0 waveform:waveform];
+            if (path && chat) [chat sendRecordingAtPath:path durationMs:durationMs side:0 waveform:waveform viewOnce:once];
             else if (path) [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+            else if (voice.failed) ExteriaGiftAlert(nil, NSLocalizedString(@"chat.voice.failed", nil));
             [voice release];
         }];
     } else {
         [round finishWithCompletion:^(NSString *path, int32_t durationMs, int32_t side) {
             ExteriaChatController *chat = weak.target;
-            if (path && chat) [chat sendRecordingAtPath:path durationMs:durationMs side:side waveform:nil];
+            if (path && chat) [chat sendRecordingAtPath:path durationMs:durationMs side:side waveform:nil viewOnce:once];
             else if (path) [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             [round release];
         }];
     }
 }
 
-- (void)sendRecordingAtPath:(NSString *)path durationMs:(int32_t)durationMs side:(int32_t)side waveform:(NSData *)waveform {
+- (void)sendRecordingAtPath:(NSString *)path durationMs:(int32_t)durationMs side:(int32_t)side waveform:(NSData *)waveform viewOnce:(BOOL)once {
     NSString *file = [[path copy] autorelease];
     NSData *bars = [[waveform copy] autorelease];
     /* a recording nobody wants goes away with its file */
     [self askFirst:ExteriaChatFlagAskRecording message:NSLocalizedString(side > 0 ? @"chat.ask.round" : @"chat.ask.voice", nil) action:NSLocalizedString(@"chat.ask.record.action", nil) then:^{
-        [self sendConfirmedRecordingAtPath:file durationMs:durationMs side:side waveform:bars];
+        [self sendConfirmedRecordingAtPath:file durationMs:durationMs side:side waveform:bars viewOnce:once];
     } declined:^{
         [[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
     }];
 }
 
-- (void)sendConfirmedRecordingAtPath:(NSString *)path durationMs:(int32_t)durationMs side:(int32_t)side waveform:(NSData *)waveform {
+- (void)sendConfirmedRecordingAtPath:(NSString *)path durationMs:(int32_t)durationMs side:(int32_t)side waveform:(NSData *)waveform viewOnce:(BOOL)once {
     ExteriaOutgoing *outgoing = [[[ExteriaOutgoing alloc] init] autorelease];
     outgoing->kind = side > 0 ? ExteriaOutgoingRound : ExteriaOutgoingVoice;
     outgoing->path = [path copy];
@@ -5180,6 +5356,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     outgoing->height = side;
     outgoing->waveform = [waveform copy];
     outgoing->temporary = YES;
+    outgoing->viewOnce = once;
     [self sendOutgoing:outgoing];
 }
 
@@ -5330,6 +5507,131 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     }];
 }
 
+/* the sender looks at their own file while the other side has not: nothing is reported and nothing burns */
+- (void)previewViewOnce:(ExteriaMessage *)message {
+    if (message.media.kind == EXTERIA_PREVIEW_VOICE) {
+        /* the player fetches by the file of the server, which a note that is still going up does not have */
+        if (!message.media.file) {
+            ExteriaShowAlert(nil, NSLocalizedString(@"viewonce.preview.wait", nil), [NSArray arrayWithObject:NSLocalizedString(@"notice.ok", nil)], 0, NO, nil);
+            return;
+        }
+        ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
+        if ([player isCurrentTrack:message.media]) [player togglePause];
+        else [player playTrack:message.media queue:[NSArray arrayWithObject:message.media] media:_media];
+        return;
+    }
+    [self dismissInput];
+    ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithOneTimePreviewOfMessage:message media:_media] autorelease];
+    [self presentViewController:viewer animated:YES completion:nil];
+}
+
+/* a one-time voice note plays through the player of the app, alone in its queue; the server hears that it was opened when the sound starts, and the card burns
+   when the note is no longer the track of the player (it ended, or the person stopped it), which is when it is gone */
+- (void)playViewOnceVoice:(ExteriaMessage *)message {
+    ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
+    ExteriaMedia *track = message.media;
+    [_onceVoice release];
+    _onceVoice = [track retain];
+    _onceVoiceId = message.messageId;
+    _onceVoiceOpened = NO;
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaMusicPlayerDidChangeNotification object:player];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onceVoiceChanged:) name:ExteriaMusicPlayerDidChangeNotification object:player];
+    [player playTrack:track queue:[NSArray arrayWithObject:track] media:_media];
+}
+
+- (void)endOnceVoice {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaMusicPlayerDidChangeNotification object:[ExteriaMusicPlayer sharedPlayer]];
+    [_onceVoice release];
+    _onceVoice = nil;
+}
+
+- (void)onceVoiceChanged:(NSNotification *)note {
+    (void)note;
+    if (!_onceVoice) return;
+    ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
+    BOOL current = [player isCurrentTrack:_onceVoice];
+    int32_t messageId = _onceVoiceId;
+    if (current && player.state == ExteriaMusicStateFailed) {
+        NSLog(@"exteria: the one-time voice note did not play, so it stays unopened");
+        [self endOnceVoice];
+        return;
+    }
+    if (current && player.state == ExteriaMusicStatePlaying && !_onceVoiceOpened) {
+        _onceVoiceOpened = YES;
+        [_openedOnce addObject:[NSNumber numberWithInt:messageId]];
+        ExteriaMessage *message = [self messageWithId:messageId];
+        message.viewOnceOpened = YES;
+        [_session markContentsRead:[NSArray arrayWithObject:[NSNumber numberWithInt:messageId]] dialog:_dialog completion:^(NSString *errorName) {
+            if (errorName) NSLog(@"exteria: the server was not told that a one-time voice note was heard: %@", errorName);
+        }];
+        return;
+    }
+    if (current) return;
+    BOOL opened = _onceVoiceOpened;
+    [self endOnceVoice];
+    if (!opened) return;
+    ExteriaWeakReference *weak = _weak;
+    for (ExteriaMessageCell *visible in _table.visibleCells) {
+        if ([visible isKindOfClass:[ExteriaMessageCell class]] && visible.item.message.messageId == messageId) {
+            [visible playBurnWithCompletion:^{ [(ExteriaChatController *)weak.target rebuildItems]; }];
+            return;
+        }
+    }
+    [self rebuildItems];
+}
+
+/* a tap on the card of a one-time file: it opens in a viewer of its own, the server hears that it was opened when the picture is on the screen, and the card burns when the viewer is closed */
+- (void)messageCellDidTapViewOnce:(ExteriaMessageCell *)cell {
+    ExteriaMessage *message = cell.item.message;
+    if (!ExteriaMessageIsViewOnce(message)) return;
+    /* the note that plays now pauses and resumes on a tap, even after the server has marked it opened */
+    if (message.media.kind == EXTERIA_PREVIEW_VOICE && _onceVoice && message.messageId == _onceVoiceId && [[ExteriaMusicPlayer sharedPlayer] isCurrentTrack:_onceVoice]) {
+        [[ExteriaMusicPlayer sharedPlayer] togglePause];
+        return;
+    }
+    if (message.outgoing) {
+        if (ExteriaViewOnceExpired(message)) {
+            ExteriaShowAlert(nil, NSLocalizedString(@"viewonce.seen", nil), [NSArray arrayWithObject:NSLocalizedString(@"notice.ok", nil)], 0, NO, nil);
+        } else {
+            [self previewViewOnce:message];
+        }
+        return;
+    }
+    if (ExteriaViewOnceExpired(message)) {
+        ExteriaShowAlert(nil, NSLocalizedString(@"viewonce.gone", nil), [NSArray arrayWithObject:NSLocalizedString(@"notice.ok", nil)], 0, NO, nil);
+        return;
+    }
+    if (message.messageId <= 0) return;
+    if (message.media.kind == EXTERIA_PREVIEW_VOICE) {
+        [self playViewOnceVoice:message];
+        return;
+    }
+    [self dismissInput];
+    ExteriaWeakReference *weak = _weak;
+    int32_t messageId = message.messageId;
+    ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithOneTimeMessage:message media:_media opened:^{
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        message.viewOnceOpened = YES;
+        [chat->_openedOnce addObject:[NSNumber numberWithInt:messageId]];
+        [chat->_session markContentsRead:[NSArray arrayWithObject:[NSNumber numberWithInt:messageId]] dialog:chat->_dialog completion:^(NSString *errorName) {
+            if (errorName) NSLog(@"exteria: the server was not told that a one-time file was opened: %@", errorName);
+        }];
+    } closed:^{
+        ExteriaChatController *chat = weak.target;
+        if (!chat || ![chat->_openedOnce containsObject:[NSNumber numberWithInt:messageId]]) return;
+        /* the card burns where it stands, and the row is built again as an expired one once the sparks are gone */
+        for (ExteriaMessageCell *visible in chat->_table.visibleCells) {
+            if ([visible isKindOfClass:[ExteriaMessageCell class]] && visible.item.message.messageId == messageId) {
+                [visible playBurnWithCompletion:^{ [(ExteriaChatController *)weak.target rebuildItems]; }];
+                return;
+            }
+        }
+        [chat rebuildItems];
+    }] autorelease];
+    [self presentViewController:viewer animated:YES completion:nil];
+}
+
 - (void)messageCellDidTapMedia:(ExteriaMessageCell *)cell {
     ExteriaMessage *selected = cell.tappedMediaMessage;
     if (selected.media.kind == EXTERIA_PREVIEW_LOCATION && selected.media.location.valid) {
@@ -5347,7 +5649,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         /* an album brings all its pictures, in order */
         for (ExteriaMessage *message in (item.albumMessages ? item.albumMessages : (item.message ? [NSArray arrayWithObject:item.message] : nil))) {
             exteria_preview_kind kind = message.media.kind;
-            if (message.media.file && exteria_media_opens_viewer(kind)) [messages addObject:message];
+            if (message.media.file && exteria_media_opens_viewer(kind) && !message.media.viewOnce) [messages addObject:message];
         }
     }
     /* the cell may still hold the message of a list that was rebuilt since, so the viewer is given the copy that is in the list */
@@ -5388,8 +5690,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 /* a document that has come opens in the preview of the system, or offers the apps that take it; the cache names its files by key only, so a link with the real
    extension is what tells the system the type */
 - (void)messageCell:(ExteriaMessageCell *)cell didOpenFileAtPath:(NSString *)path name:(NSString *)name {
-    NSString *extension = name.pathExtension.length ? name.pathExtension : @"bin";
-    NSURL *url = ExteriaPlayableLink(path, extension, @"document");
+    NSURL *url = ExteriaNamedLink(path, name.length ? name : @"file.bin", @"document");
     if (!url) {
         ExteriaGiftAlert(nil, NSLocalizedString(@"chat.file.open.failed", nil));
         return;
@@ -5422,6 +5723,17 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         [(ExteriaMessageCell *)[_table cellForRowAtIndexPath:path] startRound];
         return;
     }
+}
+
+/* the cross on a message that is going up: the upload stops and the pending message goes, as if it was never sent */
+- (void)messageCellDidCancelSending:(ExteriaMessageCell *)cell {
+    ExteriaMessage *message = cell.item.message;
+    if (![_local containsObject:message] || message.state != ExteriaMessageStateSending) return;
+    [_session cancelSendWithRandomId:message.randomId];
+    ExteriaOutgoing *sent = message.pendingSend;
+    if (sent && sent->temporary && sent->path) [[NSFileManager defaultManager] removeItemAtPath:sent->path error:NULL];
+    [_local removeObject:message];
+    [self rebuildItems];
 }
 
 - (void)messageCellDidTapFailed:(ExteriaMessageCell *)cell {

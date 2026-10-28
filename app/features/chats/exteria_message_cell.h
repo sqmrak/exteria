@@ -29,6 +29,10 @@
 /* the name or picture of the sender of a group message was tapped */
 - (void)messageCellDidTapSender:(ExteriaMessageCell *)cell;
 @optional
+/* the card of a one-time photo, video, voice note or round video was tapped */
+- (void)messageCellDidTapViewOnce:(ExteriaMessageCell *)cell;
+/* the cross on the picture or file of a message that is still going up was tapped */
+- (void)messageCellDidCancelSending:(ExteriaMessageCell *)cell;
 /* the line "forwarded from" of a bubble was tapped */
 - (void)messageCellDidTapForward:(ExteriaMessageCell *)cell;
 @required
@@ -69,6 +73,13 @@
 
 /* a moving list holds new sticker renderers and inline players until it settles */
 @property (nonatomic, assign) BOOL activationDeferred;
+
+/* the ring on the cross of a message that is going up follows the message's uploadProgress */
+- (void)showUploadProgress;
+/* a band of the accent color fades in over the row and out again: the message a reply, a search or a bookmark led to */
+- (void)flashHighlight;
+/* the card of a one-time file burns away; completion runs when the animation is over */
+- (void)playBurnWithCompletion:(void (^)(void))completion;
 
 /* readies the picture of a row that is not on screen yet; a row without a picture does nothing */
 + (void)prepareItem:(ExteriaChatItem *)item media:(ExteriaMediaCache *)media;

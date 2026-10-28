@@ -23,6 +23,7 @@
 #import "exteria_wave.h"
 #import "exteria_chat_settings.h"
 #import "exteria_theme.h"
+#import "exteria_burn_effect.h"
 
 #define JOIN_RADIUS 5.0
 /* the corner of a modern bubble, which the person sets in the chat settings; the corner that tucks in against a neighbour is never larger than it */
@@ -129,6 +130,11 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
         [eye drawAtPoint:CGPointMake(origin.x, origin.y + 1.5)];
         ExteriaDrawStringAt(_item.viewsText, ExteriaFontRegular(11), CGPointMake(origin.x + 15.5, origin.y));
         timeX = origin.x + _item.viewsWidth;
+    }
+    if (_item.deletedWidth > 0) {
+        UIImage *can = ExteriaSymbolImage(ExteriaSymbolTrashCan, 12, color);
+        [can drawAtPoint:CGPointMake(timeX, origin.y + 1 + (12 - can.size.height) / 2)];
+        timeX += _item.deletedWidth;
     }
     ExteriaDrawStringAt(_item.timeText, ExteriaFontRegular(11), CGPointMake(timeX, origin.y));
     if (!message.outgoing) return;
@@ -263,6 +269,28 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
     CGRect icon = CGRectMake(frame.origin.x, frame.origin.y, 44, 44);
     if (_item.call) {
         [self drawCallRow:context];
+        return;
+    }
+    /* a one-time file is a card: a disc with a dashed ring and the figure one, whatever the file is */
+    if (ExteriaMessageIsViewOnce(message)) {
+        BOOL expired = ExteriaViewOnceExpired(message);
+        UIColor *ink = [UIColor whiteColor];
+        [(message.outgoing && !ExteriaThemeIsClassic() ? [UIColor colorWithWhite:1 alpha:0.22] : ExteriaColorAccent()) setFill];
+        CGContextFillEllipseInRect(context, icon);
+        CGContextSaveGState(context);
+        CGContextSetStrokeColorWithColor(context, [ink colorWithAlphaComponent:expired ? 0.45 : 0.95].CGColor);
+        CGContextSetLineWidth(context, 1.6);
+        CGFloat dashes[2] = {3.2, 3.2};
+        CGContextSetLineDash(context, 0, dashes, 2);
+        CGContextStrokeEllipseInRect(context, CGRectInset(icon, 6, 6));
+        CGContextRestoreGState(context);
+        [ink set];
+        ExteriaDrawStringIn(@"1", ExteriaFontBold(17), CGRectMake(icon.origin.x, icon.origin.y + 11, 44, 22), ExteriaStringClip, ExteriaTextAlignmentCenter);
+        UIColor *quiet = ExteriaColorBubbleMeta(message.outgoing);
+        CGFloat textX = icon.origin.x + 44 + 10, textWidth = frame.size.width - 44 - 10;
+        [_item.fileTitleLayout drawAtPoint:CGPointMake(textX, frame.origin.y + 6)];
+        [quiet set];
+        ExteriaDrawStringIn(_item.fileDetail, ExteriaFontRegular(13), CGRectMake(textX, frame.origin.y + 25, textWidth, 18), ExteriaStringTailTruncate, ExteriaTextAlignmentLeft);
         return;
     }
     /* the button of a voice note, a song or a document is a view of its own over this corner of the row, which animates between its glyphs */
@@ -509,15 +537,15 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
     CGRect row = _item.commentsFrame;
     BOOL outgoing = _item.message.outgoing;
     [[ExteriaColorBubbleMeta(outgoing) colorWithAlphaComponent:0.25] setFill];
-    CGContextFillRect(context, CGRectMake(PAD_X_COMMENTS, row.origin.y, row.size.width - 2 * PAD_X_COMMENTS, 1.0 / ExteriaScreenScale()));
+    CGContextFillRect(context, CGRectMake(row.origin.x + PAD_X_COMMENTS, row.origin.y, row.size.width - 2 * PAD_X_COMMENTS, 1.0 / ExteriaScreenScale()));
     NSUInteger shown = MIN(_item.commenterPeople.count, (NSUInteger)3);
-    CGFloat textX = PAD_X_COMMENTS + (shown ? COMMENTER_SIDE + (CGFloat)(shown - 1) * COMMENTER_STEP + 8 : 0);
+    CGFloat textX = row.origin.x + PAD_X_COMMENTS + (shown ? COMMENTER_SIDE + (CGFloat)(shown - 1) * COMMENTER_STEP + 8 : 0);
     UIColor *accent = ExteriaColorBubbleLink(outgoing);
     [accent set];
     CGSize text = ExteriaStringSize(_item.commentsText, ExteriaFontSemibold(14));
     ExteriaDrawStringAt(_item.commentsText, ExteriaFontSemibold(14), CGPointMake(textX, row.origin.y + (row.size.height - text.height) / 2));
     UIImage *chevron = ExteriaSymbolImage(ExteriaSymbolChevronRight, 14, accent);
-    [chevron drawAtPoint:CGPointMake(row.size.width - PAD_X_COMMENTS - chevron.size.width, row.origin.y + (row.size.height - chevron.size.height) / 2)];
+    [chevron drawAtPoint:CGPointMake(CGRectGetMaxX(row) - PAD_X_COMMENTS - chevron.size.width, row.origin.y + (row.size.height - chevron.size.height) / 2)];
 }
 
 - (void)drawOverlay:(CGContextRef)context {
@@ -535,6 +563,12 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
     else if (_layerKind == ExteriaBubbleLayerOverlay) [self drawOverlay:context];
     else if (_item.kind == ExteriaChatItemPill) [self drawPill:context];
     else if (_item.kind == ExteriaChatItemBubble) [self drawBody:context];
+    else if (_item.commentsText.length) {
+        CGRect row = _item.commentsFrame;
+        [(_item.message.outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn()) setFill];
+        [[UIBezierPath bezierPathWithRoundedRect:row cornerRadius:ExteriaBubbleRadius()] fill];
+        [self drawCommentsRow:context];
+    }
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(self);
     /* a sticker has no bubble, its picture and the time capsule over it are other views */
 }
@@ -802,6 +836,8 @@ static float ExteriaSpoilerRandom(void) {
 
 @interface ExteriaMessageCell () <UIGestureRecognizerDelegate> {
     ExteriaSpoilerCover *_spoilerCover;
+    /* the band that lights the row of a message the list scrolled to */
+    UIView *_flash;
     UIPanGestureRecognizer *_swipe;
     UIPanGestureRecognizer *_seekPan;
     UIView *_swipeDisc;
@@ -1000,6 +1036,7 @@ static ExteriaMessageCell *sPlayingRound = nil;
     _seekPan.delegate = nil;
     [_seekPan release];
     [_swipeDisc release];
+    [_flash release];
     [_selectCover release];
     [_selectMark release];
     [_selectCheck release];
@@ -1462,7 +1499,10 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_item release];
     _item = item;
     /* a kept message the other side deleted is faded, if the person likes it so */
-    self.contentView.alpha = item.message.deletedLocally && ExteriaChatFlagGet(ExteriaChatFlagAyuTranslucent) ? 0.55f : 1.0f;
+    self.contentView.alpha = item.message.deletedLocally && ExteriaChatFlagGet(ExteriaChatFlagAyuTranslucent) ? 0.75f : 1.0f;
+    _body.alpha = 1;
+    [_flash.layer removeAllAnimations];
+    _flash.alpha = 0;
     [_media release];
     _media = [media retain];
     [_avatars release];
@@ -1478,9 +1518,15 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? CLASSIC_TAIL : 0;
     _body.tailWidth = tail;
     CGRect bodyFrame = bubble;
+    if (item.kind != ExteriaChatItemBubble && !CGRectIsEmpty(item.commentsFrame)) {
+        bodyFrame.origin.x += MIN(0, item.commentsFrame.origin.x);
+        bodyFrame.size.width = MAX(CGRectGetMaxX(bubble), bubble.origin.x + CGRectGetMaxX(item.commentsFrame)) - bodyFrame.origin.x;
+        bodyFrame.size.height = CGRectGetMaxY(item.commentsFrame);
+    }
     bodyFrame.size.width += tail;
     if (!item.message.outgoing) bodyFrame.origin.x -= tail;
     _body.frame = bodyFrame;
+    _body.bounds = CGRectMake(bodyFrame.origin.x - bubble.origin.x + (!item.message.outgoing ? tail : 0), 0, bodyFrame.size.width, bodyFrame.size.height);
     [_body setNeedsDisplay];
     _picture.hidden = YES;
     _map.hidden = YES;
@@ -1560,7 +1606,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _picture.layer.cornerRadius = MAX(0, ExteriaBubbleRadius() - 3);
         BOOL video = content.kind != EXTERIA_PREVIEW_PHOTO;
         [self loadPictureForItem:item];
-        if (video) {
+        if (video || [self uploading]) {
             [self placeMediaButtonOver:_picture.frame];
             /* a video waits for a tap, which brings it and shows the ring; the arrow says it is not here */
             [self prepareMediaButtonLoading:content.kind == EXTERIA_PREVIEW_GIF];
@@ -1684,10 +1730,59 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     return kind == EXTERIA_PREVIEW_VOICE || kind == EXTERIA_PREVIEW_AUDIO || kind == EXTERIA_PREVIEW_FILE ? _voiceAction : _play;
 }
 
+/* a photo, video or document of ours that is still going up: its button is a cross with the ring of the upload, not the arrow of a file to fetch */
+- (BOOL)uploading {
+    ExteriaMessage *message = _item.message;
+    ExteriaOutgoing *pending = message.pendingSend;
+    return message.outgoing && message.state == ExteriaMessageStateSending && pending &&
+           (pending->kind == ExteriaOutgoingPhoto || pending->kind == ExteriaOutgoingVideo || pending->kind == ExteriaOutgoingFile);
+}
+
+- (void)showUploadProgress {
+    if ([self uploading]) [[self loadAction] setProgress:_item.message.uploadProgress];
+}
+
+/* the card burns: sparks over it while it fades, and the owner rebuilds the row as an expired one when the animation is over */
+- (void)playBurnWithCompletion:(void (^)(void))completion {
+    if (!ExteriaMessageIsViewOnce(_item.message) || _item.content != ExteriaChatItemContentFile) {
+        if (completion) completion();
+        return;
+    }
+    CGRect card = [self.contentView convertRect:CGRectInset(_item.fileFrame, -6, -4) fromView:_body];
+    [UIView animateWithDuration:0.8 delay:0.1 options:UIViewAnimationOptionCurveEaseIn animations:^{ _body.alpha = 0.25f; } completion:nil];
+    [ExteriaBurnEffect burnRect:card inView:self.contentView duration:0.9 completion:completion];
+}
+
+- (void)flashHighlight {
+    if (!_flash) {
+        _flash = [[UIView alloc] init];
+        _flash.userInteractionEnabled = NO;
+        [self.contentView insertSubview:_flash atIndex:0];
+    }
+    _flash.backgroundColor = [ExteriaColorAccent() colorWithAlphaComponent:ExteriaThemeIsDark() ? 0.26f : 0.2f];
+    _flash.frame = CGRectMake(0, 1, self.contentView.bounds.size.width, MAX(0, self.contentView.bounds.size.height - 2));
+    [_flash.layer removeAllAnimations];
+    _flash.alpha = 0;
+    UIView *flash = _flash;
+    [UIView animateWithDuration:0.14 animations:^{ flash.alpha = 1; } completion:^(BOOL finished) {
+        if (!finished) return;
+        [UIView animateWithDuration:0.7 delay:0.4 options:UIViewAnimationOptionCurveEaseOut animations:^{ flash.alpha = 0; } completion:nil];
+    }];
+}
+
+- (void)cancelSending {
+    if ([_delegate respondsToSelector:@selector(messageCellDidCancelSending:)]) [_delegate messageCellDidCancelSending:self];
+}
+
 /* the glyph a file shows before anything is asked of it: the triangle when it is on the disk, the ring when it is
    coming, the arrow when it has to be asked for */
 - (void)prepareMediaButtonLoading:(BOOL)startAtOnce {
     ExteriaMedia *content = _item.message.media;
+    if ([self uploading]) {
+        [[self loadAction] setIcon:ExteriaMediaIconCancel animated:NO];
+        [[self loadAction] setProgress:_item.message.uploadProgress];
+        return;
+    }
     if (_loadRequest) {
         [[self loadAction] setIcon:ExteriaMediaIconCancel animated:NO];
         [[self loadAction] setProgress:_loadProgress];
@@ -1819,6 +1914,10 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 /* a tap on a document that is here opens it; on one that is not, it brings it with the ring turning on the button,
    and a second tap lets it go */
 - (void)tappedFileButton {
+    if ([self uploading]) {
+        [self cancelSending];
+        return;
+    }
     if (_loadedPath) {
         [_delegate messageCell:self didOpenFileAtPath:_loadedPath name:_item.message.media.name];
         return;
@@ -1835,14 +1934,14 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 - (void)prepareVoiceActionForItem:(ExteriaChatItem *)item bubble:(CGRect)bubble {
     exteria_preview_kind kind = item.message.media.kind;
-    if (item.call || item.content != ExteriaChatItemContentFile || (kind != EXTERIA_PREVIEW_VOICE && kind != EXTERIA_PREVIEW_AUDIO && kind != EXTERIA_PREVIEW_FILE)) return;
+    if (item.call || item.content != ExteriaChatItemContentFile || ExteriaMessageIsViewOnce(item.message) || (kind != EXTERIA_PREVIEW_VOICE && kind != EXTERIA_PREVIEW_AUDIO && kind != EXTERIA_PREVIEW_FILE)) return;
     CGRect icon = item.fileFrame;
     _voiceAction.frame = CGRectMake(bubble.origin.x + icon.origin.x, bubble.origin.y + icon.origin.y, VOICE_BUTTON, VOICE_BUTTON);
     _voiceAction.discColor = item.message.outgoing && !ExteriaThemeIsClassic() ? [UIColor colorWithWhite:1 alpha:0.22] : ExteriaColorAccent();
     _voiceAction.hidden = NO;
     /* a voice note comes by itself, a song waits to be played, and a document waits to be asked for: the arrow, then the page once it is here */
     [self prepareMediaButtonLoading:kind == EXTERIA_PREVIEW_VOICE];
-    if (kind == EXTERIA_PREVIEW_FILE) [_voiceAction setIcon:_loadRequest ? ExteriaMediaIconCancel : (_loadedPath ? ExteriaMediaIconFile : ExteriaMediaIconDownload) animated:NO];
+    if (kind == EXTERIA_PREVIEW_FILE) [_voiceAction setIcon:_loadRequest || [self uploading] ? ExteriaMediaIconCancel : (_loadedPath ? ExteriaMediaIconFile : ExteriaMediaIconDownload) animated:NO];
     else [self syncVoiceActionAnimated:NO];
 }
 
@@ -2307,8 +2406,21 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 - (void)tapped:(UITapGestureRecognizer *)tap {
     if (!_item || _item.kind == ExteriaChatItemPill) return;
-    if (CGRectContainsPoint(_reactions.frame, [tap locationInView:self.contentView])) return;
-    if (!_markupView.hidden && CGRectContainsPoint(_markupView.frame, [tap locationInView:self.contentView])) return;
+    CGPoint point = [tap locationInView:self.contentView];
+    if (_item.content == ExteriaChatItemContentPoll && [_delegate respondsToSelector:@selector(messageCell:didTapPollAnswer:)]) {
+        CGPoint inPoll = CGPointMake(point.x - _item.bubbleFrame.origin.x, point.y - _item.bubbleFrame.origin.y);
+        if (_item.pollButtonTitle.length && CGRectContainsPoint(_item.pollButtonFrame, inPoll)) {
+            [_delegate messageCell:self didTapPollAnswer:-1];
+            return;
+        }
+        NSUInteger answer = [_item pollAnswerAtPoint:inPoll];
+        if (answer != NSNotFound) {
+            [_delegate messageCell:self didTapPollAnswer:(NSInteger)answer];
+            return;
+        }
+    }
+    if (!_reactions.hidden && CGRectContainsPoint(_reactions.frame, point)) return;
+    if (_markupView && !_markupView.hidden && CGRectContainsPoint(_markupView.frame, point)) return;
     if (_item.albumFrames.count) {
         CGPoint inBubble = [tap locationInView:self.contentView];
         inBubble.x -= _item.bubbleFrame.origin.x;
@@ -2347,6 +2459,11 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _item.message.media.kind == EXTERIA_PREVIEW_GIF &&
         CGRectContainsPoint(_picture.frame, [tap locationInView:self.contentView])) {
         [self tappedGif];
+        return;
+    }
+    if (_item.content == ExteriaChatItemContentPicture && [self uploading] && !_play.hidden &&
+        CGRectContainsPoint(CGRectInset(_play.frame, -8, -8), [tap locationInView:self.contentView])) {
+        [self cancelSending];
         return;
     }
     if (_item.content == ExteriaChatItemContentPicture && exteria_media_opens_viewer(_item.message.media.kind) &&
@@ -2395,23 +2512,16 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
             return;
         }
     }
-    if (_item.content == ExteriaChatItemContentPoll && [_delegate respondsToSelector:@selector(messageCell:didTapPollAnswer:)]) {
-        if (_item.pollButtonTitle.length && CGRectContainsPoint(_item.pollButtonFrame, inBody)) {
-            [_delegate messageCell:self didTapPollAnswer:-1];
-            return;
-        }
-        NSUInteger answer = [_item pollAnswerAtPoint:inBody];
-        if (answer != NSNotFound) {
-            [_delegate messageCell:self didTapPollAnswer:(NSInteger)answer];
-            return;
-        }
-    }
     if (_item.commentsText.length && CGRectContainsPoint(_item.commentsFrame, inBody)) {
         [_delegate messageCellDidTapComments:self];
         return;
     }
     if (message.outgoing && message.state == ExteriaMessageStateFailed && CGRectContainsPoint(CGRectInset(CGRectMake(_item.timeOrigin.x, _item.timeOrigin.y, _item.timeSize.width, _item.timeSize.height), -10, -10), inBody)) {
         [_delegate messageCellDidTapFailed:self];
+        return;
+    }
+    if (_item.content == ExteriaChatItemContentFile && ExteriaMessageIsViewOnce(message) && CGRectContainsPoint(_item.fileFrame, inBody)) {
+        if ([_delegate respondsToSelector:@selector(messageCellDidTapViewOnce:)]) [_delegate messageCellDidTapViewOnce:self];
         return;
     }
     if (_item.content == ExteriaChatItemContentFile && message.media.kind == EXTERIA_PREVIEW_FILE && !_voiceAction.hidden && CGRectContainsPoint(_item.fileFrame, inBody)) {
