@@ -14,8 +14,10 @@
 
 - (void)drawPlaceholderInRect:(CGRect)rect {
     [[self.textColor colorWithAlphaComponent:0.6] set];
-    CGFloat height = ceil(self.font.lineHeight);
-    rect.origin.y = CGRectGetMinY(self.bounds) + floor((self.bounds.size.height - height) / 2);
+    CGFloat height = ceil(ExteriaStringSize(self.placeholder, self.font).height);
+    /* centred inside the rect that was given: ios 13 and later draw the hint in the space of its own label, where an offset taken from the field's bounds
+       pushed the line down and cut it off at the bottom; before that the rect is the field's own and the result is the same */
+    rect.origin.y += floor((rect.size.height - height) / 2);
     rect.size.height = height;
     ExteriaDrawStringIn(self.placeholder, self.font, rect, ExteriaStringTailTruncate, _leftAligned ? 0 : 1);
 }

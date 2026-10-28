@@ -6,6 +6,7 @@
 #import <MobileCoreServices/MobileCoreServices.h>
 
 #import "exteria_attach_options.h"
+#import "exteria_attach_pager.h"
 #import "exteria_location_controller.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_theme.h"
@@ -47,6 +48,10 @@ static UIImage *ExteriaOutgoingThumbnail(UIImage *image) {
     BOOL _cancelled;
     ExteriaWeakReference *_weak;
     ExteriaMediaViewer *_preview;
+    /* a selection of several that waits in the pager: collected until every item is loaded, then the ones the person kept wait their turn to be prepared */
+    NSMutableArray *_collected;
+    NSMutableArray *_ready;
+    ExteriaAttachPager *_pager;
     UIImagePickerController *_picker;
     UIPopoverController *_popover;
     AVAssetExportSession *_export;
@@ -140,7 +145,8 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     }
     if (_album) [_album addObject:outgoing];
     else _handler(outgoing);
-    if (_assetQueue.count) [self nextAsset];
+    if (_ready.count) [self nextReady];
+    else if (_assetQueue.count) [self nextAsset];
     else [self flushAlbum];
 }
 
@@ -158,6 +164,8 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
 
 - (void)endQueue {
     [_assetQueue removeAllObjects];
+    [_collected release]; _collected = nil;
+    [_ready removeAllObjects];
     [self flushAlbum];
 }
 
@@ -195,13 +203,17 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
 }
 
 - (void)chooseAssets:(NSArray *)urls options:(ExteriaAttachOptions *)options {
-    if (_cancelled || _picker || _preview || _busy || !urls.count || urls.count > 10) return;
+    if (_cancelled || _picker || _preview || _pager || _busy || !urls.count || urls.count > 10) return;
     [_options release];
     _options = [options retain];
     _captionTaken = NO;
     [_assetQueue release]; _assetQueue = [urls mutableCopy];
     [_album release];
     _album = urls.count > 1 ? [[NSMutableArray alloc] init] : nil;
+    /* a selection of pictures that go out as they are is looked at first, so the person can page between them and edit; documents have nothing to edit */
+    [_collected release]; _collected = nil;
+    [_ready release]; _ready = nil;
+    if (urls.count > 1 && !options->preview && !options->asFiles) _collected = [[NSMutableArray alloc] init];
     if (!_assetLibrary) _assetLibrary = [[NSClassFromString(@"ALAssetsLibrary") alloc] init];
     [self nextAsset];
 }
@@ -224,7 +236,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     NSURL *url = [[[_assetQueue objectAtIndex:0] retain] autorelease];
     [_assetQueue removeObjectAtIndex:0];
     BOOL direct = [self sendsDirectly];
-    if (direct) [self takeCaptionForNextItem];
+    if (direct && !_collected) [self takeCaptionForNextItem];
     if ([url.scheme isEqualToString:@"exteria-photo"]) {
         [self showBusy];
         if (direct && _options->asFiles && !ExteriaPhotoURLIsVideo(url)) {
@@ -283,7 +295,54 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     }];
 }
 
+- (void)collectItem:(ExteriaAttachItem *)item {
+    [_collected addObject:item];
+    if (_assetQueue.count) [self nextAsset];
+    else [self showPager];
+}
+
+- (void)showPager {
+    ExteriaWeakReference *weak = _weak;
+    NSArray *items = [[_collected retain] autorelease];
+    [_collected release]; _collected = nil;
+    _pager = [[ExteriaAttachPager alloc] initWithItems:items caption:_options->caption send:^(NSArray *kept, NSString *caption) {
+        ExteriaAttachFlow *flow = weak.target;
+        if (!flow || flow->_cancelled) return;
+        [flow->_pager release]; flow->_pager = nil;
+        /* the words of the pager replace those of the sheet, and the first item that goes out takes them */
+        [flow->_options->caption release];
+        flow->_options->caption = [caption copy];
+        flow->_captionTaken = NO;
+        [flow->_ready release];
+        flow->_ready = [kept mutableCopy];
+        [flow nextReady];
+    } cancel:^{
+        ExteriaAttachFlow *flow = weak.target;
+        if (flow) { [flow->_pager release]; flow->_pager = nil; [flow endQueue]; }
+    }];
+    [_host presentViewController:_pager animated:YES completion:nil];
+}
+
+/* the next item the pager kept goes through the same preparation as a selection that is sent straight away */
+- (void)nextReady {
+    if (_cancelled || !_ready.count) {
+        [self flushAlbum];
+        return;
+    }
+    ExteriaAttachItem *item = [[[_ready objectAtIndex:0] retain] autorelease];
+    [_ready removeObjectAtIndex:0];
+    [self takeCaptionForNextItem];
+    if (item->movie) [self prepareMovieAtURL:item->movie];
+    else [self preparePhoto:item->image];
+}
+
 - (void)presentOrPrepareMovie:(NSURL *)movie {
+    if (_collected) {
+        ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+        item->movie = [movie retain];
+        [self collectItem:item];
+        return;
+    }
     if ([self sendsDirectly]) [self prepareMovieAtURL:movie];
     else [self previewMovie:movie];
 }
@@ -291,6 +350,12 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
 - (void)presentOrPreparePhoto:(UIImage *)image {
     if (!image) {
         [self endQueue]; [self alert:NSLocalizedString(@"attach.failed", nil)];
+        return;
+    }
+    if (_collected) {
+        ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+        item->image = [image retain];
+        [self collectItem:item];
         return;
     }
     if ([self sendsDirectly]) [self preparePhoto:image];
@@ -516,6 +581,7 @@ static NSString *ExteriaMimeOfPath(NSString *path);
             outgoing = [[[ExteriaOutgoing alloc] init] autorelease];
             outgoing->kind = ExteriaOutgoingPhoto;
             outgoing->spoiler = spoiler;
+            outgoing->viewOnce = _options && _options->viewOnce;
             outgoing->caption = [caption copy];
             outgoing->path = [path copy];
             outgoing->name = [path.lastPathComponent copy];
@@ -582,6 +648,7 @@ static NSString *ExteriaMimeOfPath(NSString *path);
                 outgoing = [[[ExteriaOutgoing alloc] init] autorelease];
                 outgoing->kind = asFile ? ExteriaOutgoingFile : ExteriaOutgoingVideo;
                 outgoing->spoiler = _options && _options->spoiler;
+                outgoing->viewOnce = !asFile && _options && _options->viewOnce;
                 outgoing->caption = [_caption copy];
                 outgoing->path = [path copy];
                 outgoing->name = [path.lastPathComponent copy];
@@ -662,6 +729,10 @@ static NSString *ExteriaMimeOfPath(NSString *path) {
     [_assetQueue removeAllObjects];
     for (ExteriaOutgoing *held in _album) if (held->temporary && held->path) [[NSFileManager defaultManager] removeItemAtPath:held->path error:NULL];
     [_album release]; _album = nil;
+    [_collected release]; _collected = nil;
+    [_ready release]; _ready = nil;
+    if (_pager.presentingViewController) [_pager dismissViewControllerAnimated:NO completion:nil];
+    [_pager release]; _pager = nil;
     _contacts.peoplePickerDelegate = nil;
     if (_contacts.presentingViewController) [_contacts dismissViewControllerAnimated:NO completion:nil];
     [_contacts release]; _contacts = nil;

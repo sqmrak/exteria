@@ -68,6 +68,7 @@
     BOOL _asFiles;
     BOOL _spoiler;
     BOOL _standard;
+    BOOL _viewOnce;
     ExteriaPopupMenu *_menu;
 }
 @end
@@ -484,6 +485,7 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
     options->asFiles = _asFiles;
     options->spoiler = _spoiler;
     options->standard = _standard;
+    options->viewOnce = _viewOnce && !_asFiles;
     return options;
 }
 
@@ -503,6 +505,7 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
     if (!_selected.count) return;
     NSArray *urls = [[_selected copy] autorelease];
     ExteriaAttachOptions *options = [self currentOptions];
+    if (urls.count != 1) options->viewOnce = NO;
     id<ExteriaAttachSheetDelegate> delegate = _delegate;
     [self leaveThen:^{ [delegate attachSheet:self didChooseAssets:urls options:options]; }];
 }
@@ -516,17 +519,20 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
     NSArray *titles = [NSArray arrayWithObjects:
         NSLocalizedString(_asFiles ? @"attach.opt.compressed" : @"attach.opt.files", nil),
         NSLocalizedString(_spoiler ? @"attach.opt.visible" : @"attach.opt.spoiler", nil),
-        NSLocalizedString(_standard ? @"attach.opt.regular" : @"attach.opt.standard", nil), nil];
-    ExteriaSymbol symbols[] = {ExteriaSymbolFileHQ, ExteriaSymbolSpoiler, _standard ? ExteriaSymbolQualityHD : ExteriaSymbolQualitySD};
+        NSLocalizedString(_standard ? @"attach.opt.regular" : @"attach.opt.standard", nil),
+        NSLocalizedString(_viewOnce ? @"attach.opt.keep" : @"attach.opt.viewonce", nil), nil];
+    ExteriaSymbol symbols[] = {ExteriaSymbolFileHQ, ExteriaSymbolSpoiler, _standard ? ExteriaSymbolQualityHD : ExteriaSymbolQualitySD, ExteriaSymbolEye};
     [_menu release];
     ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
     _menu = [[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
         ExteriaAttachSheet *sheet = weak.target;
         if (!sheet) return;
         /* a send without compression is the original, so it and the lighter quality cannot both be asked for */
-        if (index == 0) { sheet->_asFiles = !sheet->_asFiles; if (sheet->_asFiles) sheet->_standard = NO; }
+        if (index == 0) { sheet->_asFiles = !sheet->_asFiles; if (sheet->_asFiles) { sheet->_standard = NO; sheet->_viewOnce = NO; } }
         else if (index == 1) { sheet->_spoiler = !sheet->_spoiler; [sheet->_grid reloadData]; }
-        else { sheet->_standard = !sheet->_standard; if (sheet->_standard) sheet->_asFiles = NO; }
+        else if (index == 2) { sheet->_standard = !sheet->_standard; if (sheet->_standard) sheet->_asFiles = NO; }
+        /* a document stays on the server for good, so a one-time send is a send of a picture or a video and not of a file */
+        else { sheet->_viewOnce = !sheet->_viewOnce; if (sheet->_viewOnce) sheet->_asFiles = NO; }
     }];
     CGPoint anchor = [self convertPoint:CGPointMake(CGRectGetMaxX(_more.frame) - 6, CGRectGetMaxY(_more.frame) - 8) fromView:_panel];
     [_menu showInView:self anchor:anchor];
