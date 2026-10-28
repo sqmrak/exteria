@@ -186,19 +186,21 @@ static void ExteriaFaultSignal(int signal_number, siginfo_t *info, void *context
             ExteriaPut(fd, " pc"); ExteriaPutHex(fd, pc);
             ExteriaPut(fd, " lr"); ExteriaPutHex(fd, lr);
             ExteriaPut(fd, " sp"); ExteriaPutHex(fd, sp);
-            ExteriaPut(fd, "\nstack");
-            uintptr_t addresses[2] = {pc, lr};
-            for (int i = 0; i < 2; ++i) {
-                if (addresses[i] >= sTextLow && addresses[i] < sTextHigh) ExteriaPutHex(fd, addresses[i] - (uintptr_t)sSlide);
-            }
+            uintptr_t addresses[FRAMES_MAX + 2] = {pc, lr};
+            int count = 2;
             /* the handler runs on an alternate stack; only the interrupted thread's frame chain holds its callers */
             for (int i = 0; i < FRAMES_MAX && fp >= sp && fp - sp < 8 * 1024 * 1024 && fp % sizeof(uintptr_t) == 0; ++i) {
                 uintptr_t frame[2];
                 if (!ExteriaCopyCrashMemory(fp, frame, sizeof(frame))) break;
-                if (frame[1] >= sTextLow && frame[1] < sTextHigh) ExteriaPutHex(fd, frame[1] - (uintptr_t)sSlide);
+                addresses[count++] = frame[1];
                 if (frame[0] <= fp) break;
                 fp = frame[0];
             }
+            ExteriaPut(fd, "\nstack");
+            for (int i = 0; i < count; ++i)
+                if (addresses[i] >= sTextLow && addresses[i] < sTextHigh) ExteriaPutHex(fd, addresses[i] - (uintptr_t)sSlide);
+            ExteriaPut(fd, "\nraw stack");
+            for (int i = 0; i < count; ++i) ExteriaPutHex(fd, addresses[i]);
         } else {
             ExteriaPut(fd, " context unavailable");
         }
@@ -220,7 +222,11 @@ static void ExteriaCrashException(NSException *exception) {
         ExteriaPut(fd, exception.reason.UTF8String ? exception.reason.UTF8String : "?");
         ExteriaPut(fd, "\nstack");
         for (NSNumber *address in exception.callStackReturnAddresses) ExteriaPutHex(fd, (unsigned long long)(address.unsignedLongLongValue - (unsigned long long)sSlide));
-        ExteriaPut(fd, "\n");
+        ExteriaPut(fd, "\nsymbols\n");
+        for (NSString *symbol in exception.callStackSymbols) {
+            const char *line = [symbol UTF8String];
+            if (line) { ExteriaPut(fd, line); ExteriaPut(fd, "\n"); }
+        }
         close(fd);
     }
     if (sPreviousHandler) sPreviousHandler(exception);

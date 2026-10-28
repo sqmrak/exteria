@@ -42,6 +42,10 @@ the vpn of the app and of no other app. a wireguard tunnel to cloudflare warp th
 - with the vpn on, connections wait for the tunnel and never fall back to the direct path
 - the warp account is made on the first start over tls checked against `resources/shiro/roots.pem`
 
+## proxy
+
+add a `tg://proxy`, `tg://socks`, `t.me/proxy` or `t.me/socks` link on the welcome screen or in more settings. mtproto accepts plain, `dd` and `ee` secrets; socks5 accepts a username and password. the selected link is stored in the keychain. telegram message and file connections use the proxy, through shiro when it is enabled. calls and web pages use shiro or the direct route, not the proxy.
+
 ## ipad
 
 - after sign in the lists stand on the left and what they open on the right
@@ -89,6 +93,14 @@ on start the app asks `api.github.com` for the latest release and shows a notice
 - crash log: `/var/mobile/Library/Caches/exteria-crash.log`
 - call trace: `/var/mobile/Documents/exteria-call-trace.log`
 - frame log: `Library/Caches/exteria-perf.log`, on with `defaults write com.sqmrak.exteria exteria.perf -bool YES`
+
+exception reports include the system's stack symbols. to resolve app frames in a copied crash log, use the executable from the exact reported build and architecture:
+
+```bash
+python3 scripts/symbolicate_crash.py crash.log /path/to/Exteria --arch armv7
+```
+
+the script needs `llvm-objdump` and `llvm-addr2line` and checks the build uuid before resolving frames. keep the executable or matching debug symbols for each build.
 
 ## license
 

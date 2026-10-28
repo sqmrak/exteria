@@ -69,11 +69,10 @@ static UIButton *ExteriaPromptButton(NSString *title, BOOL primary, id target, S
     return button;
 }
 
-void ExteriaAskCrashReport(void (^answer)(BOOL send)) {
+BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     UIView *window = ExteriaOverlayHost();
     if (!window || ExteriaCrashPromptShown) {
-        if (answer) answer(NO);
-        return;
+        return NO;
     }
     ExteriaCrashPromptTarget *target = [[ExteriaCrashPromptTarget alloc] init];
     target->answer = [answer copy];
@@ -162,4 +161,5 @@ void ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     card.transform = CGAffineTransformMakeScale(0.9, 0.9);
     [UIView animateWithDuration:0.2 animations:^{ dim.alpha = 0.5f; }];
     ExteriaAnimateView(card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    return YES;
 }

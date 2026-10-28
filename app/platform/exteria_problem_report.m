@@ -119,6 +119,7 @@ static void ExteriaSendReport(ExteriaSession *session, NSString *body, void (^do
     NSTimeInterval sentAt = [[NSUserDefaults standardUserDefaults] doubleForKey:ExteriaReportSentKey];
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
     if (now - sentAt < REPORT_PAUSE_SECONDS) {
+        NSLog(@"exteria: the problem report was not sent: rate limit");
         if (done) done(NO);
         return;
     }
@@ -163,21 +164,14 @@ void ExteriaProblemReportsStart(ExteriaSession *session) {
     if (!records.count) return;
     NSUInteger from = records.count > 3 ? records.count - 3 : 0;
     NSString *body = [NSString stringWithFormat:@"crash log, %lu new:\n%@", (unsigned long)(records.count), [[records subarrayWithRange:NSMakeRange(from, records.count - from)] componentsJoinedByString:@"\n--\n"]];
-    /* a message leaves the account of the person only after they said yes to the card; a no is kept as told, so the same crash is not asked about again */
-    ExteriaAskCrashReport(^(BOOL send) {
-        void (^markTold)(void) = ^{
-            [[NSUserDefaults standardUserDefaults] setDouble:(double)newest forKey:ExteriaReportedKey];
-            [[NSUserDefaults standardUserDefaults] synchronize];
-        };
-        if (!send) {
-            markTold();
-            return;
-        }
-        ExteriaSendReport(session, body, ^(BOOL sent) {
-            /* the crashes are marked as told once the message left, so a failure to send tries again at the next start */
-            if (sent) markTold();
-        });
+    /* the same crash is asked about once, even if the app closes before the answer */
+    BOOL shown = ExteriaAskCrashReport(^(BOOL send) {
+        if (send) ExteriaSendReport(session, body, nil);
     });
+    if (shown) {
+        [[NSUserDefaults standardUserDefaults] setDouble:(double)newest forKey:ExteriaReportedKey];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    }
 }
 
 void ExteriaProblemReportCallFailure(ExteriaSession *session) {
