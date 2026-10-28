@@ -51,6 +51,7 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
     return self;
 }
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaTunnelHTMLDidLoadNotification object:nil];
     _web.delegate = nil;
     [_web stopLoading];
     [_url release];
@@ -92,6 +93,7 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
     _web.backgroundColor = [UIColor whiteColor];
     _web.alpha = 0;
     [_card addSubview:_web];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(articleHTMLLoaded:) name:ExteriaTunnelHTMLDidLoadNotification object:nil];
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
     [_card addSubview:_spinner];
@@ -131,6 +133,20 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
 - (void)retry {
     [_web stopLoading];
     [self load];
+}
+- (void)articleHTMLLoaded:(NSNotification *)note {
+    if (_closing || ![note.object isKindOfClass:[NSURL class]]) return;
+    NSURL *loaded = note.object;
+    NSURL *current = _web.request.mainDocumentURL ? _web.request.mainDocumentURL : _web.request.URL;
+    if (!current) return;
+    NSString *loadedAddress = [[[loaded absoluteString] componentsSeparatedByString:@"#"] objectAtIndex:0];
+    NSString *currentAddress = [[[current absoluteString] componentsSeparatedByString:@"#"] objectAtIndex:0];
+    if (![loadedAddress isEqualToString:currentAddress]) return;
+    [_spinner stopAnimating];
+    _error.hidden = YES;
+    _retry.hidden = YES;
+    _browser.hidden = YES;
+    _web.alpha = 1;
 }
 - (void)openInBrowser {
     if (![[UIApplication sharedApplication] openURL:_url]) NSLog(@"exteria: the article %@ was not handed to the browser", _url);
@@ -195,9 +211,13 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
     (void)webView;
     [_spinner stopAnimating];
     _error.hidden = YES;
-    /* how much text the page really holds, for the log: a page that loaded and shows nothing is told from one that holds nothing */
-    NSString *length = [webView stringByEvaluatingJavaScriptFromString:@"document.body ? String(document.body.innerText.length) : '-1'"];
-    NSLog(@"exteria: the article %@ loaded, %@ characters of text", _url, length);
+    /* the title can load while the article body is empty or hidden by the page */
+    NSString *details = [webView stringByEvaluatingJavaScriptFromString:
+        @"(function(){var e=document.getElementById('_tl_editor');if(!e)return 'no article';"
+         "var s=window.getComputedStyle(e);return 'text='+((e.innerText||e.textContent||'').length)+"
+         "' paragraphs='+e.getElementsByTagName('p').length+' display='+s.display+"
+         "' visibility='+s.visibility+' height='+e.offsetHeight;})()"];
+    NSLog(@"exteria: the article %@ loaded: %@", _url, details ? details : @"no page details");
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 animations:^{ _web.alpha = 1; }];
 }
 @end

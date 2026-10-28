@@ -8,6 +8,7 @@
 
 static NSString *const ExteriaTunnelHandledKey = @"exteria.tunnel.handled";
 static NSString *const ExteriaTunnelRedirectsKey = @"exteria.tunnel.redirects";
+NSString *const ExteriaTunnelHTMLDidLoadNotification = @"ExteriaTunnelHTMLDidLoad";
 
 /* what one load shares with the thread that runs it: the cancel flag the HTTPS client polls */
 @interface ExteriaTunnelJob : NSObject {
@@ -206,6 +207,12 @@ static NSString *ExteriaTunnelPath(NSURL *url) {
     [self.client URLProtocol:self didReceiveResponse:answer cacheStoragePolicy:NSURLCacheStorageNotAllowed];
     [self.client URLProtocol:self didLoadData:body];
     [self.client URLProtocolDidFinishLoading:self];
+    NSString *contentType = [[headers objectForKey:@"content-type"] lowercaseString];
+    if (code >= 200 && code < 300 && body.length && [contentType hasPrefix:@"text/html"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaTunnelHTMLDidLoadNotification object:url];
+        });
+    }
 }
 
 @end
