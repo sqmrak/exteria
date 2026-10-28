@@ -24,6 +24,10 @@
     void (^_pickHandler)(NSArray *dialogs);
     NSUInteger _limit;
     BOOL _forwarding;
+    NSString *_remoteQuery;
+    NSArray *_remoteResults;
+    NSString *_remoteError;
+    NSMutableSet *_pageCursors;
 }
 @end
 
@@ -47,6 +51,7 @@
 }
 
 - (void)dealloc {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(searchRemote) object:nil];
     [_weak clear];
     [_weak release];
     [_faces invalidate];
@@ -54,6 +59,10 @@
     [_session release];
     [_avatars release];
     [_all release];
+    [_remoteQuery release];
+    [_remoteResults release];
+    [_remoteError release];
+    [_pageCursors release];
     [_status release];
     [_picked release];
     [_done release];
@@ -91,32 +100,67 @@
     [self rebuild];
     [self refreshAction];
     ExteriaWeakReference *weak = _weak;
-    [_session loadDialogs:^(NSArray *items, NSString *errorName) {
-        ExteriaDialogPickerController *me = weak.target;
-        if (!me) return;
-        if (!items) {
-            [me->_status release];
-            me->_status = [ExteriaGiftErrorText(errorName) copy];
-            [me rebuild];
+    if (!_forwarding) {
+        [_session loadDialogs:^(NSArray *items, NSString *errorName) {
+            ExteriaDialogPickerController *me = weak.target;
+            if (!me) return;
+            if (items) [me addDestinations:items];
+            else { [me->_status release]; me->_status = [ExteriaGiftErrorText(errorName) copy]; [me rebuild]; }
+        }];
+    }
+    if (_forwarding) {
+        [self loadFolder:0 after:nil];
+        [self loadFolder:1 after:nil];
+        [_session loadContacts:^(NSArray *items, NSString *errorName) {
+            ExteriaDialogPickerController *me = weak.target;
+            if (!me) return;
+            if (!items) { NSLog(@"exteria: forwarding contacts did not load: %@", errorName); return; }
+            NSMutableArray *dialogs = [NSMutableArray array];
+            for (ExteriaPerson *person in items) {
+                ExteriaDialog *dialog = [ExteriaDialog dialogWithPerson:person];
+                if (dialog) [dialogs addObject:dialog];
+            }
+            [me addDestinations:dialogs];
+        }];
+    }
+}
+
+- (void)loadFolder:(int32_t)folder after:(ExteriaDialog *)cursor {
+    if (cursor) {
+        if (!_pageCursors) _pageCursors = [[NSMutableSet alloc] init];
+        NSString *key = [NSString stringWithFormat:@"%d:%d:%lld:%d", (int)folder, cursor.peerKind, cursor.peerId, cursor.topMessage];
+        if ([_pageCursors containsObject:key]) {
+            [_status release]; _status = [ExteriaGiftErrorText(@"DIALOG_PAGINATION_FAILED") copy];
+            [self rebuild];
             return;
         }
-        NSMutableArray *rows = [NSMutableArray array];
-        ExteriaDialog *saved = nil;
-        for (ExteriaDialog *dialog in items) {
-            if (![me usable:dialog]) continue;
-            if (me->_forwarding && dialog.saved) saved = dialog;
-            else [rows addObject:dialog];
-        }
-        if (me->_forwarding) {
-            if (!saved && me->_all.count && ((ExteriaDialog *)[me->_all objectAtIndex:0]).saved) saved = [me->_all objectAtIndex:0];
-            if (saved) [rows insertObject:saved atIndex:0];
-        }
-        [me->_all release];
-        me->_all = [rows retain];
-        [me->_status release];
-        me->_status = [(rows.count ? @"" : NSLocalizedString(@"chats.nothing", nil)) copy];
-        [me rebuild];
+        [_pageCursors addObject:key];
+    }
+    ExteriaWeakReference *weak = _weak;
+    [_session loadDialogPageInFolder:folder after:cursor completion:^(NSArray *items, ExteriaDialog *next, NSString *errorName) {
+        ExteriaDialogPickerController *me = weak.target;
+        if (!me) return;
+        if (items) [me addDestinations:items];
+        if (errorName) {
+            NSLog(@"exteria: forwarding folder %d did not load: %@", (int)folder, errorName);
+            [me->_status release]; me->_status = [ExteriaGiftErrorText(errorName) copy];
+            [me rebuild];
+        } else if (next) [me loadFolder:folder after:next];
     }];
+}
+
+- (void)addDestinations:(NSArray *)items {
+    NSMutableArray *rows = [NSMutableArray arrayWithArray:_all ? _all : [NSArray array]];
+    for (ExteriaDialog *candidate in items) {
+        if (![self usable:candidate]) continue;
+        BOOL found = NO;
+        for (ExteriaDialog *row in rows) if (row.peerKind == candidate.peerKind && row.peerId == candidate.peerId) { found = YES; break; }
+        if (!found) [rows addObject:candidate];
+    }
+    [_all release]; _all = [rows copy];
+    if (_all.count) { [_status release]; _status = nil; }
+    [self rebuild];
+    if (self.searching) [self reloadSearchResults];
 }
 
 - (void)themeDidChange {
@@ -239,12 +283,44 @@ static UIImage *ExteriaSavedPickerImage(void) {
 }
 
 - (NSArray *)sectionsForSearchQuery:(NSString *)query {
-    if (!query.length) return nil;
+    if (!query.length) {
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(searchRemote) object:nil];
+        [_remoteQuery release]; _remoteQuery = nil;
+        [_remoteResults release]; _remoteResults = nil;
+        [_remoteError release]; _remoteError = nil;
+        return nil;
+    }
+    if (_forwarding && ![_remoteQuery isEqualToString:query]) {
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(searchRemote) object:nil];
+        [_remoteQuery release]; _remoteQuery = [query copy];
+        [_remoteResults release]; _remoteResults = nil;
+        [_remoteError release]; _remoteError = nil;
+        [self performSelector:@selector(searchRemote) withObject:nil afterDelay:0.3];
+    }
     NSMutableArray *matches = [NSMutableArray array];
     for (ExteriaDialog *dialog in _all) {
         if ([dialog.title rangeOfString:query options:NSCaseInsensitiveSearch].location != NSNotFound) [matches addObject:dialog];
     }
-    return [self sectionsForDialogs:matches footer:matches.count ? nil : NSLocalizedString(@"chats.nothing", nil)];
+    for (ExteriaDialog *candidate in _remoteResults) {
+        if (![self usable:candidate]) continue;
+        BOOL found = NO;
+        for (ExteriaDialog *row in matches) if (row.peerKind == candidate.peerKind && row.peerId == candidate.peerId) { found = YES; break; }
+        if (!found) [matches addObject:candidate];
+    }
+    return [self sectionsForDialogs:matches footer:matches.count ? nil : (_remoteError ? ExteriaGiftErrorText(_remoteError) : NSLocalizedString(@"chats.nothing", nil))];
+}
+
+- (void)searchRemote {
+    NSString *query = [[_remoteQuery copy] autorelease];
+    if (!query.length) return;
+    ExteriaWeakReference *weak = _weak;
+    [_session searchPeers:query completion:^(NSArray *items, NSString *errorName) {
+        ExteriaDialogPickerController *me = weak.target;
+        if (!me || !me.searching || ![me->_remoteQuery isEqualToString:query]) return;
+        [me->_remoteResults release]; me->_remoteResults = [items copy];
+        [me->_remoteError release]; me->_remoteError = [errorName copy];
+        [me reloadSearchResults];
+    }];
 }
 
 @end

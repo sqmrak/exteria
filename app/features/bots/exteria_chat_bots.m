@@ -307,6 +307,7 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
 #pragma mark start and menu
 
 - (void)updateStart {
+    if (!_bot) return;
     ExteriaInputBar *bar = [self bar];
     BOOL empty = _loaded && _messages.count == 0 && _bot && !_starting;
     bar.actionTitle = empty ? NSLocalizedString(@"bots.start", nil) : nil;
