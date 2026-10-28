@@ -22,7 +22,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.0-stable</string>
+	<string>1.2.0-stable</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CFBundleIconFiles</key>
@@ -631,6 +631,8 @@
 	<string>Exteria uses your location while you choose a point or search nearby places.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Exteria shares only the contact and phone number you choose.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Exteria opens the passcode lock with your face when you turn that on.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Exteria records round video messages and shows your picture in video calls.</string>
 </dict>

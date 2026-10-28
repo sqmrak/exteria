@@ -17,6 +17,7 @@ NSString *const ExteriaOpenChatNotification = @"ExteriaOpenChat";
 NSString *const ExteriaNotifySettingsDidChangeNotification = @"ExteriaNotifySettingsDidChange";
 
 #define KEY_ENABLED @"exteria.notify.enabled"
+static NSString *const ExteriaNotifyAskedKey = @"exteria.notify.asked";
 #define KEY_SAVING @"exteria.notify.saving"
 /* a change of the store is looked at after this pause, so a burst of messages is one look */
 #define DEBOUNCE_SECONDS 0.4
@@ -151,20 +152,26 @@ BOOL ExteriaBackgroundLinkWanted(void) {
 
 /* ios 8 asks before a local notification may show or the badge may change, and ios 10 moved the question to the notification center; the
    classes are looked up by name for the older sdk */
-- (void)registerForNotificationsInApplication:(UIApplication *)application {
+- (void)registerForNotificationsInApplication:(UIApplication *)application askAgain:(BOOL)askAgain {
     id center = [self userNotificationCenter];
+    /* the system puts the question only while the choice is open, but a build that it takes for a new app opens the choice again, and the question came at every launch;
+       it is put once, and the switch of the notifications in the settings puts it again. The wake interval below is not kept by the system and is set at every launch */
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    BOOL ask = askAgain || ![defaults boolForKey:ExteriaNotifyAskedKey];
+    if (ask) [defaults setBool:YES forKey:ExteriaNotifyAskedKey];
     if (center) {
         /* badge, sound and alert are bits 0, 1 and 2 of UNAuthorizationOptions */
         void (^answered)(BOOL, NSError *) = ^(BOOL granted, NSError *error) {
             if (error) NSLog(@"exteria: the notification permission could not be asked: %@", error);
             else if (!granted) NSLog(@"exteria: the notifications are not allowed in the settings of the system");
         };
-        ((void (*)(id, SEL, NSUInteger, void (^)(BOOL, NSError *)))objc_msgSend)(center, NSSelectorFromString(@"requestAuthorizationWithOptions:completionHandler:"), 1 | 2 | 4, answered);
+        if (ask) ((void (*)(id, SEL, NSUInteger, void (^)(BOOL, NSError *)))objc_msgSend)(center, NSSelectorFromString(@"requestAuthorizationWithOptions:completionHandler:"), 1 | 2 | 4, answered);
         /* a sleeping app is woken by the system now and then to look; the system picks the interval */
         SEL interval = NSSelectorFromString(@"setMinimumBackgroundFetchInterval:");
         if ([application respondsToSelector:interval]) ((void (*)(id, SEL, NSTimeInterval))objc_msgSend)(application, interval, 0);
         return;
     }
+    if (!ask) return;
     SEL register_ = NSSelectorFromString(@"registerUserNotificationSettings:");
     Class settingsClass = NSClassFromString(@"UIUserNotificationSettings");
     if (!settingsClass || ![application respondsToSelector:register_]) return;
@@ -197,7 +204,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
             dispatch_async(dispatch_get_main_queue(), ^{ [(ExteriaNotifier *)weak.target storeChanged]; });
         }];
     }];
-    if (ExteriaNotifyEnabled()) [self registerForNotificationsInApplication:[UIApplication sharedApplication]];
+    if (ExteriaNotifyEnabled()) [self registerForNotificationsInApplication:[UIApplication sharedApplication] askAgain:NO];
 }
 
 - (void)stop {
@@ -219,7 +226,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
 - (void)settingsChanged {
     UIApplication *application = [UIApplication sharedApplication];
     if (ExteriaNotifyEnabled()) {
-        [self registerForNotificationsInApplication:application];
+        [self registerForNotificationsInApplication:application askAgain:YES];
         return;
     }
     ++_scanGeneration;
