@@ -63,6 +63,15 @@ class AppIconTests(unittest.TestCase):
         for key in ("CFBundleIcons", "CFBundleIcons~ipad"):
             self.assertFalse(plist[key]["CFBundlePrimaryIcon"]["UIPrerenderedIcon"])
 
+    def test_senkogram_generator(self):
+        source = Path(make_assets.ROOT) / "resources/icons/source/senkogram.png"
+        with tempfile.TemporaryDirectory() as directory:
+            make_assets.build_senkogram_icons(source, directory)
+            for suffix, side in make_assets.ALTERNATE_ICON_SIZES:
+                self.assert_launcher_icon(Path(directory) / ("SenkoGram" + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
+            for suffix, side in make_assets.SPLASH_SIDES:
+                self.assert_launcher_icon(Path(directory) / ("splash_senkogram" + suffix + ".png"), side, True)
+
     def test_every_plist_icon_has_expected_shape(self):
         root = Path(make_assets.ROOT)
         with (root / "packaging/Info.plist").open("rb") as handle:

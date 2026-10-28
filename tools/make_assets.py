@@ -702,6 +702,16 @@ def build_alternate_icons(res_dir, out_dir):
 SPLASH_SIDES = (("", 96), ("@2x", 192), ("@3x", 288))
 
 
+def build_senkogram_icons(source, out_dir):
+    icon = Image.open(source).convert("RGB")
+    if icon.width != icon.height:
+        raise ValueError("SenkoGram icon must be square")
+    for suffix, pixels in ALTERNATE_ICON_SIZES:
+        write_png(legacy_icon(icon, pixels), os.path.join(out_dir, "SenkoGram" + suffix + ".png"))
+    for suffix, pixels in SPLASH_SIDES:
+        write_png(rounded_icon(icon, pixels), os.path.join(out_dir, "splash_senkogram" + suffix + ".png"))
+
+
 def build_alternate_splash_icons(res_dir, out_dir):
     """splash_<name>.png (and @2x, @3x) for each alternate icon, made from the same color and picture as the icons themselves"""
     os.makedirs(out_dir, exist_ok=True)
@@ -826,7 +836,7 @@ def build_flags(svg_dir, countries, out_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("part", choices=("icons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "phone", "flags", "all"))
+    parser.add_argument("part", choices=("icons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "senkogram", "phone", "flags", "all"))
     parser.add_argument("--source", default=os.path.join(ROOT, "resources/icons/source/exteria.png"))
     parser.add_argument("--animations", default=os.environ.get("EXTERIA_LOTTIE_RAW", ""))
     parser.add_argument("--phone-video", default=os.environ.get("EXTERIA_PHONE_VIDEO", ""))
@@ -864,6 +874,8 @@ def main():
             sys.exit("set EXTERIA_ICON_RES to the res directory of the reference tree")
         build_alternate_icons(args.icon_res, os.path.join(args.out, "icons"))
         build_alternate_splash_icons(args.icon_res, os.path.join(args.out, "icons"))
+    if args.part in ("senkogram", "all"):
+        build_senkogram_icons(os.path.join(ROOT, "resources/icons/source/senkogram.png"), os.path.join(args.out, "icons"))
     if args.part in ("phone", "all"):
         if not args.phone_video:
             sys.exit("set EXTERIA_PHONE_VIDEO to IntroPhone.mp4")

@@ -60,6 +60,18 @@
 		</dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
+			<key>SenkoGram</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>SenkoGram-60@2x.png</string>
+					<string>SenkoGram-60@3x.png</string>
+					<string>SenkoGram-57.png</string>
+					<string>SenkoGram-57@2x.png</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
 			<key>Exteraless</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
@@ -157,6 +169,19 @@
 		</dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
+			<key>SenkoGram</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>SenkoGram-76.png</string>
+					<string>SenkoGram-76@2x.png</string>
+					<string>SenkoGram-83.5@2x.png</string>
+					<string>SenkoGram-72.png</string>
+					<string>SenkoGram-72@2x.png</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
 			<key>Exteraless</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
