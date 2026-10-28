@@ -386,8 +386,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _linkedCard.hidden = full.linked == nil;
     if (full.linked) [_linkedCard configureWithDialog:full.linked avatars:self.avatars];
     [self fillCounts];
-    /* members and the media of the chat are lists of a supergroup, which a channel and a basic group do not offer here */
-    if (full.megagroup && !_groupTabs) {
+    if ((full.megagroup || _dialog.kind == EXTERIA_DIALOG_CHANNEL) && !_groupTabs) {
         _groupTabs = [[ExteriaGroupTabsView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media];
         _groupTabs.delegate = self;
         [_head addSubview:_groupTabs];

@@ -32,6 +32,7 @@
     NSString *_failure;
     NSDate *_loadedAt;
     BOOL _loading;
+    BOOL _reloadPending;
     BOOL _failed;
     /* a late answer from a load nobody wants any more must not replace a newer one */
     NSUInteger _generation;
@@ -277,13 +278,20 @@
             _failure = [[self failureTextForError:errorName] retain];
             NSLog(@"exteria: refresh of %@ failed: %@", NSStringFromClass([self class]), errorName);
             [self refreshStatus];
+            if (_reloadPending) { _reloadPending = NO; [self reload]; }
             return;
         }
         [_loadedAt release];
         _loadedAt = [[NSDate date] retain];
         [self didReceiveItems:items];
         [self reloadTable];
+        if (_reloadPending) { _reloadPending = NO; [self reload]; }
     }];
+}
+
+- (void)reloadAfterCurrent {
+    if (_loading) _reloadPending = YES;
+    else [self reload];
 }
 
 - (void)reloadDiscardingRunning {

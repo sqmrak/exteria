@@ -180,7 +180,11 @@ static void rpc_result(void *ctx, uint64_t id, const exteria_mt_rpc_result *r) {
             status = is_updates(r->value) ? exteria_updates_apply(&c->updates, r->value) :
                                           exteria_updates_cache(&c->updates, r->value);
             if (status != EXTERIA_E_RETRY) report(c, status, "rpc cache");
-            if (status == EXTERIA_OK) notify_changed(c);
+            if (status == EXTERIA_OK) {
+                c->change_rpc_cache = !is_updates(r->value);
+                notify_changed(c);
+                c->change_rpc_cache = 0;
+            }
             if (is_updates(r->value)) dispatch_live_updates(c, r->value);
         }
         if (c->events.result) c->events.result(c->events.ctx, id, r);

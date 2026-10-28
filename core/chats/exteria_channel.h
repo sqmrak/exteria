@@ -128,6 +128,7 @@ exteria_status exteria_channel_join_request(exteria_arena *arena, const exteria_
 /* the answer to it: EXTERIA_OK when the account is in, EXTERIA_E_UNSUPPORTED when the channel asks for a web view check first,
    EXTERIA_E_MALFORMED for anything else */
 exteria_status exteria_channel_join_parse(const exteria_tl_value *answer);
+int exteria_channel_already_left(int peer_kind, const char *error_name);
 /* resolves a min channel through the message that named it, without reusing its unusable hash */
 exteria_status exteria_channel_from_message_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t message_id,
                                                    int64_t channel_id, exteria_tl_value **out);

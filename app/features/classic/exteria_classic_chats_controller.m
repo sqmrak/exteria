@@ -37,6 +37,7 @@
 #define ARCHIVE_PULL_DISTANCE 64.0
 
 @interface ExteriaClassicChatsController () <UIActionSheetDelegate> {
+    ExteriaWeakReference *_badgeWeak;
     ExteriaSession *_session;
     ExteriaChatListStyle _listStyle;
     ExteriaChatSwipe _swipe;
@@ -45,6 +46,7 @@
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickers;
     UIView *_search;
+    UIButton *_searchButton;
     UIView *_header;
     ExteriaFolderTabs *_folders;
     id<ExteriaFolderDialogRequest> _folderLoad;
@@ -59,6 +61,8 @@
     NSArray *_displayedKeys;
     NSDate *_loadedAt;
     BOOL _loading;
+    BOOL _liveRefreshScheduled;
+    BOOL _liveRefreshPending;
     BOOL _failed;
     BOOL _floodRetried;
     BOOL _archiveHidden;
@@ -80,6 +84,7 @@
                 media:(ExteriaMediaCache *)media stickers:(ExteriaStickerLibrary *)stickers {
     self = [super initWithStyle:UITableViewStylePlain];
     if (!self) return nil;
+    _badgeWeak = [[ExteriaWeakReference referenceTo:self] retain];
     _session = [session retain];
     _listStyle = ExteriaChatListStyleStored();
     _swipe = ExteriaChatSwipeStored();
@@ -152,6 +157,9 @@
 }
 
 - (void)dealloc {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
+    [_badgeWeak clear];
+    [_badgeWeak release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(retryFloodWait) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     /* a tab nobody opened has no view, and asking for it here would load one while the controller is being freed */
@@ -165,6 +173,7 @@
     [_media release];
     [_stickers release];
     [_search release];
+    [_searchButton release];
     [_stories release];
     [_prompt release];
     [_folderLoad cancel];
@@ -193,7 +202,7 @@
     table.rowHeight = [ExteriaClassicDialogCell rowHeight];
     if (_folderId == 0) {
         self.navigationItem.leftBarButtonItem = self.editButtonItem;
-        self.navigationItem.rightBarButtonItem = [[[ExteriaShiroBarItem alloc] initWithShiro:_session.shiro host:self] autorelease];
+        [self syncChromeWithSettings];
     }
     self.navigationItem.backBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"chats.title", nil)
                                                                               style:UIBarButtonItemStyleBordered target:nil action:nil] autorelease];
@@ -212,6 +221,8 @@
     searchButton.accessibilityLabel = searchPlaceholder;
     [searchButton addTarget:self action:@selector(openSearch) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:searchButton];
+    _searchButton = [searchButton retain];
+    [self syncChromeWithSettings];
     if (!_folderId) {
         ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
         _folders = [[ExteriaFolderTabs alloc] initWithSession:_session changed:^{
@@ -263,6 +274,7 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshConnectionTitle)
                                                  name:ExteriaSessionConnectionDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogsChanged) name:ExteriaDialogsChangedNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:_session];
     [self refreshConnectionTitle];
     UILongPressGestureRecognizer *press = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(rowPressed:)] autorelease];
     [table addGestureRecognizer:press];
@@ -273,6 +285,20 @@
 - (void)dialogsChanged {
     [_loadedAt release];
     _loadedAt = [[NSDate distantPast] retain];
+}
+
+- (void)liveDialogsChanged:(NSNotification *)note {
+    (void)note;
+    if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
+    _liveRefreshScheduled = YES;
+    [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:0.5];
+}
+
+- (void)refreshLiveDialogs {
+    _liveRefreshScheduled = NO;
+    if (!self.view.window) return;
+    if (_loading) _liveRefreshPending = YES;
+    else [self reload];
 }
 
 /* the system bar shows "Connecting..." in place of the title while the link is down; picked chats put their count there */
@@ -304,13 +330,14 @@
 - (void)layoutHeader {
     CGFloat width = self.tableView.bounds.size.width;
     CGFloat promptHeight = [_prompt heightForWidth:width];
-    CGFloat height = 44 + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 8 : 0);
-    _folders.frame = CGRectMake(0, 44, width, _folders.height);
+    CGFloat search = _search.hidden ? 0 : 44;
+    CGFloat height = search + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 8 : 0);
+    _folders.frame = CGRectMake(0, search, width, _folders.height);
     [_stories layoutInWidth:width];
     CGRect strip = _stories.view.frame;
-    strip.origin = CGPointMake(0, 44 + _folders.height);
+    strip.origin = CGPointMake(0, search + _folders.height);
     _stories.view.frame = strip;
-    if (promptHeight > 0) [_prompt layoutInWidth:width atY:44 + _folders.height + _stories.height];
+    if (promptHeight > 0) [_prompt layoutInWidth:width atY:search + _folders.height + _stories.height];
     if (_header.frame.size.height == height && _header.frame.size.width == width) return;
     CGRect frame = _header.frame;
     frame.size = CGSizeMake(width, height);
@@ -387,6 +414,7 @@
                 [self performSelector:@selector(retryFloodWait) withObject:nil afterDelay:(NSTimeInterval)seconds];
             }
             [self refreshStatus];
+            if (_liveRefreshPending) { _liveRefreshPending = NO; [self reload]; }
             return;
         }
         _floodRetried = NO;
@@ -403,6 +431,7 @@
         [self reloadList:YES];
         [self restoreSelection];
         [self refreshStatus];
+        if (_liveRefreshPending) { _liveRefreshPending = NO; [self reload]; }
     };
     [_folderLoad cancel];
     [_folderLoad release];
@@ -417,7 +446,7 @@
     for (ExteriaDialog *dialog in _dialogs) {
         if (dialog.emojiStatus && !dialog.saved) [documents addObject:[NSNumber numberWithLongLong:dialog.emojiStatus]];
     }
-    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaWeakReference *weak = _badgeWeak;
     ExteriaLoadBadgePictures(documents, _session, _media, ^{
         ExteriaClassicChatsController *controller = weak.target;
         if (controller) ExteriaRedrawVisibleRows(controller.tableView);
@@ -427,7 +456,7 @@
 - (void)reportUnread {
     if (_folders.selectedFolder.folderId) return;
     NSInteger total = 0;
-    for (ExteriaDialog *dialog in _dialogs) if (dialog.unread && !dialog.folder && !dialog.muted) total += dialog.unreadCount;
+    for (ExteriaDialog *dialog in _dialogs) if (dialog.unread && !dialog.folder && !dialog.muted && !(dialog.peerKind == 3 && dialog.left)) total += dialog.unreadCount;
     if (_unreadHandler) _unreadHandler(total);
 }
 
@@ -503,7 +532,33 @@
     }
 }
 
+/* the main list takes three choices of the appearance page: the VPN button, the field of search, and the words of the title; the archive list keeps its own */
+- (void)syncChromeWithSettings {
+    if (_folderId != 0 || _selection) return;
+    BOOL hideVpn = ExteriaChatFlagGet(ExteriaChatFlagHideVpnButton);
+    if (hideVpn) self.navigationItem.rightBarButtonItem = nil;
+    else if (!self.navigationItem.rightBarButtonItem) self.navigationItem.rightBarButtonItem = [[[ExteriaShiroBarItem alloc] initWithShiro:_session.shiro host:self] autorelease];
+    BOOL hideSearch = ExteriaChatFlagGet(ExteriaChatFlagHideSearchBar);
+    _search.hidden = hideSearch;
+    _searchButton.hidden = hideSearch;
+    if (_header) [self layoutHeader];
+    ExteriaChatListTitle mode = ExteriaChatListTitleStored();
+    self.navigationItem.title = ExteriaChatListTitleText(mode, nil);
+    if (mode != ExteriaChatListTitleUsername && mode != ExteriaChatListTitleName) return;
+    ExteriaWeakReference *weak = _badgeWeak;
+    [_session loadSelf:^(NSArray *items, NSString *errorName) {
+        ExteriaClassicChatsController *me = weak.target;
+        if (!me) return;
+        if (!items.count) {
+            NSLog(@"exteria: the name for the title of the list did not load: %@", errorName);
+            return;
+        }
+        if (ExteriaChatListTitleStored() == mode) me.navigationItem.title = ExteriaChatListTitleText(mode, [items objectAtIndex:0]);
+    }];
+}
+
 - (void)chatSettingsChanged {
+    [self syncChromeWithSettings];
     [self syncStoriesWithSettings];
     BOOL hidden = ExteriaArchiveHidden();
     if (hidden == _archiveHidden) return;
@@ -516,6 +571,7 @@
 - (void)applyFilters {
     NSMutableArray *shown = [NSMutableArray array];
     for (ExteriaDialog *dialog in _dialogs) {
+        if (!dialog.folder && dialog.peerKind == 3 && dialog.left) continue;
         if (dialog.folder && ExteriaArchiveHidden() && !_archiveRevealed) continue;
         if (!_folders.selectedFolder.folderId || [_folders.selectedFolder containsDialog:dialog]) [shown addObject:dialog];
     }
@@ -839,7 +895,8 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     _savedLeft = nil;
     [_savedRight release];
     _savedRight = nil;
-    self.navigationItem.title = _folderId > 0 ? NSLocalizedString(@"chats.archive", nil) : NSLocalizedString(@"chats.title", nil);
+    if (_folderId > 0) self.navigationItem.title = NSLocalizedString(@"chats.archive", nil);
+    else [self syncChromeWithSettings];
     [self refreshConnectionTitle];
 }
 

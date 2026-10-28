@@ -108,7 +108,9 @@ static UIButton *ExteriaSheetButton(NSString *title, UIColor *color, BOOL bold) 
     CGFloat width = column.size.width;
     _dim.frame = self.bounds;
     CGFloat height = PANEL_HEIGHT + safe.bottom;
-    _panel.frame = CGRectMake(column.origin.x, size.height - height, width, height);
+    /* frame changes under a transform shift the panel while ios 6 lays out the closing sheet */
+    _panel.bounds = CGRectMake(0, 0, width, height);
+    _panel.center = CGPointMake(column.origin.x + width / 2, size.height - height / 2);
     _cancel.frame = CGRectMake(8, 6, 90, 44);
     _remove.frame = CGRectMake((width - 110) / 2, 6, 110, 44);
     _remove.hidden = !_canRemove;

@@ -285,10 +285,11 @@ static ExteriaTextEntity *ExteriaRunLike(ExteriaTextEntity *base, NSRange range)
    storage that takes them only exists from ios 7 */
 - (void)refreshAppearance {
     if (![_view respondsToSelector:@selector(textStorage)] || _view.markedTextRange) return;
+    if (!_runs.count && !_appearanceApplied) return;
     /* the ios 6.1 headers of the armv7 slice do not declare the storage, so it is sent to as an id */
     id storage = [_view performSelector:@selector(textStorage)];
     NSUInteger length = [[storage string] length];
-    if (!length) return;
+    if (!length) { _appearanceApplied = NO; return; }
     UIFont *base = _view.font ? _view.font : ExteriaFontRegular(16);
     UIColor *ink = _view.textColor ? _view.textColor : ExteriaColorTitle();
     CGFloat size = base.pointSize;
@@ -321,6 +322,7 @@ static ExteriaTextEntity *ExteriaRunLike(ExteriaTextEntity *base, NSRange range)
         }
     }
     [storage endEditing];
+    _appearanceApplied = _runs.count > 0;
 }
 
 #pragma mark menu

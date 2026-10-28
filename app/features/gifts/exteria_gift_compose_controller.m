@@ -109,6 +109,7 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
     _card.layer.cornerRadius = 12;
     [_scroll addSubview:_card];
     _note = [[UITextField alloc] init];
+    _note.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
     _note.delegate = self;
     _note.placeholder = NSLocalizedString(@"gifts.note", nil);
     _note.font = ExteriaFontRegular(16);

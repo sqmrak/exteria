@@ -141,6 +141,10 @@ exteria_status exteria_channel_join_parse(const exteria_tl_value *answer) {
     return EXTERIA_E_MALFORMED;
 }
 
+int exteria_channel_already_left(int peer_kind, const char *error_name) {
+    return peer_kind == 3 && error_name && strcmp(error_name, "USER_NOT_PARTICIPANT") == 0;
+}
+
 static const struct {
     uint32_t bit;
     const char *field;

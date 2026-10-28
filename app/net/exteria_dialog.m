@@ -41,6 +41,7 @@
 @synthesize forwarded = _forwarded;
 @synthesize read = _read;
 @synthesize date = _date;
+@synthesize topMessage = _topMessage;
 @synthesize readInboxMaxId = _readInboxMaxId;
 @synthesize readOutboxMaxId = _readOutboxMaxId;
 @synthesize presence = _presence;
@@ -117,6 +118,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _unreadMark = row->unread_mark;
     _photo = [[ExteriaPhoto photoWithRef:&row->photo] retain];
     _date = row->date;
+    _topMessage = row->top_message;
     _readInboxMaxId = row->read_inbox_max_id;
     _readOutboxMaxId = row->read_outbox_max_id;
     _presence = row->presence;

@@ -297,7 +297,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _marks = ExteriaDialogIsDeveloper(dialog);
     [_markName release];
     _markName = [dialog.title copy];
-    _title.text = ExteriaNameWithBadges(dialog.title, dialog.saved ? 0 : ExteriaBadgeDocument(dialog.emojiStatus, dialog.premium), _marks, &badge);
+    _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), _marks, &badge);
     _title.entities = badge;
     _mutedIcon.hidden = !dialog.muted;
     _time.text = ExteriaListTimeText(dialog.date);
@@ -394,6 +394,7 @@ ExteriaDialogAction ExteriaDialogSwipeAction(ExteriaDialog *dialog, NSInteger fo
     case ExteriaChatSwipeRead: return dialog.unread ? ExteriaDialogActionMarkRead : ExteriaDialogActionMarkUnread;
     case ExteriaChatSwipeMute: return dialog.muted ? ExteriaDialogActionUnmute : ExteriaDialogActionMute;
     case ExteriaChatSwipeDelete: return ExteriaDialogActionDeleteChat;
+    case ExteriaChatSwipeFolders: return ExteriaDialogActionNone;
     case ExteriaChatSwipeArchive: break;
     }
     return dialog.saved ? ExteriaDialogActionNone : ExteriaDialogActionArchive;
@@ -607,7 +608,7 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     _title.frame = CGRectMake(textX, titleY, titleWidth, 20);
     CGFloat fullTitleWidth = [_title sizeThatFits:CGSizeMake(4096, 20)].width;
     NSUInteger markCount = 0;
-    for (NSUInteger bit = 1; bit <= ExteriaMarkPromotion; bit <<= 1) if (_marks & bit) ++markCount;
+    for (NSUInteger bit = 1; bit <= ExteriaMarkOfficialTester; bit <<= 1) if (_marks & bit) ++markCount;
     CGFloat markWidth = markCount * 30.0 + (_marks & ExteriaMarkCaution ? 24.0 * (EXTERIA_CAUTION_BADGE_RATIO - 1) : 0);
     _markHit.hidden = !markCount || fullTitleWidth > titleMax;
     _markHit.frame = CGRectMake(textX + MAX(0, titleWidth - markWidth), titleY - 4, MIN(titleWidth, markWidth), 28);

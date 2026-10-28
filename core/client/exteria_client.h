@@ -52,6 +52,7 @@ typedef struct exteria_client {
     int sync_again;
     /* set while the changed event of a quiet container runs (see exteria_updates_quiet); the event handler may read it */
     int change_quiet;
+    int change_rpc_cache;
     int authorized;
     int closing;
     exteria_status session_error;

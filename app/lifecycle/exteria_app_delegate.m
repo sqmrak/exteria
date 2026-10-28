@@ -23,6 +23,7 @@
 #import "exteria_passcode_lock.h"
 #import "exteria_release_check.h"
 #import "exteria_problem_report.h"
+#import "exteria_proxy_settings.h"
 #import "exteria_session_data.h"
 #import "exteria_platform.h"
 #import "exteria_shiro.h"
@@ -116,6 +117,7 @@ static NSString *ExteriaSupportDirectory(void) {
     _notifier = [[ExteriaNotifier alloc] initWithSession:_session];
     if (signedIn) [_notifier start];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(accountSwitchRequested:) name:ExteriaAccountSwitchNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(proxyChanged:) name:ExteriaProxyDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(accountAddRequested:) name:ExteriaAccountAddNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(themeChangedForLaunchImages) name:ExteriaThemeDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notifySettingsChanged:)
@@ -200,6 +202,14 @@ static NSString *ExteriaSupportDirectory(void) {
     if (_shiro.route == _shiroRoute) return;
     _shiroRoute = _shiro.route;
     [_session routeChanged];
+}
+
+- (void)proxyChanged:(NSNotification *)note {
+    (void)note;
+    [_session routeChanged];
+    [_session reconnect];
+    [_addSession routeChanged];
+    [_addSession reconnect];
 }
 
 - (void)themeChangedForLaunchImages {
@@ -423,8 +433,23 @@ static NSString *ExteriaSupportDirectory(void) {
         if (ExteriaAccountNameOfUser(userId, _addName)) {
             UIViewController *anchor = _addAnchor ? _addAnchor : [_navigation.viewControllers objectAtIndex:0];
             [self showNoticeTitle:nil message:NSLocalizedString(@"account.add.same", nil)];
+            /* the server made a session for this login already; dropping the key here would leave it in the list of devices, so the session logs itself out first and
+               its directory goes once that is done */
+            ExteriaSession *duplicate = _addSession;
+            NSString *duplicateName = _addName;
+            _addSession = nil;
+            _addName = nil;
             [self cancelAddAccount];
             [_navigation popToViewController:anchor animated:YES];
+            duplicate.delegate = nil;
+            duplicate.shiro = nil;
+            [duplicate signOut:^(NSString *errorName) {
+                if (errorName) NSLog(@"exteria: the duplicate login was not ended on the server: %@", errorName);
+                [duplicate stop];
+                ExteriaAccountRemove(duplicateName);
+                [duplicate release];
+                [duplicateName release];
+            }];
             [flow release];
             return;
         }

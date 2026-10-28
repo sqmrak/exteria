@@ -518,7 +518,8 @@ static BOOL ExteriaReferenceExpired(NSString *errorName) {
 - (void)cancelPathRequest:(NSUInteger)requestId {
     if (!requestId) return;
     NSNumber *request = [NSNumber numberWithUnsignedInteger:requestId];
-    NSString *key = [_pathRequestKeys objectForKey:request];
+    /* removing the waiter and request can release the file that owns this key */
+    NSString *key = [[[_pathRequestKeys objectForKey:request] retain] autorelease];
     if (!key) return;
     NSMutableArray *waiting = [_pathWaiters objectForKey:key];
     for (NSUInteger i = 0; i < waiting.count; ++i) {

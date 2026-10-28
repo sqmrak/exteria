@@ -12,6 +12,7 @@
     ExteriaTranslateJob *_job;
     UIView *_host;
     ExteriaWeakReference *_weak;
+    BOOL _appearanceApplied;
 }
 
 /* the session resolves @names for a mention and runs the translation; both are asked for only when the person picks them */

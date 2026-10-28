@@ -7,6 +7,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_dialog.h"
+#import "exteria_session_channels.h"
 #import "exteria_folder_tabs.h"
 #import "exteria_perf_probe.h"
 #import "exteria_table_update.h"
@@ -47,6 +48,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 #define ARCHIVE_PULL_DISTANCE 64.0
 
 @interface ExteriaChatsController () <ExteriaDialogCellDelegate, UIAlertViewDelegate> {
+    ExteriaWeakReference *_badgeWeak;
     int32_t _folderId;
     /* a pull on the list shows the hidden archive until the screen is left */
     BOOL _archiveRevealed;
@@ -74,6 +76,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     ExteriaFallingView *_snow;
     ExteriaFallingView *_foxes;
     ExteriaLoginPrompt *_prompt;
+    BOOL _liveRefreshScheduled;
 }
 @end
 
@@ -87,6 +90,9 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 - (id)initWithSession:(ExteriaSession *)session {
     self = [super initWithSession:session];
     if (!self) return nil;
+    _badgeWeak = [[ExteriaWeakReference referenceTo:self] retain];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
     self.heading = [self titleForMode:ExteriaChatListTitleStored() person:nil];
     _dialogs = [[NSArray alloc] init];
     _folderSnapshots = [[NSMutableDictionary alloc] init];
@@ -110,6 +116,25 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     return self;
 }
 
+- (void)liveDialogsChanged:(NSNotification *)note {
+    (void)note;
+    [_folderSnapshots removeAllObjects];
+    [_folderSnapshotDates removeAllObjects];
+    if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
+    _liveRefreshScheduled = YES;
+    [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:0.5];
+}
+
+- (void)refreshLiveDialogs {
+    _liveRefreshScheduled = NO;
+    if (self.view.window) [self reloadAfterCurrent];
+}
+
+- (void)dialogListChanged:(NSNotification *)note {
+    (void)note;
+    if (self.isViewLoaded) [self reloadDiscardingRunning];
+}
+
 - (void)folderRulesChanged:(NSNotification *)notification {
     [_folderSnapshots removeAllObjects];
     [_folderSnapshotDates removeAllObjects];
@@ -118,23 +143,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 /* the title of the main list is the word Chats, or what the person chose to read there; the name and the username come once the account answers */
 - (NSString *)titleForMode:(ExteriaChatListTitle)mode person:(ExteriaPerson *)person {
     if (_folderId || self.showsBack) return NSLocalizedString(@"chats.title", nil);
-    switch (mode) {
-    case ExteriaChatListTitleUsername:
-        if (person.username.length) return [@"@" stringByAppendingString:person.username];
-        break;
-    case ExteriaChatListTitleName:
-        if (person.name.length) return person.name;
-        break;
-    case ExteriaChatListTitleCustom: {
-        NSString *text = [ExteriaChatListCustomTitle() stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (text.length) return text;
-        break;
-    }
-    case ExteriaChatListTitleDefault:
-    case ExteriaChatListTitleCount:
-        break;
-    }
-    return NSLocalizedString(@"chats.title", nil);
+    return ExteriaChatListTitleText(mode, person);
 }
 
 - (void)loadOwnTitle {
@@ -267,6 +276,11 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 }
 
 - (void)dealloc {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogsChangedNotification object:nil];
+    [_badgeWeak clear];
+    [_badgeWeak release];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaArchiveSummaryDidChangeNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaTypingDidChangeNotification object:self.session.typing];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDraftDidChangeNotification object:self.session.drafts];
@@ -491,7 +505,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     for (ExteriaDialog *dialog in _dialogs) {
         if (dialog.emojiStatus && !dialog.saved) [documents addObject:[NSNumber numberWithLongLong:dialog.emojiStatus]];
     }
-    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaWeakReference *weak = _badgeWeak;
     ExteriaLoadBadgePictures(documents, self.session, _media, ^{
         ExteriaChatsController *controller = weak.target;
         if (controller) ExteriaRedrawVisibleRows(controller->_table);
@@ -502,7 +516,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     if (_folders.selectedFolder.folderId) return;
     NSInteger total = 0;
     for (ExteriaDialog *dialog in _dialogs) {
-        if (dialog.unread && !dialog.folder && !dialog.muted) total += dialog.unreadCount;
+        if (dialog.unread && !dialog.folder && !dialog.muted && !(dialog.peerKind == 3 && dialog.left)) total += dialog.unreadCount;
     }
     [_chatsDelegate chatsController:self didChangeUnreadTotal:total];
 }
@@ -512,6 +526,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     NSMutableArray *shown = [NSMutableArray array];
     BOOL archiveShown = !ExteriaArchiveHidden() || _archiveRevealed;
     for (ExteriaDialog *dialog in _dialogs) {
+        if (!dialog.folder && dialog.peerKind == 3 && dialog.left) continue;
         if (_folders.selectedFolder.folderId && ![_folders.selectedFolder containsDialog:dialog]) continue;
         if (dialog.folder && !archiveShown) continue;
         [shown addObject:dialog];

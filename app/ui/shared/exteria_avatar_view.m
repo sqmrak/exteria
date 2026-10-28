@@ -127,12 +127,16 @@
     BOOL classicSymbol = ExteriaThemeIsClassic() && _showsSymbol && !_image &&
                          (_symbol == ExteriaSymbolArchive || _symbol == ExteriaSymbolBookmark);
     CGContextSaveGState(context);
-    CGContextMoveToPoint(context, CGRectGetMinX(bounds) + radius, CGRectGetMinY(bounds));
-    CGContextAddArcToPoint(context, CGRectGetMaxX(bounds), CGRectGetMinY(bounds), CGRectGetMaxX(bounds), CGRectGetMaxY(bounds), radius);
-    CGContextAddArcToPoint(context, CGRectGetMaxX(bounds), CGRectGetMaxY(bounds), CGRectGetMinX(bounds), CGRectGetMaxY(bounds), radius);
-    CGContextAddArcToPoint(context, CGRectGetMinX(bounds), CGRectGetMaxY(bounds), CGRectGetMinX(bounds), CGRectGetMinY(bounds), radius);
-    CGContextAddArcToPoint(context, CGRectGetMinX(bounds), CGRectGetMinY(bounds), CGRectGetMaxX(bounds), CGRectGetMinY(bounds), radius);
-    CGContextClosePath(context);
+    if (radius >= side * 0.5 && bounds.size.width == bounds.size.height) {
+        CGContextAddEllipseInRect(context, bounds);
+    } else {
+        CGContextMoveToPoint(context, CGRectGetMinX(bounds) + radius, CGRectGetMinY(bounds));
+        CGContextAddArcToPoint(context, CGRectGetMaxX(bounds), CGRectGetMinY(bounds), CGRectGetMaxX(bounds), CGRectGetMaxY(bounds), radius);
+        CGContextAddArcToPoint(context, CGRectGetMaxX(bounds), CGRectGetMaxY(bounds), CGRectGetMinX(bounds), CGRectGetMaxY(bounds), radius);
+        CGContextAddArcToPoint(context, CGRectGetMinX(bounds), CGRectGetMaxY(bounds), CGRectGetMinX(bounds), CGRectGetMinY(bounds), radius);
+        CGContextAddArcToPoint(context, CGRectGetMinX(bounds), CGRectGetMinY(bounds), CGRectGetMaxX(bounds), CGRectGetMinY(bounds), radius);
+        CGContextClosePath(context);
+    }
     CGContextClip(context);
     if (_image) {
         if (_imageHasAlpha) {

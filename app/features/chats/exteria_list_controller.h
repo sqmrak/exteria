@@ -42,6 +42,7 @@
 - (void)reload;
 /* the same, but a load already running is dropped, because what it brings was asked for before something changed */
 - (void)reloadDiscardingRunning;
+- (void)reloadAfterCurrent;
 - (void)reloadTable;
 /* called by reloadTable before it reloads the whole table: a list whose rows have names moves, adds and removes
    them with animation and answers YES, in which case the table is not reloaded */

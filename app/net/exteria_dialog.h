@@ -36,6 +36,7 @@
     int32_t _folderId;
     long long _peerHash;
     int32_t _date;
+    int32_t _topMessage;
     int32_t _readInboxMaxId;
     int32_t _readOutboxMaxId;
     int32_t _seen;
@@ -100,6 +101,7 @@
 /* the last message is ours and was read */
 @property (nonatomic, readonly) BOOL read;
 @property (nonatomic, readonly) int32_t date;
+@property (nonatomic, readonly) int32_t topMessage;
 /* everything of theirs up to this message id we have read, and everything of ours they have read */
 @property (nonatomic, readonly) int32_t readInboxMaxId;
 @property (nonatomic, readonly) int32_t readOutboxMaxId;

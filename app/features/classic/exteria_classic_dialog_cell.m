@@ -208,7 +208,7 @@
     [_communityHandler release];
     _communityHandler = nil;
     NSArray *badge = nil;
-    _title.text = ExteriaNameWithBadges(dialog.title, dialog.saved ? 0 : ExteriaBadgeDocument(dialog.emojiStatus, dialog.premium), ExteriaDialogIsDeveloper(dialog), &badge);
+    _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), ExteriaDialogIsDeveloper(dialog), &badge);
     _title.entities = badge;
     _preview.text = dialog.preview;
     _draftPrefix = 0;

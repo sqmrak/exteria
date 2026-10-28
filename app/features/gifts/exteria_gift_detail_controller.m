@@ -253,7 +253,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
     ExteriaStarGift *gift = _saved.gift;
     BOOL unique = gift.unique && gift.hasBackdropColors;
     _scroll = [[UIScrollView alloc] init];
-    _scroll.alwaysBounceVertical = YES;
+    _scroll.bounces = NO;
     [root addSubview:_scroll];
     if (unique) {
         _backdrop = [[ExteriaGiftBackdropView alloc] init];

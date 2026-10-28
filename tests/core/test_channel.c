@@ -493,6 +493,10 @@ static void test_settings_requests(void) {
 }
 
 int main(void) {
+    CHECK(exteria_channel_already_left(3, "USER_NOT_PARTICIPANT"));
+    CHECK(!exteria_channel_already_left(2, "USER_NOT_PARTICIPANT"));
+    CHECK(!exteria_channel_already_left(3, "CHANNEL_PRIVATE"));
+    CHECK(!exteria_channel_already_left(3, NULL));
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
     test_parse();
     test_discussion();
