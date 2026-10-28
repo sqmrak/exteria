@@ -5,7 +5,7 @@ references/twelve/demo/TGVideoStickerDecoder.c in ios/exteria-lol.
 source sha256: 887a9a6db0b8cbc05eee15587915e7a9258f54ea57da28408cc4a3b0cc54e2db
 local changes: packet and stream bounds, cancellation, single-frame posters,
 finite-rate validation, 8-bit YUV420 to premultiplied BGRA conversion instead of
-libswscale. This application is distributed under GPLv3, see LICENSE.
+libswscale. The previous GPLv3 license is in LICENSE.gpl-3.0.
 
 ffmpeg 7.1.1, LGPLv2.1 or later: https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz
 source sha256: 733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1
