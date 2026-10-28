@@ -8,6 +8,8 @@
 
 /* the document to draw after a name: the live status, else the Premium star for a Premium user, else zero */
 long long ExteriaBadgeDocument(long long emojiStatus, BOOL premium);
+long long ExteriaDialogBadgeDocument(ExteriaDialog *dialog);
+long long ExteriaPersonBadgeDocument(ExteriaPerson *person);
 
 /* the name followed by the badge, with the entity list that draws it in entities; the name unchanged and nil entities for document zero */
 NSString *ExteriaNameWithBadge(NSString *name, long long document, NSArray **entities);

@@ -14,6 +14,7 @@ static NSCache *ExteriaCustomPictures(void) {
     dispatch_once(&once, ^{
         cache = [[NSCache alloc] init];
         cache.countLimit = PICTURE_COUNT_MAX;
+        cache.totalCostLimit = 8 * 1024 * 1024;
     });
     return cache;
 }
@@ -25,6 +26,34 @@ static NSMutableSet *ExteriaCustomSet(NSMutableSet **slot) {
 
 static NSMutableSet *ExteriaLoading;
 static NSMutableSet *ExteriaFailed;
+
+static UIImage *ExteriaTelegramVerifiedImage(void) {
+    static UIImage *image;
+    if (image) return image;
+    CGFloat side = PICTURE_POINTS, center = side / 2;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, ExteriaScreenScale());
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextMoveToPoint(context, center, center - side * 0.46);
+    for (int i = 1; i <= 24; ++i) {
+        CGFloat angle = -M_PI_2 + (CGFloat)i * (CGFloat)M_PI / 12;
+        CGFloat radius = side * (i % 2 ? 0.40 : 0.46);
+        CGContextAddLineToPoint(context, center + cos(angle) * radius, center + sin(angle) * radius);
+    }
+    CGContextClosePath(context);
+    CGContextSetRGBFillColor(context, 0.20, 0.65, 0.91, 1);
+    CGContextFillPath(context);
+    CGContextSetRGBStrokeColor(context, 1, 1, 1, 1);
+    CGContextSetLineWidth(context, side * 0.10);
+    CGContextSetLineCap(context, kCGLineCapRound);
+    CGContextSetLineJoin(context, kCGLineJoinRound);
+    CGContextMoveToPoint(context, side * 0.29, side * 0.50);
+    CGContextAddLineToPoint(context, side * 0.43, side * 0.64);
+    CGContextAddLineToPoint(context, side * 0.71, side * 0.36);
+    CGContextStrokePath(context);
+    image = [UIGraphicsGetImageFromCurrentImageContext() retain];
+    UIGraphicsEndImageContext();
+    return image;
+}
 
 /* a five pointed star with rounded corners in the blue to violet of the Premium mark, drawn once at the size the pictures use */
 static UIImage *ExteriaPremiumStarImage(void) {
@@ -87,8 +116,18 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
 @implementation ExteriaCustomEmoji
 
 + (UIImage *)imageForDocument:(long long)document {
+    if (document == EXTERIA_TELEGRAM_VERIFIED_DOCUMENT) return ExteriaTelegramVerifiedImage();
     if (document == EXTERIA_PREMIUM_STAR_DOCUMENT) return ExteriaPremiumStarImage();
-    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion;
+    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion, *bugHunter, *officialTester;
+    if (document == EXTERIA_BUG_HUNTER_DOCUMENT) {
+        if (!bugHunter) {
+            NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_bug_hunter" ofType:@"png"];
+            if (path) bugHunter = [ExteriaDecodeImageAtURL([NSURL fileURLWithPath:path], PICTURE_POINTS * ExteriaScreenScale()) retain];
+            if (!bugHunter) NSLog(@"exteria: the bug hunter badge picture could not be decoded");
+        }
+        return bugHunter;
+    }
+    if (document == EXTERIA_OFFICIAL_TESTER_DOCUMENT) return ExteriaBundledBadge(@"badge_official_tester", &officialTester);
     if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaBundledBadge(@"badge_promotion", &promotion);
     if (document == EXTERIA_CAUTION_DOCUMENT) {
         if (!caution) {
@@ -121,14 +160,17 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
     [ExteriaCustomSet(&ExteriaLoading) removeObject:key];
     /* custom documents have unrelated transparent canvas margins */
     if (image) {
-        [ExteriaCustomPictures() setObject:ExteriaFitEmojiImage(image) forKey:key];
+        UIImage *fitted = ExteriaFitEmojiImage(image);
+        CGImageRef bitmap = fitted.CGImage;
+        NSUInteger cost = bitmap ? CGImageGetBytesPerRow(bitmap) * CGImageGetHeight(bitmap) : 0;
+        [ExteriaCustomPictures() setObject:fitted forKey:key cost:cost];
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaCustomEmojiDidLoadNotification object:key];
     }
     else [ExteriaCustomSet(&ExteriaFailed) addObject:key];
 }
 
 + (CGFloat)pictureSide {
-    return PICTURE_POINTS * ExteriaScreenScale();
+    return 50.0 * ExteriaScreenScale();
 }
 
 @end

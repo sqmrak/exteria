@@ -15,7 +15,10 @@ enum {
     /* the crossed hammers of the lead developer, worn in the place of the plain hammer */
     ExteriaMarkLead = 8,
     ExteriaMarkCaution = 16,
-    ExteriaMarkPromotion = 32
+    ExteriaMarkPromotion = 32,
+    ExteriaMarkBugHunter = 64,
+    /* the open ring of the testers the lead developer names official; it replaces the net, and the bug hunter wears it beside the hunter's own badge */
+    ExteriaMarkOfficialTester = 128
 };
 
 BOOL ExteriaIsDeveloperUsername(NSString *username);

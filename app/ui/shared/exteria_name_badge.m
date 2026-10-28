@@ -4,6 +4,8 @@
 #import "exteria_developers.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_message.h"
+#import "exteria_person.h"
+#include "exteria_people.h"
 
 /* a text symbol, not an emoji: the layout replaces it with the badge, and it draws nothing of its own while a status picture loads */
 static NSString *const ExteriaBadgePlaceholder = @"★";
@@ -13,19 +15,31 @@ long long ExteriaBadgeDocument(long long emojiStatus, BOOL premium) {
     return premium ? EXTERIA_PREMIUM_STAR_DOCUMENT : 0;
 }
 
+long long ExteriaDialogBadgeDocument(ExteriaDialog *dialog) {
+    if (dialog.peerKind == 1 && dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID) return EXTERIA_TELEGRAM_VERIFIED_DOCUMENT;
+    return dialog.saved ? 0 : ExteriaBadgeDocument(dialog.emojiStatus, dialog.premium);
+}
+
+long long ExteriaPersonBadgeDocument(ExteriaPerson *person) {
+    if (person.userId == EXTERIA_TELEGRAM_SERVICE_USER_ID) return EXTERIA_TELEGRAM_VERIFIED_DOCUMENT;
+    return ExteriaBadgeDocument(person.emojiStatus, person.premium);
+}
+
 NSString *ExteriaNameWithBadge(NSString *name, long long document, NSArray **entities) {
     return ExteriaNameWithBadges(name, document, NO, entities);
 }
 
 NSString *ExteriaNameWithBadges(NSString *name, long long document, NSUInteger marks, NSArray **entities) {
     if (entities) *entities = nil;
+    if (marks & ExteriaMarkBugHunter) { document = 0; marks &= ExteriaMarkBugHunter | ExteriaMarkOfficialTester; }
     if ((!document && !marks) || !name.length) return name;
     NSMutableString *text = [NSMutableString stringWithString:name];
     NSMutableArray *list = [NSMutableArray array];
-    long long documents[7] = {document, marks & ExteriaMarkDeveloper ? EXTERIA_DEVELOPER_DOCUMENT : 0, marks & ExteriaMarkLead ? EXTERIA_LEAD_DOCUMENT : 0,
+    long long documents[9] = {document, marks & ExteriaMarkDeveloper ? EXTERIA_DEVELOPER_DOCUMENT : 0, marks & ExteriaMarkLead ? EXTERIA_LEAD_DOCUMENT : 0,
                               marks & ExteriaMarkSenko ? EXTERIA_SENKO_DOCUMENT : 0, marks & ExteriaMarkTester ? EXTERIA_TESTER_DOCUMENT : 0,
-                              marks & ExteriaMarkCaution ? EXTERIA_CAUTION_DOCUMENT : 0, marks & ExteriaMarkPromotion ? EXTERIA_PROMOTION_DOCUMENT : 0};
-    for (int i = 0; i < 7; ++i) {
+                              marks & ExteriaMarkCaution ? EXTERIA_CAUTION_DOCUMENT : 0, marks & ExteriaMarkPromotion ? EXTERIA_PROMOTION_DOCUMENT : 0,
+                              marks & ExteriaMarkBugHunter ? EXTERIA_BUG_HUNTER_DOCUMENT : 0, marks & ExteriaMarkOfficialTester ? EXTERIA_OFFICIAL_TESTER_DOCUMENT : 0};
+    for (int i = 0; i < 9; ++i) {
         if (!documents[i]) continue;
         [text appendString:@" "];
         ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
