@@ -13,7 +13,7 @@
 #include "exteria_voice.h"
 
 #define EXTERIA_MESSAGES_MAX 100
-#define EXTERIA_MESSAGE_TEXT_MAX 4100
+#define EXTERIA_MESSAGE_TEXT_MAX (4 * 4096 + 4)
 #define EXTERIA_MESSAGE_ENTITIES_MAX 48
 #define EXTERIA_MESSAGE_URLS_MAX 1024
 #define EXTERIA_STICKERS_MAX 400
@@ -145,6 +145,7 @@ typedef struct exteria_message_row {
     int64_t from_channel;       /* the channel it was written as in a group, zero when a user wrote it */
     int64_t target_id;          /* the user a service message is about */
     uint8_t out;
+    uint8_t unread_mention;
     uint8_t post;
     uint8_t forwarded;
     int32_t saved_peer_kind;    /* in the favorites: the chat the message came from (the account itself for its own notes); zero elsewhere */
@@ -311,7 +312,8 @@ typedef enum exteria_shared_kind {
     EXTERIA_SHARED_MEDIA = 0,
     EXTERIA_SHARED_FILES,
     EXTERIA_SHARED_LINKS,
-    EXTERIA_SHARED_AUDIO
+    EXTERIA_SHARED_AUDIO,
+    EXTERIA_SHARED_VOICE
 } exteria_shared_kind;
 /* messages.search with the filter of a kind and no text, newest first, a page of limit (1 to EXTERIA_MESSAGES_MAX) older than offset_id (zero for the
    newest); read with exteria_messages_parse */
@@ -377,6 +379,7 @@ typedef struct exteria_upload_spec {
     char name[EXTERIA_UPLOAD_NAME_MAX];
     char mime[EXTERIA_MEDIA_MIME_MAX];
     uint8_t spoiler;                /* a photo or a video that is shown blurred until it is tapped */
+    uint8_t view_once;              /* a photo, video, voice note or round video that is gone after the other side has opened it; files and albums cannot be */
 } exteria_upload_spec;
 
 /* messages.sendMedia for a file already uploaded: file is the inputFile or inputFileBig the upload gave */

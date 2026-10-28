@@ -123,6 +123,13 @@ static void test_text_message(void) {
     CHECK_EQ_INT(row->id, 7);
     CHECK_EQ_INT(row->date, 1007);
     CHECK_EQ_INT(row->out, 1);
+    CHECK_EQ_INT(row->unread_mention, 0);
+    set_flag(m, "mentioned");
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->unread_mention, 0);
+    set_flag(m, "media_unread");
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->unread_mention, 1);
     CHECK_EQ_INT(row->from_id, 9);
     CHECK_EQ_INT(row->reply_to, 3);
     CHECK_EQ_INT(row->reply_peer_kind, 0);
@@ -1107,6 +1114,10 @@ static void test_requests(void) {
     memset(&set, 0, sizeof(set));
     CHECK_EQ_INT(exteria_history_request(&arena, &user, 0, 40, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_messages_getHistory);
+    CHECK_EQ_INT(exteria_shared_request(&arena, &channel, EXTERIA_SHARED_VOICE, 0, 30, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "filter")), EXTERIA_TL_ID_inputMessagesFilterRoundVoice);
+    CHECK_EQ_INT(exteria_shared_request(&arena, &channel, EXTERIA_SHARED_VOICE, 50, 30, &request), EXTERIA_OK);
+    { int32_t offset = 0; CHECK_EQ_INT(exteria_tl_get_i32(request, "offset_id", &offset), EXTERIA_OK); CHECK_EQ_INT(offset, 50); }
     CHECK_EQ_INT(exteria_history_request(&arena, &chat, 120, 40, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_messages_getHistory);
     CHECK_EQ_INT(exteria_history_request(&arena, &channel, 120, 40, &request), EXTERIA_OK);
@@ -1125,6 +1136,20 @@ static void test_requests(void) {
 
     CHECK_EQ_INT(exteria_send_text_request(&arena, &user, "hello", NULL, 0, 42, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_messages_sendMessage);
+    {
+        char text[8193];
+        for (size_t i = 0; i < 4096; ++i) { text[2 * i] = (char)0xd0; text[2 * i + 1] = (char)0xb0; }
+        text[8192] = 0;
+        CHECK_EQ_INT(exteria_send_text_request(&arena, &user, text, NULL, 0, 42, &request), EXTERIA_OK);
+        const exteria_tl_value *sent = exteria_tl_get(request, "message");
+        CHECK(sent && sent->u.bytes.len == 8192 && !memcmp(sent->u.bytes.data, text, 8192));
+        exteria_tl_value *long_message = message(123, text);
+        exteria_message_row *long_row = calloc(1, sizeof(*long_row));
+        CHECK(long_row != NULL);
+        CHECK_EQ_INT(exteria_message_read(long_message, long_row), EXTERIA_OK);
+        CHECK(!strcmp(long_row->text, text));
+        free(long_row);
+    }
     CHECK_EQ_INT(exteria_send_text_reply_request(&arena, &user, "hello", NULL, 0, 42, 77, &request), EXTERIA_OK);
     {
         const exteria_tl_value *reply = exteria_tl_get(request, "reply_to");

@@ -28,6 +28,10 @@
 @property (nonatomic, readonly) long long stickerSetHash;
 /* the sender hid the picture or the video under a spoiler */
 @property (nonatomic, readonly) BOOL spoiler;
+/* seconds the media lives after it is opened, zero for ordinary media; a one-time photo, video, voice note or round video carries EXTERIA_VIEW_ONCE_TTL */
+@property (nonatomic, readonly) int32_t ttlSeconds;
+/* the server removes it once the other side has opened it; the file is gone from the message afterwards */
+@property (nonatomic, readonly) BOOL viewOnce;
 @property (nonatomic, readonly) int32_t width;
 @property (nonatomic, readonly) int32_t height;
 @property (nonatomic, readonly) int32_t duration;
@@ -130,6 +134,8 @@ typedef enum {
     NSString *caption;
     /* a photo or a video shown blurred until it is tapped */
     BOOL spoiler;
+    /* a photo or a video that is gone from the other side once it was opened */
+    BOOL viewOnce;
     int32_t durationMs;
     int32_t width;
     int32_t height;
@@ -188,7 +194,9 @@ typedef enum {
     NSArray *_commenters;
     long long _randomId;
     BOOL _outgoing;
+    BOOL _unreadMention;
     BOOL _spoilersRevealed;
+    BOOL _viewOnceOpened;
     BOOL _post;
     BOOL _forwarded;
     BOOL _edited;
@@ -196,6 +204,7 @@ typedef enum {
     int _service;
     int32_t _serviceValue;
     ExteriaMessageState _state;
+    float _uploadProgress;
     NSString *_text;
     NSString *_forwardName;
     int32_t _forwardDate;
@@ -260,11 +269,14 @@ typedef enum {
 @property (nonatomic, readonly) long long targetId;
 @property (nonatomic, readonly) long long randomId;
 @property (nonatomic, readonly) BOOL outgoing;
+@property (nonatomic, readonly) BOOL unreadMention;
 @property (nonatomic, readonly) BOOL post;
 /* a message waiting to be sent into a broadcast channel looks like the post it will become: the channel writes it, not the account */
 - (void)showAsChannelPost;
 /* the person tapped the spoilers of this message open; kept here so a rebuilt layout does not cover them again */
 @property (nonatomic, assign) BOOL spoilersRevealed;
+/* the person opened this one-time media on this phone; kept so the row reads as expired at once, before the server's edit of the message arrives */
+@property (nonatomic, assign) BOOL viewOnceOpened;
 @property (nonatomic, readonly) BOOL forwarded;
 @property (nonatomic, readonly) BOOL edited;
 /* the other side deleted it and the phone kept it, as AyuMoments asks; set by the session when it reads the kept ones */
@@ -272,6 +284,8 @@ typedef enum {
 /* an exteria_service_kind plus one, zero for an ordinary message */
 @property (nonatomic, readonly) int service;
 @property (nonatomic, assign) ExteriaMessageState state;
+/* how much of the file of a pending message the server has, from 0 to 1 */
+@property (nonatomic, assign) float uploadProgress;
 @property (nonatomic, readonly, copy) NSString *text;
 @property (nonatomic, readonly, copy) NSString *forwardName;
 /* when the original of a forwarded message was written, zero when the header does not say */

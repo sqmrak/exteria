@@ -5,6 +5,7 @@
 #import "exteria_centered_hint_field.h"
 #import "exteria_theme.h"
 #import "exteria_media_viewer.h"
+#import "exteria_burn_effect.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -88,6 +89,12 @@ static char ExteriaMediaPlayerStatusContext;
     BOOL _statusHidden;
     BOOL _saving;
     BOOL _photoReady;
+    /* the one-time mode: set by the initializer, and the burn that runs before the viewer leaves */
+    BOOL _oneTime;
+    BOOL _opened;
+    BOOL _burning;
+    BOOL _previewOnly;
+    void (^_openedHandler)(void);
     CGFloat _keyboardHeight;
     CGSize _layoutSize;
 }
@@ -132,6 +139,31 @@ static char ExteriaMediaPlayerStatusContext;
     return self;
 }
 
+- (id)initWithOneTimeMessage:(ExteriaMessage *)message media:(ExteriaMediaCache *)media opened:(void (^)(void))opened closed:(void (^)(void))closed {
+    self = [self initWithMessages:[NSArray arrayWithObject:message] selected:message media:media];
+    if (self) {
+        _oneTime = YES;
+        _openedHandler = [opened copy];
+        _cancelHandler = [closed copy];
+    }
+    return self;
+}
+
+- (id)initWithOneTimePreviewOfMessage:(ExteriaMessage *)message media:(ExteriaMediaCache *)media {
+    self = [self initWithMessages:[NSArray arrayWithObject:message] selected:message media:media];
+    if (self) {
+        _oneTime = YES;
+        _previewOnly = YES;
+    }
+    return self;
+}
+
+- (void)noteOpened {
+    if (!_oneTime || _opened || _previewOnly) return;
+    _opened = YES;
+    if (_openedHandler) _openedHandler();
+}
+
 - (id)initWithImage:(UIImage *)image send:(void (^)(UIImage *, NSString *))send {
     self = [self init];
     if (self) { _localImage = [image retain]; _sendPhoto = [send copy]; }
@@ -148,7 +180,7 @@ static char ExteriaMediaPlayerStatusContext;
     return _index >= 0 && _index < (NSInteger)_messages.count ? [_messages objectAtIndex:(NSUInteger)_index] : nil;
 }
 
-- (BOOL)isVideo { return _localURL || self.message.media.kind == EXTERIA_PREVIEW_VIDEO || self.message.media.kind == EXTERIA_PREVIEW_GIF; }
+- (BOOL)isVideo { return _localURL || self.message.media.kind == EXTERIA_PREVIEW_VIDEO || self.message.media.kind == EXTERIA_PREVIEW_GIF || (_oneTime && self.message.media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE); }
 - (BOOL)isSending { return _sendPhoto || _sendVideo; }
 
 - (void)dealloc {
@@ -159,7 +191,7 @@ static char ExteriaMediaPlayerStatusContext;
     [_senderNames release]; [_chatTitle release];
     [_messages release]; [_media release]; [_weak release];
     [_localImage release]; [_localURL release]; [_loadedPath release];
-    [_sendPhoto release]; [_sendVideo release]; [_cancelHandler release];
+    [_sendPhoto release]; [_sendVideo release]; [_cancelHandler release]; [_openedHandler release];
     _document.delegate = nil; [_document dismissMenuAnimated:NO]; [_document release];
     if (_sharePath) [[NSFileManager defaultManager] removeItemAtPath:_sharePath error:NULL];
     [_sharePath release];
@@ -401,9 +433,27 @@ static char ExteriaMediaPlayerStatusContext;
     _title.text = self.isSending ? NSLocalizedString(@"media.preview", nil) : (name.length ? name : NSLocalizedString(@"chat.someone", nil));
     _date.text = ExteriaMediaTimeText(self.message.date);
     _count.text = [NSString stringWithFormat:NSLocalizedString(@"media.count", nil), (long)(_index + 1), (long)_messages.count];
+    if (_oneTime) {
+        /* nothing here can keep the picture: no menu, no share, no edit, and the line under the title says it goes */
+        _more.hidden = _forward.hidden = _headerEdit.hidden = _count.hidden = YES;
+        _title.text = NSLocalizedString(_previewOnly ? @"viewonce.preview.title" : (self.isVideo ? @"viewonce.title.video" : @"viewonce.title.photo"), nil);
+        _date.text = NSLocalizedString(_previewOnly ? @"viewonce.preview.hint" : @"viewonce.hint", nil);
+        _date.hidden = NO;
+    }
     [self.view setNeedsLayout];
     if (_localImage) { _image.image = _localImage; _more.enabled = _forward.enabled = _headerEdit.enabled = YES; return; }
     if (_localURL) { [self playURL:_localURL]; return; }
+    /* a one-time file of ours that has not finished going up has no server copy to fetch yet */
+    ExteriaOutgoing *pending = self.message.pendingSend;
+    if (_previewOnly && pending && pending->path && !self.message.media.file) {
+        NSURL *local = [NSURL fileURLWithPath:pending->path];
+        if (self.isVideo) { [self playURL:local]; return; }
+        UIImage *picture = ExteriaDecodeImageAtURL(local, EXTERIA_VIEWER_PHOTO_SIDE_MAX);
+        if (!picture) { [self failed]; return; }
+        _image.image = picture;
+        _photoReady = YES;
+        return;
+    }
     ExteriaMedia *content = self.message.media;
     if (!content.file) { [self failed]; return; }
     [_spinner startAnimating];
@@ -432,7 +482,7 @@ static char ExteriaMediaPlayerStatusContext;
                     ExteriaMediaViewer *viewer = weak.target;
                     if (viewer && !viewer->_closed && viewer->_generation == generation) {
                         [viewer->_spinner stopAnimating];
-                        if (image) { viewer->_photoReady = YES; viewer->_image.image = image; viewer->_more.enabled = viewer->_forward.enabled = viewer->_headerEdit.enabled = YES; }
+                        if (image) { viewer->_photoReady = YES; viewer->_image.image = image; viewer->_more.enabled = viewer->_forward.enabled = viewer->_headerEdit.enabled = YES; [viewer noteOpened]; }
                         else [viewer failed];
                     }
                     [image release];
@@ -515,6 +565,7 @@ static NSString *ExteriaVideoTime(double seconds) {
     if (_playerItem.status == AVPlayerItemStatusFailed) { NSLog(@"exteria: video playback failed: %@", _playerItem.error); [self failed]; return; }
     if (_playerItem.status != AVPlayerItemStatusReadyToPlay) return;
     [_spinner stopAnimating]; _image.hidden = NO;
+    [self noteOpened];
     _play.enabled = _mute.enabled = YES; _more.enabled = _forward.enabled = _headerEdit.enabled = YES;
     double duration = CMTimeGetSeconds(_playerItem.duration), position = CMTimeGetSeconds(_player.currentTime);
     _seek.enabled = isfinite(duration) && duration > 0;
@@ -746,7 +797,23 @@ static NSString *ExteriaVideoTime(double seconds) {
         if (![_document presentOpenInMenuFromRect:_forward.frame inView:_top animated:YES]) [self notice:NSLocalizedString(@"media.share.unavailable", nil)];
     }
 }
+/* a one-time file that was seen burns before the viewer goes; one that never loaded just leaves, and the message stays as it was */
 - (void)close {
+    if (!_oneTime || !_opened) { [self closeNow]; return; }
+    if (_burning) return;
+    _burning = YES;
+    [self releasePlayer];
+    ExteriaWeakReference *weak = _weak;
+    [ExteriaBurnEffect burnRect:self.view.bounds inView:self.view duration:0.9 completion:^{ [(ExteriaMediaViewer *)weak.target closeNow]; }];
+    [UIView animateWithDuration:0.8 delay:0.05 options:UIViewAnimationOptionCurveEaseIn animations:^{
+        _page.alpha = 0;
+        _page.transform = CGAffineTransformMakeScale(1.04, 1.04);
+        _top.alpha = 0;
+        _bottom.alpha = 0;
+    } completion:nil];
+}
+
+- (void)closeNow {
     [self cancelPaging];
     if (_closed) return;
     _closed = YES; ++_generation;

@@ -49,6 +49,8 @@ static NSString *ExteriaUtf8(const char *bytes) {
 - (long long)stickerSetId { return _info.sticker_set_id; }
 - (long long)stickerSetHash { return _info.sticker_set_hash; }
 - (BOOL)spoiler { return _info.spoiler != 0; }
+- (int32_t)ttlSeconds { return _info.ttl_seconds; }
+- (BOOL)viewOnce { return _info.ttl_seconds > 0; }
 - (int32_t)width { return _info.width; }
 - (int32_t)height { return _info.height; }
 - (int32_t)duration { return _info.duration; }
@@ -189,11 +191,14 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize targetId = _targetId;
 @synthesize randomId = _randomId;
 @synthesize outgoing = _outgoing;
+@synthesize unreadMention = _unreadMention;
 @synthesize post = _post;
 @synthesize spoilersRevealed = _spoilersRevealed;
+@synthesize viewOnceOpened = _viewOnceOpened;
 @synthesize forwarded = _forwarded;
 @synthesize edited = _edited;
 @synthesize deletedLocally = _deletedLocally;
+@synthesize uploadProgress = _uploadProgress;
 @synthesize service = _service;
 @synthesize serviceValue = _serviceValue;
 @synthesize state = _state;
@@ -326,6 +331,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_targetId = row->target_id;
     /* a post is written by the channel, not by the account that typed it, so it stands on the left like the posts of anyone else */
     message->_outgoing = row->out && !row->post;
+    message->_unreadMention = row->unread_mention;
     message->_post = row->post;
     message->_forwarded = row->forwarded;
     message->_savedOut = row->forward_saved_out;
@@ -415,6 +421,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
         break;
     case ExteriaOutgoingContact: info.kind = EXTERIA_PREVIEW_CONTACT; break;
     }
+    if (outgoing->viewOnce && info.kind != EXTERIA_PREVIEW_FILE) info.ttl_seconds = EXTERIA_VIEW_ONCE_TTL;
     info.duration = (outgoing->durationMs + 500) / 1000;
     info.width = outgoing->width;
     info.height = outgoing->height;

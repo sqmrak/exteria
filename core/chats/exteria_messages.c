@@ -156,6 +156,7 @@ static void read_document(const exteria_tl_value *document, const exteria_tl_val
         /* an expired or empty document still says what it was through the media flags */
         if (voice) out->kind = EXTERIA_PREVIEW_VOICE;
         else if (round) out->kind = EXTERIA_PREVIEW_VIDEO_MESSAGE;
+        else if (media && exteria_tl_has(media, "video")) out->kind = EXTERIA_PREVIEW_VIDEO;
         return;
     }
     exteria_tl_get_i32(document, "dc_id", &dc);
@@ -255,6 +256,12 @@ static void read_video_variant(const exteria_tl_value *media, int32_t target, ex
     }
 }
 
+/* a negative or missing value is ordinary media: a hostile server cannot make a message look timed with a bad number */
+static void read_ttl(const exteria_tl_value *media, exteria_media_info *out) {
+    int32_t ttl = 0;
+    if (exteria_tl_has(media, "ttl_seconds") && exteria_tl_get_i32(media, "ttl_seconds", &ttl) == EXTERIA_OK && ttl > 0) out->ttl_seconds = ttl;
+}
+
 void exteria_media_classify_sized(const exteria_tl_value *media, int32_t photo_target, exteria_media_info *out) {
     memset(out, 0, sizeof(*out));
     out->kind = EXTERIA_PREVIEW_TEXT;
@@ -263,10 +270,12 @@ void exteria_media_classify_sized(const exteria_tl_value *media, int32_t photo_t
     if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaPhoto)) {
         read_photo(exteria_tl_get(media, "photo"), photo_target, out);
         out->spoiler = exteria_tl_has(media, "spoiler") ? 1 : 0;
+        read_ttl(media, out);
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaDocument)) {
         read_document(exteria_tl_get(media, "document"), media, out);
         read_video_variant(media, photo_target, out);
         out->spoiler = exteria_tl_has(media, "spoiler") ? 1 : 0;
+        read_ttl(media, out);
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaGeo) || exteria_tl_is(media, EXTERIA_TL_ID_messageMediaGeoLive) ||
                exteria_tl_is(media, EXTERIA_TL_ID_messageMediaVenue)) {
         out->kind = EXTERIA_PREVIEW_LOCATION;
@@ -602,6 +611,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     out->has_reactions = exteria_tl_has(m, "reactions") ? 1 : 0;
     out->reactions_possible = !service || exteria_tl_has(m, "reactions_are_possible");
     out->out = exteria_tl_has(m, "out") ? 1 : 0;
+    out->unread_mention = exteria_tl_has(m, "mentioned") && exteria_tl_has(m, "media_unread") ? 1 : 0;
     out->post = exteria_tl_has(m, "post") ? 1 : 0;
     if (exteria_peer_from_tl(exteria_tl_get(m, "from_id"), &from) == EXTERIA_OK) {
         if (from.kind == 1) out->from_id = from.id;
@@ -1511,6 +1521,7 @@ static exteria_status upload_media(exteria_arena *arena, exteria_tl_value *file,
         if (!media) return EXTERIA_E_NOMEM;
         status = exteria_tl_set(media, "file", file);
         if (status == EXTERIA_OK && spec->spoiler) status = exteria_tl_set_flag(media, "spoiler");
+        if (status == EXTERIA_OK && spec->view_once) status = exteria_tl_set_i32(arena, media, "ttl_seconds", EXTERIA_VIEW_ONCE_TTL);
     } else {
         attribute = upload_attribute(arena, spec, &status);
         if (!attribute) return status == EXTERIA_OK ? EXTERIA_E_ARG : status;
@@ -1525,13 +1536,15 @@ static exteria_status upload_media(exteria_arena *arena, exteria_tl_value *file,
         /* a sent video is not played in a circle, and a file is never turned into a picture on the other side */
         if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_FILE) status = exteria_tl_set_flag(media, "force_file");
         if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_VIDEO && spec->spoiler) status = exteria_tl_set_flag(media, "spoiler");
+        if (status == EXTERIA_OK && spec->view_once) status = exteria_tl_set_i32(arena, media, "ttl_seconds", EXTERIA_VIEW_ONCE_TTL);
     }
     if (status == EXTERIA_OK) *out = media;
     return status;
 }
 
 static int upload_spec_valid(const exteria_upload_spec *spec) {
-    return spec->kind >= EXTERIA_UPLOAD_VOICE && spec->kind <= EXTERIA_UPLOAD_FILE && memchr(spec->name, 0, sizeof(spec->name)) != NULL &&
+    /* a document sent as a file keeps its bytes for good, so a one-time file is a mistake of the caller */
+    return spec->kind >= EXTERIA_UPLOAD_VOICE && spec->kind <= EXTERIA_UPLOAD_FILE && !(spec->view_once && spec->kind == EXTERIA_UPLOAD_FILE) && memchr(spec->name, 0, sizeof(spec->name)) != NULL &&
            memchr(spec->mime, 0, sizeof(spec->mime)) != NULL && memchr(spec->caption, 0, sizeof(spec->caption)) != NULL;
 }
 
@@ -1638,10 +1651,10 @@ exteria_status exteria_album_send_request(exteria_arena *arena, const exteria_pe
 }
 
 exteria_status exteria_shared_request(exteria_arena *arena, const exteria_peer_ref *peer, exteria_shared_kind kind, int32_t offset_id, int32_t limit, exteria_tl_value **out) {
-    static const char *const filters[] = {"inputMessagesFilterPhotoVideo", "inputMessagesFilterDocument", "inputMessagesFilterUrl", "inputMessagesFilterMusic"};
+    static const char *const filters[] = {"inputMessagesFilterPhotoVideo", "inputMessagesFilterDocument", "inputMessagesFilterUrl", "inputMessagesFilterMusic", "inputMessagesFilterRoundVoice"};
     exteria_status status;
     if (out) *out = NULL;
-    if (!arena || !out || (unsigned)kind > EXTERIA_SHARED_AUDIO || offset_id < 0) return EXTERIA_E_ARG;
+    if (!arena || !out || (unsigned)kind > EXTERIA_SHARED_VOICE || offset_id < 0) return EXTERIA_E_ARG;
     status = chat_search_request(arena, peer, NULL, "", filters[kind], limit, out);
     if (status == EXTERIA_OK && offset_id) status = exteria_tl_set_i32(arena, *out, "offset_id", offset_id);
     if (status != EXTERIA_OK) *out = NULL;

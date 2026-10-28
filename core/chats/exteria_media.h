@@ -16,6 +16,9 @@
 /* the packed waveform of a voice note; a longer one than this is dropped, since the picture is only decoration */
 #define EXTERIA_MEDIA_WAVEFORM_MAX 256
 
+/* the ttl_seconds of media the server removes once the other side has looked at it */
+#define EXTERIA_VIEW_ONCE_TTL 0x7FFFFFFF
+
 typedef enum exteria_sticker_format {
     EXTERIA_STICKER_STATIC = 0,     /* webp */
     EXTERIA_STICKER_ANIMATED,       /* gzip lottie, application/x-tgsticker */
@@ -39,6 +42,7 @@ typedef struct exteria_media_info {
     int64_t sticker_set_id;         /* the set a sticker belongs to, zero when the document names none by id */
     int64_t sticker_set_hash;
     uint8_t spoiler;                /* a photo or a video the sender asked to show blurred until it is tapped */
+    int32_t ttl_seconds;            /* zero for ordinary media; EXTERIA_VIEW_ONCE_TTL for media that is gone after one view, and any other positive value is a timed one */
     char mime[EXTERIA_MEDIA_MIME_MAX];
     char title[EXTERIA_MEDIA_TAG_MAX];      /* the song title of an audio file, empty when the tags have none */
     char performer[EXTERIA_MEDIA_TAG_MAX];
