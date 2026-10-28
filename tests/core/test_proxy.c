@@ -100,11 +100,23 @@ static void test_links(void) {
     CHECK_EQ_INT(l.kind, EXTERIA_LINK_SOCKS);
     CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_OK);
     CHECK(p.user[0] == 0);
-    /* the fake tls proxy parses as a proxy link and is refused where the secret is read */
+    l = link_of("tg://socks?server=10.0.0.2&port=1080&user=me");
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_E_MALFORMED);
+    l = link_of("tg://socks?server=10.0.0.2&port=1080&pass=secret");
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_E_MALFORMED);
+    /* fake tls carries both the key and the domain used by the handshake */
     l = link_of("tg://proxy?server=a.example&port=443&secret=ee000102030405060708090a0b0c0d0e0f6578616d706c652e636f6d");
     CHECK_EQ_INT(l.kind, EXTERIA_LINK_PROXY);
-    CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_E_UNSUPPORTED);
-    CHECK_EQ_INT(p.kind, 0);
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_OK);
+    CHECK_EQ_INT(p.kind, EXTERIA_PROXY_MTPROTO);
+    CHECK_EQ_INT(p.padded, 1);
+    CHECK(!strcmp(p.tls_domain, "example.com"));
+    CHECK_MEM(p.secret, SECRET, 16);
+    l = link_of("tg://proxy?server=a.example&port=443&secret=7gABAgMEBQYHCAkKCwwNDg9leGFtcGxlLmNvbQ");
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_OK);
+    CHECK(!strcmp(p.tls_domain, "example.com"));
+    l = link_of("tg://proxy?server=a.example&port=443&secret=ee000102030405060708090a0b0c0d0e0f2f");
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &p), EXTERIA_E_MALFORMED);
     /* not a link this client can use: it stays an ordinary address */
     CHECK_EQ_INT(link_of("tg://proxy?server=a.example&port=443").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("tg://proxy?server=a.example&port=443&secret=").kind, EXTERIA_LINK_OTHER);
@@ -140,9 +152,24 @@ static void test_link_out(void) {
     l = link_of(out);
     CHECK_EQ_INT(exteria_proxy_from_link(&l, &back), EXTERIA_OK);
     CHECK(memcmp(&back, &p, sizeof(p)) == 0);
+    memset(p.tls_domain, 'a', 60);
+    p.tls_domain[60] = '.';
+    memset(p.tls_domain + 61, 'b', 59);
+    p.tls_domain[120] = 0;
+    CHECK_EQ_INT(exteria_proxy_link(&p, out, sizeof(out)), EXTERIA_OK);
+    l = link_of(out);
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &back), EXTERIA_OK);
+    CHECK(!strcmp(p.tls_domain, back.tls_domain));
+    memset(p.tls_domain, 0, sizeof(p.tls_domain));
     p.padded = 0;
     CHECK_EQ_INT(exteria_proxy_link(&p, out, sizeof(out)), EXTERIA_OK);
     CHECK(strstr(out, "&secret=0001") != NULL);
+    p.padded = 1;
+    strcpy(p.tls_domain, "example.com");
+    CHECK_EQ_INT(exteria_proxy_link(&p, out, sizeof(out)), EXTERIA_OK);
+    l = link_of(out);
+    CHECK_EQ_INT(exteria_proxy_from_link(&l, &back), EXTERIA_OK);
+    CHECK(memcmp(&back, &p, sizeof(p)) == 0);
     memset(&p, 0, sizeof(p));
     p.kind = EXTERIA_PROXY_SOCKS5;
     strcpy(p.server, "h.example");

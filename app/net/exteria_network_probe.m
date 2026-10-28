@@ -1,4 +1,5 @@
 #import "exteria_network_probe.h"
+#import "exteria_proxy_settings.h"
 
 #include "exteria_session_file.h"
 
@@ -18,7 +19,9 @@ static const int32_t ExteriaProbeDatacenters[] = {2, 4};
             exteria_mt_socket socket;
             exteria_mt_socket_init(&socket);
             BOOL tunneled = NO;
-            exteria_status status = ExteriaShiroConnectSocket(shiro, &socket, host, exteria_dc_port(), PROBE_TIMEOUT_MS, &tunneled);
+            exteria_mt_client_config config;
+            memset(&config, 0, sizeof(config));
+            exteria_status status = ExteriaProxyConnect(shiro, &socket, host, exteria_dc_port(), PROBE_TIMEOUT_MS, &config, &tunneled);
             exteria_mt_socket_close(&socket);
             if (status == EXTERIA_OK) {
                 result = ExteriaProbeReachable;

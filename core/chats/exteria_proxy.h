@@ -8,6 +8,7 @@
 #include "exteria_status.h"
 
 #define EXTERIA_PROXY_SECRET_LEN 16
+#define EXTERIA_PROXY_DOMAIN_MAX 120
 
 typedef enum exteria_proxy_kind {
     EXTERIA_PROXY_MTPROTO = 1,  /* an MTProto proxy: the obfuscated stream of the transport, keyed by a secret */
@@ -20,6 +21,7 @@ typedef struct exteria_proxy {
     uint16_t port;
     uint8_t secret[EXTERIA_PROXY_SECRET_LEN];
     uint8_t padded;             /* the secret began with dd: the padded intermediate transport, which proxies of the current kind ask for */
+    char tls_domain[EXTERIA_PROXY_DOMAIN_MAX + 1];
     char user[EXTERIA_LINK_CREDENTIAL_MAX];
     char password[EXTERIA_LINK_CREDENTIAL_MAX];
 } exteria_proxy;

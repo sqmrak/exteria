@@ -1,6 +1,8 @@
 #import "exteria_welcome_controller.h"
 
 #import "exteria_animated_icon_view.h"
+#import "exteria_alert.h"
+#import "exteria_proxy_settings.h"
 #import "exteria_lottie_view.h"
 #import "exteria_network_probe.h"
 #import "exteria_page_dots_view.h"
@@ -14,6 +16,7 @@
 #import "exteria_weak_reference.h"
 #import "exteria_welcome_toast.h"
 #import "exteria_welcome.h"
+#include "exteria_bytes.h"
 
 #define EXTERIA_WELCOME_PAGES 6
 /* the sticker of the network card: the duck with the phone and the cloud, from the welcome pages */
@@ -99,6 +102,7 @@ static UILabel *ExteriaWelcomeLabel(UIColor *color, NSInteger lines) {
     ExteriaPageDotsView *_dots;
     ExteriaWaveButton *_button;
     UIButton *_qr;
+    UIButton *_proxy;
     ExteriaSenkoPopup *_senkoPopup;
     ExteriaShiroButton *_vpn;
     NSInteger _page;
@@ -172,6 +176,13 @@ static UILabel *ExteriaWelcomeLabel(UIColor *color, NSInteger lines) {
           forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
     [root addSubview:_qr];
 
+    _proxy = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    [_proxy setTitle:NSLocalizedString(@"proxy.title", nil) forState:UIControlStateNormal];
+    [_proxy setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
+    _proxy.titleLabel.font = ExteriaFontMedium(14);
+    [_proxy addTarget:self action:@selector(proxyTapped) forControlEvents:UIControlEventTouchUpInside];
+    [root addSubview:_proxy];
+
     if (_shiro) {
         _vpn = [[ExteriaShiroButton alloc] initWithShiro:_shiro host:self];
         [root addSubview:_vpn];
@@ -189,6 +200,7 @@ static UILabel *ExteriaWelcomeLabel(UIColor *color, NSInteger lines) {
     [_dots release];
     [_button release];
     [_qr release];
+    [_proxy release];
     _senkoPopup.dismissHandler = nil;
     [_senkoPopup dismiss];
     [_senkoPopup release];
@@ -231,6 +243,7 @@ static UILabel *ExteriaWelcomeLabel(UIColor *color, NSInteger lines) {
     [_toast refresh];
     CGSize pill = [_vpn preferredSize];
     _vpn.frame = CGRectMake(size.width - insets.right - 16 - pill.width, insets.top + 10, pill.width, pill.height);
+    _proxy.frame = CGRectMake(insets.left + 12, insets.top + 10, 88, 40);
     _scroll.contentSize = CGSizeMake(size.width * EXTERIA_WELCOME_PAGES, size.height);
     for (NSInteger i = 0; i < EXTERIA_WELCOME_PAGES; ++i) {
         ExteriaWelcomePage *page = [_pages objectAtIndex:i];
@@ -265,6 +278,27 @@ static UILabel *ExteriaWelcomeLabel(UIColor *color, NSInteger lines) {
         _scroll.contentOffset = CGPointMake(_page * size.width, 0);
     }
     [_dots setProgress:exteria_pager_progress(_scroll.contentOffset.x, size.width, EXTERIA_WELCOME_PAGES)];
+}
+
+- (void)proxyTapped {
+    exteria_proxy proxy;
+    BOOL enabled = NO;
+    exteria_status status = ExteriaProxyRead(&proxy, &enabled);
+    exteria_wipe(&proxy, sizeof(proxy));
+    if (status != EXTERIA_OK && !enabled) NSLog(@"exteria: proxy settings unavailable: %s", exteria_status_name(status));
+    NSArray *choices = [NSArray arrayWithObjects:NSLocalizedString(@"proxy.add", nil), NSLocalizedString(enabled ? @"proxy.disable" : @"proxy.enable", nil), nil];
+    ExteriaChoose(NSLocalizedString(@"proxy.title", nil), choices, -1, ^(NSInteger index) {
+        if (index == 0) {
+            ExteriaPromptText(NSLocalizedString(@"proxy.add", nil), nil, nil, NSLocalizedString(@"proxy.link.hint", nil), ^(NSString *text) {
+                if (!text.length) return;
+                exteria_status saved = ExteriaProxyStoreLink([text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]);
+                if (saved != EXTERIA_OK) ExteriaShowNotice(NSLocalizedString(@"proxy.title", nil), NSLocalizedString(saved == EXTERIA_E_STORAGE ? @"proxy.savefailed" : @"proxy.invalid", nil));
+            });
+        } else if (index == 1) {
+            exteria_status changed = ExteriaProxySetEnabled(!enabled);
+            if (changed != EXTERIA_OK) ExteriaShowNotice(NSLocalizedString(@"proxy.title", nil), NSLocalizedString(@"proxy.invalid", nil));
+        }
+    });
 }
 
 - (void)viewDidAppear:(BOOL)animated {

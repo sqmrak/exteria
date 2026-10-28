@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SECRET_BYTES_MAX 64
+#define SECRET_BYTES_MAX (1 + EXTERIA_PROXY_SECRET_LEN + EXTERIA_PROXY_DOMAIN_MAX)
 
 static int hex_digit(char c) {
     if (c >= '0' && c <= '9') return c - '0';
@@ -52,11 +52,12 @@ static int is_hex_text(const char *text, size_t len) {
     return 1;
 }
 
-exteria_status exteria_proxy_secret_decode(const char *text, uint8_t secret[EXTERIA_PROXY_SECRET_LEN], uint8_t *padded) {
+static exteria_status decode_secret(const char *text, uint8_t secret[EXTERIA_PROXY_SECRET_LEN], uint8_t *padded, char *domain, size_t domain_cap) {
     uint8_t bytes[SECRET_BYTES_MAX];
     size_t len, count = 0, i;
     if (secret) memset(secret, 0, EXTERIA_PROXY_SECRET_LEN);
     if (padded) *padded = 0;
+    if (domain && domain_cap) domain[0] = 0;
     if (!text || !secret || !padded) return EXTERIA_E_ARG;
     len = strlen(text);
     if (len == 0 || len > 4 * SECRET_BYTES_MAX) return EXTERIA_E_MALFORMED;
@@ -71,13 +72,27 @@ exteria_status exteria_proxy_secret_decode(const char *text, uint8_t secret[EXTE
         memcpy(secret, bytes, EXTERIA_PROXY_SECRET_LEN);
         return EXTERIA_OK;
     }
-    if (count > EXTERIA_PROXY_SECRET_LEN && bytes[0] == 0xee) return EXTERIA_E_UNSUPPORTED;
+    if (count > EXTERIA_PROXY_SECRET_LEN + 1 && bytes[0] == 0xee) {
+        size_t domain_len = count - 1 - EXTERIA_PROXY_SECRET_LEN;
+        if (!domain || domain_cap <= domain_len) return EXTERIA_E_UNSUPPORTED;
+        if (memchr(bytes + 1 + EXTERIA_PROXY_SECRET_LEN, 0, domain_len)) return EXTERIA_E_MALFORMED;
+        memcpy(domain, bytes + 1 + EXTERIA_PROXY_SECRET_LEN, domain_len);
+        domain[domain_len] = 0;
+        if (!exteria_proxy_server_valid(domain)) { domain[0] = 0; return EXTERIA_E_MALFORMED; }
+        memcpy(secret, bytes + 1, EXTERIA_PROXY_SECRET_LEN);
+        *padded = 1;
+        return EXTERIA_OK;
+    }
     if (count == EXTERIA_PROXY_SECRET_LEN + 1 && bytes[0] == 0xdd) {
         memcpy(secret, bytes + 1, EXTERIA_PROXY_SECRET_LEN);
         *padded = 1;
         return EXTERIA_OK;
     }
     return EXTERIA_E_MALFORMED;
+}
+
+exteria_status exteria_proxy_secret_decode(const char *text, uint8_t secret[EXTERIA_PROXY_SECRET_LEN], uint8_t *padded) {
+    return decode_secret(text, secret, padded, NULL, 0);
 }
 
 int exteria_proxy_server_valid(const char *server) {
@@ -106,13 +121,17 @@ exteria_status exteria_proxy_from_link(const exteria_tg_link *link, exteria_prox
     strcpy(out->server, link->proxy_server);
     out->port = link->proxy_port;
     if (link->kind == EXTERIA_LINK_PROXY) {
-        exteria_status status = exteria_proxy_secret_decode(link->proxy_secret, out->secret, &out->padded);
+        exteria_status status = decode_secret(link->proxy_secret, out->secret, &out->padded, out->tls_domain, sizeof(out->tls_domain));
         if (status != EXTERIA_OK) {
             memset(out, 0, sizeof(*out));
             return status;
         }
         out->kind = EXTERIA_PROXY_MTPROTO;
         return EXTERIA_OK;
+    }
+    if ((link->proxy_user[0] != 0) != (link->proxy_password[0] != 0)) {
+        memset(out, 0, sizeof(*out));
+        return EXTERIA_E_MALFORMED;
     }
     out->kind = EXTERIA_PROXY_SOCKS5;
     strcpy(out->user, link->proxy_user);
@@ -155,17 +174,28 @@ exteria_status exteria_proxy_link(const exteria_proxy *proxy, char *out, size_t 
     memcpy(out + at, head, (size_t)written);
     at += (size_t)written;
     if (proxy->kind == EXTERIA_PROXY_MTPROTO) {
-        if (at + 8 + 2 + 2 * EXTERIA_PROXY_SECRET_LEN + 1 > cap) return EXTERIA_E_LIMIT;
+        const char *domain_end = memchr(proxy->tls_domain, 0, sizeof(proxy->tls_domain));
+        size_t domain_len;
+        if (!domain_end) return EXTERIA_E_ARG;
+        domain_len = (size_t)(domain_end - proxy->tls_domain);
+        if (domain_len && (!proxy->padded || domain_len > EXTERIA_PROXY_DOMAIN_MAX || !exteria_proxy_server_valid(proxy->tls_domain))) return EXTERIA_E_ARG;
+        if (at + 8 + 2 + 2 * EXTERIA_PROXY_SECRET_LEN + 2 * domain_len + 1 > cap) return EXTERIA_E_LIMIT;
         memcpy(out + at, "&secret=", 8);
         at += 8;
         if (proxy->padded) {
-            out[at++] = 'd';
-            out[at++] = 'd';
+            out[at++] = domain_len ? 'e' : 'd';
+            out[at++] = domain_len ? 'e' : 'd';
         }
         for (i = 0; i < EXTERIA_PROXY_SECRET_LEN; ++i) {
             static const char hex[] = "0123456789abcdef";
             out[at++] = hex[proxy->secret[i] >> 4];
             out[at++] = hex[proxy->secret[i] & 15];
+        }
+        for (i = 0; i < domain_len; ++i) {
+            static const char hex[] = "0123456789abcdef";
+            unsigned char c = (unsigned char)proxy->tls_domain[i];
+            out[at++] = hex[c >> 4];
+            out[at++] = hex[c & 15];
         }
     } else if (proxy->user[0]) {
         if (at + 6 >= cap) return EXTERIA_E_LIMIT;

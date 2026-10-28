@@ -1,5 +1,9 @@
 #include "exteria_socks.h"
+#include "exteria_mt_socket.h"
 #include "test_util.h"
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static void fragmented_reply(void) {
     exteria_socks s;
@@ -79,8 +83,42 @@ static void credentials_and_rejection(void) {
     exteria_writer_free(&out);
 }
 
+static void connected_socket(void) {
+    int pair[2], status = 0;
+    pid_t child;
+    exteria_mt_socket socket;
+    CHECK_EQ_INT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair), 0);
+    child = fork();
+    CHECK(child >= 0);
+    if (child == 0) {
+        uint8_t in[10];
+        const uint8_t method[] = {5, 0};
+        const uint8_t reply[] = {5, 0, 0, 1, 127, 0, 0, 1, 0, 1};
+        close(pair[0]);
+        if (recv(pair[1], in, 3, MSG_WAITALL) != 3 || in[0] != 5 || write(pair[1], method, 2) != 2 ||
+            recv(pair[1], in, 10, MSG_WAITALL) != 10 || in[3] != 1 || in[4] != 127 ||
+            write(pair[1], reply, sizeof(reply)) != (ssize_t)sizeof(reply)) _exit(1);
+        close(pair[1]);
+        _exit(0);
+    }
+    close(pair[1]);
+    exteria_mt_socket_init(&socket);
+    CHECK_EQ_INT(exteria_mt_socket_adopt(&socket, pair[0]), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_mt_socket_negotiate_socks5(&socket, NULL, NULL, "127.0.0.1", 443, 2000), EXTERIA_OK);
+    CHECK(socket.fd >= 0);
+    exteria_mt_socket_close(&socket);
+    CHECK_EQ_INT(waitpid(child, &status, 0), child);
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    CHECK_EQ_INT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair), 0);
+    CHECK_EQ_INT(exteria_mt_socket_adopt(&socket, pair[0]), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_mt_socket_negotiate_socks5(&socket, NULL, NULL, "bad host", 443, 2000), EXTERIA_E_ARG);
+    CHECK_EQ_INT(socket.fd, -1);
+    close(pair[1]);
+}
+
 int main(void) {
     fragmented_reply();
     credentials_and_rejection();
+    connected_socket();
     return test_finish("socks");
 }

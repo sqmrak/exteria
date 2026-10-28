@@ -9,9 +9,11 @@
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
 #import "exteria_theme.h"
+#import "exteria_proxy_settings.h"
 #import "exteria_user_profile_controller.h"
 
 #include "exteria_links.h"
+#include "exteria_bytes.h"
 
 /* the schemes an address in a message or a button may hand to the system; javascript:, file: and the rest are not links to follow */
 static BOOL ExteriaSystemSchemeAllowed(NSString *scheme) {
@@ -201,10 +203,25 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
         [self openInviteOfHash:[NSString stringWithUTF8String:link.slug]];
         return;
     case EXTERIA_LINK_PROXY:
-    case EXTERIA_LINK_SOCKS:
-        ExteriaShowNotice(NSLocalizedString(@"proxy.unsupported.title", nil),
-                          NSLocalizedString(@"proxy.unsupported.message", nil));
+    case EXTERIA_LINK_SOCKS: {
+        exteria_proxy proxy;
+        exteria_status status = exteria_proxy_from_link(&link, &proxy);
+        if (status != EXTERIA_OK) {
+            exteria_wipe(&proxy, sizeof(proxy));
+            exteria_wipe(&link, sizeof(link));
+            ExteriaShowNotice(NSLocalizedString(@"proxy.title", nil), NSLocalizedString(@"proxy.invalid", nil));
+            return;
+        }
+        NSString *description = [NSString stringWithFormat:NSLocalizedString(@"proxy.confirm", nil),
+            proxy.kind == EXTERIA_PROXY_SOCKS5 ? @"SOCKS5" : @"MTProto", proxy.server, (unsigned)proxy.port];
+        exteria_wipe(&proxy, sizeof(proxy));
+        exteria_wipe(&link, sizeof(link));
+        ExteriaConfirm(NSLocalizedString(@"proxy.title", nil), description, NSLocalizedString(@"proxy.enable", nil), ^{
+            exteria_status saved = ExteriaProxyStoreLink(url);
+            if (saved != EXTERIA_OK) ExteriaShowNotice(NSLocalizedString(@"proxy.title", nil), NSLocalizedString(@"proxy.savefailed", nil));
+        });
         return;
+    }
     case EXTERIA_LINK_PEER:
         break;
     }

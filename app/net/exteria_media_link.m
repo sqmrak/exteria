@@ -1,4 +1,5 @@
 #import "exteria_media_link.h"
+#import "exteria_proxy_settings.h"
 
 #import <errno.h>
 #import <fcntl.h>
@@ -455,7 +456,11 @@ static void ExteriaMediaError(void *ctx, exteria_status status, const char *boun
 }
 
 - (void)openLink {
-    exteria_status status = ExteriaShiroConnectSocket(_shiro, &_socket, exteria_dc_host(_dc), exteria_dc_port(), CONNECT_TIMEOUT_MS, NULL);
+    exteria_status status = ExteriaProxyConnect(_shiro, &_socket, exteria_dc_host(_dc), exteria_dc_port(), CONNECT_TIMEOUT_MS, &_client.config, NULL);
+    if (status == EXTERIA_OK) {
+        _client.mt.config.transport = _client.config.transport;
+        _client.mt.config.obfuscation = _client.config.obfuscation;
+    }
     if (status == EXTERIA_OK) status = exteria_client_connect(&_client);
     if (status != EXTERIA_OK) [self linkLost:status];
 }

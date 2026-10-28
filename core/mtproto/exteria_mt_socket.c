@@ -279,20 +279,17 @@ exteria_status exteria_mt_socket_start_faketls(exteria_mt_socket *s, const uint8
     return status;
 }
 
-exteria_status exteria_mt_socket_connect_socks5(exteria_mt_socket *s, const char *proxy_host, uint16_t proxy_port,
-                                                const char *user, const char *pass,
-                                                const char *dest_host, uint16_t dest_port, int timeout_ms) {
+exteria_status exteria_mt_socket_negotiate_socks5(exteria_mt_socket *s, const char *user, const char *pass,
+                                                  const char *dest_host, uint16_t dest_port, int timeout_ms) {
     exteria_socks proxy;
     exteria_writer out;
     uint64_t deadline;
     exteria_status status;
-    if (!s || timeout_ms <= 0) return EXTERIA_E_ARG;
+    if (!s || s->fd < 0 || timeout_ms <= 0) return EXTERIA_E_ARG;
     deadline = exteria_system_clock.monotonic_ms(NULL) + (uint64_t)timeout_ms;
     exteria_writer_init(&out, 1024);
     status = exteria_socks_start(&proxy, dest_host, dest_port, user, pass, &out);
-    if (status != EXTERIA_OK) goto done;
-    status = exteria_mt_socket_connect(s, proxy_host, proxy_port, timeout_ms);
-    if (status != EXTERIA_OK) goto done;
+    if (status != EXTERIA_OK) { exteria_mt_socket_close(s); goto done; }
     while (status == EXTERIA_OK && proxy.state != EXTERIA_SOCKS_READY) {
         uint8_t bytes[262];
         size_t got = 0, used = 0;
@@ -312,5 +309,22 @@ done:
     if (out.data) exteria_wipe(out.data, out.cap);
     exteria_writer_free(&out);
     exteria_socks_free(&proxy);
+    return status;
+}
+
+exteria_status exteria_mt_socket_connect_socks5(exteria_mt_socket *s, const char *proxy_host, uint16_t proxy_port,
+                                                const char *user, const char *pass,
+                                                const char *dest_host, uint16_t dest_port, int timeout_ms) {
+    uint64_t deadline;
+    exteria_status status;
+    int left;
+    if (!s || timeout_ms <= 0) return EXTERIA_E_ARG;
+    deadline = exteria_system_clock.monotonic_ms(NULL) + (uint64_t)timeout_ms;
+    status = exteria_mt_socket_connect(s, proxy_host, proxy_port, timeout_ms);
+    if (status != EXTERIA_OK) return status;
+    left = remaining_ms(deadline);
+    if (!left) { exteria_mt_socket_close(s); return EXTERIA_E_TIMEOUT; }
+    status = exteria_mt_socket_negotiate_socks5(s, user, pass, dest_host, dest_port, left);
+    if (status != EXTERIA_OK) exteria_mt_socket_close(s);
     return status;
 }
