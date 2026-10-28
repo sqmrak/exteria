@@ -86,6 +86,9 @@ typedef enum {
 ExteriaChatListTitle ExteriaChatListTitleStored(void);
 void ExteriaChatListTitleStore(ExteriaChatListTitle mode);
 NSString *ExteriaChatListCustomTitle(void);
+/* the words a mode puts in the title: the username or name of person when it is known, the person's own text, and the word Chats otherwise */
+@class ExteriaPerson;
+NSString *ExteriaChatListTitleText(ExteriaChatListTitle mode, ExteriaPerson *person);
 void ExteriaChatListSetCustomTitle(NSString *text);
 
 /* how round the pictures of people and chats are, from 0 (a square) to 100 (a circle); the default is the rounded square the app began with */
@@ -112,7 +115,9 @@ typedef enum {
     ExteriaChatSwipePin,
     ExteriaChatSwipeRead,
     ExteriaChatSwipeMute,
-    ExteriaChatSwipeDelete
+    ExteriaChatSwipeDelete,
+    /* the row has no swipe of its own, so a swipe to the left turns the bar of folders to the next one */
+    ExteriaChatSwipeFolders
 } ExteriaChatSwipe;
 ExteriaChatSwipe ExteriaChatSwipeStored(void);
 void ExteriaChatSetSwipe(ExteriaChatSwipe swipe);
@@ -189,6 +194,9 @@ typedef enum {
     ExteriaChatFlagNoUnarchiveSwipe,            /* the swipe of a chat in the archive does nothing, so a chat does not leave it by a slip of the finger */
     ExteriaChatFlagHideVpnButton,               /* the chat list has no VPN button beside its menu */
     ExteriaChatFlagFoxes,                       /* foxes fall over the chat list and the background of a chat */
+    ExteriaChatFlagHideWaves,                   /* the modern look draws no waves in the corners of the screens */
+    ExteriaChatFlagShowMessageEmojiStatus,
+    ExteriaChatFlagShowReplyCustomEmoji,
     ExteriaChatFlagCount
 } ExteriaChatFlag;
 /* the archive entry of the chat list is hidden on this device, and a pull on the list shows it; the server keeps no such state */

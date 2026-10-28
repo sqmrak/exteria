@@ -3,6 +3,8 @@
 #import "exteria_alert.h"
 #import "exteria_avatar_view.h"
 #import "exteria_chat_settings.h"
+#import "exteria_platform.h"
+#include <math.h>
 #import "exteria_sheet.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -48,8 +50,11 @@
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat gap = (self.bounds.size.width - PREVIEW_AVATARS * PREVIEW_SIDE) / (PREVIEW_AVATARS + 1);
+    CGFloat scale = ExteriaScreenScale();
     for (NSUInteger i = 0; i < PREVIEW_AVATARS; ++i) {
-        ((UIView *)[_avatars objectAtIndex:i]).frame = CGRectMake(gap + i * (PREVIEW_SIDE + gap), (self.bounds.size.height - PREVIEW_SIDE) / 2, PREVIEW_SIDE, PREVIEW_SIDE);
+        CGFloat x = round((gap + i * (PREVIEW_SIDE + gap)) * scale) / scale;
+        CGFloat y = round((self.bounds.size.height - PREVIEW_SIDE) * scale / 2) / scale;
+        ((UIView *)[_avatars objectAtIndex:i]).frame = CGRectMake(x, y, PREVIEW_SIDE, PREVIEW_SIDE);
     }
 }
 
@@ -191,6 +196,10 @@
     }]];
     [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.foxes", nil) subtitle:NSLocalizedString(@"look.foxes.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagFoxes) toggle:^(BOOL on) {
         ExteriaChatFlagSet(ExteriaChatFlagFoxes, on);
+        [(ExteriaAppearanceSettingsController *)weak.target apply];
+    }]];
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.hidewaves", nil) subtitle:NSLocalizedString(@"look.hidewaves.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagHideWaves) toggle:^(BOOL on) {
+        ExteriaChatFlagSet(ExteriaChatFlagHideWaves, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
     return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.chatlist.header", nil) footer:nil rows:rows];

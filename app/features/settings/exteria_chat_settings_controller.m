@@ -322,7 +322,7 @@ static NSString *ExteriaNightStateText(void) {
 - (ExteriaSettingsSection *)swipeSection {
     ExteriaWeakReference *weak = _weak;
     ExteriaChatSwipe current = ExteriaChatSwipeStored();
-    static NSString *const keys[] = {@"chatset.swipe.archive", @"chatset.swipe.pin", @"chatset.swipe.read", @"chatset.swipe.mute", @"chatset.swipe.delete"};
+    static NSString *const keys[] = {@"chatset.swipe.archive", @"chatset.swipe.pin", @"chatset.swipe.read", @"chatset.swipe.mute", @"chatset.swipe.delete", @"chatset.swipe.folders"};
     NSMutableArray *rows = [NSMutableArray array];
     for (NSUInteger i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
         [rows addObject:[ExteriaSettingsRow checkRowWithTitle:NSLocalizedString(keys[i], nil) subtitle:nil checked:(NSUInteger)current == i tap:^{

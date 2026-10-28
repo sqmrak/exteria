@@ -1,4 +1,5 @@
 #import "exteria_chat_settings.h"
+#import "exteria_person.h"
 
 #import "exteria_platform.h"
 
@@ -132,6 +133,25 @@ void ExteriaChatListTitleStore(ExteriaChatListTitle mode) { ExteriaStoreNumber(E
 NSString *ExteriaChatListCustomTitle(void) {
     NSString *text = [[NSUserDefaults standardUserDefaults] stringForKey:ExteriaChatListCustomTitleKey];
     return text ? text : @"";
+}
+NSString *ExteriaChatListTitleText(ExteriaChatListTitle mode, ExteriaPerson *person) {
+    switch (mode) {
+    case ExteriaChatListTitleUsername:
+        if (person.username.length) return [@"@" stringByAppendingString:person.username];
+        break;
+    case ExteriaChatListTitleName:
+        if (person.name.length) return person.name;
+        break;
+    case ExteriaChatListTitleCustom: {
+        NSString *text = [ExteriaChatListCustomTitle() stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (text.length) return text;
+        break;
+    }
+    case ExteriaChatListTitleDefault:
+    case ExteriaChatListTitleCount:
+        break;
+    }
+    return NSLocalizedString(@"chats.title", nil);
 }
 void ExteriaChatListSetCustomTitle(NSString *text) {
     [[NSUserDefaults standardUserDefaults] setObject:text ? text : @"" forKey:ExteriaChatListCustomTitleKey];
@@ -277,6 +297,9 @@ static const struct { NSString *key; BOOL fallback; } ExteriaChatFlagTable[Exter
     [ExteriaChatFlagBoykisser] = {@"exteria.chat.boykisser", NO},
     [ExteriaChatFlagSnow] = {@"exteria.chat.snow", NO},
     [ExteriaChatFlagFoxes] = {@"exteria.chat.foxes", NO},
+    [ExteriaChatFlagHideWaves] = {@"exteria.chat.hidewaves", NO},
+    [ExteriaChatFlagShowMessageEmojiStatus] = {@"exteria.chat.messageemojistatus", YES},
+    [ExteriaChatFlagShowReplyCustomEmoji] = {@"exteria.chat.replycustomemoji", YES},
     [ExteriaChatFlagSenderAvatars] = {@"exteria.chat.senderavatars", NO},
     [ExteriaChatFlagHideSearchBar] = {@"exteria.chat.hidesearch", NO},
     [ExteriaChatFlagHideStories] = {@"exteria.chat.hidestories", NO},
@@ -367,7 +390,7 @@ void ExteriaChatSetStickerShape(ExteriaStickerShape shape) {
 ExteriaChatSwipe ExteriaChatSwipeStored(void) {
     NSNumber *stored = ExteriaStoredNumber(ExteriaChatSwipeKey);
     NSInteger value = stored ? stored.integerValue : ExteriaChatSwipeArchive;
-    return value >= ExteriaChatSwipeArchive && value <= ExteriaChatSwipeDelete ? (ExteriaChatSwipe)value : ExteriaChatSwipeArchive;
+    return value >= ExteriaChatSwipeArchive && value <= ExteriaChatSwipeFolders ? (ExteriaChatSwipe)value : ExteriaChatSwipeArchive;
 }
 
 void ExteriaChatSetSwipe(ExteriaChatSwipe swipe) {

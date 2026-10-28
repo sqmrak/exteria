@@ -594,6 +594,26 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
 
 @end
 
+@interface ExteriaClassicSelectionView : UIView {
+    UIRectCorner _corners;
+}
+@property (nonatomic, assign) UIRectCorner corners;
+@end
+
+@implementation ExteriaClassicSelectionView
+@synthesize corners = _corners;
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) { self.backgroundColor = [UIColor clearColor]; self.opaque = NO; self.contentMode = UIViewContentModeRedraw; }
+    return self;
+}
+- (void)drawRect:(CGRect)rect {
+    (void)rect;
+    [ExteriaClassicSelectionColor() setFill];
+    [[UIBezierPath bezierPathWithRoundedRect:self.bounds byRoundingCorners:_corners cornerRadii:CGSizeMake(10, 10)] fill];
+}
+@end
+
 /* the cell of a row with a slider in the classic grouped table */
 @interface ExteriaClassicSliderCell : UITableViewCell {
     UIView *_slider;
@@ -1901,8 +1921,10 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
     Class cellClass = row.hasSlider ? [ExteriaClassicSliderCell class] : [UITableViewCell class];
     UITableViewCell *cell = [[[cellClass alloc] initWithStyle:style reuseIdentifier:nil] autorelease];
     ExteriaClassicStyleCell(cell);
-    UIView *selection = [[[UIView alloc] initWithFrame:CGRectZero] autorelease];
-    selection.backgroundColor = ExteriaClassicSelectionColor();
+    ExteriaClassicSelectionView *selection = [[[ExteriaClassicSelectionView alloc] initWithFrame:CGRectZero] autorelease];
+    NSUInteger count = [[[[self shownSections] objectAtIndex:(NSUInteger)indexPath.section] rows] count];
+    if (indexPath.row == 0) selection.corners |= UIRectCornerTopLeft | UIRectCornerTopRight;
+    if ((NSUInteger)indexPath.row + 1 == count) selection.corners |= UIRectCornerBottomLeft | UIRectCornerBottomRight;
     cell.selectedBackgroundView = selection;
     cell.textLabel.text = row.title;
     cell.textLabel.numberOfLines = 0;

@@ -3,6 +3,7 @@
 #import "exteria_chat_preview_view.h"
 #import "exteria_chat_settings.h"
 #import "exteria_name_color_controller.h"
+#import "exteria_quick_reaction_controller.h"
 #import "exteria_person.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -42,6 +43,11 @@
     [super viewDidLoad];
     [self rebuild];
     [self loadMe];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    if (self.isViewLoaded) [self rebuild];
 }
 
 /* the page stays up when the theme changes; its rows are made again in the new colors */
@@ -88,6 +94,7 @@
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:color]]];
     }
     [sections addObject:[self mediaSection]];
+    [sections addObject:[self premiumElementsSection]];
     [sections addObject:[self messagesSection]];
     [sections addObject:[self menuSection]];
     [sections addObject:[self confirmSection]];
@@ -134,9 +141,16 @@ static ExteriaSettingsRow *ExteriaFlagRow(NSString *titleKey, NSString *infoKey,
             [(ExteriaChatExtrasController *)weak.target rebuild];
         });
     }]];
-    [rows addObject:ExteriaFlagRow(@"chatset.replycolors", @"chatset.replycolors.info", ExteriaChatFlagReplyColors)];
     [rows addObject:ExteriaFlagRow(@"chatset.replybackground", nil, ExteriaChatFlagReplyBackground)];
     return [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:rows];
+}
+
+- (ExteriaSettingsSection *)premiumElementsSection {
+    NSArray *rows = [NSArray arrayWithObjects:
+        ExteriaFlagRow(@"chatset.premium.status", nil, ExteriaChatFlagShowMessageEmojiStatus),
+        ExteriaFlagRow(@"chatset.premium.replyemoji", nil, ExteriaChatFlagShowReplyCustomEmoji),
+        ExteriaFlagRow(@"chatset.replycolors", @"chatset.replycolors.info", ExteriaChatFlagReplyColors), nil];
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.premium.header", nil) footer:nil rows:rows];
 }
 
 /* playback beyond the original: the step of the seek, what pauses a voice or a round message when the app goes down, and the camera and the sound of videos */
@@ -189,19 +203,10 @@ static ExteriaSettingsRow *ExteriaFlagRow(NSString *titleKey, NSString *infoKey,
 
 /* the emoji a double tap sends; the chat falls back to its first reaction when it does not offer the one chosen */
 - (ExteriaSettingsRow *)quickReactionRow {
-    static NSString *const choices[] = {@"\u2764", @"\U0001F44D", @"\U0001F44E", @"\U0001F525", @"\U0001F970", @"\U0001F44F", @"\U0001F601", @"\U0001F914",
-                                        @"\U0001F622", @"\U0001F389", @"\U0001F92F", @"\U0001F631"};
     ExteriaWeakReference *weak = _weak;
-    NSString *title = NSLocalizedString(@"chatset.quickreaction", nil);
-    return [ExteriaSettingsRow rowWithTitle:title value:ExteriaChatQuickReaction() tap:^{
+    return [ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chatset.quickreaction", nil) value:ExteriaChatQuickReaction() tap:^{
         ExteriaChatExtrasController *me = weak.target;
-        if (!me) return;
-        NSMutableArray *options = [NSMutableArray array];
-        for (size_t i = 0; i < sizeof(choices) / sizeof(choices[0]); ++i) [options addObject:choices[i]];
-        ExteriaSettingsChoose(me, title, options, ^(NSUInteger index) {
-            ExteriaChatSetQuickReaction([options objectAtIndex:index]);
-            [(ExteriaChatExtrasController *)weak.target rebuild];
-        });
+        if (me) [me.navigationController pushViewController:[[[ExteriaQuickReactionController alloc] initWithSession:me->_session] autorelease] animated:YES];
     }];
 }
 

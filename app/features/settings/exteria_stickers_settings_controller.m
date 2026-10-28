@@ -4,6 +4,7 @@
 #import "exteria_gift_screen.h"
 #import "exteria_session_stickermanage.h"
 #import "exteria_sheet.h"
+#import "exteria_quick_reaction_controller.h"
 #import "exteria_sticker_catalog_controller.h"
 #import "exteria_sticker_maker.h"
 #import "exteria_symbol.h"
@@ -60,7 +61,7 @@
 /* a page opened from here may have changed what is counted, so coming back asks again */
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    if (_loaded) [self load];
+    if (_loaded) { [self rebuild]; [self load]; }
 }
 
 - (void)load {
@@ -122,6 +123,10 @@
     /* an archive with nothing in it is not offered */
     if (_archivedTotal > 0) [catalog addObject:archived];
     [catalog addObject:emoji];
+    [catalog addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolHeart tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"chatset.quickreaction", nil) subtitle:nil value:ExteriaChatQuickReaction() tap:^{
+        ExteriaStickersSettingsController *me = weak.target;
+        if (me) [me.navigationController pushViewController:[[[ExteriaQuickReactionController alloc] initWithSession:me->_session] autorelease] animated:YES];
+    }]];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:catalog]];
     ExteriaSettingsRow *large = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.largeemoji", nil) subtitle:NSLocalizedString(@"chatset.largeemoji.info", nil)
                                                                     on:ExteriaChatLargeEmoji() toggle:^(BOOL on) { ExteriaChatSetLargeEmoji(on); }];

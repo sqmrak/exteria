@@ -315,7 +315,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
                                                          subtitle:NSLocalizedString(@"settings.power.info", nil) value:nil
                                                               tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaLiteModeSettingsController alloc] init] autorelease]]; }];
     ExteriaSettingsRow *language = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolSettingsLanguage tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"language.title", nil)
-                                                            subtitle:nil value:ExteriaNativeLanguageName(ExteriaInterfaceLanguage())
+                                                            subtitle:nil value:ExteriaNativeLanguageName(ExteriaInterfaceLanguageVariant())
                                                                  tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaLanguageSettingsController alloc] init] autorelease]]; }];
     NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
 #if defined(__arm64__)
