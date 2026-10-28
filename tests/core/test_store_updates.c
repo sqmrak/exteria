@@ -240,7 +240,72 @@ static void test_cached_senders(void) {
     exteria_arena_free(&read);
 }
 
+/* a channel seen in part (min) must not replace the whole one the store holds: its photo and its hash are what the avatar is fetched with */
+static exteria_tl_value *channel_object(exteria_arena *a, int64_t id, const char *title, int with_hash, int min) {
+    exteria_tl_value *channel = exteria_tl_new_obj(a, "channel"), *photo = exteria_tl_new_obj(a, "chatPhoto");
+    CHECK_EQ_INT(exteria_tl_set_i64(a, channel, "id", id), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_str(a, channel, "title", title), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(a, channel, "date", 100), EXTERIA_OK);
+    if (with_hash) CHECK_EQ_INT(exteria_tl_set_i64(a, channel, "access_hash", 77), EXTERIA_OK);
+    if (min) CHECK_EQ_INT(exteria_tl_set_flag(channel, "min"), EXTERIA_OK);
+    if (with_hash) {
+        CHECK_EQ_INT(exteria_tl_set_i64(a, photo, "photo_id", 900), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(a, photo, "dc_id", 4), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set(channel, "photo", photo), EXTERIA_OK);
+    } else {
+        /* the photo field of a channel is not optional, and an empty one is what a stub without a photo carries */
+        CHECK_EQ_INT(exteria_tl_set(channel, "photo", exteria_tl_new_obj(a, "chatPhotoEmpty")), EXTERIA_OK);
+    }
+    return channel;
+}
+
+static void cache_chat(exteria_updates *u, exteria_arena *a, exteria_tl_value *channel) {
+    exteria_tl_value *answer = exteria_tl_new_obj(a, "messages.messages"), *chats = exteria_tl_new_vec(a, 1), *empty = exteria_tl_new_vec(a, 0);
+    CHECK_EQ_INT(exteria_tl_vec_set(chats, 0, channel), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(answer, "chats", chats), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(answer, "users", empty), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(answer, "messages", empty), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_cache(u, answer), EXTERIA_OK);
+}
+
+static void test_min_keeps_whole(void) {
+    exteria_store *s = NULL;
+    exteria_updates u;
+    exteria_arena a, read;
+    exteria_tl_value *got;
+    exteria_person_row row;
+    exteria_peer whole = {3, INT64_C(4294967500)}, stub = {3, INT64_C(4294967501)};
+    exteria_arena_init(&a, 2u * 1024u * 1024u);
+    exteria_arena_init(&read, 2u * 1024u * 1024u);
+    CHECK_EQ_INT(exteria_store_open(&s, ":memory:", 1), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_init(&u, s, 1), EXTERIA_OK);
+    cache_chat(&u, &a, channel_object(&a, whole.id, "Whole", 1, 0));
+    /* the stub of the same channel comes later in a group's messages: the whole one stays, photo and hash with it */
+    cache_chat(&u, &a, channel_object(&a, whole.id, "Stub", 0, 1));
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_CHAT, whole, whole.id, &read, &got), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_channel_person_parse(got, &row), EXTERIA_OK);
+    CHECK(!strcmp(row.name, "Whole"));
+    CHECK_EQ_INT(row.access_hash, 77);
+    CHECK_EQ_INT(row.photo.photo_id, 900);
+    /* a stub of a channel the store has never held is kept, since it is all there is */
+    cache_chat(&u, &a, channel_object(&a, stub.id, "Only a stub", 0, 1));
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_CHAT, stub, stub.id, &read, &got), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_channel_person_parse(got, &row), EXTERIA_OK);
+    CHECK(!strcmp(row.name, "Only a stub"));
+    CHECK_EQ_INT(row.photo.photo_id, 0);
+    /* and a whole object does replace a stub, and another whole one */
+    cache_chat(&u, &a, channel_object(&a, stub.id, "Now whole", 1, 0));
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_CHAT, stub, stub.id, &read, &got), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_channel_person_parse(got, &row), EXTERIA_OK);
+    CHECK(!strcmp(row.name, "Now whole"));
+    CHECK_EQ_INT(row.photo.photo_id, 900);
+    CHECK_EQ_INT(exteria_store_close(s), EXTERIA_OK);
+    exteria_arena_free(&a);
+    exteria_arena_free(&read);
+}
+
 int main(void) {
+    test_min_keeps_whole();
     test_atomic();
     test_difference();
     test_cached_senders();

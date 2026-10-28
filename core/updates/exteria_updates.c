@@ -205,6 +205,17 @@ static exteria_status cache_vector(exteria_updates *u, const exteria_tl_value *v
                             exteria_tl_is(item, EXTERIA_TL_ID_community) || exteria_tl_is(item, EXTERIA_TL_ID_communityForbidden) ? 3 : 2;
                 peer.id = id;
             }
+            /* a user or channel seen in part (min) has no access hash that works for this account and no photo the account can fetch; it is left out when the store holds the
+               whole object, or the photo of everyone who ever showed up in a group as a stub would vanish */
+            if ((kind == EXTERIA_RECORD_USER || kind == EXTERIA_RECORD_CHAT) && exteria_tl_has(item, "min")) {
+                exteria_arena arena;
+                exteria_tl_value *held = NULL;
+                int whole;
+                exteria_arena_init(&arena, 1024u * 1024u);
+                whole = exteria_store_get(u->store, kind, peer, id, &arena, &held) == EXTERIA_OK && held && !exteria_tl_has(held, "min");
+                exteria_arena_free(&arena);
+                if (whole) continue;
+            }
             status = exteria_store_put(u->store, kind, peer, id, item);
         }
         if (status != EXTERIA_OK) return status;

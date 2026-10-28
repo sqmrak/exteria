@@ -8,7 +8,8 @@
 /* decoded bitmaps count by size: 512 MB devices (iphone 4, 4s, ipad 2) get a third of the budget of the rest */
 #define MEMORY_BYTES_OLD (12 * 1024 * 1024)
 #define MEMORY_BYTES_NEW (32 * 1024 * 1024)
-#define RETRY_AFTER_SECONDS 300.0
+/* a photo that did not come is asked for again after this: a link that was down for a moment must not leave a blank for five minutes */
+#define RETRY_AFTER_SECONDS 30.0
 /* larger avatars exhausted the cache and caused repeated decodes while scrolling */
 #define AVATAR_DECODE_POINTS 96.0
 /* a photo that decodes to nothing is not worth keeping, and a file this large is not a profile photo */
