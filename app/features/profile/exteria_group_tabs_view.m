@@ -17,7 +17,7 @@
 #define MORE_HEIGHT 48.0
 #define EMPTY_HEIGHT 80.0
 
-typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFiles, ExteriaGroupTabLinks, ExteriaGroupTabAudio, ExteriaGroupTabCount } ExteriaGroupTab;
+typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFiles, ExteriaGroupTabLinks, ExteriaGroupTabAudio, ExteriaGroupTabVoice, ExteriaGroupTabCount } ExteriaGroupTab;
 
 @interface ExteriaGroupTabsView () {
     ExteriaSession *_session;
@@ -32,6 +32,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     BOOL _loaded[ExteriaGroupTabCount];
     BOOL _loading[ExteriaGroupTabCount];
     BOOL _finished[ExteriaGroupTabCount];
+    BOOL _failed[ExteriaGroupTabCount];
     NSUInteger _tab;
     BOOL _forUser;
     CGFloat _width;
@@ -64,15 +65,15 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     for (int i = 0; i < ExteriaGroupTabCount; ++i) _items[i] = [[NSMutableArray alloc] init];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(forUser ? @"gifts.title" : @"group.tab.members", nil), NSLocalizedString(@"group.tab.media", nil),
-                                                NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), nil];
-    if (dialog.saved) {
+                                                NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil), nil];
+    BOOL skipFirst = dialog.saved || dialog.kind == EXTERIA_DIALOG_CHANNEL;
+    if (skipFirst) {
         titles = [titles subarrayWithRange:NSMakeRange(1, titles.count - 1)];
         _tab = ExteriaGroupTabMedia;
     }
     _tabs = [[ExteriaPillTabsView alloc] initWithTitles:titles];
     ExteriaWeakReference *me = _weak;
-    BOOL saved = dialog.saved;
-    _tabs.changeHandler = ^(NSUInteger index) { [(ExteriaGroupTabsView *)me.target chooseTab:saved ? index + 1 : index]; };
+    _tabs.changeHandler = ^(NSUInteger index) { [(ExteriaGroupTabsView *)me.target chooseTab:skipFirst ? index + 1 : index]; };
     [self addSubview:_tabs];
     _body = [[UIView alloc] init];
     _body.backgroundColor = ExteriaColorCard();
@@ -126,8 +127,11 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     _loading[tab] = NO;
     if (errorName) {
         NSLog(@"exteria: the group tab %lu of %lld did not load: %@", (unsigned long)tab, _dialog.peerId, errorName);
+        _failed[tab] = YES;
+        [self rebuild];
         return;
     }
+    _failed[tab] = NO;
     _loaded[tab] = YES;
     if (added == 0) _finished[tab] = YES;
     [self rebuild];
@@ -143,6 +147,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
         return;
     }
     _loading[tab] = YES;
+    _failed[tab] = NO;
     ExteriaWeakReference *me = _weak;
     [self retain];
     if (tab == ExteriaGroupTabMembers) {
@@ -157,7 +162,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
         }];
         return;
     }
-    exteria_shared_kind kind = tab == ExteriaGroupTabMedia ? EXTERIA_SHARED_MEDIA : (tab == ExteriaGroupTabFiles ? EXTERIA_SHARED_FILES : (tab == ExteriaGroupTabAudio ? EXTERIA_SHARED_AUDIO : EXTERIA_SHARED_LINKS));
+    exteria_shared_kind kind = tab == ExteriaGroupTabMedia ? EXTERIA_SHARED_MEDIA : (tab == ExteriaGroupTabFiles ? EXTERIA_SHARED_FILES : (tab == ExteriaGroupTabAudio ? EXTERIA_SHARED_AUDIO : (tab == ExteriaGroupTabVoice ? EXTERIA_SHARED_VOICE : EXTERIA_SHARED_LINKS)));
     int32_t before = _items[tab].count ? [(ExteriaMessage *)[_items[tab] lastObject] messageId] : 0;
     [_session loadSharedOfDialog:_dialog kind:kind beforeId:before limit:PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
         [self autorelease];
@@ -248,15 +253,16 @@ static NSString *ExteriaGroupDateText(int32_t date) {
         }
     }
     if (!items.count) {
-        _empty.text = NSLocalizedString(_loaded[tab] ? @"group.tab.empty" : @"group.tab.loading", nil);
+        _empty.text = NSLocalizedString(_failed[tab] ? @"group.tab.failed" : (_loaded[tab] ? @"group.tab.empty" : @"group.tab.loading"), nil);
         _empty.frame = CGRectMake(0, 0, width, EMPTY_HEIGHT);
         [_body addSubview:_empty];
         y = EMPTY_HEIGHT;
-    } else if (!_finished[tab]) {
+    }
+    if ((!items.count && _failed[tab]) || (items.count && !_finished[tab])) {
         UIButton *more = [UIButton buttonWithType:UIButtonTypeCustom];
         more.frame = CGRectMake(0, y, width, MORE_HEIGHT);
         more.titleLabel.font = ExteriaFontMedium(15);
-        [more setTitle:NSLocalizedString(@"group.tab.more", nil) forState:UIControlStateNormal];
+        [more setTitle:NSLocalizedString(_failed[tab] ? @"article.retry" : @"group.tab.more", nil) forState:UIControlStateNormal];
         [more setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
         [more addTarget:self action:@selector(load) forControlEvents:UIControlEventTouchUpInside];
         [_body addSubview:more];
@@ -295,9 +301,9 @@ static NSString *ExteriaGroupDateText(int32_t date) {
         [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:color
                        trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
         cell.avatarDeleted = person.deleted;
-    } else if (tab == ExteriaGroupTabFiles || tab == ExteriaGroupTabAudio) {
+    } else if (tab == ExteriaGroupTabFiles || tab == ExteriaGroupTabAudio || tab == ExteriaGroupTabVoice) {
         ExteriaMessage *message = item;
-        NSString *name = message.media.name.length ? message.media.name : (message.media.title.length ? message.media.title : NSLocalizedString(@"group.tab.file", nil));
+        NSString *name = message.media.name.length ? message.media.name : (message.media.title.length ? message.media.title : NSLocalizedString(tab == ExteriaGroupTabVoice ? @"group.tab.voice" : @"group.tab.file", nil));
         NSString *extension = [[name pathExtension] uppercaseString];
         NSString *detail = [NSString stringWithFormat:@"%@, %@", ExteriaGroupSizeText(message.media.size), ExteriaGroupDateText(message.date)];
         [cell configureWithName:name initials:extension.length ? [extension substringToIndex:MIN(extension.length, 3)] : @"?" seed:(NSUInteger)message.messageId
