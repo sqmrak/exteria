@@ -42,6 +42,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     NSUInteger _senderDeveloper;
     NSString *_transcript;
     NSString *_senderTag;
+    UIColor *_senderTagColor;
     ExteriaPerson *_senderPerson;
     BOOL _avatarColumn;
     UIColor *_senderColor;
@@ -56,6 +57,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     NSString *_timeText;
     NSString *_viewsText;
     CGFloat _viewsWidth;
+    CGFloat _deletedWidth;
     NSString *_commentsText;
     NSArray *_commenterPeople;
     BOOL _showsShare;
@@ -71,6 +73,8 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     ExteriaMessageState _builtState;
     BOOL _builtEdited;
     BOOL _builtDeleted;
+    /* what the row said about a one-time file: waiting, or gone */
+    BOOL _builtOnceExpired;
     int _builtService;
     NSString *_builtText;
     /* the reactions and the faces on their chips as they were when the row was laid out, to tell whether a message changed them */
@@ -204,6 +208,8 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
    viewsWidth is the room that takes */
 @property (nonatomic, readonly, copy) NSString *viewsText;
 @property (nonatomic, readonly) CGFloat viewsWidth;
+/* the room of the trash can drawn before the time of a message the other side deleted and the phone kept, 0 for any other */
+@property (nonatomic, readonly) CGFloat deletedWidth;
 /* the row under a post that has comments: "10 comments", and the ExteriaPerson items of the newest commenters the chat knows */
 @property (nonatomic, readonly, copy) NSString *commentsText;
 @property (nonatomic, readonly, retain) NSArray *commenterPeople;
@@ -268,6 +274,11 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 - (BOOL)displaysSameAs:(ExteriaChatItem *)other;
 - (BOOL)hasDifferentReactionsFrom:(ExteriaChatItem *)other;
 - (void)markDisplayed;
+
+/* a photo, video, voice note or round video that goes after one view; the row shows a card with a "1" and not the picture */
+BOOL ExteriaMessageIsViewOnce(ExteriaMessage *message);
+/* opened on this phone, or taken by the server: the file is no longer in the message. The sender's own copy keeps its local file until the server has answered */
+BOOL ExteriaViewOnceExpired(ExteriaMessage *message);
 
 /* works the frames out for a table of this width; the same width again costs nothing */
 - (void)layoutForWidth:(CGFloat)width;

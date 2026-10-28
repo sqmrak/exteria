@@ -35,6 +35,7 @@
 #define META_HEIGHT 14.0
 /* the eye before a view count, the gap after the count, the row of comments under a post, the round share button beside it and the
    room that button takes from the width of the bubble */
+#define DELETED_MARK 12.0
 #define VIEWS_EYE 13.0
 #define VIEWS_GAP 8.0
 #define COMMENTS_HEIGHT 38.0
@@ -47,6 +48,8 @@
 #define ROUND_SIDE_MAX 220.0
 #define PHOTO_WIDTH_MAX 232.0
 #define PHOTO_HEIGHT_MAX 320.0
+#define PHOTO_WIDTH_MAX_PAD 360.0
+#define PHOTO_HEIGHT_MAX_PAD 480.0
 #define PHOTO_WIDTH_MIN 120.0
 /* a tall picture is shown at least this share of the widest a picture goes, cut to fit, so its bubble and the words under it are not a thin column */
 #define PHOTO_WIDTH_MIN_SHARE 0.72
@@ -87,6 +90,7 @@
 @synthesize timeText = _timeText;
 @synthesize viewsText = _viewsText;
 @synthesize viewsWidth = _viewsWidth;
+@synthesize deletedWidth = _deletedWidth;
 @synthesize commentsText = _commentsText;
 @synthesize commenterPeople = _commenterPeople;
 @synthesize showsShare = _showsShare;
@@ -189,6 +193,32 @@ static NSString *ExteriaServiceText(ExteriaMessage *message, NSDictionary *peopl
                               message.fromId == message.targetId);
 }
 
+BOOL ExteriaMessageIsViewOnce(ExteriaMessage *message) {
+    ExteriaMedia *media = message.media;
+    if (!media.viewOnce) return NO;
+    return media.kind == EXTERIA_PREVIEW_PHOTO || media.kind == EXTERIA_PREVIEW_VIDEO || media.kind == EXTERIA_PREVIEW_VOICE || media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE;
+}
+
+BOOL ExteriaViewOnceExpired(ExteriaMessage *message) {
+    if (message.viewOnceOpened) return YES;
+    return !message.media.file && !(message.outgoing && message.pendingSend);
+}
+
+/* the words of a card of a one-time file: what it is, and whether it can still be opened */
+static void ExteriaViewOnceCaptions(ExteriaMessage *message, NSString **title, NSString **detail) {
+    NSString *key = @"viewonce.photo";
+    switch (message.media.kind) {
+    case EXTERIA_PREVIEW_VIDEO: key = @"viewonce.video"; break;
+    case EXTERIA_PREVIEW_VOICE: key = @"viewonce.voice"; break;
+    case EXTERIA_PREVIEW_VIDEO_MESSAGE: key = @"viewonce.round"; break;
+    default: break;
+    }
+    *title = NSLocalizedString(key, nil);
+    BOOL expired = ExteriaViewOnceExpired(message);
+    if (message.outgoing) *detail = NSLocalizedString(expired ? @"viewonce.opened" : @"viewonce.sent", nil);
+    else *detail = NSLocalizedString(expired ? @"viewonce.expired" : @"viewonce.tap", nil);
+}
+
 - (void)captureMessage:(ExteriaMessage *)message {
     _message = [message retain];
     _builtMessageId = message.messageId;
@@ -196,6 +226,7 @@ static NSString *ExteriaServiceText(ExteriaMessage *message, NSDictionary *peopl
     _builtState = message.state;
     _builtEdited = message.edited;
     _builtDeleted = message.deletedLocally;
+    _builtOnceExpired = ExteriaMessageIsViewOnce(message) && ExteriaViewOnceExpired(message);
     _builtService = message.service;
     _builtText = [message.text copy];
     _builtReactionKey = [message.reactionKey copy];
@@ -213,6 +244,7 @@ static BOOL ExteriaSameString(NSString *a, NSString *b) {
            _message.senderKey == message.senderKey && ExteriaSameString(_message.senderRank, message.senderRank) &&
            _builtMessageId == message.messageId && _builtRandomId == message.randomId &&
            _builtState == message.state && _builtEdited == message.edited && _builtDeleted == message.deletedLocally && _builtService == message.service &&
+           _builtOnceExpired == (ExteriaMessageIsViewOnce(message) && ExteriaViewOnceExpired(message)) &&
            ExteriaSameString(_builtText, message.text) && ExteriaSameString(_builtReactionKey, message.reactionKey) &&
            ExteriaSameString(_builtMarkupKey, message.markupKey) && ExteriaSameString(_builtPollKey, message.pollKey);
 }
@@ -226,12 +258,21 @@ static NSString *ExteriaSenderTag(ExteriaMessage *message, ExteriaPerson *person
     return tag;
 }
 
+/* the color of the tag after a name: the owner of the group in gold, an administrator (by role or by a title the owners gave) in green, a bot in blue, and the
+   quiet grey for anything else; the tag then says who it is at a glance */
+static UIColor *ExteriaSenderTagColor(ExteriaMessage *message, ExteriaPerson *person, NSString *role) {
+    if ([role isEqualToString:NSLocalizedString(@"chat.role.owner", nil)]) return [UIColor colorWithRed:0.89f green:0.62f blue:0.10f alpha:1];
+    if (message.senderRank.length || [role isEqualToString:NSLocalizedString(@"chat.role.admin", nil)]) return [UIColor colorWithRed:0.16f green:0.68f blue:0.40f alpha:1];
+    if (person.bot) return [UIColor colorWithRed:0.20f green:0.55f blue:0.93f alpha:1];
+    return ExteriaColorSecondary();
+}
+
 - (BOOL)reflectsPeople:(NSDictionary *)people role:(NSString *)role {
     if (!_avatarColumn) return YES;
     ExteriaPerson *sender = [people objectForKey:[NSNumber numberWithLongLong:_message.senderKey]];
     return ExteriaSameString(_senderTag, ExteriaSenderTag(_message, sender, role)) &&
            ExteriaSameString(_senderPerson.name, sender.name) && ExteriaSameString(_senderPerson.initials, sender.initials) &&
-           _senderBadge == ExteriaBadgeDocument(sender.emojiStatus, sender.premium) && _senderDeveloper == ExteriaPersonIsDeveloper(sender) &&
+           _senderBadge == ExteriaBadgeDocument(ExteriaChatFlagGet(ExteriaChatFlagShowMessageEmojiStatus) ? sender.emojiStatus : 0, sender.premium) && _senderDeveloper == ExteriaPersonIsDeveloper(sender) &&
            ExteriaSameString(_senderPerson.photo.key, sender.photo.key);
 }
 
@@ -364,12 +405,14 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     /* a pencil takes less of the bubble than the word */
     NSString *editedMark = ExteriaChatFlagGet(ExteriaChatFlagEditedIcon) ? @"\u270E" : NSLocalizedString(@"chat.edited", nil);
     NSString *clock = message.edited ? [NSString stringWithFormat:@"%@ %@", editedMark, ExteriaClockText(message.date)] : ExteriaClockText(message.date);
-    /* a message the other side deleted and the phone kept says so in its time line */
-    item->_timeText = [(message.deletedLocally ? [NSString stringWithFormat:@"%@ %@", NSLocalizedString(@"chat.deleted", nil), clock] : clock) copy];
+    /* a message the other side deleted and the phone kept has a trash can before its time */
+    item->_timeText = [clock copy];
+    if (message.deletedLocally) item->_deletedWidth = DELETED_MARK + 3;
     [item captureChannelPost:message people:people];
     ExteriaMedia *media = message.media;
     BOOL sticker = media.kind == EXTERIA_PREVIEW_STICKER && (media.file || media.previewFile);
-    BOOL round = media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE && !message.text.length;
+    BOOL once = ExteriaMessageIsViewOnce(message);
+    BOOL round = media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE && !message.text.length && !once;
     item->_kind = sticker ? ExteriaChatItemSticker : (round ? ExteriaChatItemRound : ExteriaChatItemBubble);
     if ((media.kind == EXTERIA_PREVIEW_NONE || media.kind == EXTERIA_PREVIEW_TEXT) &&
         !message.entities.count && !message.forwarded && !message.post && !message.markup && message.text.length <= 32 && ExteriaChatLargeEmoji()) {
@@ -388,9 +431,10 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
         item->_senderPerson = [person retain];
         if (person.name.length) {
             item->_senderName = [person.name copy];
-            item->_senderBadge = ExteriaBadgeDocument(person.emojiStatus, person.premium);
+            item->_senderBadge = ExteriaBadgeDocument(ExteriaChatFlagGet(ExteriaChatFlagShowMessageEmojiStatus) ? person.emojiStatus : 0, person.premium);
             item->_senderDeveloper = ExteriaPersonIsDeveloper(person);
             item->_senderTag = [ExteriaSenderTag(message, person, role) copy];
+            item->_senderTagColor = [ExteriaSenderTagColor(message, person, role) retain];
             item->_senderColor = [ExteriaSenderColor(person, llabs(message.senderKey)) retain];
         }
     }
@@ -415,7 +459,13 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     /* what stands in the bubble above the text */
     BOOL picture = exteria_media_uses_picture(media.kind, media.file != nil, media.previewFile != nil,
                                             message.pendingSend && message.pendingSend->preview);
-    switch (media.kind) {
+    if (once) {
+        NSString *title = nil, *detail = nil;
+        ExteriaViewOnceCaptions(message, &title, &detail);
+        item->_content = ExteriaChatItemContentFile;
+        item->_fileTitle = [title copy];
+        item->_fileDetail = [detail copy];
+    } else switch (media.kind) {
     case EXTERIA_PREVIEW_PHOTO:
         if (picture) item->_content = ExteriaChatItemContentPicture;
         else { item->_content = ExteriaChatItemContentFile; item->_fileTitle = [NSLocalizedString(@"preview.photo", nil) copy]; }
@@ -495,6 +545,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_senderName release];
     [_transcript release];
     [_senderTag release];
+    [_senderTagColor release];
     [_senderTagLayout release];
     [_senderPerson release];
     [_senderColor release];
@@ -656,11 +707,12 @@ static CGFloat ExteriaAlbumLayout(NSArray *ratios, CGFloat width, NSMutableArray
 
 static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     CGFloat w = media.width > 0 ? media.width : 4, h = media.height > 0 ? media.height : 3;
-    CGFloat limit = MIN(widthMax, PHOTO_WIDTH_MAX);
-    CGFloat scale = MIN(limit / w, PHOTO_HEIGHT_MAX / h);
+    CGFloat limit = MIN(widthMax, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : PHOTO_WIDTH_MAX);
+    CGFloat heightMax = ExteriaIsPad() ? PHOTO_HEIGHT_MAX_PAD : PHOTO_HEIGHT_MAX;
+    CGFloat scale = MIN(limit / w, heightMax / h);
     CGFloat width = MAX(MIN(w * scale, limit), MIN(MAX(PHOTO_WIDTH_MIN, limit * PHOTO_WIDTH_MIN_SHARE), limit));
-    CGFloat height = MIN(h * scale, PHOTO_HEIGHT_MAX);
-    if (width > w * scale) height = MIN(height * width / (w * scale), PHOTO_HEIGHT_MAX);
+    CGFloat height = MIN(h * scale, heightMax);
+    if (width > w * scale) height = MIN(height * width / (w * scale), heightMax);
     return CGSizeMake(ceil(width), ceil(height));
 }
 
@@ -694,7 +746,7 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     CGFloat x = _message.outgoing ? width - SIDE_MARGIN - picture.width : [self incomingLeft];
     _bubbleFrame = CGRectMake(x, top, picture.width, picture.height);
     _pictureFrame = CGRectMake(0, 0, picture.width, picture.height);
-    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + (_message.outgoing ? CHECK_WIDTH : 0);
+    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + _deletedWidth + (_message.outgoing ? CHECK_WIDTH : 0);
     _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
     _timeOrigin = CGPointMake(picture.width - _timeSize.width - 4, picture.height - _timeSize.height - 4);
     _height = top + picture.height + 1;
@@ -707,7 +759,7 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     CGFloat x = _message.outgoing ? width - SIDE_MARGIN - side : [self incomingLeft];
     _bubbleFrame = CGRectMake(x, top, side, side);
     _pictureFrame = CGRectMake(0, 0, side, side);
-    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + (_message.outgoing ? CHECK_WIDTH : 0);
+    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + _deletedWidth + (_message.outgoing ? CHECK_WIDTH : 0);
     _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
     _timeOrigin = CGPointMake(side - _timeSize.width, side + 2);
     _height = top + side + _timeSize.height + 3;
@@ -837,7 +889,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     ExteriaMedia *media = _message.media;
     BOOL outgoing = _message.outgoing;
     CGFloat maxBubble = floor(MIN((width - (_avatarColumn && !outgoing ? AVATAR_COLUMN : 0) - (_showsShare ? SHARE_ROOM : 0)) * MAX_BUBBLE_FRACTION, ExteriaIsPad() ? BUBBLE_CAP_PAD : BUBBLE_CAP_PHONE));
-    CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _viewsWidth;
+    CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _viewsWidth + _deletedWidth;
     /* a voice message has no words of its own, so what the server heard in it takes their place */
     BOOL ownText = _message.text.length > 0;
     NSString *bodyText = ownText ? _message.text : _transcript;
@@ -847,7 +899,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     BOOL poll = _content == ExteriaChatItemContentPoll;
     CGSize pictureSize = CGSizeZero;
     if (picture && _albumMessages.count > 1) {
-        CGFloat albumWidth = MIN(maxBubble - 2 * PICTURE_INSET, ALBUM_WIDTH_MAX);
+        CGFloat albumWidth = MIN(maxBubble - 2 * PICTURE_INSET, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : ALBUM_WIDTH_MAX);
         pictureSize = CGSizeMake(albumWidth, ExteriaAlbumLayout([self albumRatios], albumWidth, [NSMutableArray array]));
     } else if (picture) {
         pictureSize = ExteriaPictureSize(media, maxBubble - 2 * PICTURE_INSET);
@@ -878,8 +930,9 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         CGFloat room = textMax - _senderLayout.size.width - 6;
         CGFloat tagWidth = 0;
         if (_senderTag.length && room >= 36) {
-            _senderTagLayout = [[ExteriaTextLayout layoutForText:_senderTag entities:nil font:ExteriaFontRegular(11)
-                color:ExteriaColorSecondary() linkColor:ExteriaColorSecondary() width:MIN(room, textMax * 0.45) maxLines:1 flush:0] retain];
+            UIColor *tagColor = _senderTagColor ? _senderTagColor : ExteriaColorSecondary();
+            _senderTagLayout = [[ExteriaTextLayout layoutForText:_senderTag entities:nil font:ExteriaFontSemibold(11)
+                color:tagColor linkColor:tagColor width:MIN(room, textMax * 0.45) maxLines:1 flush:0] retain];
             tagWidth = _senderTagLayout.size.width;
         }
         _senderOrigin = CGPointMake(PAD_X, y);
@@ -928,8 +981,9 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         CGFloat rowWidth = 44 + 10 + MAX(titleWidth, detailWidth);
         /* a call has no button in front: the arrow stands before the second line and the phone at the end of the row */
         if (_call) rowWidth = MAX(titleWidth, 18 + detailWidth) + 14 + CALL_ICON;
-        /* a voice note needs room for its bars; its length sets the width, longer notes wider, up to the bubble's limit */
-        if (_message.media.kind == EXTERIA_PREVIEW_VOICE) rowWidth = 54 + MIN(150, 90 + _message.media.duration * 3.0);
+        /* a voice note needs room for its bars, and the bars are the same hundred for a note of any length, so the bubble is the same width too: the width the
+           longest notes had, which the shorter ones used to fall short of */
+        if (_message.media.kind == EXTERIA_PREVIEW_VOICE) rowWidth = 54 + 150;
         _fileFrame = CGRectMake(PAD_X, y + 1, MIN(textMax, MAX(rowWidth, 150)), FILE_HEIGHT);
         contentWidth = MAX(contentWidth, _fileFrame.size.width);
         y += FILE_HEIGHT + 4;
@@ -1078,6 +1132,16 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         CGFloat chipsHeight = ExteriaReactionsHeight([self shownReactions], chipsWidth, YES);
         _reactionFrame = CGRectMake(x, _height + 4, chipsWidth, chipsHeight);
         _height += chipsHeight + 4;
+    }
+    if (_kind != ExteriaChatItemBubble && _kind != ExteriaChatItemPill) {
+        if (_commentsText.length) {
+            CGFloat available = _message.outgoing ? CGRectGetMaxX(_bubbleFrame) - SIDE_MARGIN : width - SIDE_MARGIN - _bubbleFrame.origin.x;
+            CGFloat rowWidth = MIN(available, MAX(_bubbleFrame.size.width, COMMENTS_MIN_WIDTH));
+            CGFloat rowX = _message.outgoing ? _bubbleFrame.size.width - rowWidth : 0;
+            _commentsFrame = CGRectMake(rowX, _height + 4 - _bubbleFrame.origin.y, rowWidth, COMMENTS_HEIGHT);
+            _height += COMMENTS_HEIGHT + 4;
+        }
+        if (_showsShare) _shareFrame = CGRectMake(_bubbleFrame.size.width + 6, _bubbleFrame.size.height - SHARE_SIDE, SHARE_SIDE, SHARE_SIDE);
     }
     [self layoutMarkupForWidth:width];
 }

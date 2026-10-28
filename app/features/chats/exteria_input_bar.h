@@ -56,12 +56,16 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 @property (nonatomic, readonly) ExteriaAvatarView *senderAvatar;
 /* a wide button with this title takes the place of the whole bar's controls; nil gives the field back */
 @property (nonatomic, copy) NSString *actionTitle;
+@property (nonatomic, assign) BOOL actionWithInput;
 /* false for a chat the person cannot write in, such as a channel, which swaps the field for a note */
 @property (nonatomic, assign) BOOL writable;
 @property (nonatomic, copy) NSString *readOnlyNote;
 
 /* the height the bar wants for the text it holds, without the bottom safe area */
 /* the timer of the recording shown in place of the field while the button is held */
+/* the small "1" on the record button: the voice note or round video that comes next can be heard or seen once; kept until a recording goes out */
+@property (nonatomic, readonly) BOOL oneTimeRecording;
+- (void)clearOneTimeRecording;
 - (void)setRecordingElapsed:(NSTimeInterval)elapsed;
 /* a voice message recorded without a finger on the button, for the phone held to the ear */
 - (BOOL)beginRaisedRecording;

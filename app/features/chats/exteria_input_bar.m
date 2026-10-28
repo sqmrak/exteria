@@ -32,6 +32,9 @@ static CGFloat ExteriaInputIdleHeight(void) {
 #define SLIDE_CANCEL 90.0
 /* how far the finger rises before the recording locks and keeps going without the hold */
 #define LOCK_DISTANCE 70.0
+/* a hold that ends this soon after it began locks the recording instead of ending it; a swipe up is the only other way to lock, and a gesture tweak on the phone
+   takes that swipe for itself */
+#define QUICK_LOCK_SECONDS 0.5
 
 static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
@@ -51,6 +54,8 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     UIImageView *_lockIcon;
     UIButton *_cancelLocked;
     BOOL _locked;
+    UIButton *_onceChip;
+    BOOL _oneTimeRecording;
     BOOL _lockedRecording;
     BOOL _raisedRecording;
     BOOL _sendShowsPlane;
@@ -58,6 +63,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     ExteriaRecordMode _mode;
     BOOL _holding;
     BOOL _slidAway;
+    CFTimeInterval _holdBeganAt;
     CGFloat _holdStart;
     UIView *_hairline;
     UIToolbar *_toolbar;
@@ -77,6 +83,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     NSString *_placeholderText;
     NSString *_menuTitle;
     NSString *_actionTitle;
+    BOOL _actionWithInput;
     ExteriaBotKeyboardState _botState;
 }
 @end
@@ -203,12 +210,22 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _send.layer.cornerRadius = BUTTON / 2;
     }
     [_send addTarget:self action:@selector(sendTapped) forControlEvents:UIControlEventTouchUpInside];
+    /* the chip sits on the corner of the record button and is a control of its own, so a tap on it never starts the hold of the button */
+    _onceChip = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _onceChip.titleLabel.font = ExteriaFontBold(12);
+    [_onceChip setTitle:@"1" forState:UIControlStateNormal];
+    _onceChip.layer.cornerRadius = 11;
+    _onceChip.layer.borderWidth = 1.5;
+    _onceChip.accessibilityLabel = NSLocalizedString(@"chat.record.once", nil);
+    [_onceChip addTarget:self action:@selector(onceChipTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self refreshOnceChip];
     _hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(held:)];
     _hold.minimumPressDuration = 0.25;
     /* the finger travels left to cancel, and a short move limit would end the hold before that */
     _hold.allowableMovement = 1000;
     [_send addGestureRecognizer:_hold];
     [self addSubview:_send];
+    [self addSubview:_onceChip];
 
     _recording = [[UIView alloc] init];
     _recording.backgroundColor = _field.backgroundColor;
@@ -247,7 +264,9 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _lockView.layer.borderColor = ExteriaColorHairline().CGColor;
     _lockView.alpha = 0;
     _lockView.hidden = YES;
-    _lockView.userInteractionEnabled = NO;
+    /* a second finger that taps the lock while the first one holds the button closes it; the view stands above the bar, so pointInside: lets the touch in */
+    _lockView.userInteractionEnabled = YES;
+    [_lockView addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(lockTapped)] autorelease]];
     _lockIcon = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolLock, 22, ExteriaColorSecondary())];
     _lockIcon.contentMode = UIViewContentModeCenter;
     _lockIcon.frame = CGRectMake(0, 6, 40, 30);
@@ -293,6 +312,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     [_actionTitle release];
     [_send release];
     [_hold release];
+    [_onceChip release];
     [_recording release];
     [_dot release];
     [_timer release];
@@ -324,14 +344,23 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 /* the field and its buttons, the note of a chat that cannot be written in and the wide button each have their turn */
 - (void)applyVisibility {
-    BOOL action = _actionTitle.length > 0;
+    BOOL action = _actionTitle.length > 0 && (!_actionWithInput || !_writable);
     _note.hidden = _writable || action;
     _field.hidden = !_writable || action;
     _send.hidden = !_writable || action;
     _menuPill.hidden = !_writable || action || !_menuTitle.length;
     _senderButton.hidden = !_writable || action || !_senderVisible;
-    _actionButton.hidden = !action;
+    _actionButton.hidden = !_actionTitle.length;
     [self setNeedsLayout];
+}
+
+- (BOOL)actionWithInput { return _actionWithInput; }
+
+- (void)setActionWithInput:(BOOL)value {
+    if (_actionWithInput == value) return;
+    _actionWithInput = value;
+    [self applyVisibility];
+    [_delegate inputBarDidChangeHeight:self];
 }
 
 - (void)setActionTitle:(NSString *)title {
@@ -412,6 +441,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         [self setNeedsLayout];
     }
     _hold.enabled = empty && !_lockedRecording;
+    _onceChip.hidden = !empty || _lockedRecording || _holding || !_writable;
     BOOL plane = !empty || _lockedRecording;
     ExteriaSymbol symbol = plane ? ExteriaSymbolSendArrow : (_mode == ExteriaRecordRound ? ExteriaSymbolVideoCamera : ExteriaSymbolMicrophone);
     if (ExteriaThemeIsClassic()) {
@@ -579,9 +609,9 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 }
 
 - (CGFloat)preferredHeight {
-    if (!_writable || _actionTitle.length) return ExteriaInputIdleHeight();
+    if (!_writable || (_actionTitle.length && !_actionWithInput)) return ExteriaInputIdleHeight();
     CGFloat height = MIN(FIELD_MAX, MAX(FIELD_MIN, [self textHeight] + 1));
-    return height + 2 * ExteriaInputVerticalMargin();
+    return height + 2 * ExteriaInputVerticalMargin() + (_actionTitle.length && _actionWithInput ? ExteriaInputIdleHeight() : 0);
 }
 
 - (void)textViewDidChange:(UITextView *)view {
@@ -612,6 +642,28 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 - (void)textViewDidBeginEditing:(UITextView *)view {
     (void)view;
     [_delegate inputBarDidBeginEditing:self];
+}
+
+- (void)refreshOnceChip {
+    UIColor *accent = ExteriaColorAccent();
+    _onceChip.backgroundColor = _oneTimeRecording ? accent : ExteriaColorField();
+    _onceChip.layer.borderColor = (_oneTimeRecording ? accent : ExteriaColorSecondary()).CGColor;
+    [_onceChip setTitleColor:_oneTimeRecording ? [UIColor whiteColor] : ExteriaColorSecondary() forState:UIControlStateNormal];
+}
+
+- (void)onceChipTapped {
+    _oneTimeRecording = !_oneTimeRecording;
+    [self refreshOnceChip];
+    _onceChip.transform = CGAffineTransformMakeScale(0.7, 0.7);
+    [UIView animateWithDuration:0.18 animations:^{ _onceChip.transform = CGAffineTransformIdentity; }];
+}
+
+- (BOOL)oneTimeRecording { return _oneTimeRecording; }
+
+- (void)clearOneTimeRecording {
+    if (!_oneTimeRecording) return;
+    _oneTimeRecording = NO;
+    [self refreshOnceChip];
 }
 
 - (void)attachTapped {
@@ -645,6 +697,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 /* the field gives way to the timer strip, which slides in from the left, while the button swells past its size and settles */
 - (void)showRecordingAnimated {
+    _onceChip.hidden = YES;
     _recording.hidden = NO;
     _recording.alpha = 0;
     _recording.transform = CGAffineTransformMakeTranslation(-48, 0);
@@ -705,6 +758,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _dot.hidden = NO;
         if (!_holding) _recording.hidden = YES;
         _recording.transform = CGAffineTransformIdentity;
+        [self refreshControls];
     }];
     _slide.textColor = ExteriaColorSecondary();
 }
@@ -781,6 +835,17 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     [self setNeedsLayout];
 }
 
+- (void)lockTapped {
+    if (!_holding || _raisedRecording || _lockedRecording || _slidAway) return;
+    _holding = NO;
+    [self enterLockedRecording];
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    if (!_lockView.hidden && _lockView.alpha > 0.01f && CGRectContainsPoint(_lockView.frame, point)) return YES;
+    return [super pointInside:point withEvent:event];
+}
+
 - (void)endLockedCancelled:(BOOL)cancelled {
     if (!_lockedRecording) return;
     _lockedRecording = NO;
@@ -846,6 +911,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _slidAway = NO;
         _locked = NO;
         _holdStart = x;
+        _holdBeganAt = CACurrentMediaTime();
         _holdStartY = [hold locationInView:self].y;
         [self setRecordingElapsed:0];
         [self showRecordingAnimated];
@@ -875,7 +941,8 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     case UIGestureRecognizerStateFailed: {
         if (!_holding) return;
         _holding = NO;
-        if (_locked && !_slidAway && hold.state == UIGestureRecognizerStateEnded) {
+        BOOL quick = CACurrentMediaTime() - _holdBeganAt < QUICK_LOCK_SECONDS;
+        if ((_locked || quick) && !_slidAway && hold.state == UIGestureRecognizerStateEnded) {
             [self enterLockedRecording];
             break;
         }
@@ -896,7 +963,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     CGSize size = self.bounds.size;
     _toolbar.frame = self.bounds;
     _hairline.frame = CGRectMake(0, 0, size.width, 1.0 / ExteriaScreenScale());
-    if (_actionTitle.length) {
+    if (_actionTitle.length && (!_actionWithInput || !_writable)) {
         _actionButton.frame = CGRectMake(MARGIN, 0, size.width - 2 * MARGIN, ExteriaInputIdleHeight());
         return;
     }
@@ -904,6 +971,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _note.frame = CGRectMake(MARGIN, 0, size.width - 2 * MARGIN, ExteriaInputIdleHeight());
         return;
     }
+    if (_actionTitle.length && _actionWithInput) _actionButton.frame = CGRectMake(MARGIN, _fieldHeight + 2 * ExteriaInputVerticalMargin(), size.width - 2 * MARGIN, ExteriaInputIdleHeight());
     CGFloat sendWidth = BUTTON;
     CGFloat sendHeight = BUTTON;
     /* a scaled button keeps its frame, so a transform in flight is set aside while the frame is set */
@@ -911,6 +979,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _send.transform = CGAffineTransformIdentity;
     _send.frame = CGRectMake(size.width - MARGIN - sendWidth, ExteriaInputVerticalMargin() + _fieldHeight - sendHeight, sendWidth, sendHeight);
     _send.transform = held;
+    _onceChip.frame = CGRectMake(CGRectGetMaxX(_send.frame) - 12, CGRectGetMinY(_send.frame) - 10, 22, 22);
     CGFloat pillWidth = _menuPill.hidden ? 0 : ceil([_menuTitle sizeWithFont:_menuPill.titleLabel.font].width) + 28;
     CGFloat senderRoom = _senderButton.hidden ? 0 : FIELD_MIN + MARGIN;
     CGFloat menuRoom = (pillWidth ? pillWidth + MARGIN : 0) + senderRoom;
