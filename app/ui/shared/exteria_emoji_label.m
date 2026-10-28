@@ -180,6 +180,14 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     return [layout customEmojiAtPoint:point];
 }
 
+- (CGRect)customEmojiRect:(long long)document {
+    ExteriaTextLayout *layout = [self layoutForWidth:self.bounds.size.width];
+    CGRect rect = [layout rectOfCustomEmoji:document];
+    if (CGRectIsNull(rect)) return rect;
+    rect.origin.y += floor((self.bounds.size.height - layout.size.height) / 2);
+    return rect;
+}
+
 - (CGSize)sizeThatFits:(CGSize)size {
     ExteriaTextLayout *layout = [self layoutForWidth:size.width];
     return CGSizeMake(MIN(size.width, layout.size.width), layout.size.height);

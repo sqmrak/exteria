@@ -34,5 +34,7 @@
 - (void)setPrefixLength:(NSUInteger)length color:(UIColor *)color;
 - (NSString *)linkAtPoint:(CGPoint)point;
 - (long long)customEmojiAtPoint:(CGPoint)point;
+/* the box of the custom emoji of a document in the coordinates of the label, as it is drawn; CGRectNull when the text holds none */
+- (CGRect)customEmojiRect:(long long)document;
 
 @end

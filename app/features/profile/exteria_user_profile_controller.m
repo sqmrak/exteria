@@ -26,6 +26,10 @@
 #import "exteria_profile_qr_controller.h"
 #import "exteria_alert.h"
 #import "exteria_gift_folder_bar.h"
+#import "exteria_image_decoder.h"
+#import "exteria_lite_mode.h"
+#import "exteria_lottie_view.h"
+#import "exteria_platform.h"
 #import "exteria_session_bots.h"
 #import "exteria_profile_feed.h"
 #import "exteria_report_flow.h"
@@ -57,6 +61,10 @@
     ExteriaStoryRing *_storyRing;
     BOOL _storiesShown;
     ExteriaEmojiLabel *_name;
+    /* the emoji status of the user when it moves: drawn over the still picture the name already holds, at the place the name leaves for it */
+    ExteriaLottieView *_statusAnimation;
+    long long _statusAnimationDocument;
+    NSUInteger _statusAnimationToken;
     ExteriaStatusLabel *_status;
     ExteriaUserAction *_messageAction;
     ExteriaUserAction *_soundAction;
@@ -107,6 +115,7 @@
     [_avatar release];
     [_storyRing release];
     [_name release];
+    [_statusAnimation release];
     [_status release];
     [_messageAction release];
     [_soundAction release];
@@ -249,7 +258,9 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
         [_status setStatus:typing kind:ExteriaStatusTyping];
         return;
     }
-    [_status setStatus:ExteriaLastSeenText(_dialog.presence, _dialog.seen) kind:_dialog.presence == EXTERIA_PRESENCE_ONLINE ? ExteriaStatusOnline : ExteriaStatusPlain];
+    BOOL service = _dialog.peerKind == 1 && _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID;
+    [_status setStatus:service ? NSLocalizedString(@"chat.status.telegram", nil) : ExteriaLastSeenText(_dialog.presence, _dialog.seen)
+                   kind:!service && _dialog.presence == EXTERIA_PRESENCE_ONLINE ? ExteriaStatusOnline : ExteriaStatusPlain];
 }
 
 - (void)viewDidLoad {
@@ -292,6 +303,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    [_statusAnimation setPlaying:YES];
     NSLog(@"exteria: the profile screen is on screen");
 }
 
@@ -353,14 +365,90 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
    again when it lands */
 - (void)showName:(NSString *)name emojiStatus:(long long)emojiStatus premium:(BOOL)premium {
     NSArray *entities = nil;
-    _name.text = ExteriaNameWithBadges(name, _dialog.saved ? 0 : ExteriaBadgeDocument(emojiStatus, premium), ExteriaDialogIsDeveloper(_dialog), &entities);
+    long long badge = _dialog.peerKind == 1 && _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID ? ExteriaDialogBadgeDocument(_dialog) : (_dialog.saved ? 0 : ExteriaBadgeDocument(emojiStatus, premium));
+    _name.text = ExteriaNameWithBadges(name, badge, ExteriaDialogIsDeveloper(_dialog), &entities);
     _name.entities = entities;
+    /* only a status that is the badge drawn after the name has a place to move in */
+    [self animateStatus:badge == emojiStatus ? emojiStatus : 0];
     if (!emojiStatus) return;
     ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
     ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:emojiStatus]], self.session, self.media, ^{
         ExteriaUserProfileController *profile = weak.target;
         if (profile) [profile->_name setNeedsDisplay];
     });
+}
+
+- (void)dropStatusAnimation {
+    ++_statusAnimationToken;
+    _statusAnimationDocument = 0;
+    [_statusAnimation removeFromSuperview];
+    [_statusAnimation release];
+    _statusAnimation = nil;
+}
+
+/* a status that is an animation (tgs, or a video sticker) is fetched once and plays in place of its still picture; a plain one stays as it is drawn. The same
+   status again only puts the animation back at the place the name now leaves for it */
+- (void)animateStatus:(long long)document {
+    if (document && document == _statusAnimationDocument) {
+        [self placeStatusAnimation];
+        return;
+    }
+    [self dropStatusAnimation];
+    if (!document || !ExteriaLiteEnabled(EXTERIA_LITE_EMOJI_CHAT)) return;
+    _statusAnimationDocument = document;
+    NSUInteger token = ++_statusAnimationToken;
+    ExteriaWeakReference *weak = _weak;
+    [self.session loadCustomEmojiDocuments:[NSArray arrayWithObject:[NSNumber numberWithLongLong:document]] completion:^(NSArray *documents, NSString *errorName) {
+        ExteriaUserProfileController *profile = weak.target;
+        if (!profile || token != profile->_statusAnimationToken) return;
+        ExteriaCustomEmojiDocument *found = documents.count ? [documents objectAtIndex:0] : nil;
+        if (!found) {
+            if (errorName) NSLog(@"exteria: the status emoji %lld was not looked up: %@", document, errorName);
+            return;
+        }
+        if (!found.file || (found.format != EXTERIA_STICKER_ANIMATED && found.format != EXTERIA_STICKER_VIDEO)) return;
+        NSString *key = found.file.key;
+        [profile.media loadDataForFile:found.file completion:^(NSData *data) {
+            ExteriaUserProfileController *again = weak.target;
+            if (!again || token != again->_statusAnimationToken) return;
+            ExteriaFileFormat format = data ? ExteriaFileFormatOfData(data) : ExteriaFileFormatUnknown;
+            if (format != ExteriaFileFormatGzip && format != ExteriaFileFormatMatroska) {
+                NSLog(@"exteria: the status emoji %@ did not load as tgs or webm", key);
+                return;
+            }
+            [again showStatusAnimation:data key:key];
+        }];
+    }];
+}
+
+- (void)showStatusAnimation:(NSData *)data key:(NSString *)key {
+    ExteriaLottieView *view = [[[ExteriaLottieView alloc] initWithPackedData:data key:key] autorelease];
+    view.userInteractionEnabled = NO;
+    view.backgroundColor = [UIColor clearColor];
+    [_statusAnimation removeFromSuperview];
+    [_statusAnimation release];
+    _statusAnimation = [view retain];
+    [_head addSubview:view];
+    [self placeStatusAnimation];
+    [view setPlaying:self.isViewLoaded && self.view.window != nil];
+}
+
+/* over the still picture of the emoji, which the name draws and which stays below it until the first frame of the animation is there */
+- (void)placeStatusAnimation {
+    if (!_statusAnimation) return;
+    CGRect box = [_name customEmojiRect:_statusAnimationDocument];
+    if (CGRectIsNull(box)) {
+        _statusAnimation.hidden = YES;
+        return;
+    }
+    CGFloat side = box.size.width;
+    _statusAnimation.frame = [_head convertRect:CGRectMake(box.origin.x, CGRectGetMidY(box) - side / 2, side, side) fromView:_name];
+    _statusAnimation.hidden = NO;
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [_statusAnimation setPlaying:NO];
 }
 
 - (void)showFull {
@@ -473,6 +561,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     _name.font = ExteriaFontBold(22);
     CGFloat nameHeight = MAX(28, ceil([_name sizeThatFits:CGSizeMake(contentWidth, 200)].height));
     _name.frame = CGRectMake(x, y, contentWidth, nameHeight);
+    [self placeStatusAnimation];
     _status.frame = CGRectMake(x, y + nameHeight + 2, contentWidth, 20);
     y += nameHeight + 22 + GAP + 4;
     NSMutableArray *actions = [NSMutableArray array];
@@ -537,7 +626,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
 
 /* the calls go to a person, not to a bot; the profile that was opened from a mention learns that it is a bot when the full user comes in */
 - (BOOL)canCallPerson {
-    return [self canGift] && !_fullUser.person.bot;
+    return [self canGift] && !_fullUser.person.bot && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID;
 }
 
 - (NSString *)username {

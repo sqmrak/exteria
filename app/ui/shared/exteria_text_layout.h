@@ -58,5 +58,7 @@ extern NSString *const ExteriaSpoilerTarget;
 /* the address of the link under point (relative to the text box), nil when there is none */
 - (NSString *)linkAtPoint:(CGPoint)point;
 - (long long)customEmojiAtPoint:(CGPoint)point;
+/* where the first custom emoji of this document stands in the layout, in its coordinates; CGRectNull when the text has none */
+- (CGRect)rectOfCustomEmoji:(long long)document;
 
 @end
