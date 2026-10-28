@@ -16,6 +16,10 @@ NSString *ExteriaTrackLine(ExteriaMedia *track);
    by key only */
 NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot);
 
+/* the same, named as the file was sent: a document that goes to another app or to the files of the person keeps its own name and extension, and two documents
+   do not become file.pdf and file(1).pdf there */
+NSURL *ExteriaNamedLink(NSString *path, NSString *name, NSString *slot);
+
 /* posted on the main thread when the song, the state or the load progress changes, and each half second while a song plays */
 extern NSString *const ExteriaMusicPlayerDidChangeNotification;
 extern NSString *const ExteriaMusicPlayerDidTickNotification;
@@ -43,6 +47,7 @@ typedef enum {
 @property (nonatomic, readonly) NSTimeInterval duration;
 /* the songs next and previous go through; the current one is among them */
 @property (nonatomic, readonly) NSArray *queue;
+@property (nonatomic, readonly) ExteriaMediaCache *media;
 /* the cover of the song once it has arrived, nil before and for songs without one */
 @property (nonatomic, readonly) UIImage *cover;
 /* 1, 1.5 or 2; it applies to songs and voice notes alike and is kept between runs */
@@ -65,6 +70,7 @@ typedef enum {
 - (void)togglePause;
 - (void)next;
 - (void)previous;
+- (void)playQueueTrackAtIndex:(NSUInteger)index;
 /* the song and the queue are forgotten and the audio session is let go */
 - (void)stop;
 /* fraction of the song, 0 to 1 */

@@ -67,6 +67,11 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     NSUInteger _pathRequest;
     NSUInteger _waitTicks;
     BOOL _listening;
+    /* AVPlayer keeps answering the old time until a seek has landed, which sent every slider back to where the song was for a moment; the target is
+       the position while the seek runs, and a newer seek or a new player makes an older answer void */
+    BOOL _seeking;
+    NSTimeInterval _seekTarget;
+    NSUInteger _seekGeneration;
     BOOL _pausedForRecording;
     /* the phone is watched for the ear while a voice message plays, and the sound follows it: earpiece near, loudspeaker away */
     BOOL _watchingProximity;
@@ -81,6 +86,7 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 @synthesize state = _state;
 @synthesize loadProgress = _loadProgress;
 @synthesize queue = _queue;
+@synthesize media = _media;
 @synthesize cover = _cover;
 @synthesize speed = _speed;
 
@@ -164,6 +170,7 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 
 - (NSTimeInterval)position {
     if (!_player) return 0;
+    if (_seeking) return _seekTarget;
     NSTimeInterval seconds = CMTimeGetSeconds(_player.currentTime);
     return seconds > 0 && seconds < 1e9 ? seconds : 0;
 }
@@ -255,6 +262,8 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     _player = nil;
     [_item release];
     _item = nil;
+    ++_seekGeneration;
+    _seeking = NO;
 }
 
 - (void)fail:(NSString *)reason {
@@ -263,7 +272,8 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     [self setState:ExteriaMusicStateFailed];
 }
 
-NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot) {
+/* the link under the name given, in a folder that is emptied first */
+static NSURL *ExteriaLinkNamed(NSString *path, NSString *aliasName, NSString *slot) {
     NSFileManager *files = [NSFileManager defaultManager];
     NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[@"exteria-" stringByAppendingString:slot]];
     [files removeItemAtPath:directory error:NULL];
@@ -272,7 +282,7 @@ NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot) 
         NSLog(@"exteria: cannot make %@: %@", directory, error);
         return nil;
     }
-    NSString *alias = [directory stringByAppendingPathComponent:[@"file." stringByAppendingString:extension]];
+    NSString *alias = [directory stringByAppendingPathComponent:aliasName];
     /* a hard link is the cached file itself, so the player never follows a link out of the temporary folder into the cache; the symbolic link stays for
        a volume that refuses the hard link */
     if (link(path.fileSystemRepresentation, alias.fileSystemRepresentation) == 0) return [NSURL fileURLWithPath:alias];
@@ -281,6 +291,27 @@ NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot) 
         return nil;
     }
     return [NSURL fileURLWithPath:alias];
+}
+
+NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot) {
+    return ExteriaLinkNamed(path, [@"file." stringByAppendingString:extension], slot);
+}
+
+/* an inch short of what a file system takes: names are cut in the middle of the stem, never in the extension, since the extension tells the type */
+#define LINK_NAME_BYTES_MAX 120
+
+NSURL *ExteriaNamedLink(NSString *path, NSString *name, NSString *slot) {
+    NSString *clean = [[name lastPathComponent] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    clean = [[clean componentsSeparatedByCharactersInSet:[NSCharacterSet controlCharacterSet]] componentsJoinedByString:@""];
+    /* a name that begins with dots would be hidden, and one that is only dots is a directory entry */
+    while ([clean hasPrefix:@"."]) clean = [clean substringFromIndex:1];
+    if (!clean.length) clean = @"file";
+    NSString *extension = [clean pathExtension];
+    NSString *stem = [clean stringByDeletingPathExtension];
+    while ([stem lengthOfBytesUsingEncoding:NSUTF8StringEncoding] + (extension.length ? extension.length + 1 : 0) > LINK_NAME_BYTES_MAX && stem.length > 1) {
+        stem = [stem substringToIndex:stem.length - 1];
+    }
+    return ExteriaLinkNamed(path, extension.length ? [stem stringByAppendingPathExtension:extension] : stem, slot);
 }
 
 /* a voice note is Ogg Opus, which no system here plays; the decoder writes the samples as they come, so the
@@ -457,6 +488,13 @@ static BOOL ExteriaIsOgg(NSString *path) {
 
 #pragma mark control
 
+- (void)playQueueTrackAtIndex:(NSUInteger)index {
+    if (index >= _queue.count) return;
+    if (index == _index && _state != ExteriaMusicStateFailed) { [self togglePause]; return; }
+    _index = index;
+    [self startCurrent];
+}
+
 - (void)playTrack:(ExteriaMedia *)track queue:(NSArray *)queue media:(ExteriaMediaCache *)media {
     if (!track || !media) return;
     ExteriaMediaCache *nextMedia = [media retain];
@@ -545,7 +583,18 @@ static BOOL ExteriaIsOgg(NSString *path) {
     NSTimeInterval length = self.duration;
     if (!_player || length <= 0) return;
     fraction = fraction < 0 ? 0 : (fraction > 1 ? 1 : fraction);
-    [_player seekToTime:CMTimeMakeWithSeconds(length * fraction, 600)];
+    NSUInteger generation = ++_seekGeneration;
+    _seeking = YES;
+    _seekTarget = length * fraction;
+    [_player seekToTime:CMTimeMakeWithSeconds(_seekTarget, 600) completionHandler:^(BOOL finished) {
+        (void)finished;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (generation != _seekGeneration) return;
+            _seeking = NO;
+            [self refreshNowPlaying];
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaMusicPlayerDidTickNotification object:self];
+        });
+    }];
     [self refreshNowPlaying];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaMusicPlayerDidTickNotification object:self];
 }

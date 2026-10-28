@@ -2,6 +2,7 @@
 
 #import "exteria_emoji_label.h"
 #import "exteria_music_player.h"
+#import "exteria_music_sheet.h"
 #import "exteria_platform.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -46,6 +47,8 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _title.textColor = ExteriaColorTitle();
     _title.dropsUndrawable = YES;
     [self addSubview:_title];
+    _title.userInteractionEnabled = YES;
+    [_title addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openPlayer)] autorelease]];
     _previous = [ExteriaStripButton(ExteriaSymbolPrevious, self, @selector(previousTapped), @"music.previous") retain];
     _toggle = [ExteriaStripButton(ExteriaSymbolPlay, self, @selector(toggleTapped), @"music.play") retain];
     _next = [ExteriaStripButton(ExteriaSymbolNext, self, @selector(nextTapped), @"music.next") retain];
@@ -97,6 +100,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 - (void)toggleTapped { [[ExteriaMusicPlayer sharedPlayer] togglePause]; }
 - (void)nextTapped { [[ExteriaMusicPlayer sharedPlayer] next]; }
 - (void)closeTapped { [[ExteriaMusicPlayer sharedPlayer] stop]; }
+- (void)openPlayer { if (ExteriaThemeIsClassic()) [ExteriaMusicSheet present]; }
 
 - (void)layoutSubviews {
     [super layoutSubviews];

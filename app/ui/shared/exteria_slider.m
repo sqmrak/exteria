@@ -35,9 +35,20 @@ static UIImage *thumb_image(UIColor *color, CGFloat side) {
     [self setThumbImage:thumb_image(color, 18) forState:UIControlStateHighlighted];
 }
 
+/* the track runs the full width and the thumb travels inside it by its own radius: with the track inset to the thumb's centre the filled part has no
+   width at value 0, and the stretched cap image shows there as a thin bar as tall as the slider */
 - (CGRect)trackRectForBounds:(CGRect)bounds {
     if (ExteriaThemeIsClassic()) return [super trackRectForBounds:bounds];
-    return CGRectMake(14, (bounds.size.height - 4) / 2, MAX(0, bounds.size.width - 28), 4);
+    return CGRectMake(0, (bounds.size.height - 4) / 2, bounds.size.width, 4);
+}
+
+- (CGRect)thumbRectForBounds:(CGRect)bounds trackRect:(CGRect)rect value:(float)value {
+    if (ExteriaThemeIsClassic()) return [super thumbRectForBounds:bounds trackRect:rect value:value];
+    CGFloat side = 28;
+    CGFloat travel = MAX(0, rect.size.width - side);
+    float span = self.maximumValue - self.minimumValue;
+    CGFloat fraction = span > 0 ? (value - self.minimumValue) / span : 0;
+    return CGRectMake(rect.origin.x + travel * MIN(1, MAX(0, fraction)), (bounds.size.height - side) / 2, side, side);
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
