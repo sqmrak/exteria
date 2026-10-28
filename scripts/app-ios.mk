@@ -65,7 +65,7 @@ V64_TARGET := -target arm64-apple-ios7.0 -isysroot $(EXTERIA_SDK_V64)
 # the core reaches openssl by its own headers on each slice
 V7_CC := -isystem $(EXTERIA_VIDEO_V7)/include $(V7_TARGET) -I$(EXTERIA_OPENSSL_V7)/include
 V64_CC := -isystem $(EXTERIA_VIDEO_V64)/include $(V64_TARGET) -I$(EXTERIA_OPENSSL_V64)/include
-LINK_LIBS := -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -framework ImageIO -framework CoreText -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AudioToolbox -framework CoreLocation -weak_framework CoreMotion -framework MobileCoreServices -framework CFNetwork -weak_framework AssetsLibrary -weak_framework AddressBook -weak_framework AddressBookUI -weak_framework MediaPlayer -lz -lc++ -lsqlite3 -liconv
+LINK_LIBS := -framework UIKit -framework Foundation -framework Security -framework CoreGraphics -framework QuartzCore -framework ImageIO -framework CoreText -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AudioToolbox -framework CoreLocation -weak_framework CoreMotion -framework MobileCoreServices -framework CFNetwork -weak_framework AssetsLibrary -weak_framework AddressBook -weak_framework AddressBookUI -weak_framework MediaPlayer -lz -lc++ -lsqlite3 -liconv
 
 VIDEO_LIB_NAMES := libavformat.a libavcodec.a libavutil.a libvpx.a
 VIDEO_V7_LIBS := $(addprefix $(EXTERIA_VIDEO_V7)/lib/,$(VIDEO_LIB_NAMES))
@@ -148,6 +148,8 @@ $(APP)/$(APP_NAME): $(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME) $(EXTERIA_IOS_BUILD)/
 	"$(EXTERIA_TC)/lipo" -create $(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME) $(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME) -output $@
 	cp packaging/Info.plist $(APP)/Info.plist
 	cp $(RES) $(APP)/
+	mkdir -p $(APP)/exteria-original-icons
+	cp resources/icons/Icon*.png $(APP)/exteria-original-icons/
 	for dir in $(sort $(dir $(STRINGS))); do mkdir -p $(APP)/$$(basename $$dir) && cp $$dir/Localizable.strings $(APP)/$$(basename $$dir)/; done
 
 $(EXTERIA_IOS_BUILD)/app-signed.stamp: $(APP)/$(APP_NAME)

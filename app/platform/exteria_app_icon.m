@@ -215,6 +215,97 @@ static BOOL ExteriaPNGSize(NSString *path, uint32_t *width, uint32_t *height) {
     return YES;
 }
 
+/* old uicache rebuilds system app entries but leaves ipa icon names in the user installation cache */
+static BOOL ExteriaUsesCachedUserIcons(void) {
+    NSString *bundle = [[[NSBundle mainBundle] bundlePath] stringByResolvingSymlinksInPath];
+    return ([bundle hasPrefix:@"/private/var/mobile/Applications/"] || [bundle hasPrefix:@"/var/mobile/Applications/"]) &&
+        [[NSFileManager defaultManager] fileExistsAtPath:@"/var/mobile/Library/Caches/com.apple.mobile.installation.plist"];
+}
+
+static NSError *ExteriaWriteUserIconFiles(NSString *name) {
+    NSString *bundle = [[NSBundle mainBundle] bundlePath];
+    NSString *originals = [bundle stringByAppendingPathComponent:@"exteria-original-icons"];
+    NSError *error = nil;
+    NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:originals error:&error];
+    if (!files.count) return error ? error : ExteriaIconFailure(9, @"the original app icons are missing");
+    NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:ExteriaBundlePlistPath()];
+    NSDictionary *saved = [plist objectForKey:ExteriaIconOriginalKey];
+    NSDictionary *source = saved ? saved : plist;
+    NSMutableArray *alternates = [NSMutableArray array];
+    if (name) {
+        for (NSString *key in [NSArray arrayWithObjects:@"CFBundleIcons", @"CFBundleIcons~ipad", nil]) {
+            NSDictionary *icons = [source objectForKey:key];
+            NSDictionary *icon = [[icons objectForKey:@"CFBundleAlternateIcons"] objectForKey:name];
+            NSArray *paths = [icon objectForKey:@"CFBundleIconFiles"];
+            if ([paths isKindOfClass:[NSArray class]]) [alternates addObjectsFromArray:paths];
+        }
+        if (!alternates.count) return ExteriaIconFailure(9, @"the selected icon has no files");
+    }
+    for (NSString *file in files) {
+        if (![file hasPrefix:@"Icon"] || ![file hasSuffix:@".png"] || ![[file lastPathComponent] isEqualToString:file])
+            return ExteriaIconFailure(9, @"the original icon list is invalid");
+        NSString *original = [originals stringByAppendingPathComponent:file];
+        NSData *data = nil;
+        if (!name) {
+            data = [NSData dataWithContentsOfFile:original];
+        } else {
+            uint32_t width = 0, height = 0;
+            if (!ExteriaPNGSize(original, &width, &height) || !width || width != height || width > 1024)
+                return ExteriaIconFailure(9, @"an original app icon is invalid");
+            NSString *best = nil;
+            uint32_t bestDistance = UINT32_MAX;
+            for (id candidate in alternates) {
+                if (![candidate isKindOfClass:[NSString class]] || ![[candidate lastPathComponent] isEqualToString:candidate]) continue;
+                NSString *path = [bundle stringByAppendingPathComponent:candidate];
+                uint32_t w = 0, h = 0;
+                if (!ExteriaPNGSize(path, &w, &h) || !w || w != h) continue;
+                uint32_t distance = w > width ? w - width : width - w;
+                if (distance < bestDistance) { best = path; bestDistance = distance; }
+            }
+            UIImage *image = best ? [UIImage imageWithContentsOfFile:best] : nil;
+            if (!image) return ExteriaIconFailure(9, @"the selected icon could not be read");
+            UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, 1);
+            [image drawInRect:CGRectMake(0, 0, width, height)];
+            UIImage *resized = UIGraphicsGetImageFromCurrentImageContext();
+            data = resized ? UIImagePNGRepresentation(resized) : nil;
+            UIGraphicsEndImageContext();
+        }
+        if (!data) return ExteriaIconFailure(9, @"the app icon could not be prepared");
+        if (![data writeToFile:[bundle stringByAppendingPathComponent:file] options:NSDataWritingAtomic error:&error])
+            return error ? error : ExteriaIconFailure(9, @"the app icon could not be written");
+    }
+    return nil;
+}
+
+static NSError *ExteriaRewriteSelectedIcon(NSString *name) {
+    if (!ExteriaUsesCachedUserIcons()) return ExteriaRewriteIconPlist(name);
+    NSString *previous = [[ExteriaAlternateIconName() copy] autorelease];
+    NSString *path = ExteriaBundlePlistPath();
+    NSData *previousPlist = [NSData dataWithContentsOfFile:path];
+    if (!previousPlist) return ExteriaIconFailure(1, @"the Info.plist could not be read");
+    NSError *error = ExteriaWriteUserIconFiles(name);
+    if (!error) {
+        /* restore the packaged icon names for installs changed by older exteria versions */
+        error = ExteriaRewriteIconPlist(nil);
+        if (!error && name) {
+            NSMutableDictionary *plist = [NSMutableDictionary dictionaryWithContentsOfFile:path];
+            if (!plist) error = ExteriaIconFailure(1, @"the Info.plist could not be read");
+            else {
+                [plist setObject:name forKey:ExteriaIconNameKey];
+                if (![plist writeToFile:path atomically:YES]) error = ExteriaIconFailure(3, @"the Info.plist could not be written");
+            }
+        }
+    }
+    if (error) {
+        NSError *rollback = ExteriaWriteUserIconFiles(previous);
+        if (rollback) NSLog(@"exteria: the previous app icon files could not be restored: %@", rollback);
+        NSError *plistError = nil;
+        if (![previousPlist writeToFile:path options:NSDataWritingAtomic error:&plistError])
+            NSLog(@"exteria: the previous app icon plist could not be restored: %@", plistError);
+    }
+    return error;
+}
+
 /* what the launch images carry: the icon and the color of the screen of the theme that is on now, as hex */
 static NSString *ExteriaLaunchSignature(NSString *name, UIColor *screen) {
     CGFloat r = 0, g = 0, b = 0, a = 0;
@@ -323,7 +414,7 @@ void ExteriaAppIconRestore(void) {
     dispatch_async(ExteriaIconQueue(), ^{
         @autoreleasepool {
             if (plistWrong) {
-                NSError *error = ExteriaRewriteIconPlist(wanted);
+                NSError *error = ExteriaRewriteSelectedIcon(wanted);
                 if (error) {
                     NSLog(@"exteria: the chosen icon was not put back: %@", error);
                     return;
@@ -365,13 +456,13 @@ void ExteriaRewriteAppIcon(NSString *name, void (^completion)(NSError *)) {
     UIColor *screen = ExteriaColorScreen();
     dispatch_async(ExteriaIconQueue(), ^{
         @autoreleasepool {
-            NSError *error = ExteriaRewriteIconPlist(chosen);
+            NSError *error = ExteriaRewriteSelectedIcon(chosen);
             if (!error) ExteriaKeepIconChoice(chosen);
             if (!error) ExteriaSyncLaunchImages(chosen, screen);
             if (!error) {
                 error = ExteriaRefreshHomeScreen();
                 if (error) {
-                    NSError *rollback = ExteriaRewriteIconPlist(previous);
+                    NSError *rollback = ExteriaRewriteSelectedIcon(previous);
                     if (rollback) NSLog(@"exteria: the previous icon could not be restored: %@", rollback);
                     else {
                         ExteriaKeepIconChoice(previous);
