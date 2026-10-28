@@ -63,14 +63,16 @@ exteria_status exteria_call_emoji_indexes(const uint8_t key[EXTERIA_CALL_KEY_LEN
                                          uint16_t indexes[EXTERIA_CALL_EMOJI_SHOWN]);
 extern const char *const exteria_call_emoji[EXTERIA_CALL_EMOJI_COUNT];
 
-/* phone.requestCall to a user, with the commitment and our protocol; video asks for a video call */
-exteria_status exteria_call_request_request(exteria_arena *arena, const exteria_peer_ref *user, int32_t random_id, const uint8_t hash[32], int video,
+/* phone.requestCall to a user, with the commitment and our protocol; video asks for a video call. p2p says whether this phone lets the media go straight to the
+   other phone: a call through the VPN of the app must not, since a direct path leaves the tunnel and shows the real address, so the flag is left out and the
+   server then gives the call relays only. The same goes for accept and confirm */
+exteria_status exteria_call_request_request(exteria_arena *arena, const exteria_peer_ref *user, int32_t random_id, const uint8_t hash[32], int video, int p2p,
                                            exteria_tl_value **out);
 /* phone.acceptCall with our public value, and phone.confirmCall with the caller's own and the key's fingerprint */
-exteria_status exteria_call_accept_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[EXTERIA_CALL_KEY_LEN],
+exteria_status exteria_call_accept_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[EXTERIA_CALL_KEY_LEN], int p2p,
                                           exteria_tl_value **out);
 exteria_status exteria_call_confirm_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[EXTERIA_CALL_KEY_LEN],
-                                           int64_t fingerprint, exteria_tl_value **out);
+                                           int64_t fingerprint, int p2p, exteria_tl_value **out);
 /* phone.sendSignalingData: bytes of the call's signaling for the other phone; EXTERIA_E_LIMIT for none or more than 16 KiB */
 exteria_status exteria_call_signaling_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t *data, size_t len, exteria_tl_value **out);
 /* phone.receivedCall: tells the caller that the phone rings */

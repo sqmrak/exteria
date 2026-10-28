@@ -154,7 +154,7 @@ static void test_requests(void) {
     uint8_t hash[32], pub[EXTERIA_CALL_KEY_LEN];
     memset(hash, 1, sizeof(hash));
     memset(pub, 2, sizeof(pub));
-    CHECK_EQ_INT(exteria_call_request_request(&arena, &user, 99, hash, 0, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_call_request_request(&arena, &user, 99, hash, 0, 1, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_phone_requestCall);
     {
         const exteria_tl_value *proto = exteria_tl_get(request, "protocol"), *versions;
@@ -176,8 +176,18 @@ static void test_requests(void) {
         CHECK_EQ_INT(versions->u.vec.items[1]->u.bytes.len, strlen(EXTERIA_CALL_LIBRARY_VERSION));
         CHECK_EQ_INT(exteria_tl_has(request, "video"), 0);
     }
+    /* a call through the VPN does not offer a direct path: none of the three messages carries udp_p2p, and the relays are still asked for */
+    CHECK_EQ_INT(exteria_call_request_request(&arena, &user, 99, hash, 0, 0, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(exteria_tl_get(request, "protocol"), "udp_p2p"), 0);
+    CHECK_EQ_INT(exteria_tl_has(exteria_tl_get(request, "protocol"), "udp_reflector"), 1);
+    CHECK_EQ_INT(exteria_call_accept_request(&arena, 5, 6, pub, 0, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(exteria_tl_get(request, "protocol"), "udp_p2p"), 0);
+    CHECK_EQ_INT(exteria_call_confirm_request(&arena, 5, 6, pub, -12345, 0, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(exteria_tl_get(request, "protocol"), "udp_p2p"), 0);
+    CHECK_EQ_INT(exteria_call_accept_request(&arena, 5, 6, pub, 1, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(exteria_tl_get(request, "protocol"), "udp_p2p"), 1);
     /* a video call carries the flag */
-    CHECK_EQ_INT(exteria_call_request_request(&arena, &user, 99, hash, 1, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_call_request_request(&arena, &user, 99, hash, 1, 1, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_has(request, "video"), 1);
     /* the signaling of a call: the call, the bytes, and refusals for none, too many, or no call */
     {
@@ -196,12 +206,12 @@ static void test_requests(void) {
         CHECK_EQ_INT(exteria_call_signaling_request(&arena, 0, 6, big, 4, &request), EXTERIA_E_ARG);
         CHECK_EQ_INT(exteria_call_signaling_request(&arena, 5, 6, NULL, 4, &request), EXTERIA_E_ARG);
     }
-    CHECK_EQ_INT(exteria_call_request_request(&arena, &nohash, 99, hash, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_call_request_request(&arena, &nohash, 99, hash, 0, 1, &request), EXTERIA_E_ARG);
     CHECK(request == NULL);
-    CHECK_EQ_INT(exteria_call_request_request(&arena, &channel, 99, hash, 0, &request), EXTERIA_E_ARG);
-    CHECK_EQ_INT(exteria_call_accept_request(&arena, 5, 6, pub, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_call_request_request(&arena, &channel, 99, hash, 0, 1, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_call_accept_request(&arena, 5, 6, pub, 1, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_phone_acceptCall);
-    CHECK_EQ_INT(exteria_call_confirm_request(&arena, 5, 6, pub, -12345, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_call_confirm_request(&arena, 5, 6, pub, -12345, 1, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_phone_confirmCall);
     CHECK_EQ_INT(exteria_call_received_request(&arena, 5, 6, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_phone_receivedCall);
@@ -210,7 +220,7 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "reason")), EXTERIA_TL_ID_phoneCallDiscardReasonHangup);
     CHECK_EQ_INT(exteria_call_discard_request(&arena, 5, 6, -1, EXTERIA_CALL_REASON_HANGUP, 0, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_call_discard_request(&arena, 5, 6, 0, EXTERIA_CALL_REASON_NONE, 0, &request), EXTERIA_E_ARG);
-    CHECK_EQ_INT(exteria_call_accept_request(&arena, 0, 6, pub, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_call_accept_request(&arena, 0, 6, pub, 1, &request), EXTERIA_E_ARG);
 }
 
 static exteria_tl_value *protocol_object(void) {

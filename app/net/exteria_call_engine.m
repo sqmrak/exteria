@@ -7,6 +7,8 @@
 #import "exteria_rpc.h"
 #import "exteria_session.h"
 #import "exteria_session_internal.h"
+#import "exteria_shiro.h"
+#import "exteria_shiro_network.h"
 #import "exteria_voip_bridge.h"
 #import "exteria_weak_reference.h"
 
@@ -304,17 +306,24 @@ static void ExteriaCallMediaBars(void *context, int bars);
     }];
 }
 
+/* media may go straight to the other phone only when the VPN of the app is off: through it every packet must pass the tunnel, and a direct path would leave it
+   and show the real address of this phone */
+- (BOOL)directPathAllowed {
+    return ExteriaShiroNetworkRoute() == (int)ExteriaShiroRouteDirect;
+}
+
 - (void)sendRequest {
     ExteriaCallValue hash;
     int32_t randomId = 0;
     NSUInteger generation = _generation;
     BOOL video = _wantsVideo;
     exteria_peer_ref ref = _userRef;
+    int p2p = [self directPathAllowed];
     exteria_random(&randomId, sizeof(randomId));
     memcpy(_callerPub, _pub, sizeof(_callerPub));
     exteria_call_commit(_pub, hash.bytes);
     [_session submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        return exteria_call_request_request(arena, &ref, randomId, hash.bytes, video ? 1 : 0, request);
+        return exteria_call_request_request(arena, &ref, randomId, hash.bytes, video ? 1 : 0, p2p, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         if (generation != _generation || !_active) return;
         exteria_phone_call call;
@@ -438,10 +447,11 @@ static void ExteriaCallMediaBars(void *context, int bars);
             return;
         }
         int64_t callId = _call.id, accessHash = _call.access_hash;
+        int p2p = [self directPathAllowed];
         ExteriaCallValue pub;
         memcpy(pub.bytes, _pub, sizeof(pub.bytes));
         [_session submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-            return exteria_call_accept_request(arena, callId, accessHash, pub.bytes, request);
+            return exteria_call_accept_request(arena, callId, accessHash, pub.bytes, p2p, request);
         } handler:^(const exteria_mt_rpc_result *result) {
             if (generation != _generation || !_active) return;
             exteria_phone_call call;
@@ -469,10 +479,11 @@ static void ExteriaCallMediaBars(void *context, int bars);
     [self setPhase:ExteriaCallPhaseExchanging];
     NSUInteger generation = _generation;
     int64_t callId = _call.id, accessHash = _call.access_hash;
+    int p2p = [self directPathAllowed];
     ExteriaCallValue pub;
     memcpy(pub.bytes, _pub, sizeof(pub.bytes));
     [_session submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        return exteria_call_confirm_request(arena, callId, accessHash, pub.bytes, fingerprint, request);
+        return exteria_call_confirm_request(arena, callId, accessHash, pub.bytes, fingerprint, p2p, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         if (generation != _generation || !_active) return;
         exteria_phone_call call;
@@ -590,7 +601,7 @@ static void ExteriaCallMediaBars(void *context, int bars) {
     _mediaContext->engine = [[ExteriaWeakReference referenceTo:self] retain];
     _mediaContext->generation = _generation;
     int32_t layer = _call.max_layer > 0 ? _call.max_layer : EXTERIA_CALL_MAX_LAYER;
-    _voip = exteria_voip_create(endpoints, count, _key, _outgoing ? 1 : 0, _call.p2p_allowed ? 1 : 0, layer, ExteriaCallMediaState, ExteriaCallMediaBars, _mediaContext);
+    _voip = exteria_voip_create(endpoints, count, _key, _outgoing ? 1 : 0, _call.p2p_allowed && [self directPathAllowed] ? 1 : 0, layer, ExteriaCallMediaState, ExteriaCallMediaBars, _mediaContext);
     if (!_voip) {
         NSLog(@"exteria: the call engine could not be made");
         [self finishWithReason:EXTERIA_CALL_REASON_DISCONNECT end:ExteriaCallEndFailed sendDiscard:YES];

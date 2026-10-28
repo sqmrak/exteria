@@ -143,7 +143,7 @@ exteria_status exteria_call_emoji_indexes(const uint8_t key[KEY], const uint8_t 
     return EXTERIA_OK;
 }
 
-static exteria_status protocol(exteria_arena *arena, exteria_tl_value **out) {
+static exteria_status protocol(exteria_arena *arena, int p2p, exteria_tl_value **out) {
     static const char *const names[] = {EXTERIA_CALL_TGCALLS_VERSION, EXTERIA_CALL_LIBRARY_VERSION};
     exteria_tl_value *p = exteria_tl_new_obj(arena, "phoneCallProtocol"), *versions = exteria_tl_new_vec(arena, 2);
     exteria_status status = EXTERIA_OK;
@@ -154,7 +154,7 @@ static exteria_status protocol(exteria_arena *arena, exteria_tl_value **out) {
         if (!version) return EXTERIA_E_NOMEM;
         status = exteria_tl_vec_set(versions, i, version);
     }
-    if (status == EXTERIA_OK) status = exteria_tl_set_flag(p, "udp_p2p");
+    if (status == EXTERIA_OK && p2p) status = exteria_tl_set_flag(p, "udp_p2p");
     if (status == EXTERIA_OK) status = exteria_tl_set_flag(p, "udp_reflector");
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, p, "min_layer", EXTERIA_CALL_MIN_LAYER);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, p, "max_layer", EXTERIA_CALL_MAX_LAYER);
@@ -173,7 +173,7 @@ static exteria_status input_call(exteria_arena *arena, int64_t id, int64_t acces
     return status;
 }
 
-exteria_status exteria_call_request_request(exteria_arena *arena, const exteria_peer_ref *user, int32_t random_id, const uint8_t hash[32], int video,
+exteria_status exteria_call_request_request(exteria_arena *arena, const exteria_peer_ref *user, int32_t random_id, const uint8_t hash[32], int video, int p2p,
                                            exteria_tl_value **out) {
     exteria_tl_value *request, *input, *proto = NULL;
     exteria_status status;
@@ -185,7 +185,7 @@ exteria_status exteria_call_request_request(exteria_arena *arena, const exteria_
     if (!request || !input) return EXTERIA_E_NOMEM;
     status = exteria_tl_set_i64(arena, input, "user_id", user->id);
     if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, input, "access_hash", user->access_hash);
-    if (status == EXTERIA_OK) status = protocol(arena, &proto);
+    if (status == EXTERIA_OK) status = protocol(arena, p2p, &proto);
     if (status == EXTERIA_OK && video) status = exteria_tl_set_flag(request, "video");
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "user_id", input);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "random_id", random_id);
@@ -195,7 +195,7 @@ exteria_status exteria_call_request_request(exteria_arena *arena, const exteria_
     return status;
 }
 
-exteria_status exteria_call_accept_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[KEY], exteria_tl_value **out) {
+exteria_status exteria_call_accept_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[KEY], int p2p, exteria_tl_value **out) {
     exteria_tl_value *request, *peer = NULL, *proto = NULL;
     exteria_status status;
     if (!out) return EXTERIA_E_ARG;
@@ -204,7 +204,7 @@ exteria_status exteria_call_accept_request(exteria_arena *arena, int64_t call_id
     request = exteria_tl_new_obj(arena, "phone.acceptCall");
     if (!request) return EXTERIA_E_NOMEM;
     status = input_call(arena, call_id, access_hash, &peer);
-    if (status == EXTERIA_OK) status = protocol(arena, &proto);
+    if (status == EXTERIA_OK) status = protocol(arena, p2p, &proto);
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "peer", peer);
     if (status == EXTERIA_OK) status = exteria_tl_set_bytes(arena, request, "g_b", pub, KEY);
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "protocol", proto);
@@ -212,7 +212,7 @@ exteria_status exteria_call_accept_request(exteria_arena *arena, int64_t call_id
     return status;
 }
 
-exteria_status exteria_call_confirm_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[KEY], int64_t fingerprint,
+exteria_status exteria_call_confirm_request(exteria_arena *arena, int64_t call_id, int64_t access_hash, const uint8_t pub[KEY], int64_t fingerprint, int p2p,
                                            exteria_tl_value **out) {
     exteria_tl_value *request, *peer = NULL, *proto = NULL;
     exteria_status status;
@@ -222,7 +222,7 @@ exteria_status exteria_call_confirm_request(exteria_arena *arena, int64_t call_i
     request = exteria_tl_new_obj(arena, "phone.confirmCall");
     if (!request) return EXTERIA_E_NOMEM;
     status = input_call(arena, call_id, access_hash, &peer);
-    if (status == EXTERIA_OK) status = protocol(arena, &proto);
+    if (status == EXTERIA_OK) status = protocol(arena, p2p, &proto);
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "peer", peer);
     if (status == EXTERIA_OK) status = exteria_tl_set_bytes(arena, request, "g_a", pub, KEY);
     if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "key_fingerprint", fingerprint);
