@@ -36,6 +36,8 @@ UIColor *ExteriaColorCard(void);
 UIColor *ExteriaColorBar(void);
 UIColor *ExteriaColorHairline(void);
 UIColor *ExteriaColorAccent(void);
+/* a color given as 0xRRGGBB, opaque */
+UIColor *ExteriaColorOfRGB(uint32_t rgb);
 UIColor *ExteriaColorAccentDark(void);
 UIColor *ExteriaColorTitle(void);
 UIColor *ExteriaColorMessage(void);

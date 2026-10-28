@@ -22,6 +22,7 @@
 #import "exteria_music_pill.h"
 #import "exteria_popup_menu.h"
 #import "exteria_profile_action.h"
+#import "exteria_profile_backdrop_view.h"
 #import "exteria_profile_chat.h"
 #import "exteria_profile_qr_controller.h"
 #import "exteria_alert.h"
@@ -61,6 +62,9 @@
     ExteriaStoryRing *_storyRing;
     BOOL _storiesShown;
     ExteriaEmojiLabel *_name;
+    /* the colored ground behind the head when the person wears a collectible color or status */
+    ExteriaProfileBackdropView *_backdrop;
+    CGFloat _backdropBottom;
     /* the emoji status of the user when it moves: drawn over the still picture the name already holds, at the place the name leaves for it */
     ExteriaLottieView *_statusAnimation;
     long long _statusAnimationDocument;
@@ -116,6 +120,7 @@
     [_storyRing release];
     [_name release];
     [_statusAnimation release];
+    [_backdrop release];
     [_status release];
     [_messageAction release];
     [_soundAction release];
@@ -451,8 +456,27 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     [_statusAnimation setPlaying:NO];
 }
 
+/* the head takes the colors of the person: the blend behind the photo, the text over it in the color they gave it, and the action cards as veils with the same ink */
+- (void)applyBackdropOfPerson:(ExteriaPerson *)person {
+    if (!person.hasBackdrop) return;
+    if (!_backdrop) {
+        _backdrop = [[ExteriaProfileBackdropView alloc] init];
+        [_head insertSubview:_backdrop atIndex:0];
+    }
+    _backdrop.centerColor = ExteriaColorOfRGB(person.backdropCenter);
+    _backdrop.edgeColor = ExteriaColorOfRGB(person.backdropEdge);
+    UIColor *ink = ExteriaColorOfRGB(person.backdropText);
+    _name.textColor = ink;
+    _status.plainColor = [ink colorWithAlphaComponent:0.78f];
+    _status.activeColor = ink;
+    for (ExteriaUserAction *action in [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil]) [action setInk:ink];
+    [self.view setNeedsLayout];
+    [_name setNeedsDisplay];
+}
+
 - (void)showFull {
     ExteriaFullUser *user = _fullUser;
+    [self applyBackdropOfPerson:user.person];
     if (user.person.name.length) {
         [self showName:user.person.name emojiStatus:user.person.emojiStatus premium:user.person.premium];
         self.screenTitle = user.person.name;
@@ -571,6 +595,13 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
         if (!order[i].hidden) [actions addObject:order[i]];
     }
     y += ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10) + GAP;
+    if (_backdrop) {
+        /* the ground runs up under the bar and down behind the action cards */
+        CGFloat above = 600;
+        _backdropBottom = y - GAP + 6;
+        _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom);
+        _backdrop.focus = CGPointMake(width / 2, above + CGRectGetMidY(_avatar.frame));
+    }
     if (_music.hasContent) {
         _music.frame = CGRectMake(x, y - GAP + 8, contentWidth, [ExteriaMusicPill height]);
         y += [ExteriaMusicPill height] + 8;

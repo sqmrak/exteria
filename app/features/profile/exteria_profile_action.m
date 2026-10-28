@@ -13,6 +13,7 @@
     ExteriaAttachBounce(self, 0.06);
     self.backgroundColor = ExteriaColorCard();
     self.layer.cornerRadius = 14;
+    _symbol = symbol;
     _icon = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(symbol, 24, ExteriaColorAccent())];
     _icon.contentMode = UIViewContentModeCenter;
     [self addSubview:_icon];
@@ -29,12 +30,23 @@
 }
 
 - (void)setSymbol:(ExteriaSymbol)symbol title:(NSString *)title {
-    _icon.image = ExteriaSymbolImage(symbol, 24, ExteriaColorAccent());
+    _symbol = symbol;
+    _icon.image = ExteriaSymbolImage(symbol, 24, _ink ? _ink : ExteriaColorAccent());
     _caption.text = title;
     self.accessibilityLabel = title;
 }
 
+- (void)setInk:(UIColor *)ink {
+    if (ink == _ink) return;
+    [_ink release];
+    _ink = [ink retain];
+    self.backgroundColor = ink ? [UIColor colorWithWhite:0 alpha:0.18f] : ExteriaColorCard();
+    _icon.image = ExteriaSymbolImage(_symbol, 24, ink ? ink : ExteriaColorAccent());
+    _caption.textColor = ink ? ink : ExteriaColorTitle();
+}
+
 - (void)dealloc {
+    [_ink release];
     [_icon release];
     [_caption release];
     [super dealloc];

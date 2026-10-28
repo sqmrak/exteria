@@ -261,3 +261,7 @@ UIColor *ExteriaMixedColor(UIColor *base, UIColor *tint, CGFloat share) {
     }
     return [UIColor colorWithRed:b[0] + (t[0] - b[0]) * share green:b[1] + (t[1] - b[1]) * share blue:b[2] + (t[2] - b[2]) * share alpha:1];
 }
+
+UIColor *ExteriaColorOfRGB(uint32_t rgb) {
+    return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0f green:((rgb >> 8) & 0xFF) / 255.0f blue:(rgb & 0xFF) / 255.0f alpha:1];
+}

@@ -72,8 +72,23 @@ NSString *ExteriaInitialsOfName(NSString *name) {
     _phone = [ExteriaUtf8(row->phone) copy];
     _initials = [(row->deleted ? @"" : ExteriaInitialsOfName(_name)) copy];
     _photo = [[ExteriaPhoto photoWithRef:&row->photo] retain];
+    _hasBackdrop = row->has_backdrop != 0;
+    _backdropCenter = row->backdrop_center;
+    _backdropEdge = row->backdrop_edge;
+    _backdropPattern = row->backdrop_pattern;
+    _backdropText = row->backdrop_text;
+    _backdropPatternDocument = row->backdrop_pattern_document;
+    _backdropTitle = [ExteriaUtf8(row->backdrop_title) copy];
     return self;
 }
+
+- (BOOL)hasBackdrop { return _hasBackdrop; }
+- (uint32_t)backdropCenter { return _backdropCenter; }
+- (uint32_t)backdropEdge { return _backdropEdge; }
+- (uint32_t)backdropPattern { return _backdropPattern; }
+- (uint32_t)backdropText { return _backdropText; }
+- (long long)backdropPatternDocument { return _backdropPatternDocument; }
+- (NSString *)backdropTitle { return _backdropTitle; }
 
 - (BOOL)deleted {
     return _presence == EXTERIA_PRESENCE_DELETED;
@@ -86,6 +101,7 @@ NSString *ExteriaInitialsOfName(NSString *name) {
     [_botPlaceholder release];
     [_initials release];
     [_photo release];
+    [_backdropTitle release];
     [super dealloc];
 }
 

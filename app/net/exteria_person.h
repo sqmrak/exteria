@@ -28,6 +28,10 @@ long long ExteriaLiveEmojiStatus(long long document, int32_t until);
     NSString *_phone;
     NSString *_initials;
     ExteriaPhoto *_photo;
+    BOOL _hasBackdrop;
+    uint32_t _backdropCenter, _backdropEdge, _backdropPattern, _backdropText;
+    long long _backdropPatternDocument;
+    NSString *_backdropTitle;
 }
 @property (nonatomic, readonly) long long userId;
 /* what a request that names this user needs, zero when none is known */
@@ -49,6 +53,14 @@ long long ExteriaLiveEmojiStatus(long long document, int32_t until);
 @property (nonatomic, readonly) long long emojiStatus;
 /* the id of the color the person chose for their name in groups, -1 when they chose none and the id decides */
 @property (nonatomic, readonly) NSInteger nameColor;
+/* the colored ground of the profile from a collectible profile color or status; the colors as 0xRRGGBB, the emoji that tiles it, and the name of the collectible */
+@property (nonatomic, readonly) BOOL hasBackdrop;
+@property (nonatomic, readonly) uint32_t backdropCenter;
+@property (nonatomic, readonly) uint32_t backdropEdge;
+@property (nonatomic, readonly) uint32_t backdropPattern;
+@property (nonatomic, readonly) uint32_t backdropText;
+@property (nonatomic, readonly) long long backdropPatternDocument;
+@property (nonatomic, readonly, copy) NSString *backdropTitle;
 @property (nonatomic, readonly) exteria_presence presence;
 /* the account is gone: the avatar is the ghost and the status reads "a very long time ago" */
 @property (nonatomic, readonly) BOOL deleted;
