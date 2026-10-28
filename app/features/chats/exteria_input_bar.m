@@ -35,6 +35,8 @@ static CGFloat ExteriaInputIdleHeight(void) {
 /* a hold that ends this soon after it began locks the recording instead of ending it; a swipe up is the only other way to lock, and a gesture tweak on the phone
    takes that swipe for itself */
 #define QUICK_LOCK_SECONDS 0.5
+/* a hold that lasts this long without a slide locks the recording by itself: the person means to go on, and the swipe up it would take is the one a gesture tweak steals */
+#define AUTO_LOCK_SECONDS 5.0
 
 static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
@@ -291,6 +293,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 - (void)dealloc {
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(updateTextHeight) object:nil];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(lockTapped) object:nil];
     [_weak clear];
     [_weak release];
     _text.formatHandler = nil;
@@ -915,6 +918,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _holdStartY = [hold locationInView:self].y;
         [self setRecordingElapsed:0];
         [self showRecordingAnimated];
+        [self performSelector:@selector(lockTapped) withObject:nil afterDelay:AUTO_LOCK_SECONDS];
         break;
     case UIGestureRecognizerStateChanged: {
         if (!_holding) return;
@@ -940,6 +944,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     case UIGestureRecognizerStateCancelled:
     case UIGestureRecognizerStateFailed: {
         if (!_holding) return;
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(lockTapped) object:nil];
         _holding = NO;
         BOOL quick = CACurrentMediaTime() - _holdBeganAt < QUICK_LOCK_SECONDS;
         if ((_locked || quick) && !_slidAway && hold.state == UIGestureRecognizerStateEnded) {
