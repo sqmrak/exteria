@@ -104,8 +104,12 @@ typedef enum {
 /* posted on the main thread with the refreshed archive shortcut under the key "dialog" */
 extern NSString *const ExteriaArchiveSummaryDidChangeNotification;
 extern NSString *const ExteriaSessionConnectionDidChangeNotification;
+extern NSString *const ExteriaSessionDialogsUpdatedNotification;
 /* the other side read more of our messages in a chat; userInfo has kind, peer and maxId */
 extern NSString *const ExteriaReadOutboxDidChangeNotification;
+/* the parts of a file sent in a message that the server has taken, on the main thread; userInfo has "randomId" (the NSNumber of the pending message)
+   and "fraction" (an NSNumber float from 0 to 1) */
+extern NSString *const ExteriaUploadProgressNotification;
 
 @interface ExteriaSession : NSObject {
     id<ExteriaSessionDelegate> _delegate;
@@ -181,6 +185,7 @@ typedef void (^ExteriaListCompletion)(NSArray *items, NSString *errorName);
 - (void)loadDialogs:(ExteriaListCompletion)completion;
 /* folder 0 is the main list, 1 the archive; the main list carries the archive as its own entry */
 - (void)loadDialogsInFolder:(int32_t)folder completion:(ExteriaListCompletion)completion;
+- (void)loadDialogPageInFolder:(int32_t)folder after:(ExteriaDialog *)cursor completion:(void (^)(NSArray *items, ExteriaDialog *next, NSString *errorName))completion;
 /* the list as the last good load left it, so a screen can show it before the network answers; a nil list means
    nothing is kept yet and is not an error */
 - (void)loadCachedDialogsInFolder:(int32_t)folder completion:(ExteriaListCompletion)completion;
@@ -287,6 +292,9 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* two to ten photos and videos as one album; each is uploaded, then one request sends them together, so the other
    side sees one collage. randomIds are the NSNumber random ids of the pending messages, one for each item in order */
 - (void)sendAlbumOfOutgoings:(NSArray *)outgoings toDialog:(ExteriaDialog *)dialog randomIds:(NSArray *)randomIds completion:(void (^)(NSArray *messageIds, NSString *errorName))completion;
+/* stops the upload of the pending message with this random id; the completion of its send then reports CANCELLED. A message the server
+   already has is not recalled */
+- (void)cancelSendWithRandomId:(long long)randomId;
 - (void)sendLocationLatitude:(double)latitude longitude:(double)longitude toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId
                   completion:(ExteriaSendCompletion)completion;
 /* a jpeg becomes the profile photo of the signed in user: the file goes up in parts, then the server is told to
@@ -306,6 +314,9 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
            completion:(ExteriaListCompletion)completion;
 /* tells the server everything up to maxId is read; a failure only shows in the log, the next open says it again */
 - (void)markDialogRead:(ExteriaDialog *)dialog upTo:(int32_t)maxId;
+- (void)markMentionsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
+/* messages.readMessageContents: the voice notes, round videos and one-time media of these messages count as played or opened; the ids are NSNumbers */
+- (void)markContentsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 
 /* pin, mute or delete one chat on the server; the completion runs on the main thread with nil on success or the
    rpc error name */

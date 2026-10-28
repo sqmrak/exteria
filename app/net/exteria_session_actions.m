@@ -241,7 +241,7 @@ static NSData *ExteriaPackIds(NSArray *ids) {
             exteria_message_row *rows = calloc(EXTERIA_MESSAGES_MAX, sizeof(*rows));
             size_t found = 0;
             if (rows && exteria_messages_parse(result->value, rows, EXTERIA_MESSAGES_MAX, &found) == EXTERIA_OK) {
-                people = ExteriaPeopleOfAnswer(result->value);
+                people = ExteriaPeopleOfAnswer(self, result->value);
                 messages = [NSMutableArray arrayWithCapacity:found];
                 for (size_t i = 0; i < found; ++i) {
                     ExteriaMessage *message = [ExteriaMessage messageWithRow:&rows[i]];

@@ -4,6 +4,7 @@
 #import "exteria_dialog.h"
 #import "exteria_files.h"
 #import "exteria_media_link.h"
+#import "exteria_proxy_settings.h"
 #import "exteria_photo.h"
 #import "exteria_person.h"
 #import "exteria_remote_file.h"
@@ -171,6 +172,8 @@
     ExteriaShiro *_shiro;
     ExteriaTypingBoard *_typing;
     NSMutableDictionary *_readOutbox;
+    /* worker only: the random ids of pending messages whose upload the person stopped, read by the next step of that upload */
+    NSMutableSet *_cancelledSends;
     ExteriaCallEngine *_calls;
     NSString *_deviceModel;
     NSString *_systemVersion;
@@ -188,6 +191,7 @@
 NSString *const ExteriaArchiveSummaryDidChangeNotification = @"ExteriaArchiveSummaryDidChange";
 
 NSString *const ExteriaSessionConnectionDidChangeNotification = @"ExteriaSessionConnectionDidChange";
+NSString *const ExteriaSessionDialogsUpdatedNotification = @"ExteriaSessionDialogsUpdated";
 
 @implementation ExteriaSession
 
@@ -200,6 +204,7 @@ NSString *const ExteriaSessionConnectionDidChangeNotification = @"ExteriaSession
 @synthesize drafts = _drafts;
 
 NSString *const ExteriaReadOutboxDidChangeNotification = @"ExteriaReadOutboxDidChange";
+NSString *const ExteriaUploadProgressNotification = @"ExteriaUploadProgress";
 
 - (int32_t)readOutboxOfKind:(int32_t)kind peer:(long long)peer {
     return [[_readOutbox objectForKey:[NSString stringWithFormat:@"%d:%lld", (int)kind, peer]] intValue];
@@ -301,23 +306,24 @@ static NSString *ExteriaMachineName(void) {
     free(_cAppVersion);
     free(_cLangCode);
     [_readOutbox release];
+    [_cancelledSends release];
     [super dealloc];
 }
 
 #pragma mark calls
 
-/* a bot has no phone: the server refuses the call, and no screen offers one, so a call that gets here from a list that did not know the bot is stopped */
+/* bots and telegram's service account cannot receive calls */
 - (void)startCallToDialog:(ExteriaDialog *)dialog {
-    if (dialog.kind == EXTERIA_DIALOG_BOT) {
-        NSLog(@"exteria: a call to the bot %lld was not started", dialog.peerId);
+    if (dialog.kind == EXTERIA_DIALOG_BOT || (dialog.peerKind == 1 && dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID)) {
+        NSLog(@"exteria: a call to service user %lld was not started", dialog.peerId);
         return;
     }
     [_calls startCallToDialog:dialog];
 }
 
 - (void)startVideoCallToDialog:(ExteriaDialog *)dialog {
-    if (dialog.kind == EXTERIA_DIALOG_BOT) {
-        NSLog(@"exteria: a video call to the bot %lld was not started", dialog.peerId);
+    if (dialog.kind == EXTERIA_DIALOG_BOT || (dialog.peerKind == 1 && dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID)) {
+        NSLog(@"exteria: a video call to service user %lld was not started", dialog.peerId);
         return;
     }
     [_calls startCallToDialog:dialog video:YES];
@@ -613,6 +619,19 @@ static NSString *ExteriaMachineName(void) {
     if (batched && exteria_store_commit(_store) != EXTERIA_OK) NSLog(@"exteria: the history page was not committed");
 }
 
+- (void)workerCancelSend:(long long)randomId {
+    if (!_cancelledSends) _cancelledSends = [[NSMutableSet alloc] init];
+    [_cancelledSends addObject:[NSNumber numberWithLongLong:randomId]];
+}
+
+- (BOOL)workerSendIsCancelled:(long long)randomId {
+    return [_cancelledSends containsObject:[NSNumber numberWithLongLong:randomId]];
+}
+
+- (void)workerForgetSend:(long long)randomId {
+    [_cancelledSends removeObject:[NSNumber numberWithLongLong:randomId]];
+}
+
 - (int64_t)workerAccount {
     return _account;
 }
@@ -657,6 +676,9 @@ static NSString *ExteriaMachineName(void) {
     }
     /* presence and typing change nothing a notification could say, and a contact list sends them all day */
     if (_changeHook && _store && !(_clientLive && _client.change_quiet)) _changeHook();
+    if (_clientLive && !_client.change_quiet && !_client.change_rpc_cache) {
+        [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaSessionDialogsUpdatedNotification object:self]; }];
+    }
 }
 
 /* hands a finished load to the main thread; a dropped key also queues the client restart */
@@ -736,6 +758,42 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
         }
         return dialogs;
     } completion:completion];
+}
+
+- (void)loadDialogPageInFolder:(int32_t)folder after:(ExteriaDialog *)cursor completion:(void (^)(NSArray *, ExteriaDialog *, NSString *))completion {
+    exteria_peer_ref peer = {0};
+    if (cursor) {
+        peer.kind = cursor.peerKind; peer.id = cursor.peerId; peer.access_hash = cursor.peerHash; peer.self = cursor.saved;
+    }
+    int32_t date = cursor.date, message = cursor.topMessage;
+    __block BOOL more = NO;
+    void (^done)(NSArray *, ExteriaDialog *, NSString *) = [completion copy];
+    [self load:"messages.getDialogs" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
+        exteria_status status = ExteriaConfigureDialogList(arena, request, folder);
+        if (status != EXTERIA_OK || !cursor) return status;
+        exteria_tl_value *input = NULL;
+        status = exteria_input_peer(arena, &peer, &input);
+        if (status == EXTERIA_OK) status = exteria_tl_set(request, "offset_peer", input);
+        if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_date", date);
+        if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_id", message);
+        if (status == EXTERIA_OK) status = exteria_tl_set_flag(request, "exclude_pinned");
+        return status;
+    } parse:^NSArray *(const exteria_tl_value *answer) {
+        const exteria_tl_value *dialogs = NULL;
+        more = exteria_tl_is(answer, EXTERIA_TL_ID_messages_dialogsSlice) &&
+               exteria_tl_get_vec(answer, "dialogs", &dialogs) == EXTERIA_OK && dialogs->u.vec.count > 0;
+        return [self dialogsFromAnswer:answer folder:folder];
+    } completion:^(NSArray *items, NSString *errorName) {
+        ExteriaDialog *next = nil;
+        if (items && more) {
+            for (ExteriaDialog *item in [items reverseObjectEnumerator]) {
+                if (!item.folder && !item.community && item.topMessage > 0 && item.date > 0 && (item.peerKind == 2 || item.saved || item.peerHash)) { next = item; break; }
+            }
+            if (!next || (cursor && next.peerKind == cursor.peerKind && next.peerId == cursor.peerId && next.topMessage == cursor.topMessage)) errorName = @"DIALOG_PAGINATION_FAILED";
+        }
+        done(items, errorName ? nil : next, errorName);
+        [done release];
+    }];
 }
 
 - (NSArray *)dialogsFromAnswer:(const exteria_tl_value *)answer folder:(int32_t)folder {
@@ -1460,7 +1518,11 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
 - (void)openLink {
     const char *host = exteria_dc_host(_dc);
     BOOL tunneled = NO;
-    exteria_status status = ExteriaShiroConnectSocket(_shiro, &_socket, host, exteria_dc_port(), CONNECT_TIMEOUT_MS, &tunneled);
+    exteria_status status = ExteriaProxyConnect(_shiro, &_socket, host, exteria_dc_port(), CONNECT_TIMEOUT_MS, &_client.config, &tunneled);
+    if (status == EXTERIA_OK) {
+        _client.mt.config.transport = _client.config.transport;
+        _client.mt.config.obfuscation = _client.config.obfuscation;
+    }
     /* a signed in link that should keep working while the app sleeps is made a voip socket; a stream of the tunnel
        is a local socket pair, which the system cannot keep alive for the network, so it stays an ordinary socket */
     if (status == EXTERIA_OK && !tunneled && _account > 0 && ExteriaBackgroundLinkWanted()) _voip = ExteriaVoipSocketAttach(_socket.fd);

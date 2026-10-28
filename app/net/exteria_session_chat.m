@@ -106,18 +106,29 @@ static uint64_t ExteriaMonotonicMs(void) {
 
 /* the people a messages answer names: its users by id, and the channels it carries, which messages written as a channel point at, by
    the negative of their id */
-NSMutableDictionary *ExteriaPeopleOfAnswer(const exteria_tl_value *answer) {
+/* the photo and the hash of the whole object, for a row that came as a stub */
+static void ExteriaFillFromStore(ExteriaSession *session, exteria_person_row *row, int64_t key) {
+    if (row->photo.photo_id > 0) return;
+    ExteriaPerson *held = [session storedPersonWithKey:key];
+    if (!held || !held.photo.ref.photo_id) return;
+    row->photo = held.photo.ref;
+    if (!row->access_hash) row->access_hash = held.accessHash;
+}
+
+NSMutableDictionary *ExteriaPeopleOfAnswer(ExteriaSession *session, const exteria_tl_value *answer) {
     NSMutableDictionary *people = [NSMutableDictionary dictionary];
     const exteria_tl_value *users = exteria_tl_get(answer, "users");
     for (uint32_t i = 0; users && users->kind == EXTERIA_TL_V_VEC && i < users->u.vec.count; ++i) {
         exteria_person_row person;
         if (exteria_person_parse(users->u.vec.items[i], &person) != EXTERIA_OK) continue;
+        if (exteria_tl_has(users->u.vec.items[i], "min")) ExteriaFillFromStore(session, &person, person.id);
         [people setObject:[[[ExteriaPerson alloc] initWithRow:&person] autorelease] forKey:[NSNumber numberWithLongLong:person.id]];
     }
     const exteria_tl_value *chats = exteria_tl_get(answer, "chats");
     for (uint32_t i = 0; chats && chats->kind == EXTERIA_TL_V_VEC && i < chats->u.vec.count; ++i) {
         exteria_person_row channel;
         if (exteria_channel_person_parse(chats->u.vec.items[i], &channel) != EXTERIA_OK) continue;
+        if (exteria_tl_has(chats->u.vec.items[i], "min")) ExteriaFillFromStore(session, &channel, -channel.id);
         [people setObject:[[[ExteriaPerson alloc] initWithRow:&channel] autorelease] forKey:[NSNumber numberWithLongLong:-channel.id]];
     }
     return people;
@@ -245,6 +256,10 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
         return EXTERIA_E_ARG;
     } handler:^(const exteria_mt_rpc_result *result) {
         NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        if (action == ExteriaChatCommandDelete && exteria_channel_already_left(peer.kind, error.UTF8String)) {
+            NSLog(@"exteria: channel %lld was already left", peer.id);
+            error = nil;
+        }
         [self noteRpcError:error];
         [self deliverMain:^{ done(error); [done release]; }];
     }];
@@ -255,6 +270,12 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
 /* worker only: sends the next part, or the message once every part is there */
 - (void)pumpUpload:(ExteriaUploadJob *)job {
     exteria_file_state state = job->transfer.state;
+    if ([self sendIsCancelled:job]) {
+        exteria_status cancelled = exteria_file_cancel(&job->transfer);
+        if (cancelled != EXTERIA_OK) NSLog(@"exteria: the stopped upload did not close cleanly: %s", exteria_status_name(cancelled));
+        [self failUpload:job error:@"CANCELLED"];
+        return;
+    }
     if (state == EXTERIA_FILE_DONE && job->albumDone) {
         [self submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
             exteria_tl_value *file = NULL;
@@ -368,7 +389,30 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
             [self failUpload:job error:error];
             return;
         }
+        [self reportProgressOfUpload:job];
         [self post:^{ [self pumpUpload:job]; }];
+    }];
+}
+
+/* worker only: only a file that goes out in a message of the chat has a pending message to cancel or to show progress on */
+- (BOOL)isMessageUpload:(ExteriaUploadJob *)job {
+    return job->randomId != 0 && job->completion && !job->albumDone && !job->stickerDone && !job->profilePhoto && !job->storyPhoto;
+}
+
+- (BOOL)sendIsCancelled:(ExteriaUploadJob *)job {
+    return [self isMessageUpload:job] && [self workerSendIsCancelled:job->randomId];
+}
+
+- (void)reportProgressOfUpload:(ExteriaUploadJob *)job {
+    if (![self isMessageUpload:job] || job->transfer.size == 0) return;
+    NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:job->randomId], @"randomId",
+                          [NSNumber numberWithFloat:(float)((double)job->transfer.offset / (double)job->transfer.size)], @"fraction", nil];
+    [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaUploadProgressNotification object:self userInfo:info]; }];
+}
+
+- (void)cancelSendWithRandomId:(long long)randomId {
+    [self post:^{
+        [self workerCancelSend:randomId];
     }];
 }
 
@@ -389,6 +433,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     }
     ExteriaSendCompletion done = [job->completion retain];
     NSString *delivered = [[error copy] autorelease];
+    [self workerForgetSend:job->randomId];
     [self deliverMain:^{ done(0, delivered); [done release]; }];
     [job release];
 }
@@ -646,6 +691,7 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
     exteria_upload_spec spec = ExteriaSpec(kind, outgoing->durationMs, outgoing->width, outgoing->height);
     spec.reply_to = replyTo;
     spec.spoiler = outgoing->spoiler ? 1 : 0;
+    spec.view_once = outgoing->viewOnce && kind != EXTERIA_UPLOAD_FILE ? 1 : 0;
     if (!ExteriaUploadCaption(&spec, outgoing->caption)) { completion(0, @"CAPTION_TOO_LONG"); return; }
     if (kind == EXTERIA_UPLOAD_FILE) {
         int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", outgoing->name.UTF8String);
@@ -710,6 +756,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
         NSString *error = nil;
         if (result->status != EXTERIA_OK) {
             error = ExteriaRpcErrorName(result);
+            NSLog(@"exteria: history failed for peer %d:%lld topic %d offset %d: %@", peer.kind, (long long)peer.id, peer.topic_id, beforeId, error);
         } else {
             exteria_message_row *rows = calloc(EXTERIA_MESSAGES_MAX, sizeof(*rows));
             size_t count = 0;
@@ -735,7 +782,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                     if (message) [messages addObject:message];
                 }
                 ExteriaApplyMarkups(messages, result->value);
-                people = ExteriaPeopleOfAnswer(result->value);
+                people = ExteriaPeopleOfAnswer(self, result->value);
             } else {
                 NSLog(@"exteria: messages.getHistory answer rejected");
                 error = @"INTERNAL";
@@ -778,7 +825,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                 if (message) [messages addObject:message];
             }
             ExteriaApplyMarkups(messages, result->value);
-            people = ExteriaPeopleOfAnswer(result->value);
+            people = ExteriaPeopleOfAnswer(self, result->value);
         } else {
             NSLog(@"exteria: messages.search for %s answer rejected", what);
             error = @"INTERNAL";
@@ -1138,6 +1185,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
 #pragma mark sending
 
 - (void)finishSend:(const exteria_mt_rpc_result *)result randomId:(long long)randomId completion:(ExteriaSendCompletion)done {
+    [self workerForgetSend:randomId];
     int32_t serverId = 0;
     NSString *error = nil;
     if (result->status != EXTERIA_OK) {
@@ -1264,6 +1312,46 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
     }];
 }
 
+- (void)markMentionsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    if (ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) { if (completion) completion(@"NOT_SENT"); return; }
+    [self markContentsRead:ids dialog:dialog completion:completion];
+}
+
+/* the ghost mode does not apply here: opening a one-time photo is the point where the server must hear that it was seen, or it stays openable */
+- (void)markContentsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    if (!ids.count || ids.count > EXTERIA_MESSAGES_MAX) { if (completion) completion(@"NOT_SENT"); return; }
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    NSArray *messages = [ids copy];
+    void (^done)(NSString *) = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        exteria_tl_value *list = exteria_tl_new_vec(arena, (uint32_t)messages.count);
+        *request = exteria_tl_new_obj(arena, peer.kind == 3 ? "channels.readMessageContents" : "messages.readMessageContents");
+        if (!list || !*request) return EXTERIA_E_NOMEM;
+        for (NSUInteger i = 0; i < messages.count; ++i) {
+            int32_t value = [[messages objectAtIndex:i] intValue];
+            if (value <= 0) return EXTERIA_E_ARG;
+            exteria_tl_value *item = exteria_tl_new_i32(arena, value);
+            if (!item) return EXTERIA_E_NOMEM;
+            exteria_status status = exteria_tl_vec_set(list, (uint32_t)i, item);
+            if (status != EXTERIA_OK) return status;
+        }
+        exteria_status status = exteria_tl_set(*request, "id", list);
+        if (status == EXTERIA_OK && peer.kind == 3) {
+            exteria_tl_value *channel = exteria_tl_new_obj(arena, "inputChannel");
+            if (!channel || !peer.access_hash) return EXTERIA_E_ARG;
+            status = exteria_tl_set_i64(arena, channel, "channel_id", peer.id);
+            if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, channel, "access_hash", peer.access_hash);
+            if (status == EXTERIA_OK) status = exteria_tl_set(*request, "channel", channel);
+        }
+        return status;
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        if (!error && !(peer.kind == 3 ? exteria_tl_is(result->value, EXTERIA_TL_ID_boolTrue) : exteria_tl_is(result->value, EXTERIA_TL_ID_messages_affectedMessages))) error = @"MALFORMED";
+        if (error) { [self noteRpcError:error]; NSLog(@"exteria: marking contents read failed: %@", error); }
+        [self deliverMain:^{ if (done) done(error); [done release]; [messages release]; }];
+    }];
+}
+
 #pragma mark watching
 
 /* worker only: the visit callback of the store page; a message that cannot be shown is skipped */
@@ -1290,7 +1378,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
         NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
         ExteriaPerson *person = nil;
         if (!error) {
-            person = [ExteriaPeopleOfAnswer(result->value) objectForKey:[NSNumber numberWithLongLong:-channelId]];
+            person = [ExteriaPeopleOfAnswer(self, result->value) objectForKey:[NSNumber numberWithLongLong:-channelId]];
             if (!person.accessHash) error = @"CHANNEL_INVALID";
         }
         [self noteRpcError:error];
@@ -1316,7 +1404,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
                 NSLog(@"exteria: group roles could not be read: %s", exteria_status_name(status));
                 error = @"INTERNAL";
             } else {
-                people = ExteriaPeopleOfAnswer(result->value);
+                people = ExteriaPeopleOfAnswer(self, result->value);
                 for (size_t i = 0; i < count; ++i) {
                     NSString *role = rows[i].rank[0] ? [NSString stringWithUTF8String:rows[i].rank]
                         : NSLocalizedString(rows[i].owner ? @"chat.role.owner" : @"chat.role.admin", nil);

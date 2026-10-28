@@ -15,7 +15,8 @@ NSMutableArray *ExteriaSavedDeletedOfPeer(exteria_store *store, exteria_peer pee
 exteria_peer_ref ExteriaPeerRefOfDialog(ExteriaDialog *dialog);
 
 /* users and channel senders keyed as in chat history, on the worker thread */
-NSMutableDictionary *ExteriaPeopleOfAnswer(const exteria_tl_value *answer);
+/* a person or channel seen in part (min) has no photo that can be fetched, so the one the store holds whole stands in for it; worker only, since it reads the store */
+NSMutableDictionary *ExteriaPeopleOfAnswer(ExteriaSession *session, const exteria_tl_value *answer);
 
 /* the entities of a message in the rows exteria_send_text_request reads, and the pool their link strings point into, which has to live as long as the rows */
 NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **strings, size_t *count);
@@ -43,6 +44,10 @@ exteria_status ExteriaApplySendAs(ExteriaSession *session, const exteria_peer_re
 - (void)setKeepMask:(uint32_t)mask;
 /* worker only: stores the messages of a history answer when deleted messages are kept */
 - (void)keepMessagesOfAnswer:(const exteria_tl_value *)answer;
+/* worker only: the upload of a pending message was stopped by the person; the next step of the upload reads it and forgets it at the end */
+- (void)workerCancelSend:(long long)randomId;
+- (BOOL)workerSendIsCancelled:(long long)randomId;
+- (void)workerForgetSend:(long long)randomId;
 - (int64_t)workerAccount;
 - (int32_t)workerDc;
 /* the next step of an upload runs on the worker; the declarations the chat code shares */
