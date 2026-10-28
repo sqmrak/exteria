@@ -6,6 +6,7 @@ static NSString *const ExteriaPasscodeHashKey = @"exteria.passcode.hash";
 static NSString *const ExteriaPasscodeSaltKey = @"exteria.passcode.salt";
 static NSString *const ExteriaPasscodeTypeKey = @"exteria.passcode.type";
 static NSString *const ExteriaPasscodeAutoLockKey = @"exteria.passcode.autolock";
+static NSString *const ExteriaPasscodeBiometricKey = @"exteria.passcode.biometric";
 static NSString *const ExteriaPasscodeFailuresKey = @"exteria.passcode.failures";
 static NSString *const ExteriaPasscodeUntilKey = @"exteria.passcode.until";
 
@@ -51,6 +52,7 @@ void ExteriaPasscodeClear(void) {
     [defaults removeObjectForKey:ExteriaPasscodeHashKey];
     [defaults removeObjectForKey:ExteriaPasscodeSaltKey];
     [defaults removeObjectForKey:ExteriaPasscodeTypeKey];
+    [defaults removeObjectForKey:ExteriaPasscodeBiometricKey];
     [defaults removeObjectForKey:ExteriaPasscodeFailuresKey];
     [defaults removeObjectForKey:ExteriaPasscodeUntilKey];
     if (![defaults synchronize]) NSLog(@"exteria: the removal of the passcode was not saved");
@@ -97,4 +99,14 @@ uint32_t ExteriaPasscodeAutoLock(void) {
 
 void ExteriaPasscodeSetAutoLock(uint32_t seconds) {
     [[NSUserDefaults standardUserDefaults] setInteger:(NSInteger)seconds forKey:ExteriaPasscodeAutoLockKey];
+}
+
+BOOL ExteriaPasscodeBiometricEnabled(void) {
+    return ExteriaPasscodeEnabled() && [[NSUserDefaults standardUserDefaults] boolForKey:ExteriaPasscodeBiometricKey];
+}
+
+void ExteriaPasscodeSetBiometric(BOOL on) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:on forKey:ExteriaPasscodeBiometricKey];
+    if (![defaults synchronize]) NSLog(@"exteria: the biometric choice was not saved");
 }

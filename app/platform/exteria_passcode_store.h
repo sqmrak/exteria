@@ -25,3 +25,7 @@ NSUInteger ExteriaPasscodeWaitRemaining(void);
 /* seconds away that the app allows before it asks for the code again: 0 never, 1 on every return */
 uint32_t ExteriaPasscodeAutoLock(void);
 void ExteriaPasscodeSetAutoLock(uint32_t seconds);
+
+/* the sensor may open the lock in place of the code; it never replaces the code, which stays the way in when the sensor fails, and it goes with the code */
+BOOL ExteriaPasscodeBiometricEnabled(void);
+void ExteriaPasscodeSetBiometric(BOOL on);

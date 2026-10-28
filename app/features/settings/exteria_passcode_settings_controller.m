@@ -1,5 +1,6 @@
 #import "exteria_passcode_settings_controller.h"
 
+#import "exteria_biometric.h"
 #import "exteria_passcode_flow_controller.h"
 #import "exteria_passcode_store.h"
 #import "exteria_theme.h"
@@ -72,6 +73,20 @@ static NSString *ExteriaAutoLockTitle(uint32_t seconds) {
     [self presentViewController:flow animated:YES completion:nil];
 }
 
+/* the sensor is asked once before the switch stays on, so a face or finger that cannot be read never leaves a lock that only looks safe */
+- (void)setBiometric:(BOOL)on {
+    if (!on) {
+        ExteriaPasscodeSetBiometric(NO);
+        [self rebuild];
+        return;
+    }
+    ExteriaWeakReference *weak = _weak;
+    ExteriaBiometricEvaluate(NSLocalizedString(@"passcode.biometric.reason", nil), ^(BOOL matched) {
+        if (matched) ExteriaPasscodeSetBiometric(YES);
+        [(ExteriaPasscodeSettingsController *)weak.target rebuild];
+    });
+}
+
 - (void)chooseAutoLock {
     ExteriaWeakReference *weak = _weak;
     NSMutableArray *options = [NSMutableArray array];
@@ -107,6 +122,15 @@ static NSString *ExteriaAutoLockTitle(uint32_t seconds) {
                                                                   tap:^{ [(ExteriaPasscodeSettingsController *)weak.target chooseAutoLock]; }];
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"passcode.auto.info", nil)
                                                                  rows:[NSArray arrayWithObjects:change, auto_, nil]]];
+        ExteriaBiometricKind kind = ExteriaBiometricAvailable();
+        if (kind != ExteriaBiometricNone) {
+            ExteriaSettingsRow *sensor = [ExteriaSettingsRow switchRowWithSymbol:ExteriaSymbolLock tone:ExteriaSettingsTonePurple title:ExteriaBiometricName(kind)
+                                                                        subtitle:nil on:ExteriaPasscodeBiometricEnabled() toggle:^(BOOL on) {
+                [(ExteriaPasscodeSettingsController *)weak.target setBiometric:on];
+            }];
+            [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:[NSString stringWithFormat:NSLocalizedString(@"passcode.biometric.info", nil), ExteriaBiometricName(kind)]
+                                                                     rows:[NSArray arrayWithObject:sensor]]];
+        }
     }
     self.sections = sections;
     [self reloadSettings];

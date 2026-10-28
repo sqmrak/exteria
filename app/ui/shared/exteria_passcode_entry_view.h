@@ -17,6 +17,10 @@
 /* a pin is full, or the person pressed done on a password; main thread */
 @property (nonatomic, copy) void (^submit)(NSString *code);
 
+/* the name of the sensor on a button beside the code, nil for no button; pressing it calls biometric, main thread */
+@property (nonatomic, copy) NSString *biometricTitle;
+@property (nonatomic, copy) void (^biometric)(void);
+
 /* drops what was typed */
 - (void)reset;
 /* the dots shake sideways, and what was typed is dropped */

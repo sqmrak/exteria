@@ -16,6 +16,7 @@
     NSMutableArray *_dots;
     NSMutableArray *_keys;
     UIButton *_delete;
+    UIButton *_biometricButton;
     UITextField *_field;
     NSMutableString *_typed;
     exteria_passcode_type _type;
@@ -28,6 +29,7 @@
 @implementation ExteriaPasscodeEntryView
 
 @synthesize submit = _submit;
+@synthesize biometric = _biometric;
 @synthesize topInset = _topInset;
 @synthesize inputEnabled = _inputEnabled;
 
@@ -80,6 +82,14 @@
     [_delete addTarget:self action:@selector(deletePressed) forControlEvents:UIControlEventTouchUpInside];
     _delete.accessibilityLabel = NSLocalizedString(@"passcode.delete", nil);
     [self addSubview:_delete];
+    _biometricButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _biometricButton.titleLabel.font = ExteriaFontSemibold(14);
+    _biometricButton.titleLabel.adjustsFontSizeToFitWidth = YES;
+    _biometricButton.titleLabel.minimumFontSize = 10;
+    [_biometricButton setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
+    [_biometricButton addTarget:self action:@selector(biometricPressed) forControlEvents:UIControlEventTouchUpInside];
+    _biometricButton.hidden = YES;
+    [self addSubview:_biometricButton];
     _field = [[UITextField alloc] init];
     _field.backgroundColor = ExteriaColorField();
     _field.layer.cornerRadius = 10;
@@ -110,6 +120,8 @@
     [_dots release];
     [_keys release];
     [_delete release];
+    [_biometricButton release];
+    [_biometric release];
     [_field release];
     [_typed release];
     [_submit release];
@@ -153,12 +165,27 @@
     _messageLabel.text = message;
 }
 
+- (NSString *)biometricTitle {
+    return [_biometricButton titleForState:UIControlStateNormal];
+}
+
+- (void)setBiometricTitle:(NSString *)title {
+    [_biometricButton setTitle:title forState:UIControlStateNormal];
+    _biometricButton.accessibilityLabel = title;
+    _biometricButton.hidden = title.length == 0;
+}
+
+- (void)biometricPressed {
+    if (_inputEnabled && _biometric) _biometric();
+}
+
 - (void)setInputEnabled:(BOOL)enabled {
     _inputEnabled = enabled;
     self.userInteractionEnabled = enabled;
     self.alpha = 1;
     for (UIButton *key in _keys) key.enabled = enabled;
     _delete.enabled = enabled;
+    _biometricButton.enabled = enabled;
     _field.enabled = enabled;
 }
 
@@ -290,6 +317,7 @@
     if (!pin) {
         CGFloat fieldWidth = MIN(width - 48, 320);
         _field.frame = CGRectMake((width - fieldWidth) / 2, below + 8, fieldWidth, FIELD_HEIGHT);
+        _biometricButton.frame = CGRectMake((width - fieldWidth) / 2, below + 8 + FIELD_HEIGHT + 12, fieldWidth, 40);
         return;
     }
     CGFloat dotsWidth = EXTERIA_PASSCODE_PIN_LEN * DOT_SIDE + (EXTERIA_PASSCODE_PIN_LEN - 1) * DOT_GAP;
@@ -312,6 +340,8 @@
                 key.layer.cornerRadius = side / 2;
             } else if (column == 2) {
                 _delete.frame = frame;
+            } else {
+                _biometricButton.frame = frame;
             }
         }
     }
