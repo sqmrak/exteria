@@ -370,6 +370,10 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
 }
 
 - (void)drawAtPoint:(CGPoint)origin {
+    [self drawAtPoint:origin hidingCustomEmoji:0];
+}
+
+- (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)hiddenDocument {
     if (!_lineCount) return;
     CGContextRef context = UIGraphicsGetCurrentContext();
     BOOL covered = _hasSpoilers && !_spoilersRevealed;
@@ -420,6 +424,7 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
             NSNumber *entry = [attributes objectForKey:ExteriaEmojiAttribute];
             NSNumber *document = [attributes objectForKey:ExteriaCustomEmojiAttribute];
             if (!entry && !document) continue;
+            if (document && hiddenDocument && [document longLongValue] == hiddenDocument) continue;
             /* an emoji inside a covered spoiler stays hidden with the words around it */
             if (covered && [attributes objectForKey:ExteriaSpoilerAttribute]) continue;
             CGPoint position;

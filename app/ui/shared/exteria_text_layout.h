@@ -55,6 +55,7 @@ extern NSString *const ExteriaSpoilerTarget;
 
 /* draws with the top left corner of the text box at origin, in the current UIKit context */
 - (void)drawAtPoint:(CGPoint)origin;
+- (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)document;
 /* the address of the link under point (relative to the text box), nil when there is none */
 - (NSString *)linkAtPoint:(CGPoint)point;
 - (long long)customEmojiAtPoint:(CGPoint)point;

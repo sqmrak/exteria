@@ -13,6 +13,7 @@
     CGSize _shadowOffset;
     UIColor *_prefixColor;
     NSUInteger _prefixLength;
+    long long _hiddenCustomEmoji;
 }
 
 @property (nonatomic, copy) NSString *text;
@@ -29,6 +30,8 @@
 /* the engraved shadow of the old bars, with the meaning UILabel gives it: a nil color draws none, and the offset is in points with y down */
 @property (nonatomic, retain) UIColor *shadowColor;
 @property (nonatomic, assign) CGSize shadowOffset;
+/* leave the emoji's space in the text while an animation draws it */
+@property (nonatomic, assign) long long hiddenCustomEmoji;
 
 /* the first prefixLength characters are drawn in prefixColor, such as the red "Draft:" before the words of a draft; zero length draws one color */
 - (void)setPrefixLength:(NSUInteger)length color:(UIColor *)color;

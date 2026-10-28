@@ -111,6 +111,13 @@
     [self setNeedsDisplay];
 }
 
+- (long long)hiddenCustomEmoji { return _hiddenCustomEmoji; }
+- (void)setHiddenCustomEmoji:(long long)document {
+    if (_hiddenCustomEmoji == document) return;
+    _hiddenCustomEmoji = document;
+    [self setNeedsDisplay];
+}
+
 - (void)setPrefixLength:(NSUInteger)length color:(UIColor *)color {
     if (length == _prefixLength && (length == 0 || color == _prefixColor)) return;
     _prefixLength = color ? length : 0;
@@ -202,7 +209,7 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     CGContextSaveGState(context);
     if (_shadowColor) CGContextSetShadowWithColor(context, _shadowOffset, 0, _shadowColor.CGColor);
     /* the text sits on the vertical middle, as a label's does */
-    [layout drawAtPoint:CGPointMake(0, floor((self.bounds.size.height - layout.size.height) / 2))];
+    [layout drawAtPoint:CGPointMake(0, floor((self.bounds.size.height - layout.size.height) / 2)) hidingCustomEmoji:_hiddenCustomEmoji];
     CGContextRestoreGState(context);
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(self);
 }

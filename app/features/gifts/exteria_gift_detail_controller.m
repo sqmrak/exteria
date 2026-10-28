@@ -408,10 +408,11 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
         [self autorelease];
         if (!data) return;
         _animation = [[ExteriaLottieView alloc] initWithPackedData:data key:file.key];
+        UIImageView *picture = _picture;
+        _animation.firstFrameHandler = ^{ picture.image = nil; };
         [_scroll addSubview:_animation];
         [self.view setNeedsLayout];
         [_animation setPlaying:YES];
-        _picture.hidden = YES;
     }];
 }
 

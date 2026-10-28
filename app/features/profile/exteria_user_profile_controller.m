@@ -397,6 +397,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 
 - (void)dropStatusAnimation {
     ++_statusAnimationToken;
+    _name.hiddenCustomEmoji = 0;
     _statusAnimationDocument = 0;
     [_statusAnimation removeFromSuperview];
     [_statusAnimation release];
@@ -445,12 +446,19 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     [_statusAnimation removeFromSuperview];
     [_statusAnimation release];
     _statusAnimation = [view retain];
+    ExteriaWeakReference *weak = _weak;
+    NSUInteger token = _statusAnimationToken;
+    view.firstFrameHandler = ^{
+        ExteriaUserProfileController *profile = weak.target;
+        if (profile && token == profile->_statusAnimationToken)
+            profile->_name.hiddenCustomEmoji = profile->_statusAnimationDocument;
+    };
     [_head addSubview:view];
     [self placeStatusAnimation];
     [view setPlaying:self.isViewLoaded && self.view.window != nil];
 }
 
-/* over the still picture of the emoji, which the name draws and which stays below it until the first frame of the animation is there */
+/* the name keeps the still picture until the animation has its first frame */
 - (void)placeStatusAnimation {
     if (!_statusAnimation) return;
     CGRect box = [_name customEmojiRect:_statusAnimationDocument];
