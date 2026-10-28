@@ -80,6 +80,19 @@ static int vec_i32(const exteria_tl_value *vec, uint32_t index, int32_t *out) {
     return 1;
 }
 
+/* a profile color picked from the list names only its id and the emoji; the colors come from the list */
+static void profile_color_read(const exteria_tl_value *user, exteria_person_row *out) {
+    const exteria_tl_value *color = exteria_tl_get(user, "profile_color");
+    int32_t id = 0;
+    int64_t emoji = 0;
+    out->has_profile_color = 0;
+    if (!exteria_tl_is(color, EXTERIA_TL_ID_peerColor) || exteria_tl_get_i32(color, "color", &id) != EXTERIA_OK || id < 0) return;
+    exteria_tl_get_i64(color, "background_emoji_id", &emoji);
+    out->has_profile_color = 1;
+    out->profile_color_id = id;
+    out->profile_color_emoji = emoji > 0 ? emoji : 0;
+}
+
 /* a collectible profile color wins over a collectible emoji status; a plain color index has no colors of its own here and leaves the profile as it is */
 static void backdrop_read(const exteria_tl_value *user, exteria_person_row *out) {
     const exteria_tl_value *color = exteria_tl_get(user, "profile_color"), *status = exteria_tl_get(user, "emoji_status");
@@ -148,6 +161,7 @@ exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person
     out->premium = exteria_tl_has(user, "premium") ? 1 : 0;
     exteria_emoji_status_read(user, &out->emoji_status, &out->emoji_status_until);
     backdrop_read(user, out);
+    profile_color_read(user, out);
     out->deleted = exteria_tl_has(user, "deleted") ? 1 : 0;
     {
         /* a collectible color has no id of its own and leaves the name to the default */
@@ -261,5 +275,55 @@ exteria_status exteria_contacts_parse(const exteria_tl_value *answer, exteria_pe
         if (exteria_person_parse(users->u.vec.items[i], &rows[n]) == EXTERIA_OK) ++n;
     }
     *count = n;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_profile_colors_request(exteria_arena *arena, int32_t hash, exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "help.getPeerProfileColors");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_i32(arena, request, "hash", hash);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+/* the one or two background colors of a help.peerColorProfileSet; zero colors is no set */
+static int profile_set_read(const exteria_tl_value *set, uint32_t bg[2]) {
+    const exteria_tl_value *colors;
+    int32_t first = 0, second = 0;
+    if (!exteria_tl_is(set, EXTERIA_TL_ID_help_peerColorProfileSet)) return 0;
+    colors = exteria_tl_get(set, "bg_colors");
+    if (!vec_i32(colors, 0, &first)) return 0;
+    if (!vec_i32(colors, 1, &second)) second = first;
+    bg[0] = (uint32_t)first & 0xFFFFFFu;
+    bg[1] = (uint32_t)second & 0xFFFFFFu;
+    return 1;
+}
+
+exteria_status exteria_profile_colors_parse(const exteria_tl_value *answer, exteria_profile_color *rows, size_t cap, size_t *count, int32_t *hash) {
+    const exteria_tl_value *options;
+    uint32_t i;
+    if (count) *count = 0;
+    if (hash) *hash = 0;
+    if (!answer || !rows || !count || !cap) return EXTERIA_E_ARG;
+    if (exteria_tl_is(answer, EXTERIA_TL_ID_help_peerColorsNotModified)) return EXTERIA_E_NOTFOUND;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_help_peerColors)) return EXTERIA_E_MALFORMED;
+    if (hash && exteria_tl_get_i32(answer, "hash", hash) != EXTERIA_OK) *hash = 0;
+    options = exteria_tl_get(answer, "colors");
+    if (!options || options->kind != EXTERIA_TL_V_VEC) return EXTERIA_E_MALFORMED;
+    for (i = 0; i < options->u.vec.count && *count < cap; ++i) {
+        const exteria_tl_value *option = options->u.vec.items[i];
+        exteria_profile_color row;
+        int32_t id = 0;
+        memset(&row, 0, sizeof(row));
+        if (!exteria_tl_is(option, EXTERIA_TL_ID_help_peerColorOption) || exteria_tl_get_i32(option, "color_id", &id) != EXTERIA_OK || id < 0) continue;
+        if (!profile_set_read(exteria_tl_get(option, "colors"), row.bg)) continue;
+        row.id = id;
+        row.has_dark = (uint8_t)profile_set_read(exteria_tl_get(option, "dark_colors"), row.dark_bg);
+        rows[(*count)++] = row;
+    }
     return EXTERIA_OK;
 }

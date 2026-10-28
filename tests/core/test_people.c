@@ -227,6 +227,72 @@ static void test_backdrop(void) {
     CHECK_EQ_INT(row.has_backdrop, 0);
 }
 
+static exteria_tl_value *colors_of(uint32_t first, uint32_t second, int two) {
+    exteria_tl_value *items[2], *colors = obj("help.peerColorProfileSet");
+    items[0] = exteria_tl_new_i32(&arena, (int32_t)first);
+    items[1] = exteria_tl_new_i32(&arena, (int32_t)second);
+    set(colors, "palette_colors", vec_of(items, 1));
+    set(colors, "bg_colors", vec_of(items, two ? 2 : 1));
+    set(colors, "story_colors", vec_of(items, 1));
+    return colors;
+}
+
+static exteria_tl_value *option(int32_t id, exteria_tl_value *light, exteria_tl_value *dark) {
+    exteria_tl_value *o = obj("help.peerColorOption");
+    set_i32(o, "color_id", id);
+    if (light) set(o, "colors", light);
+    if (dark) set(o, "dark_colors", dark);
+    return o;
+}
+
+static void test_profile_colors(void) {
+    exteria_person_row row;
+    exteria_profile_color rows[8];
+    exteria_tl_value *u = user(41, "Tint", NULL), *color, *request = NULL, *answer, *items[4];
+    size_t count = 0;
+    int32_t hash = -1;
+    /* a plain color index and its emoji on the user */
+    color = obj("peerColor");
+    set_i32(color, "color", 12);
+    set_i64(color, "background_emoji_id", 555);
+    set(u, "profile_color", color);
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_profile_color, 1);
+    CHECK_EQ_INT(row.profile_color_id, 12);
+    CHECK_EQ_INT(row.profile_color_emoji, 555);
+    CHECK_EQ_INT(row.has_backdrop, 0);
+    set(u, "profile_color", obj("peerColor"));
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.has_profile_color, 0);
+    /* the request and the list: dark colors when the server sends them, one color for both ends, and no row for an option without colors */
+    CHECK_EQ_INT(exteria_profile_colors_request(&arena, 77, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_help_getPeerProfileColors);
+    CHECK_EQ_INT(exteria_profile_colors_request(NULL, 0, &request), EXTERIA_E_ARG);
+    items[0] = option(3, colors_of(0xAA0000, 0xBB1111, 1), colors_of(0x220000, 0x331111, 1));
+    items[1] = option(4, colors_of(0x00AA00, 0, 0), NULL);
+    items[2] = option(5, NULL, NULL);
+    answer = obj("help.peerColors");
+    set_i32(answer, "hash", 4242);
+    set(answer, "colors", vec_of(items, 3));
+    CHECK_EQ_INT(exteria_profile_colors_parse(answer, rows, 8, &count, &hash), EXTERIA_OK);
+    CHECK_EQ_INT(count, 2);
+    CHECK_EQ_INT(hash, 4242);
+    CHECK_EQ_INT(rows[0].id, 3);
+    CHECK_EQ_INT(rows[0].bg[0], 0xAA0000u);
+    CHECK_EQ_INT(rows[0].bg[1], 0xBB1111u);
+    CHECK_EQ_INT(rows[0].has_dark, 1);
+    CHECK_EQ_INT(rows[0].dark_bg[0], 0x220000u);
+    CHECK_EQ_INT(rows[1].id, 4);
+    CHECK_EQ_INT(rows[1].bg[0], 0x00AA00u);
+    CHECK_EQ_INT(rows[1].bg[1], 0x00AA00u);
+    CHECK_EQ_INT(rows[1].has_dark, 0);
+    CHECK_EQ_INT(exteria_profile_colors_parse(answer, rows, 1, &count, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(count, 1);
+    CHECK_EQ_INT(exteria_profile_colors_parse(obj("help.peerColorsNotModified"), rows, 8, &count, &hash), EXTERIA_E_NOTFOUND);
+    CHECK_EQ_INT(exteria_profile_colors_parse(obj("boolTrue"), rows, 8, &count, &hash), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_profile_colors_parse(NULL, rows, 8, &count, &hash), EXTERIA_E_ARG);
+}
+
 static void test_contacts(void) {
     exteria_person_row rows[3];
     size_t count;
@@ -404,6 +470,7 @@ int main(void) {
     test_person();
     test_emoji_status();
     test_backdrop();
+    test_profile_colors();
     test_contacts();
     test_channel_person();
     test_sender_kinds();

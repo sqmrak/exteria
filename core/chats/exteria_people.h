@@ -43,6 +43,9 @@ typedef struct exteria_person_row {
     int32_t name_color;         /* its id, 0 to 6 free for everyone and above them for Premium accounts */
     /* the backdrop of the profile, from a collectible profile color or else a collectible emoji status: the radial colors as 0xRRGGBB, the color of the
        tiles and of the text over it, and the emoji that tiles it */
+    uint8_t has_profile_color;  /* the user chose a profile color from the server's list (a plain PeerColor on profile_color) */
+    int32_t profile_color_id;
+    int64_t profile_color_emoji;    /* the emoji that tiles it, zero without one */
     uint8_t has_backdrop;
     uint32_t backdrop_center;
     uint32_t backdrop_edge;
@@ -72,6 +75,20 @@ exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person
 
 /* a channel or community sender, including forbidden objects that still carry a title */
 exteria_status exteria_channel_person_parse(const exteria_tl_value *channel, exteria_person_row *out);
+
+/* the backgrounds of the profile colors the server lists, by the id a user's profile_color names */
+#define EXTERIA_PROFILE_COLORS_MAX 64
+typedef struct exteria_profile_color {
+    int32_t id;
+    uint32_t bg[2];         /* the two ends of the blend as 0xRRGGBB; a single color is both */
+    uint32_t dark_bg[2];    /* the same for the dark theme, valid when has_dark is set */
+    uint8_t has_dark;
+} exteria_profile_color;
+
+/* help.getPeerProfileColors; hash is the one of the last answer, zero for the first */
+exteria_status exteria_profile_colors_request(exteria_arena *arena, int32_t hash, exteria_tl_value **out);
+/* a help.peerColors answer in server order, at most cap rows; options without colors are left out. help.peerColorsNotModified is EXTERIA_E_NOTFOUND */
+exteria_status exteria_profile_colors_parse(const exteria_tl_value *answer, exteria_profile_color *rows, size_t cap, size_t *count, int32_t *hash);
 
 #define EXTERIA_GROUP_ROLES_MAX 200
 typedef struct exteria_group_role {
