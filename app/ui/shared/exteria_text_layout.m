@@ -13,6 +13,7 @@ static NSString *const ExteriaLinkAttribute = @"ExteriaLink";
 static NSString *const ExteriaEmojiAttribute = @"ExteriaEmoji";
 static NSString *const ExteriaCustomEmojiAttribute = @"ExteriaCustomEmoji";
 static NSString *const ExteriaStrikeAttribute = @"ExteriaStrike";
+static NSString *const ExteriaQuoteAttribute = @"ExteriaQuote";
 static NSString *const ExteriaSpoilerAttribute = @"ExteriaSpoiler";
 static NSString *const ExteriaMonoAttribute = @"ExteriaMono";
 NSString *const ExteriaSpoilerTarget = @"exteria-spoiler:";
@@ -110,8 +111,9 @@ static NSMutableAttributedString *ExteriaStyledString(NSString *text, NSArray *e
         }
         case ExteriaTextStyleStrike: [string addAttribute:ExteriaStrikeAttribute value:[NSNumber numberWithBool:YES] range:range]; break;
         case ExteriaTextStyleSpoiler: [string addAttribute:ExteriaSpoilerAttribute value:[NSNumber numberWithBool:YES] range:range]; break;
-        /* a quote is shaped when the lines are broken, not here */
-        case ExteriaTextStyleQuote:
+        /* a quote is shaped when the lines are broken; it is marked here, because an emoji that is set as one character moves every index after it, which
+           the range of the entity would not follow */
+        case ExteriaTextStyleQuote: [string addAttribute:ExteriaQuoteAttribute value:[NSNumber numberWithBool:YES] range:range]; break;
         case ExteriaTextStyleCustomEmoji: break;
         case ExteriaTextStyleDate: {
             int single = kCTUnderlineStyleSingle;
@@ -259,9 +261,7 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
     layout->_ink = [color retain];
     layout->_width = width;
     layout->_hasSpoilers = NO;
-    NSMutableArray *quotes = [NSMutableArray array];
     for (ExteriaTextEntity *entity in entities) {
-        if (entity.style == ExteriaTextStyleQuote && NSMaxRange(entity.range) <= text.length) [quotes addObject:[NSValue valueWithRange:entity.range]];
         if (entity.style == ExteriaTextStyleSpoiler && NSMaxRange(entity.range) <= text.length) layout->_hasSpoilers = YES;
     }
 
@@ -282,11 +282,7 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
     CGFloat baseline = 0, widest = 0, previousDescent = 0;
     CFIndex start = 0;
     while (start < length && layout->_lines && layout->_origins && layout->_ascents && layout->_descents && layout->_quoted) {
-        BOOL quoted = NO;
-        for (NSValue *quote in quotes) {
-            NSRange r = [quote rangeValue];
-            if ((NSUInteger)start >= r.location && (NSUInteger)start < NSMaxRange(r)) quoted = YES;
-        }
+        BOOL quoted = [string attribute:ExteriaQuoteAttribute atIndex:(NSUInteger)start effectiveRange:NULL] != nil;
         CGFloat indent = quoted ? QUOTE_INDENT : 0, room = MAX(20, width - indent);
         if (layout->_lineCount == capacity) {
             capacity *= 2;
