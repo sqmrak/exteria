@@ -327,6 +327,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     UILabel *_pinnedTitle;
     ExteriaEmojiLabel *_pinnedText;
     int32_t _pinnedId;
+    NSUInteger _topicPinnedGeneration;
     int32_t _scrollTarget;
     int _scrollPages;
     UILabel *_toast;
@@ -1197,6 +1198,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 - (void)loadChannelFull {
+    if (_dialog.topicId > 0 && !_pinnedList) [self loadTopicPinned];
     ExteriaWeakReference *weak = _weak;
     [_session loadFullChannelOfDialog:_dialog completion:^(ExteriaFullChannel *channel, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
@@ -1220,6 +1222,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             [chat.view setNeedsLayout];
         }
         [chat loadSendAsOptions];
+        if (chat->_dialog.topicId > 0) return;
         if (channel.pinnedMessage > 0 && !chat->_pinnedList) {
             [chat loadPinned:channel.pinnedMessage];
             [chat countPinned];
@@ -1234,6 +1237,44 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }];
 }
 
+/* the full channel names a pin of the whole group, not the pins of the open topic */
+- (void)loadTopicPinned {
+    NSUInteger generation = ++_topicPinnedGeneration;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadPinnedMessagesOfDialog:_dialog completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        (void)people;
+        ExteriaChatController *chat = weak.target;
+        if (!chat || generation != chat->_topicPinnedGeneration) return;
+        if (!messages) {
+            NSLog(@"exteria: pinned messages of topic %d did not load: %@", (int)chat->_dialog.topicId, errorName);
+            return;
+        }
+        chat->_pinnedCount = (NSInteger)messages.count;
+        chat->_pinnedListButton.hidden = messages.count < 2;
+        if (messages.count) [chat showPinnedMessage:[messages objectAtIndex:0]];
+        else {
+            chat->_pinnedId = 0;
+            ++chat->_pinnedThumbToken;
+            chat->_pinnedThumb.image = nil;
+            chat->_pinnedThumb.hidden = YES;
+            chat->_pinnedBar.hidden = YES;
+            [chat.view setNeedsLayout];
+        }
+    }];
+}
+
+- (void)showPinnedMessage:(ExteriaMessage *)message {
+    NSString *line = message.text.length ? message.text : ExteriaPreviewWord(message.media.kind);
+    if (!message.text.length && message.media.kind == EXTERIA_PREVIEW_FILE && message.media.name.length) line = message.media.name;
+    NSRange newline = [line rangeOfString:@"\n"];
+    if (newline.location != NSNotFound) line = [line substringToIndex:newline.location];
+    _pinnedId = message.messageId;
+    _pinnedText.text = line;
+    [self showPinnedThumbOf:message];
+    _pinnedBar.hidden = line.length == 0;
+    [self.view setNeedsLayout];
+}
+
 /* the pinned message is fetched by id, and its first words or the word for its media stand in the bar */
 - (void)loadPinned:(int32_t)messageId {
     ExteriaWeakReference *weak = _weak;
@@ -1244,16 +1285,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             NSLog(@"exteria: the pinned message %d of channel %lld did not load: %@", (int)messageId, chat->_dialog.peerId, errorName);
             return;
         }
-        NSString *line = message.text.length ? message.text : ExteriaPreviewWord(message.media.kind);
-        /* a pinned file is told by its name */
-        if (!message.text.length && message.media.kind == EXTERIA_PREVIEW_FILE && message.media.name.length) line = message.media.name;
-        NSRange newline = [line rangeOfString:@"\n"];
-        if (newline.location != NSNotFound) line = [line substringToIndex:newline.location];
-        chat->_pinnedId = messageId;
-        chat->_pinnedText.text = line;
-        [chat showPinnedThumbOf:message];
-        chat->_pinnedBar.hidden = line.length == 0;
-        [chat.view setNeedsLayout];
+        [chat showPinnedMessage:message];
     }];
 }
 
