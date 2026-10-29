@@ -28,6 +28,7 @@
 #import "exteria_platform.h"
 #import "exteria_profile_edit_controller.h"
 #import "exteria_profile_feed.h"
+#import "exteria_rating_view.h"
 #import "exteria_profile_photo_picker.h"
 #import "exteria_session_profile.h"
 #import "exteria_sheet.h"
@@ -113,6 +114,7 @@
     ExteriaAvatarView *_avatar;
     ExteriaEmojiLabel *_name;
     UILabel *_status;
+    ExteriaRatingBadge *_ratingBadge;
     ExteriaProfileAction *_actions[3];
     ExteriaInfoCardView *_info;
     UIView *_signOutCard;
@@ -190,6 +192,7 @@
     [_avatar release];
     [_name release];
     [_status release];
+    [_ratingBadge release];
     for (int i = 0; i < 3; ++i) {
         [_actions[i] release];
         [_feeds[i] release];
@@ -245,6 +248,10 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _name = [_identity.name retain];
     _status = [_identity.line retain];
     _status.text = NSLocalizedString(@"profile.online", nil);
+    _ratingBadge = [[ExteriaRatingBadge alloc] initWithFrame:CGRectZero];
+    _ratingBadge.hidden = YES;
+    [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
+    [_identity addSubview:_ratingBadge];
 
     NSString *titles[3] = {NSLocalizedString(@"profile.photo", nil), NSLocalizedString(@"profile.edit", nil), NSLocalizedString(@"tab.settings", nil)};
     ExteriaSymbol symbols[3] = {ExteriaSymbolGallery, ExteriaSymbolCompose, ExteriaSymbolGear};
@@ -411,6 +418,11 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 }
 
 - (void)refreshProfile {
+    _ratingBadge.hidden = !_full.hasRating;
+    if (_full.hasRating) {
+        _ratingBadge.level = _full.rating.level;
+        _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)_full.rating.level];
+    }
     [_identity setName:_person.name developer:ExteriaPersonIsDeveloper(_person)];
     _barName.text = _person.name;
     _avatar.initials = _person.initials;
@@ -572,6 +584,9 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     CGFloat x = (width - contentWidth) / 2;
     CGFloat y = EXTERIA_IDENTITY_TOP;
     _identity.frame = CGRectMake(0, y, width, EXTERIA_IDENTITY_HEIGHT);
+    [_identity layoutIfNeeded];
+    CGFloat statusWidth = MIN(width - 70, ceil([_status sizeThatFits:CGSizeMake(width - 70, 22)].width));
+    _ratingBadge.frame = CGRectMake(floor((width - statusWidth) / 2) - 26, _status.frame.origin.y + 1, 22, 20);
     y += EXTERIA_IDENTITY_HEIGHT + GAP + 4;
     CGFloat each = (contentWidth - 2 * 10) / 3;
     for (int i = 0; i < 3; ++i) _actions[i].frame = CGRectMake(x + i * (each + 10), y, each, ACTION_HEIGHT);
@@ -653,6 +668,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _channelCard.hidden = channel == nil;
     if (channel) [_channelCard configureWithChannel:channel avatars:_avatars];
 }
+
+- (void)openRating { ExteriaShowRating(self.view.window, _full); }
 
 - (void)openMusic {
     if (!_person || !_media) return;

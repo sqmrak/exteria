@@ -36,6 +36,39 @@ static void test_full_user(void) {
     CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
     CHECK_EQ_INT(full.about[0], 0);
     CHECK_EQ_INT(full.require_premium, 0);
+    CHECK_EQ_INT(full.sharing_restricted, 0);
+    CHECK_EQ_INT(exteria_tl_set_flag(inner, "noforwards_peer_enabled"), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+    CHECK_EQ_INT(full.sharing_restricted, 1);
+    {
+        exteria_tl_value *other = obj("users.userFull"), *mine = obj("userFull");
+        set(other, "full_user", mine);
+        CHECK_EQ_INT(exteria_tl_set_flag(mine, "noforwards_my_enabled"), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_full_user_parse(other, &full), EXTERIA_OK);
+        CHECK_EQ_INT(full.sharing_restricted, 1);
+    }
+    {
+        exteria_tl_value *rating = obj("starsRating");
+        set(inner, "stars_rating", rating);
+        CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_E_MALFORMED);
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, rating, "level", -1), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, rating, "current_level_stars", -100), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, rating, "stars", -20), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, rating, "next_level_stars", 0), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+        CHECK(full.has_rating && full.rating.has_next);
+        CHECK_EQ_INT(full.rating.level, -1);
+        CHECK_EQ_INT(full.rating.stars, -20);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, rating, "next_level_stars", -100), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_E_MALFORMED);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, rating, "next_level_stars", 0), EXTERIA_OK);
+        set(inner, "stars_my_pending_rating", rating);
+        CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_E_MALFORMED);
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, inner, "stars_my_pending_rating_date", 123), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+        CHECK(full.has_pending_rating);
+        CHECK_EQ_INT(full.pending_rating_date, 123);
+    }
     CHECK_EQ_INT(exteria_tl_set_flag(inner, "contact_require_premium"), EXTERIA_OK);
     CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
     CHECK_EQ_INT(full.require_premium, 1);

@@ -1979,6 +1979,17 @@
 "chatset.reclock.10" = "After 10 seconds";
 "chatset.reclock.15" = "After 15 seconds";
 
+"rating.title" = "Rating";
+"rating.level" = "Level %d";
+"rating.pending" = "Your pending rating will be applied on %@.";
+"rating.preview" = "Preview";
+"rating.current" = "Current rating";
+"rating.about" = "This rating reflects your activity on Telegram. It is based on:";
+"rating.gifts" = "Gifts from Telegram: 100% of the Stars spent on gifts purchased from Telegram are added.";
+"rating.users" = "Gifts and posts from users: 20% of the Stars spent on gifts or posts from users and channels are added.";
+"rating.refunds" = "Refunds and conversions: 10 times the refunded Stars and 85% of purchased gifts converted to Stars are deducted.";
+"rating.ok" = "Understood";
+
 "group.title" = "Voice chat";
 "group.you" = "%@ (you)";
 "group.speaking" = "speaking";

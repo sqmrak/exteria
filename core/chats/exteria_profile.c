@@ -46,6 +46,19 @@ static const exteria_tl_value *find_entity(const exteria_tl_value *list, int64_t
     return NULL;
 }
 
+static exteria_status rating_parse(const exteria_tl_value *value, exteria_star_rating *rating) {
+    if (!exteria_tl_is(value, EXTERIA_TL_ID_starsRating) ||
+        exteria_tl_get_i32(value, "level", &rating->level) != EXTERIA_OK ||
+        exteria_tl_get_i64(value, "current_level_stars", &rating->current_level_stars) != EXTERIA_OK ||
+        exteria_tl_get_i64(value, "stars", &rating->stars) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    if (exteria_tl_has(value, "next_level_stars")) {
+        if (exteria_tl_get_i64(value, "next_level_stars", &rating->next_level_stars) != EXTERIA_OK ||
+            rating->next_level_stars <= rating->current_level_stars) return EXTERIA_E_MALFORMED;
+        rating->has_next = 1;
+    }
+    return EXTERIA_OK;
+}
+
 exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_full_user *out) {
     const exteria_tl_value *full, *users, *chats, *entity, *birthday;
     const uint8_t *data;
@@ -56,6 +69,16 @@ exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_f
     if (!exteria_tl_is(answer, EXTERIA_TL_ID_users_userFull)) return EXTERIA_E_MALFORMED;
     full = exteria_tl_get(answer, "full_user");
     if (!exteria_tl_is(full, EXTERIA_TL_ID_userFull)) return EXTERIA_E_MALFORMED;
+    if (exteria_tl_has(full, "stars_rating")) {
+        if (rating_parse(exteria_tl_get(full, "stars_rating"), &out->rating) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+        out->has_rating = 1;
+    }
+    if (exteria_tl_has(full, "stars_my_pending_rating")) {
+        if (rating_parse(exteria_tl_get(full, "stars_my_pending_rating"), &out->pending_rating) != EXTERIA_OK ||
+            exteria_tl_get_i32(full, "stars_my_pending_rating_date", &out->pending_rating_date) != EXTERIA_OK || out->pending_rating_date <= 0)
+            return EXTERIA_E_MALFORMED;
+        out->has_pending_rating = 1;
+    }
     if (exteria_tl_has(full, "about") && exteria_tl_get_bytes(full, "about", &data, &len) == EXTERIA_OK && data) {
         if (len >= sizeof(out->about)) {
             len = sizeof(out->about) - 1;
@@ -65,6 +88,7 @@ exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_f
         out->about[len] = 0;
     }
     out->require_premium = exteria_tl_has(full, "contact_require_premium") ? 1 : 0;
+    out->sharing_restricted = exteria_tl_has(full, "noforwards_my_enabled") || exteria_tl_has(full, "noforwards_peer_enabled");
     users = exteria_tl_get(answer, "users");
     chats = exteria_tl_get(answer, "chats");
     if (exteria_tl_get_i64(full, "id", &id) == EXTERIA_OK && id > 0) {

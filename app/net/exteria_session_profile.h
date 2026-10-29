@@ -3,6 +3,7 @@
 #import "exteria_dialog.h"
 #import "exteria_person.h"
 #import "exteria_session.h"
+#include "exteria_profile.h"
 
 /* the channel a profile shows under the name: the chat to open it, how many follow it and its newest message */
 @interface ExteriaPersonalChannel : NSObject {
@@ -29,6 +30,11 @@
     int32_t _birthdayYear;
     ExteriaPersonalChannel *_channel;
     ExteriaMedia *_music;
+    BOOL _hasRating;
+    BOOL _hasPendingRating;
+    int32_t _pendingRatingDate;
+    exteria_star_rating _rating;
+    exteria_star_rating _pendingRating;
 }
 @property (nonatomic, readonly, copy) NSString *about;
 /* the user as that answer names them, nil when it did not carry them */
@@ -43,6 +49,11 @@
 @property (nonatomic, readonly, retain) ExteriaPersonalChannel *channel;
 /* the song the profile shows first, nil when it has none */
 @property (nonatomic, readonly, retain) ExteriaMedia *music;
+@property (nonatomic, readonly) BOOL hasRating;
+@property (nonatomic, readonly) BOOL hasPendingRating;
+@property (nonatomic, readonly) int32_t pendingRatingDate;
+@property (nonatomic, readonly) exteria_star_rating rating;
+@property (nonatomic, readonly) exteria_star_rating pendingRating;
 @end
 
 /* the signed in person's own profile: the bio, the name, the username and the photo; implemented in

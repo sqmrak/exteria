@@ -44,6 +44,8 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
 @synthesize birthdayYear = _birthdayYear;
 @synthesize channel = _channel;
 @synthesize music = _music;
+@synthesize hasRating = _hasRating, hasPendingRating = _hasPendingRating, pendingRatingDate = _pendingRatingDate;
+@synthesize rating = _rating, pendingRating = _pendingRating;
 - (id)initWithRow:(const exteria_full_user *)row channel:(ExteriaPersonalChannel *)channel {
     self = [super init];
     if (!self) return nil;
@@ -56,6 +58,11 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
     _birthdayYear = row->birthday_year;
     _channel = [channel retain];
     if (row->has_music) _music = [[ExteriaMedia mediaWithInfo:&row->music] retain];
+    _hasRating = row->has_rating;
+    _hasPendingRating = row->has_pending_rating;
+    _pendingRatingDate = row->pending_rating_date;
+    _rating = row->rating;
+    _pendingRating = row->pending_rating;
     return self;
 }
 - (void)dealloc {

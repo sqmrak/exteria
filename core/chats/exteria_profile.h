@@ -14,6 +14,14 @@
 #define EXTERIA_USERNAME_MIN 5
 #define EXTERIA_USERNAME_MAX 32
 
+typedef struct exteria_star_rating {
+    int32_t level;
+    int64_t current_level_stars;
+    int64_t stars;
+    int64_t next_level_stars;
+    uint8_t has_next;
+} exteria_star_rating;
+
 typedef struct exteria_full_user {
     char about[EXTERIA_ABOUT_MAX];  /* the bio, empty when there is none; line breaks stay */
     uint8_t has_person;
@@ -27,8 +35,14 @@ typedef struct exteria_full_user {
     int32_t channel_participants;
     int32_t channel_message;        /* the id of the message the profile shows from it, zero for none */
     uint8_t require_premium;        /* only Telegram Premium users may write to this user, and nobody else may reply to their stories */
+    uint8_t sharing_restricted;     /* either participant has disabled sharing */
     uint8_t has_music;              /* the song the profile shows first, from its saved music */
     exteria_media_info music;
+    uint8_t has_rating;
+    uint8_t has_pending_rating;
+    int32_t pending_rating_date;
+    exteria_star_rating rating;
+    exteria_star_rating pending_rating;
 } exteria_full_user;
 
 /* the songs saved on a profile, one page at a time */

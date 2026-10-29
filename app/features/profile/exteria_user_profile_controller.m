@@ -40,6 +40,7 @@
 #import "exteria_session_profile.h"
 #import "exteria_star_gift.h"
 #import "exteria_status_label.h"
+#import "exteria_rating_view.h"
 #import "exteria_typing_board.h"
 #import "exteria_story.h"
 #import "exteria_story_ring.h"
@@ -75,6 +76,7 @@
     long long _statusAnimationDocument;
     NSUInteger _statusAnimationToken;
     ExteriaStatusLabel *_status;
+    ExteriaRatingBadge *_ratingBadge;
     ExteriaUserAction *_messageAction;
     ExteriaUserAction *_soundAction;
     ExteriaUserAction *_callAction;
@@ -128,6 +130,7 @@
     [_backdrop release];
     [_backdropTitle release];
     [_status release];
+    [_ratingBadge release];
     [_messageAction release];
     [_soundAction release];
     [_callAction release];
@@ -195,6 +198,10 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     _status.textAlignment = ExteriaTextAlignmentCenter;
     [self refreshStatus];
     [_head addSubview:_status];
+    _ratingBadge = [[ExteriaRatingBadge alloc] initWithFrame:CGRectZero];
+    _ratingBadge.hidden = YES;
+    [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
+    [_head addSubview:_ratingBadge];
 
     _messageAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolChats title:NSLocalizedString(@"profile.action.message", nil)];
     [_messageAction addTarget:self action:@selector(openMessages) forControlEvents:UIControlEventTouchUpInside];
@@ -530,6 +537,9 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 
 - (void)showFull {
     ExteriaFullUser *user = _fullUser;
+    _ratingBadge.hidden = !user.hasRating;
+    _ratingBadge.level = user.rating.level;
+    _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)user.rating.level];
     [self applyBackdropOfPerson:user.person];
     if (user.person.name.length) {
         [self showName:user.person.name emojiStatus:user.person.emojiStatus premium:user.person.premium];
@@ -640,7 +650,10 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     CGFloat nameHeight = MAX(28, ceil([_name sizeThatFits:CGSizeMake(contentWidth, 200)].height));
     _name.frame = CGRectMake(x, y, contentWidth, nameHeight);
     [self placeStatusAnimation];
-    _status.frame = CGRectMake(x, y + nameHeight + 2, contentWidth, 20);
+    CGFloat statusWidth = MIN(contentWidth - (_ratingBadge.hidden ? 0 : 28), ceil([_status sizeThatFits:CGSizeMake(contentWidth, 20)].width) + 8);
+    CGFloat statusStart = (width - statusWidth - (_ratingBadge.hidden ? 0 : 28)) / 2;
+    _ratingBadge.frame = CGRectMake(statusStart, y + nameHeight + 2, 22, 20);
+    _status.frame = CGRectMake(statusStart + (_ratingBadge.hidden ? 0 : 28), y + nameHeight + 2, statusWidth, 20);
     y += nameHeight + 22 + GAP + 4;
     NSMutableArray *actions = [NSMutableArray array];
     /* message, sound, call and video stand in one row; the gift is in the menu behind the dots */
@@ -896,6 +909,10 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     ExteriaMusicListController *list = [[[ExteriaMusicListController alloc] initWithSession:self.session dialog:_dialog first:_fullUser.music
                                                                                     avatars:self.avatars media:self.media] autorelease];
     [self.navigationController pushViewController:list animated:YES];
+}
+
+- (void)openRating {
+    ExteriaShowRating(self.view.window, _fullUser);
 }
 
 - (void)openChannel {

@@ -12,6 +12,7 @@
 #import "exteria_gifts_controller.h"
 #import "exteria_profile_qr_controller.h"
 #import "exteria_profile_edit_controller.h"
+#import "exteria_rating_view.h"
 #import "exteria_profile_photo_picker.h"
 #import "exteria_music_list_controller.h"
 #import "exteria_symbol.h"
@@ -130,6 +131,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     ExteriaAvatarView *_avatar;
     ExteriaEmojiLabel *_name;
     UILabel *_detail;
+    ExteriaRatingBadge *_ratingBadge;
     UIActivityIndicatorView *_spinner;
     BOOL _working;
     void (^_signOutHandler)(void (^)(NSString *));
@@ -177,6 +179,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [_avatar release];
     [_name release];
     [_detail release];
+    [_ratingBadge release];
     [_spinner release];
     [super dealloc];
 }
@@ -207,6 +210,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     _detail.textColor = ExteriaThemeIsDark() ? ExteriaColorSecondary() : [UIColor grayColor];
     _detail.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     [header addSubview:_detail];
+    _ratingBadge = [[ExteriaRatingBadge alloc] initWithFrame:CGRectZero];
+    _ratingBadge.hidden = YES;
+    [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:_ratingBadge];
     table.tableHeaderView = header;
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
@@ -216,6 +223,9 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     _avatar.frame = CGRectMake((self.tableView.bounds.size.width - AVATAR) / 2, 14, AVATAR, AVATAR);
+    CGFloat width = self.tableView.bounds.size.width;
+    CGFloat detailWidth = MIN(width - 70, ceil([_detail sizeThatFits:CGSizeMake(width - 70, 20)].width));
+    _ratingBadge.frame = CGRectMake(floor((width - detailWidth) / 2) - 26, _detail.frame.origin.y, 22, 20);
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation {
@@ -286,11 +296,17 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         }
         [_full release];
         _full = [user retain];
+        _ratingBadge.hidden = !user.hasRating;
+        _ratingBadge.level = user.rating.level;
+        _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)user.rating.level];
+        [self.view setNeedsLayout];
         [_about release];
         _about = [user.about copy];
         [self rebuildInfo];
     }];
 }
+
+- (void)openRating { ExteriaShowRating(self.view.window, _full); }
 
 /* the phone, the bio and the username, each only when there is one; a tap copies it */
 - (void)rebuildInfo {
