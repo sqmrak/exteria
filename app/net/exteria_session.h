@@ -74,6 +74,8 @@ typedef enum {
 
 @class ExteriaStickerDocument;
 @class ExteriaCall;
+@class ExteriaGroupCall;
+@class ExteriaGroupCallEngine;
 @class ExteriaCallVideo;
 @class ExteriaCommunity;
 @class ExteriaDraftBoard;
@@ -81,6 +83,11 @@ typedef enum {
 @protocol ExteriaCallDelegate <NSObject>
 /* the call changed, or ended; always on the main thread */
 - (void)session:(ExteriaSession *)session callDidChange:(ExteriaCall *)call;
+@end
+
+@protocol ExteriaGroupCallDelegate <NSObject>
+/* the group call changed, or ended; always on the main thread */
+- (void)session:(ExteriaSession *)session groupCallDidChange:(ExteriaGroupCall *)call;
 @end
 
 /* owns the mtproto client and one worker thread; every call below only queues work for that thread */
@@ -114,6 +121,7 @@ extern NSString *const ExteriaUploadProgressNotification;
 @interface ExteriaSession : NSObject {
     id<ExteriaSessionDelegate> _delegate;
     id<ExteriaCallDelegate> _callDelegate;
+    id<ExteriaGroupCallDelegate> _groupCallDelegate;
     /* who the account writes as in each chat that offers a choice, as the exteria_peer_ref data of the identity, keyed by the chat; any thread, under @synchronized */
     NSMutableDictionary *_sendAsChoices;
     NSArray *_chatFolders;
@@ -128,6 +136,10 @@ extern NSString *const ExteriaUploadProgressNotification;
 @property (nonatomic, assign) id<ExteriaSessionDelegate> delegate;
 /* main thread only: hears every change of the one voice call the session can hold */
 @property (nonatomic, assign) id<ExteriaCallDelegate> callDelegate;
+/* main thread only: hears every change of the one group call (voice chat) the session can hold */
+@property (nonatomic, assign) id<ExteriaGroupCallDelegate> groupCallDelegate;
+/* the voice chats of the account: joining, making and leaving them */
+@property (nonatomic, readonly) ExteriaGroupCallEngine *groupCalls;
 /* main thread only: who is typing in which chat, from the live updates */
 @property (nonatomic, readonly) ExteriaTypingBoard *typing;
 /* main thread only: the drafts of the account's chats, from the chat lists, the live updates and what the person types */
@@ -241,6 +253,8 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* the newest messages of a chat, or the ones before beforeId (zero for the newest), newest first, with the people
    they mention keyed by user id (NSNumber) as ExteriaPerson */
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion;
+/* a page that may reach toward newer messages: offsetId and a negative addOffset as exteria_history_window_request takes them */
+- (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)offsetId addOffset:(int32_t)addOffset limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion;
 
 /* the topics of a forum as ExteriaDialog items carrying a topicId, pinned ones first and then by last message; at
    most 200 */

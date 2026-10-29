@@ -605,7 +605,6 @@
 "profile.action.message" = "Message";
 "profile.action.call" = "Call";
 "profile.action.video" = "Video";
-"chat.menu.videocall" = "Video call";
 "report.title" = "Report";
 "report.reason.spam" = "Spam";
 "report.reason.violence" = "Violence";
@@ -1284,7 +1283,7 @@
 "group.tab.loading" = "Loading";
 "group.tab.more" = "Show more";
 "group.tab.file" = "File";
-"group.action.add" = "Add";
+"group.action.add" = "Invite";
 "group.action.added" = "Added";
 
 "fmt.menu" = "Format";
@@ -1332,7 +1331,6 @@
 "pack.remove.one" = "REMOVE %ld STICKER";
 "pack.remove.few" = "REMOVE %ld STICKERS";
 "pack.remove.other" = "REMOVE %ld STICKERS";
-"chat.menu.call" = "Call";
 "chat.menu.pinned" = "Pinned message";
 "chat.menu.linked.group" = "Linked group";
 "chat.menu.linked.channel" = "Linked channel";
@@ -1980,3 +1978,35 @@
 "chatset.reclock.5" = "After 5 seconds";
 "chatset.reclock.10" = "After 10 seconds";
 "chatset.reclock.15" = "After 15 seconds";
+
+"group.title" = "Voice chat";
+"group.you" = "%@ (you)";
+"group.speaking" = "speaking";
+"group.listening" = "listening";
+"group.muted" = "microphone off";
+"group.muted.you" = "you muted this microphone";
+"group.muted.admin" = "muted by an admin";
+"group.members" = "Members: %d";
+"group.connecting" = "Connecting…";
+"group.ended" = "Voice chat ended";
+"group.mic.on" = "Microphone on";
+"group.mic.off" = "Unmute";
+"group.leave" = "Leave";
+"group.invite" = "Invite with a link";
+"group.invite.failed" = "The invite link of the voice chat could not be loaded.";
+"group.invite.copied" = "The link of the voice chat was copied.";
+"group.end.all" = "End for everyone";
+"group.end.confirm" = "The voice chat will end for everyone in it.";
+"group.return" = "Voice chat · %@";
+"group.notice.finished" = "The voice chat has ended.";
+"group.notice.nocall" = "There is no voice chat in this chat now.";
+"group.notice.unsupported" = "This call cannot be opened in Exteria: it is an encrypted conference or a live stream.";
+"group.notice.removed" = "You were removed from the voice chat.";
+"group.notice.failed" = "Could not connect to the voice chat.";
+"group.notice.failed.detail" = "Could not connect to the voice chat (%@).";
+"chat.voice.title" = "Voice chat";
+"chat.voice.join" = "Join";
+"chat.voice.empty" = "Nobody is in yet";
+"chat.voice.start.confirm" = "Start a voice chat in this chat?";
+"chat.menu.voicechat.join" = "Voice chat";
+"chat.menu.voicechat.start" = "Start voice chat";

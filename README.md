@@ -22,6 +22,7 @@
 - voice notes, round videos, gifs, files, albums
 - location picker, nearby places and search, OpenStreetMap previews in messages
 - calls: voice and video (vp8), emoji fingerprint
+- voice chats of groups and channels: join, start, leave, mute, invite link and `?videochat=` links, audio only. no video, screen sharing, live streams or encrypted conferences (`t.me/call/...`)
 - translator: telegram, services and ai
 - passcode lock: four digits or a password, auto-lock
 - keeps deleted and edited messages on the phone, if you ask for it

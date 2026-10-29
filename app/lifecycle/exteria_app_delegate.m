@@ -7,6 +7,7 @@
 #import "exteria_avatar_cache.h"
 #import "exteria_session_profile.h"
 #import "exteria_call_controller.h"
+#import "exteria_group_call_presenter.h"
 #import "exteria_language.h"
 #import "exteria_link_router.h"
 #import "exteria_lite_mode.h"
@@ -46,6 +47,7 @@
     ExteriaBackSwipe *_backSwipe;
     ExteriaSplashView *_splash;
     ExteriaCallController *_callScreen;
+    ExteriaGroupCallPresenter *_groupPresenter;
     /* the call screen folded away while the call goes on, and the bar over the chats that brings it back */
     BOOL _callMinimized;
     BOOL _callMinimizing;
@@ -105,6 +107,8 @@ static NSString *ExteriaSupportDirectory(void) {
     _session = [[ExteriaSession alloc] initWithDirectory:accountDirectory];
     _session.delegate = self;
     _session.callDelegate = self;
+    _groupPresenter = [[ExteriaGroupCallPresenter alloc] initWithTopController:^UIViewController *{ return _navigation; } host:^UIView *{ return _navigation.view; }];
+    _session.groupCallDelegate = _groupPresenter;
     /* the tunnel is wanted before the first connection, so a start with the VPN on never sends anything in the clear */
     _shiro = [[ExteriaShiro alloc] initWithDirectory:directory];
     _session.shiro = _shiro;
@@ -325,10 +329,12 @@ static NSString *ExteriaSupportDirectory(void) {
     [_session stop];
     _session.delegate = nil;
     _session.callDelegate = nil;
+    _session.groupCallDelegate = nil;
     _session.shiro = nil;
     ExteriaShiroSetActive(nil);
     [_shiro release];
     [_callScreen release];
+    [_groupPresenter release];
     [_pendingCall release];
     [_callAvatars release];
     [_window release];
@@ -511,6 +517,7 @@ static NSString *ExteriaSupportDirectory(void) {
 - (void)bindSession:(ExteriaSession *)session {
     session.delegate = self;
     session.callDelegate = self;
+    session.groupCallDelegate = _groupPresenter;
     session.shiro = _shiro;
 }
 
@@ -518,13 +525,14 @@ static NSString *ExteriaSupportDirectory(void) {
 - (void)retireSession:(ExteriaSession *)session {
     session.delegate = nil;
     session.callDelegate = nil;
+    session.groupCallDelegate = nil;
     session.shiro = nil;
     [session stop];
 }
 
 /* makes the account the one with the connection, and shows its chats, or the welcome screen for one that is not signed in */
 - (void)activateAccount:(NSString *)name {
-    if (_callScreen || _addSession) return;
+    if (_callScreen || _groupPresenter.callIsShown || _addSession) return;
     UIViewController *shown = _navigation.presentedViewController;
     if (shown) [_navigation dismissViewControllerAnimated:NO completion:nil];
     [_notifier stop];

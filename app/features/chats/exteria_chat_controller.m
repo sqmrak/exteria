@@ -1,5 +1,6 @@
 #import "exteria_emoji_label.h"
 #import "exteria_chat_controller.h"
+#import "exteria_group_call_engine.h"
 #import "exteria_location_controller.h"
 #import "exteria_status_label.h"
 
@@ -93,6 +94,7 @@
 
 #define BAR_HEIGHT 44.0
 #define PINNED_HEIGHT 46.0
+#define VOICE_HEIGHT 44.0
 /* the pages of older history a tap on the pinned message will fetch looking for it */
 #define PINNED_SEARCH_PAGES 12
 #define HISTORY_PAGE 40
@@ -314,6 +316,10 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     ExteriaAttachFlow *_attach;
     ExteriaFullChannel *_channelFull;
     UIControl *_pinnedBar;
+    UIControl *_voiceBar;
+    UILabel *_voiceTitle, *_voiceInfo, *_voiceJoin;
+    ExteriaVoiceChat *_voiceChat;
+    NSUInteger _voiceToken;
     UILabel *_pinnedTitle;
     ExteriaEmojiLabel *_pinnedText;
     int32_t _pinnedId;
@@ -501,6 +507,11 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_selectionBar release];
     [_selectedIds release];
     [_pinnedBar release];
+    [_voiceBar release];
+    [_voiceTitle release];
+    [_voiceInfo release];
+    [_voiceJoin release];
+    [_voiceChat release];
     [_pinnedTitle release];
     [_pinnedText release];
     [_confirmingGone release];
@@ -709,6 +720,26 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _pinnedListButton.hidden = YES;
     [_pinnedBar addSubview:_pinnedListButton];
     [root addSubview:_pinnedBar];
+    /* the voice chat that runs in a group or channel: a bar under the pinned message with who is in it and the way to join */
+    _voiceBar = [[UIControl alloc] init];
+    _voiceBar.backgroundColor = ExteriaColorBar();
+    _voiceBar.hidden = YES;
+    [_voiceBar addTarget:self action:@selector(openVoiceChat) forControlEvents:UIControlEventTouchUpInside];
+    _voiceTitle = ExteriaChatLabel(ExteriaColorTitle(), ExteriaTextAlignmentLeft);
+    _voiceTitle.text = NSLocalizedString(@"chat.voice.title", nil);
+    _voiceTitle.userInteractionEnabled = NO;
+    [_voiceBar addSubview:_voiceTitle];
+    _voiceInfo = ExteriaChatLabel(ExteriaColorSecondary(), ExteriaTextAlignmentLeft);
+    _voiceInfo.userInteractionEnabled = NO;
+    [_voiceBar addSubview:_voiceInfo];
+    _voiceJoin = ExteriaChatLabel([UIColor whiteColor], ExteriaTextAlignmentCenter);
+    _voiceJoin.backgroundColor = ExteriaColorAccent();
+    _voiceJoin.layer.cornerRadius = 14;
+    _voiceJoin.layer.masksToBounds = YES;
+    _voiceJoin.text = NSLocalizedString(@"chat.voice.join", nil);
+    _voiceJoin.userInteractionEnabled = NO;
+    [_voiceBar addSubview:_voiceJoin];
+    [root addSubview:_voiceBar];
     _toast = ExteriaChatLabel([UIColor whiteColor], ExteriaTextAlignmentCenter);
     _toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
     _toast.layer.cornerRadius = 14;
@@ -1335,8 +1366,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 
 #pragma mark menu
 
-typedef enum { ExteriaChatMenuCall, ExteriaChatMenuVideoCall, ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete } ExteriaChatMenuEntry;
-enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDeleteMessage, ExteriaChatAlertSearch, ExteriaChatAlertDeleteSelected };
+typedef enum { ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete } ExteriaChatMenuEntry;
+enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDeleteMessage, ExteriaChatAlertSearch, ExteriaChatAlertDeleteSelected, ExteriaChatAlertStartVoice };
 
 /* a call goes to a person: not to a bot, a group, a channel or the saved messages */
 - (BOOL)canCall {
@@ -1369,12 +1400,6 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
     } declined:nil];
 }
 
-- (void)startVideoCall {
-    [self askFirst:ExteriaChatFlagAskCall message:[NSString stringWithFormat:NSLocalizedString(@"chat.ask.call", nil), _dialog.title] action:NSLocalizedString(@"chat.ask.call.action", nil) then:^{
-        [_session startVideoCallToDialog:_dialog];
-    } declined:nil];
-}
-
 - (void)showChatMenu {
     NSMutableArray *titles = [NSMutableArray array];
     NSMutableArray *entries = [NSMutableArray array];
@@ -1383,10 +1408,6 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
     BOOL bot = _dialog.kind == EXTERIA_DIALOG_BOT;
 /* the rows are the ones the three dots give, in its order */
 #define MENU_ROW(symbol, key, entry) do { symbols[titles.count] = (symbol); [titles addObject:NSLocalizedString((key), nil)]; [entries addObject:[NSNumber numberWithInt:(entry)]]; } while (0)
-    if ([self canCall]) {
-        MENU_ROW(ExteriaSymbolCallback, @"chat.menu.call", ExteriaChatMenuCall);
-        MENU_ROW(ExteriaSymbolVideoCallMenu, @"chat.menu.videocall", ExteriaChatMenuVideoCall);
-    }
     MENU_ROW(ExteriaSymbolMagnifier, @"chat.menu.search", ExteriaChatMenuSearch);
     MENU_ROW(ExteriaSymbolPinLine, @"chat.menu.pinned", ExteriaChatMenuPinned);
     if (_dialog.saved && !_dialog.savedSource) MENU_ROW(ExteriaSymbolGroupsMenu, @"chat.menu.saved.dialogs", ExteriaChatMenuSavedDialogs);
@@ -1415,10 +1436,9 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         ExteriaChatController *chat = weak.target;
         if (!chat || index >= entries.count) return;
         switch ([[entries objectAtIndex:index] intValue]) {
-        case ExteriaChatMenuCall: [chat startCall]; break;
-        case ExteriaChatMenuVideoCall: [chat startVideoCall]; break;
         case ExteriaChatMenuSearch: [chat askSearchQuery]; break;
         case ExteriaChatMenuPinned: [chat openPinnedList]; break;
+        case ExteriaChatMenuVoiceChat: [chat openVoiceChat]; break;
         case ExteriaChatMenuSavedDialogs: [chat openSavedDialogs]; break;
         case ExteriaChatMenuDiscussion: [chat openDiscussion]; break;
         case ExteriaChatMenuNotifications:
@@ -1675,6 +1695,10 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 - (void)confirmedTag:(NSInteger)tag {
+    if (tag == ExteriaChatAlertStartVoice) {
+        [_session.groupCalls startVoiceChatInDialog:_dialog title:nil];
+        return;
+    }
     if (tag == ExteriaChatAlertDeleteSelected) {
         [self deleteSelectedNow];
         return;
@@ -1854,6 +1878,15 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _nextHint.frame = CGRectMake(CGRectGetMidX(column) - hintSize.width / 2, inputY - contextHeight - hintSize.height - 12, hintSize.width, hintSize.height);
     _toast.frame = CGRectMake(CGRectGetMidX(column) - 60, headerHeight + pinnedHeight + 10, 120, 28);
     headerHeight += pinnedHeight;
+    CGFloat voiceHeight = _voiceBar.hidden ? 0 : VOICE_HEIGHT;
+    _voiceBar.frame = CGRectMake(left, headerHeight, width, voiceHeight);
+    _voiceTitle.font = ExteriaFontSemibold(14);
+    _voiceInfo.font = ExteriaFontRegular(12);
+    _voiceJoin.font = ExteriaFontSemibold(13);
+    _voiceJoin.frame = CGRectMake(width - 112, (VOICE_HEIGHT - 28) / 2, 100, 28);
+    _voiceTitle.frame = CGRectMake(24, 5, width - 150, 18);
+    _voiceInfo.frame = CGRectMake(24, 23, width - 150, 16);
+    headerHeight += voiceHeight;
     CGFloat playerHeight = _miniPlayer.showing ? [ExteriaMiniPlayer height] : 0;
     _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
     headerHeight += playerHeight;
@@ -1929,6 +1962,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     _visible = YES;
+    [self rebuildItems];
+    [self refreshVoiceChat];
     ExteriaNotifierSetOpenChat(_dialog.peerKind, _dialog.peerId);
     if (!_reactionTimer) {
         ExteriaReactionPollTarget *target = [[[ExteriaReactionPollTarget alloc] initWithReference:_weak] autorelease];

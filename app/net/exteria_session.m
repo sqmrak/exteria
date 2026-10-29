@@ -14,6 +14,7 @@
 #import "exteria_session_drafts.h"
 #import "exteria_rpc.h"
 #import "exteria_call_engine.h"
+#import "exteria_group_call_engine.h"
 
 #import <UIKit/UIKit.h>
 #import <errno.h>
@@ -175,6 +176,7 @@
     /* worker only: the random ids of pending messages whose upload the person stopped, read by the next step of that upload */
     NSMutableSet *_cancelledSends;
     ExteriaCallEngine *_calls;
+    ExteriaGroupCallEngine *_groupCalls;
     NSString *_deviceModel;
     NSString *_systemVersion;
     NSString *_appVersion;
@@ -198,6 +200,8 @@ NSString *const ExteriaSessionDialogsUpdatedNotification = @"ExteriaSessionDialo
 @synthesize delegate = _delegate;
 @synthesize connected = _connected;
 @synthesize callDelegate = _callDelegate;
+@synthesize groupCallDelegate = _groupCallDelegate;
+@synthesize groupCalls = _groupCalls;
 @synthesize directory = _directory;
 @synthesize shiro = _shiro;
 @synthesize typing = _typing;
@@ -262,6 +266,7 @@ static NSString *ExteriaMachineName(void) {
     _typing = [[ExteriaTypingBoard alloc] init];
     _drafts = [[ExteriaDraftBoard alloc] init];
     _calls = [[ExteriaCallEngine alloc] initWithSession:self];
+    _groupCalls = [[ExteriaGroupCallEngine alloc] initWithSession:self];
     _wake[0] = _wake[1] = -1;
     exteria_mt_socket_init(&_socket);
     _exited = dispatch_semaphore_create(0);
@@ -296,6 +301,7 @@ static NSString *ExteriaMachineName(void) {
     [_typing release];
     [_drafts release];
     [_calls release];
+    [_groupCalls release];
     [_storeObservers release];
     [_deviceModel release];
     [_systemVersion release];
@@ -638,6 +644,10 @@ static NSString *ExteriaMachineName(void) {
 
 - (int32_t)workerDc {
     return _dc;
+}
+
+- (int64_t)workerServerTimeOffsetMilliseconds {
+    return _clientLive ? _client.mt.time_offset_ms : 0;
 }
 
 - (void)setStoreObserver:(void (^)(void))observer {
@@ -1229,6 +1239,11 @@ static void ExteriaClientPhoneSignaling(void *ctx, int64_t callId, const uint8_t
     [session->_calls handleSignalingData:bytes callId:callId];
 }
 
+static void ExteriaClientGroupCall(void *ctx, const exteria_tl_value *update, const exteria_tl_value *container) {
+    ExteriaSession *session = (ExteriaSession *)ctx;
+    [session->_groupCalls handleUpdate:update container:container];
+}
+
 static void ExteriaClientFoldersChanged(void *ctx) {
     ExteriaSession *session = ctx;
     [session deliverMain:^{
@@ -1399,6 +1414,7 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
     events.changed = ExteriaClientChanged;
     events.phone_call = ExteriaClientPhoneCall;
     events.phone_signaling = ExteriaClientPhoneSignaling;
+    events.group_call = ExteriaClientGroupCall;
     events.typing = ExteriaClientTyping;
     events.read_outbox = ExteriaClientReadOutbox;
     events.draft = ExteriaClientDraft;
@@ -1682,6 +1698,7 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
 
     NSAutoreleasePool *teardown = [[NSAutoreleasePool alloc] init];
     [_calls shutdown];
+    [_groupCalls shutdown];
     for (ExteriaMediaLink *link in [_links allValues]) [link stop];
     [self closeSocket];
     if (_clientLive) exteria_client_free(&_client);

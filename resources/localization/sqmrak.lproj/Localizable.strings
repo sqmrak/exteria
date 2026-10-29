@@ -607,7 +607,6 @@
 "profile.action.message" = "сообщение";
 "profile.action.call" = "звонок";
 "profile.action.video" = "видео";
-"chat.menu.videocall" = "видеозвонок";
 "report.title" = "пожаловаться";
 "report.reason.spam" = "спам";
 "report.reason.violence" = "насилие";
@@ -1290,7 +1289,7 @@
 "group.tab.loading" = "загрузка";
 "group.tab.more" = "показать ещё";
 "group.tab.file" = "файл";
-"group.action.add" = "добавить";
+"group.action.add" = "пригласить";
 "group.action.added" = "участник добавлен";
 
 "fmt.menu" = "формат";
@@ -1338,7 +1337,6 @@
 "pack.remove.one" = "удалить %ld стикер";
 "pack.remove.few" = "удалить %ld стикера";
 "pack.remove.other" = "удалить %ld стикеров";
-"chat.menu.call" = "позвонить";
 "chat.menu.pinned" = "закреплённое сообщение";
 "chat.menu.linked.group" = "привязанная группа";
 "chat.menu.linked.channel" = "привязанный канал";
@@ -1986,3 +1984,35 @@
 "chatset.reclock.5" = "через 5 секунд";
 "chatset.reclock.10" = "через 10 секунд";
 "chatset.reclock.15" = "через 15 секунд";
+
+"group.title" = "голосовой чат";
+"group.you" = "%@ (вы)";
+"group.speaking" = "говорит";
+"group.listening" = "слушает";
+"group.muted" = "микрофон выключен";
+"group.muted.you" = "вы отключили этот микрофон";
+"group.muted.admin" = "микрофон выключен ведущим";
+"group.members" = "участники: %d";
+"group.connecting" = "подключение…";
+"group.ended" = "голосовой чат завершён";
+"group.mic.on" = "микрофон включён";
+"group.mic.off" = "включить микрофон";
+"group.leave" = "выйти";
+"group.invite" = "пригласить по ссылке";
+"group.invite.failed" = "не удалось получить ссылку на голосовой чат :P";
+"group.invite.copied" = "ссылка на голосовой чат скопирована.";
+"group.end.all" = "завершить для всех";
+"group.end.confirm" = "голосовой чат завершится для всех участников.";
+"group.return" = "голосовой чат · %@";
+"group.notice.finished" = "голосовой чат завершён.";
+"group.notice.nocall" = "в этом чате сейчас нет голосового чата.";
+"group.notice.unsupported" = "этот звонок нельзя открыть в exteria: это зашифрованная конференция или трансляция.";
+"group.notice.removed" = "вас отключили от голосового чата.";
+"group.notice.failed" = "не удалось подключиться к голосовому чату :#";
+"group.notice.failed.detail" = "не удалось подключиться к голосовому чату (%@).";
+"chat.voice.title" = "голосовой чат";
+"chat.voice.join" = "войти";
+"chat.voice.empty" = "пока никого нет";
+"chat.voice.start.confirm" = "начать голосовой чат в этом чате?";
+"chat.menu.voicechat.join" = "голосовой чат";
+"chat.menu.voicechat.start" = "начать голосовой чат";
