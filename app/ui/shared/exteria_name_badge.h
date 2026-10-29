@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 
+#import "exteria_emoji_label.h"
 #import "exteria_media_cache.h"
 #import "exteria_session.h"
 
@@ -23,3 +24,8 @@ NSString *ExteriaNameWithBadges(NSString *name, long long document, NSUInteger m
 void ExteriaRedrawVisibleRows(UITableView *table);
 
 void ExteriaLoadBadgePictures(NSArray *documents, ExteriaSession *session, ExteriaMediaCache *media, void (^redraw)(void));
+
+/* sets a label to the name of a person with the marks of Exteria after it at once, and, when the account has a copy of the person (asked for by user id, which a
+   screen that only knows a name and an id, such as a call, has), with the emoji status or the Premium star too, which come a moment later. the label is made
+   to draw as the names of the app are, emoji as pictures and no boxes; session and media may be nil, then only the marks show */
+void ExteriaShowNameWithBadges(ExteriaEmojiLabel *label, NSString *name, long long userId, ExteriaSession *session, ExteriaMediaCache *media);

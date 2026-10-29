@@ -2,6 +2,7 @@
 
 #import "exteria_avatar_cache.h"
 #import "exteria_call_state.h"
+#import "exteria_media_cache.h"
 #import "exteria_photo.h"
 #import "exteria_session.h"
 
@@ -14,6 +15,8 @@
 /* the picture of the other person when the caller already has it */
 @property (nonatomic, retain) ExteriaPhoto *photo;
 @property (nonatomic, retain) ExteriaAvatarCache *avatars;
+/* where the picture of an emoji status after the name comes from */
+@property (nonatomic, retain) ExteriaMediaCache *media;
 
 /* main thread only */
 - (void)updateWithCall:(ExteriaCall *)call;

@@ -10,6 +10,7 @@
 #import "exteria_call_tones.h"
 #import "exteria_call_video.h"
 #import "exteria_emoji_label.h"
+#import "exteria_name_badge.h"
 #import "exteria_lite_mode.h"
 #import "exteria_person.h"
 #import "exteria_notify_store.h"
@@ -146,6 +147,7 @@ static CGImageRef CreateMeshImage(exteria_call_mood mood, BOOL dark) {
 
 @synthesize photo = _photo;
 @synthesize avatars = _avatars;
+@synthesize media = _media;
 @synthesize onFinish = _onFinish;
 @synthesize onMinimize = _onMinimize;
 
@@ -174,6 +176,7 @@ static CGImageRef CreateMeshImage(exteria_call_mood mood, BOOL dark) {
     [_call release];
     [_photo release];
     [_avatars release];
+    [_media release];
     [_onFinish release];
     [_onMinimize release];
     [self releaseViews];
@@ -635,7 +638,7 @@ static CGImageRef CreateMeshImage(exteria_call_mood mood, BOOL dark) {
 - (void)render {
     if (![self isViewLoaded] || !_call) return;
     [self applyMood];
-    _name.text = _call.peerName;
+    ExteriaShowNameWithBadges(_name, _call.peerName, _call.peerId, _session, _media);
     _status.text = [self statusText];
     _avatarView.seed = (NSUInteger)(_call.peerId < 0 ? -_call.peerId : _call.peerId);
     _avatarView.initials = ExteriaInitialsOfName(_call.peerName);

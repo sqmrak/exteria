@@ -1,3 +1,5 @@
+#import "exteria_name_badge.h"
+#import "exteria_developers.h"
 #import "exteria_search_controller.h"
 #import "exteria_string_drawing.h"
 #import "exteria_lite_mode.h"
@@ -122,7 +124,11 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     _avatar.showsSymbol = dialog.saved;
     _avatar.symbol = ExteriaSymbolBookmark;
     [_avatar setPhoto:dialog.saved ? nil : dialog.photo cache:avatars];
-    _title.text = dialog.title;
+    /* the name wears the marks and the status of the person, as in the list of chats */
+    NSArray *badges = nil;
+    _title.dropsUndrawable = YES;
+    _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), ExteriaDialogIsDeveloper(dialog), &badges);
+    _title.entities = badges;
     _subtitle.text = dialog.preview;
     _date.text = showsDate ? ExteriaListTimeText(dialog.date) : @"";
     [self setNeedsLayout];

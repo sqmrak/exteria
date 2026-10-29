@@ -1,3 +1,4 @@
+#import "exteria_developers.h"
 #import "exteria_group_tabs_view.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -66,7 +67,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     for (int i = 0; i < ExteriaGroupTabCount; ++i) _items[i] = [[NSMutableArray alloc] init];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(forUser ? @"gifts.title" : @"group.tab.members", nil), NSLocalizedString(@"group.tab.media", nil),
                                                 NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil), nil];
-    BOOL skipFirst = dialog.saved || dialog.kind == EXTERIA_DIALOG_CHANNEL;
+    BOOL skipFirst = dialog.saved;
     if (skipFirst) {
         titles = [titles subarrayWithRange:NSMakeRange(1, titles.count - 1)];
         _tab = ExteriaGroupTabMedia;
@@ -298,6 +299,7 @@ static NSString *ExteriaGroupDateText(int32_t date) {
             if (person.presence == EXTERIA_PRESENCE_ONLINE) color = ExteriaColorAccent();
             subtitle = ExteriaLastSeenText(person.presence, person.seen);
         }
+        cell.developer = ExteriaPersonIsDeveloper(person);
         [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:color
                        trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
         cell.avatarDeleted = person.deleted;

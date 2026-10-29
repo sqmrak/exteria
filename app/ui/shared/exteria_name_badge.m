@@ -5,6 +5,8 @@
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_message.h"
 #import "exteria_person.h"
+#import "exteria_session_bots.h"
+#import "exteria_weak_reference.h"
 #include "exteria_people.h"
 
 /* a text symbol, not an emoji: the layout replaces it with the badge, and it draws nothing of its own while a status picture loads */
@@ -69,4 +71,31 @@ static void ExteriaRedrawTreeOfView(UIView *view) {
 
 void ExteriaRedrawVisibleRows(UITableView *table) {
     for (UITableViewCell *cell in table.visibleCells) ExteriaRedrawTreeOfView(cell.contentView);
+}
+
+void ExteriaShowNameWithBadges(ExteriaEmojiLabel *label, NSString *name, long long userId, ExteriaSession *session, ExteriaMediaCache *media) {
+    NSUInteger marks = ExteriaMarksOfId(userId);
+    NSArray *entities = nil;
+    label.dropsUndrawable = YES;
+    label.text = ExteriaNameWithBadges(name, 0, marks, &entities);
+    label.entities = entities;
+    if (!session || userId <= 0 || !name.length) return;
+    NSString *shown = [[name copy] autorelease];
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:label];
+    [session loadStoredPersonOfUserId:userId completion:^(ExteriaPerson *person) {
+        ExteriaEmojiLabel *target = weak.target;
+        /* the label may be showing another name by now, as the cells of a list are used again */
+        if (!target || !person || ![target.text hasPrefix:shown]) return;
+        long long document = ExteriaPersonBadgeDocument(person);
+        NSUInteger known = marks | ExteriaPersonIsDeveloper(person);
+        if (!document && known == marks) return;
+        NSArray *more = nil;
+        target.text = ExteriaNameWithBadges(shown, document, known, &more);
+        target.entities = more;
+        if (person.emojiStatus) {
+            ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:person.emojiStatus]], session, media, ^{
+                [(ExteriaEmojiLabel *)weak.target setNeedsDisplay];
+            });
+        }
+    }];
 }

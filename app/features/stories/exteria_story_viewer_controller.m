@@ -1,3 +1,4 @@
+#import "exteria_name_badge.h"
 #import "exteria_story_viewer_controller.h"
 #import "exteria_string_drawing.h"
 
@@ -811,7 +812,12 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
 
 - (void)showOwner:(ExteriaStoryPeer *)peer {
     ExteriaDialog *owner = peer.owner;
-    _name.text = owner.saved ? NSLocalizedString(@"story.mine", nil) : owner.title;
+    if (owner.saved) {
+        _name.entities = nil;
+        _name.text = NSLocalizedString(@"story.mine", nil);
+    } else {
+        ExteriaShowNameWithBadges(_name, owner.title, owner.peerKind == 1 ? owner.peerId : 0, owner.peerKind == 1 ? _session : nil, _media);
+    }
     _time.text = @"";
     _avatar.initials = owner.saved ? @"" : owner.initials;
     _avatar.seed = owner.avatarSeed;

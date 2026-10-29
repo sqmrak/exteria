@@ -57,6 +57,7 @@
     /* the newest snapshot of a call that began while the screen of the one before it was still leaving */
     ExteriaCall *_pendingCall;
     ExteriaAvatarCache *_callAvatars;
+    ExteriaMediaCache *_callMedia;
     ExteriaShiro *_shiro;
     ExteriaShiroRoute _shiroRoute;
     /* a link that arrived before anyone was signed in, opened once the main screen exists */
@@ -337,6 +338,7 @@ static NSString *ExteriaSupportDirectory(void) {
     [_groupPresenter release];
     [_pendingCall release];
     [_callAvatars release];
+    [_callMedia release];
     [_window release];
     [_navigation release];
     [_countries release];
@@ -626,9 +628,11 @@ static NSString *ExteriaSupportDirectory(void) {
             NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
             NSString *directory = [[caches stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"avatars"];
             _callAvatars = [[ExteriaAvatarCache alloc] initWithSession:session directory:directory];
+            _callMedia = [[ExteriaMediaCache alloc] initWithSession:session directory:[[caches stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"media"]];
         }
         _callScreen = [[ExteriaCallController alloc] initWithSession:session];
         _callScreen.avatars = _callAvatars;
+        _callScreen.media = _callMedia;
         _callScreen.photo = call.photo;
         /* not retained by the block: the screen holds the block */
         __block ExteriaCallController *shown = _callScreen;

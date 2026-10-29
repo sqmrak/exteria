@@ -1,3 +1,4 @@
+#import "exteria_name_badge.h"
 #import "exteria_media_action_view.h"
 #import "exteria_progress_bar.h"
 #import "exteria_slider.h"
@@ -430,12 +431,20 @@ static char ExteriaMediaPlayerStatusContext;
     _caption.text = self.message.text;
     NSString *name = [_senderNames objectForKey:[NSNumber numberWithLongLong:self.message.senderKey]];
     if (!name.length) name = self.message.outgoing ? NSLocalizedString(@"media.you", nil) : _chatTitle;
-    _title.text = self.isSending ? NSLocalizedString(@"media.preview", nil) : (name.length ? name : NSLocalizedString(@"chat.someone", nil));
+    if (self.isSending) {
+        _title.entities = nil;
+        _title.text = NSLocalizedString(@"media.preview", nil);
+    } else {
+        /* the sender's marks stand after the name, as in the chat; a negative key is a channel, which wears none */
+        long long sender = self.message.senderKey;
+        ExteriaShowNameWithBadges(_title, name.length ? name : NSLocalizedString(@"chat.someone", nil), sender > 0 ? sender : 0, nil, nil);
+    }
     _date.text = ExteriaMediaTimeText(self.message.date);
     _count.text = [NSString stringWithFormat:NSLocalizedString(@"media.count", nil), (long)(_index + 1), (long)_messages.count];
     if (_oneTime) {
         /* nothing here can keep the picture: no menu, no share, no edit, and the line under the title says it goes */
         _more.hidden = _forward.hidden = _headerEdit.hidden = _count.hidden = YES;
+        _title.entities = nil;
         _title.text = NSLocalizedString(_previewOnly ? @"viewonce.preview.title" : (self.isVideo ? @"viewonce.title.video" : @"viewonce.title.photo"), nil);
         _date.text = NSLocalizedString(_previewOnly ? @"viewonce.preview.hint" : @"viewonce.hint", nil);
         _date.hidden = NO;
