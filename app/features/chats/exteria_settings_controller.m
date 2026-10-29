@@ -348,7 +348,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
                                                             subtitle:nil value:ExteriaNativeLanguageName(ExteriaInterfaceLanguageVariant())
                                                                  tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaLanguageSettingsController alloc] init] autorelease]]; }];
     ExteriaSettingsRow *update = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolArrowDown tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"update.page.title", nil)
-                                                         subtitle:nil value:nil tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; }];
+                                                         subtitle:NSLocalizedString(@"update.page.info", nil) value:nil tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; }];
     NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
 #if defined(__arm64__)
     NSString *architecture = @"arm64";

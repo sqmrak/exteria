@@ -2010,6 +2010,7 @@
 "rating.ok" = "Понятно";
 
 "update.page.title" = "Обновление";
+"update.page.info" = "Полуавтоматическое обновление Exteria";
 "update.page.installed" = "Установлена";
 "update.page.latest" = "Последняя";
 "update.page.checking" = "Проверка…";

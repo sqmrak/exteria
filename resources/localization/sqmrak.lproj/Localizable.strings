@@ -2011,6 +2011,7 @@
 "rating.ok" = "понятно";
 
 "update.page.title" = "обновление";
+"update.page.info" = "полуавтоматическое обновление exteria";
 "update.page.installed" = "установлена";
 "update.page.latest" = "последняя";
 "update.page.checking" = "проверка…";

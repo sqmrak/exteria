@@ -2005,6 +2005,7 @@
 "rating.ok" = "Understood";
 
 "update.page.title" = "Update";
+"update.page.info" = "Semi-automatic Exteria update";
 "update.page.installed" = "Installed";
 "update.page.latest" = "Latest";
 "update.page.checking" = "Checking…";
