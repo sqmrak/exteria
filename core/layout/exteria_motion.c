@@ -25,6 +25,7 @@ double exteria_motion_duration(exteria_motion_curve curve) {
     case EXTERIA_MOTION_SPRING: return 0.48;
     case EXTERIA_MOTION_NAVIGATION: return 0.32;
     case EXTERIA_MOTION_LIST_MOVE: return 0.25;
+    case EXTERIA_MOTION_DISMISS: return 0.2;
     }
     return 0.0;
 }
@@ -56,6 +57,10 @@ double exteria_motion_progress(exteria_motion_curve curve, double time) {
     /* ChatListItemAnimator: DEFAULT_DURATION 250 ms with its DEFAULT_INTERPOLATOR, for rows that move and rows
        that are added */
     case EXTERIA_MOTION_LIST_MOVE: return bezier(time, 0.19919472913616398, 0.010644531250000006, 0.27920937042459737, 0.91025390625);
+    case EXTERIA_MOTION_DISMISS: {
+        double remaining = 1.0 - time;
+        return 1.0 - remaining * remaining;
+    }
     }
     return 0.0;
 }

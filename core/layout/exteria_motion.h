@@ -6,7 +6,9 @@ typedef enum exteria_motion_curve {
     EXTERIA_MOTION_EXIT,
     EXTERIA_MOTION_SPRING,
     EXTERIA_MOTION_NAVIGATION,
-    EXTERIA_MOTION_LIST_MOVE
+    EXTERIA_MOTION_LIST_MOVE,
+    /* a card or a menu that goes away: it starts to leave at once and settles, where EXIT starts slowly and the card seems to hang for a moment */
+    EXTERIA_MOTION_DISMISS
 } exteria_motion_curve;
 
 double exteria_motion_duration(exteria_motion_curve curve);
