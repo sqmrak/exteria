@@ -6148,16 +6148,72 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         [player togglePause];
         return;
     }
-    /* voice notes follow one another and songs follow songs, but a note does not lead into a song */
+    [self playAudioTrack:track];
+}
+
+/* voice notes follow one another and songs follow songs, but a note does not lead into a song */
+- (void)playAudioTrack:(ExteriaMedia *)track {
+    ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
     NSMutableArray *queue = [NSMutableArray array];
     for (ExteriaChatItem *item in _items) {
         ExteriaMedia *media = item.message.media;
         if (media.kind == track.kind && media.file) [queue addObject:media];
     }
+    if (track.kind == EXTERIA_PREVIEW_VOICE) {
+        /* the player walks only voice notes, so a video message between two of them is started from here when the note before it ends */
+        ExteriaWeakReference *weak = _weak;
+        player.voiceEndHandler = ^BOOL(ExteriaMedia *ended) {
+            ExteriaChatController *me = weak.target;
+            return me && [me voiceNoteEnded:ended];
+        };
+    }
     [player playTrack:track queue:queue media:_media];
 }
 
-/* a round message that ended is followed by the next one of the chat, brought into view first when it is off screen */
+/* the item after index that a note or a video message hands over to: another voice note or a video message with a file, one-time ones left alone */
+- (NSUInteger)chainItemAfter:(NSUInteger)index {
+    for (NSUInteger next = index + 1; next < _items.count; ++next) {
+        ExteriaChatItem *item = [_items objectAtIndex:next];
+        ExteriaMedia *media = item.message.media;
+        if (!media.file) continue;
+        if (item.kind == ExteriaChatItemRound) return next;
+        if (media.kind == EXTERIA_PREVIEW_VOICE && !media.viewOnce) return next;
+    }
+    return NSNotFound;
+}
+
+/* brings the item into view when it is off screen and starts it as a tap on it would */
+- (void)startChainItemAtIndex:(NSUInteger)index {
+    ExteriaChatItem *item = [_items objectAtIndex:index];
+    if (item.kind != ExteriaChatItemRound) {
+        [self playAudioTrack:item.message.media];
+        return;
+    }
+    NSIndexPath *path = [NSIndexPath indexPathForRow:(NSInteger)index inSection:0];
+    if (![[_table indexPathsForVisibleRows] containsObject:path]) {
+        [_table scrollToRowAtIndexPath:path atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+        [_table layoutIfNeeded];
+    }
+    [(ExteriaMessageCell *)[_table cellForRowAtIndexPath:path] startRound];
+}
+
+/* a voice note ended: when the next voice note or video message of the chat is a video message, it starts and the player stops; a voice note next is left to the
+   player, whose queue is the voice notes of the chat in order */
+- (BOOL)voiceNoteEnded:(ExteriaMedia *)ended {
+    if (ExteriaChatFlagGet(ExteriaChatFlagNoAutoNextVoice) || ended.viewOnce) return NO;
+    NSUInteger index = NSNotFound;
+    for (NSUInteger i = 0; i < _items.count; ++i) {
+        ExteriaChatItem *candidate = [_items objectAtIndex:i];
+        ExteriaMedia *media = candidate.message.media;
+        if (media.kind == EXTERIA_PREVIEW_VOICE && [media.file.key isEqualToString:ended.file.key]) { index = i; break; }
+    }
+    if (index == NSNotFound) return NO;
+    NSUInteger next = [self chainItemAfter:index];
+    if (next == NSNotFound || ((ExteriaChatItem *)[_items objectAtIndex:next]).kind != ExteriaChatItemRound) return NO;
+    [self startChainItemAtIndex:next];
+    return YES;
+}
+
 /* a document that has come opens in the preview of the system, or offers the apps that take it; the cache names its files by key only, so a link with the real
    extension is what tells the system the type */
 - (void)messageCell:(ExteriaMessageCell *)cell didOpenFileAtPath:(NSString *)path name:(NSString *)name {
@@ -6180,20 +6236,15 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     return self;
 }
 
+/* a video message that ended hands over to the next video message or voice note of the chat; a voice note starts only when the chat lets voice notes follow
+   one another */
 - (void)messageCellDidFinishRound:(ExteriaMessageCell *)cell {
     NSUInteger index = [_items indexOfObjectIdenticalTo:cell.item];
     if (index == NSNotFound) return;
-    for (NSUInteger next = index + 1; next < _items.count; ++next) {
-        ExteriaChatItem *item = [_items objectAtIndex:next];
-        if (item.kind != ExteriaChatItemRound || !item.message.media.file) continue;
-        NSIndexPath *path = [NSIndexPath indexPathForRow:(NSInteger)next inSection:0];
-        if (![[_table indexPathsForVisibleRows] containsObject:path]) {
-            [_table scrollToRowAtIndexPath:path atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
-            [_table layoutIfNeeded];
-        }
-        [(ExteriaMessageCell *)[_table cellForRowAtIndexPath:path] startRound];
-        return;
-    }
+    NSUInteger next = [self chainItemAfter:index];
+    if (next == NSNotFound) return;
+    if (((ExteriaChatItem *)[_items objectAtIndex:next]).kind != ExteriaChatItemRound && ExteriaChatFlagGet(ExteriaChatFlagNoAutoNextVoice)) return;
+    [self startChainItemAtIndex:next];
 }
 
 /* the cross on a message that is going up: the upload stops and the pending message goes, as if it was never sent */

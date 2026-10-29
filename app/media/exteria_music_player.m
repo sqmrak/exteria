@@ -69,6 +69,7 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 }
 
 @interface ExteriaMusicPlayer () {
+    BOOL (^_voiceEndHandler)(ExteriaMedia *);
     ExteriaMedia *_track;
     NSArray *_queue;
     NSUInteger _index;
@@ -104,6 +105,7 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 
 @implementation ExteriaMusicPlayer
 
+@synthesize voiceEndHandler = _voiceEndHandler;
 @synthesize track = _track;
 @synthesize state = _state;
 @synthesize loadProgress = _loadProgress;
@@ -578,6 +580,10 @@ static BOOL ExteriaIsFlac(NSString *path) {
     /* a voice message that ends leaves the next one of the chat unplayed, if the person asked for that */
     BOOL voice = _track.kind == EXTERIA_PREVIEW_VOICE;
     if (voice) {
+        if (_voiceEndHandler && _voiceEndHandler(_track)) {
+            [self stop];
+            return;
+        }
         if (_index + 1 < _queue.count && !ExteriaChatFlagGet(ExteriaChatFlagNoAutoNextVoice)) [self next];
         else [self stop];
         return;

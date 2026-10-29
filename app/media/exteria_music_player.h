@@ -72,6 +72,9 @@ typedef enum {
    track plays it alone */
 - (void)playTrack:(ExteriaMedia *)track queue:(NSArray *)queue media:(ExteriaMediaCache *)media;
 - (BOOL)isCurrentTrack:(ExteriaMedia *)track;
+/* asked when a voice note ends, with that note: YES means the chat started something else after it (a video message), so the player stops and does not walk its
+   own queue; NO leaves the next voice note to the player. set by the chat that started the note, nil for other owners of the player */
+@property (nonatomic, copy) BOOL (^voiceEndHandler)(ExteriaMedia *track);
 /* pauses a song that plays and does nothing for any other state, for a video that takes the speaker */
 - (void)pause;
 /* the pauses of the chat settings: a video or a video message that starts pauses the song when "pause music on
