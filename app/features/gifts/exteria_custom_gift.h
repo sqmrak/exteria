@@ -14,6 +14,6 @@ NSString *ExteriaCustomGiftNumberText(int32_t number);
 
 /* whether the profile gets the gift and the sender is not known yet: the feed asks for him before it builds the gift */
 BOOL ExteriaCustomGiftNeedsSender(ExteriaDialog *owner);
-/* asks the server who @sqmrak is, once, and keeps the answer for the run; done runs on the main thread, also when he could not be had (the gift then names him
+/* loads the sender by id, once, and keeps the answer for the run; done runs on the main thread, also when he could not be had (the gift then names him
    without a picture) */
 void ExteriaCustomGiftLoadSender(ExteriaSession *session, void (^done)(void));

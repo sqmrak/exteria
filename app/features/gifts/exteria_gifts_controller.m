@@ -1,5 +1,6 @@
 #import "exteria_gifts_controller.h"
 
+#import "exteria_custom_gift.h"
 #import "exteria_gift_catalog_controller.h"
 #import "exteria_gift_detail_controller.h"
 #import "exteria_gift_folder_bar.h"
@@ -168,6 +169,16 @@
     _retry.hidden = YES;
     if (first && !_loaded) [_spinner startAnimating];
     [self retain];
+    if (first && !_folderId && ExteriaCustomGiftNeedsSender(_dialog)) {
+        /* the gift of the app names @sqmrak with his picture, so the first page waits for him, once per run */
+        ExteriaCustomGiftLoadSender(self.session, ^{
+            [self autorelease];
+            if (generation != _generation) return;
+            _loading = NO;
+            [self loadPage];
+        });
+        return;
+    }
     [self.session loadSavedGiftsOfDialog:_dialog folder:_folderId offset:offset completion:^(NSArray *gifts, NSInteger total, NSString *next, NSString *errorName) {
         [self autorelease];
         if (generation != _generation) return;
@@ -182,7 +193,11 @@
             _retry.hidden = NO;
             return;
         }
-        if (first) [_gifts removeAllObjects];
+        if (first) {
+            [_gifts removeAllObjects];
+            /* the gifts of the app stand before every gift of the profile, and not in a folder of them */
+            if (!_folderId) [_gifts addObjectsFromArray:ExteriaCustomGiftsForDialog(_dialog)];
+        }
         [_gifts addObjectsFromArray:gifts];
         [_nextOffset release];
         _nextOffset = [next copy];

@@ -55,15 +55,14 @@ void ExteriaCustomGiftLoadSender(ExteriaSession *session, void (^done)(void)) {
     BOOL running = ExteriaCustomGiftWaiting.count > 0;
     [ExteriaCustomGiftWaiting addObject:[[done copy] autorelease]];
     if (running) return;
-    [session resolveUsername:ExteriaCustomGiftSenderUsername completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
-        (void)dialog;
+    ExteriaLoadTeamPerson(session, EXTERIA_TEAM_LEAD_ID, ^(ExteriaPerson *person, NSString *errorName) {
         ExteriaCustomGiftAsked = YES;
         if (person && person.userId > 0) ExteriaCustomGiftSender = [person retain];
         else NSLog(@"exteria: the sender of the custom gift was not resolved: %@", errorName);
         NSArray *waiting = [[ExteriaCustomGiftWaiting copy] autorelease];
         [ExteriaCustomGiftWaiting removeAllObjects];
         for (void (^waiter)(void) in waiting) waiter();
-    }];
+    });
 }
 
 NSArray *ExteriaCustomGiftsForDialog(ExteriaDialog *owner) {
@@ -86,8 +85,8 @@ NSArray *ExteriaCustomGiftsForDialog(ExteriaDialog *owner) {
         snprintf(row.gift.model, sizeof(row.gift.model), "%s", spec->model);
         snprintf(row.gift.pattern, sizeof(row.gift.pattern), "%s", spec->symbol);
         snprintf(row.gift.backdrop, sizeof(row.gift.backdrop), "%s", spec->backdrop);
-        /* until the server has told who he is, the id the credits learned and his username stand for him */
-        row.from_id = ExteriaDeveloperIdOfUsername(ExteriaCustomGiftSenderUsername);
+        /* the sender stays the same account when its username changes */
+        row.from_id = EXTERIA_TEAM_LEAD_ID;
         snprintf(row.from_name, sizeof(row.from_name), "%s", ExteriaCustomGiftSenderUsername.UTF8String);
         snprintf(row.note, sizeof(row.note), "%s", ExteriaCustomGiftNote.UTF8String);
         row.date = spec->date;
