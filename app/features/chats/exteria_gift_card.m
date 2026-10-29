@@ -140,30 +140,25 @@ static NSString *ExteriaGiftNumberRibbon(int32_t number) {
     [super dealloc];
 }
 
-/* a four point star, white; the emitter tints and fades it */
-static UIImage *ExteriaSparkleImage(void) {
+/* small blurred points stay within the gift button, as in the original client */
+static UIImage *ExteriaGiftParticleImage(void) {
     static UIImage *image;
     if (image) return image;
-    CGFloat side = 16;
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(6, 6), NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
-    CGFloat m = side / 2, k = side * 0.12;
-    CGContextMoveToPoint(context, m, 0);
-    CGContextAddQuadCurveToPoint(context, m + k, m - k, side, m);
-    CGContextAddQuadCurveToPoint(context, m + k, m + k, m, side);
-    CGContextAddQuadCurveToPoint(context, m - k, m + k, 0, m);
-    CGContextAddQuadCurveToPoint(context, m - k, m - k, m, 0);
-    CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-    CGContextFillPath(context);
+    CGContextSetShadowWithColor(context, CGSizeZero, 1.5, [UIColor whiteColor].CGColor);
+    CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
+    CGContextFillEllipseInRect(context, CGRectMake(2, 2, 2, 2));
     image = [UIGraphicsGetImageFromCurrentImageContext() retain];
     UIGraphicsEndImageContext();
     return image;
 }
 
-/* the stars drift around the button, a little wider than it */
 - (void)placeSparkles {
     if (!_sparkles || !_card) return;
-    _sparkles.frame = CGRectInset(_card.buttonFrame, -26, -10);
+    _sparkles.frame = _card.buttonFrame;
+    _sparkles.cornerRadius = _card.buttonFrame.size.height / 2;
+    _sparkles.masksToBounds = YES;
     _sparkles.emitterPosition = CGPointMake(CGRectGetMidX(_sparkles.bounds), CGRectGetMidY(_sparkles.bounds));
     _sparkles.emitterSize = _sparkles.bounds.size;
 }
@@ -179,16 +174,16 @@ static UIImage *ExteriaSparkleImage(void) {
 - (void)setSparkling:(BOOL)sparkling {
     if (sparkling && !_sparkles && _card) {
         CAEmitterCell *star = [CAEmitterCell emitterCell];
-        star.contents = (id)ExteriaSparkleImage().CGImage;
-        star.birthRate = 5;
-        star.lifetime = 1.5;
-        star.lifetimeRange = 0.6;
-        star.velocity = 3;
-        star.velocityRange = 3;
+        star.contents = (id)ExteriaGiftParticleImage().CGImage;
+        star.birthRate = 7;
+        star.lifetime = 1.1;
+        star.lifetimeRange = 0.35;
+        star.velocity = 0;
+        star.velocityRange = 0;
         star.emissionRange = (CGFloat)(2 * M_PI);
-        star.scale = 0.55;
-        star.scaleRange = 0.35;
-        star.alphaSpeed = -0.6;
+        star.scale = 0.5;
+        star.scaleRange = 0.25;
+        star.alphaSpeed = -0.8;
         star.color = [UIColor colorWithWhite:1 alpha:0.85].CGColor;
         _sparkles = [[CAEmitterLayer alloc] init];
         _sparkles.emitterShape = kCAEmitterLayerRectangle;
