@@ -11,6 +11,7 @@
 #import "exteria_music_player.h"
 #import "exteria_image_decoder.h"
 #import "exteria_lottie_view.h"
+#import "exteria_gift_card.h"
 #import "exteria_media_action_view.h"
 #import "exteria_markup_view.h"
 #import "exteria_reactions_view.h"
@@ -561,7 +562,7 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
     NSUInteger misses = ExteriaEmojiMissCount();
     if (_layerKind == ExteriaBubbleLayerReply) [self drawReply];
     else if (_layerKind == ExteriaBubbleLayerOverlay) [self drawOverlay:context];
-    else if (_item.kind == ExteriaChatItemPill) [self drawPill:context];
+    else if (_item.kind == ExteriaChatItemPill && !_item.giftCard) [self drawPill:context];
     else if (_item.kind == ExteriaChatItemBubble) [self drawBody:context];
     else if (_item.commentsText.length) {
         CGRect row = _item.commentsFrame;
@@ -873,6 +874,7 @@ static float ExteriaSpoilerRandom(void) {
     BOOL _playWhenLoaded;
     BOOL _photoLoadShown;
     ExteriaLottieView *_lottie;
+    ExteriaGiftCardView *_giftCardView;
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickerLibrary;
     BOOL _emojiPlayed;
@@ -903,6 +905,8 @@ static float ExteriaSpoilerRandom(void) {
     NSMutableArray *_commenters;
     NSMutableArray *_pollVoters;
     UIButton *_share;
+    UIButton *_sharingAccept;
+    UIButton *_sharingDecline;
     ExteriaWeakReference *_weak;
     BOOL _activationDeferred;
     /* the sticker file that arrived while activation was deferred */
@@ -1056,6 +1060,8 @@ static ExteriaMessageCell *sPlayingRound = nil;
     [_commenters release];
     [_pollVoters release];
     [_share release];
+    [_sharingAccept release];
+    [_sharingDecline release];
     [_item release];
     [_body release];
     [_replyPreview release];
@@ -1066,6 +1072,7 @@ static ExteriaMessageCell *sPlayingRound = nil;
     [_play release];
     [_voiceAction release];
     [_loadedPath release];
+    [_giftCardView release];
     [_lottie release];
     [_pendingLottie release];
     [_pendingLottieKey release];
@@ -1103,6 +1110,8 @@ static ExteriaMessageCell *sPlayingRound = nil;
     [self cancelMediaLoad];
     ++_token;
     [self discardLottie];
+    [_giftCardView discard];
+    _giftCardView.hidden = YES;
     _animationLoading = NO;
     _animating = NO;
     _gifPlayRequested = NO;
@@ -1557,6 +1566,40 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [self configureMarkupForItem:item];
     [self configurePostExtrasForItem:item bubble:bubble];
     [self configurePollVotersForItem:item bubble:bubble];
+    if (item.giftCard) {
+        if (!_giftCardView) {
+            _giftCardView = [[ExteriaGiftCardView alloc] init];
+            [self.contentView addSubview:_giftCardView];
+        }
+        _giftCardView.hidden = NO;
+        _giftCardView.frame = item.bubbleFrame;
+        [_giftCardView configureWithLayout:item.giftCard media:media];
+        [_giftCardView setActive:_animating];
+    } else _giftCardView.hidden = YES;
+    BOOL sharingOffer = item.message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 && !item.message.outgoing && !item.sharingExpired && item.message.messageId > 0;
+    if (sharingOffer && !_sharingAccept) {
+        _sharingAccept = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+        _sharingDecline = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+        for (UIButton *button in [NSArray arrayWithObjects:_sharingDecline, _sharingAccept, nil]) {
+            button.titleLabel.font = ExteriaFontMedium(13);
+            button.backgroundColor = ExteriaColorAccent();
+            button.layer.cornerRadius = 8;
+            [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+            [self.contentView addSubview:button];
+        }
+        [_sharingAccept setTitle:NSLocalizedString(@"chat.sharing.accept", nil) forState:UIControlStateNormal];
+        [_sharingDecline setTitle:NSLocalizedString(@"chat.sharing.decline", nil) forState:UIControlStateNormal];
+        [_sharingAccept addTarget:self action:@selector(acceptSharing) forControlEvents:UIControlEventTouchUpInside];
+        [_sharingDecline addTarget:self action:@selector(declineSharing) forControlEvents:UIControlEventTouchUpInside];
+    }
+    _sharingAccept.hidden = !sharingOffer;
+    _sharingDecline.hidden = !sharingOffer;
+    if (sharingOffer) {
+        CGFloat width = MIN(260, self.contentView.bounds.size.width - 24);
+        CGFloat x = floor((self.contentView.bounds.size.width - width) / 2);
+        _sharingDecline.frame = CGRectMake(x, CGRectGetMaxY(bubble) + 4, (width - 4) / 2, 36);
+        _sharingAccept.frame = CGRectMake(x + (width + 4) / 2, CGRectGetMaxY(bubble) + 4, (width - 4) / 2, 36);
+    }
     if (item.kind == ExteriaChatItemPill) return;
     ExteriaMedia *content = item.message.media;
     BOOL pictureOnly = item.content == ExteriaChatItemContentPicture && !item.textLayout;
@@ -1760,7 +1803,10 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         [self.contentView insertSubview:_flash atIndex:0];
     }
     _flash.backgroundColor = [ExteriaColorAccent() colorWithAlphaComponent:ExteriaThemeIsDark() ? 0.26f : 0.2f];
-    _flash.frame = CGRectMake(0, 1, self.contentView.bounds.size.width, MAX(0, self.contentView.bounds.size.height - 2));
+    CGRect bubble = _item.bubbleFrame;
+    CGFloat top = MAX(0, CGRectGetMinY(bubble));
+    CGFloat bottom = MIN(self.contentView.bounds.size.height, CGRectGetMaxY(bubble));
+    _flash.frame = CGRectMake(0, top, self.contentView.bounds.size.width, MAX(0, bottom - top));
     [_flash.layer removeAllAnimations];
     _flash.alpha = 0;
     UIView *flash = _flash;
@@ -2123,6 +2169,11 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 }
 
 - (void)setAnimating:(BOOL)animating {
+    if (_item.giftCard) {
+        _animating = animating;
+        [_giftCardView setActive:animating];
+        return;
+    }
     if (_item.message.media.kind == EXTERIA_PREVIEW_GIF) {
         _animating = animating && (_gifPlayRequested || [self playsOnItsOwn]) && ![self spoilerHidesItem:_item];
         if (_animating) [self startGif];
@@ -2404,7 +2455,19 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_delegate messageCellDidTapShare:self];
 }
 
+- (void)acceptSharing {
+    if ([_delegate respondsToSelector:@selector(messageCell:answerSharingRequest:)]) [_delegate messageCell:self answerSharingRequest:YES];
+}
+
+- (void)declineSharing {
+    if ([_delegate respondsToSelector:@selector(messageCell:answerSharingRequest:)]) [_delegate messageCell:self answerSharingRequest:NO];
+}
+
 - (void)tapped:(UITapGestureRecognizer *)tap {
+    if (_item.giftCard && CGRectContainsPoint(_item.bubbleFrame, [tap locationInView:self.contentView]) && [_delegate respondsToSelector:@selector(messageCellDidTapGift:)]) {
+        [_delegate messageCellDidTapGift:self];
+        return;
+    }
     if (!_item || _item.kind == ExteriaChatItemPill) return;
     CGPoint point = [tap locationInView:self.contentView];
     if (_item.content == ExteriaChatItemContentPoll && [_delegate respondsToSelector:@selector(messageCell:didTapPollAnswer:)]) {

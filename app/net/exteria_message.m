@@ -3,6 +3,7 @@
 
 #import "exteria_person.h"
 #import "exteria_remote_file.h"
+#import "exteria_star_gift.h"
 
 /* strings arrive as UTF-8 cut by the core, but a server can still send invalid bytes */
 static NSString *ExteriaUtf8(const char *bytes) {
@@ -232,6 +233,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize giftTitle = _giftTitle;
 @synthesize giftStars = _giftStars;
 @synthesize giftNumber = _giftNumber;
+@synthesize gift = _gift;
 @synthesize reactions = _reactions;
 @synthesize reactionsPossible = _reactionsPossible;
 @synthesize hasReactions = _hasReactions;
@@ -362,6 +364,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_giftTitle = [ExteriaUtf8(row->gift.title) copy];
     message->_giftStars = row->gift.stars;
     message->_giftNumber = row->gift.num;
+    if (row->gift.id != 0) message->_gift = [[ExteriaStarGift giftWithRow:&row->gift] retain];
     message->_entities = [ExteriaTextEntities(message->_text, row->entities, row->entity_count, row->urls) retain];
     message->_poll = [[ExteriaPoll pollWithRow:&row->poll] retain];
     return message;
@@ -447,6 +450,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     [_entities release];
     [_media release];
     [_giftTitle release];
+    [_gift release];
     [_reactions release];
     [_poll release];
     [super dealloc];

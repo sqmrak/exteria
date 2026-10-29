@@ -1,3 +1,4 @@
+#import "exteria_gift_detail_controller.h"
 #import "exteria_emoji_label.h"
 #import "exteria_chat_controller.h"
 #import "exteria_group_call_engine.h"
@@ -6025,6 +6026,22 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithMessages:messages selected:selected media:_media
         senderNames:senderNames chatTitle:_dialog.title] autorelease];
     [self presentViewController:viewer animated:YES completion:nil];
+}
+
+/* a tap on the card of a gift opens the same detail as the profile shows; the chat has no say over what the gift may do, so it is read only */
+- (void)messageCellDidTapGift:(ExteriaMessageCell *)cell {
+    ExteriaMessage *message = cell.item.message;
+    if (!message.gift) return;
+    exteria_saved_gift row;
+    memset(&row, 0, sizeof(row));
+    row.gift = message.gift.row;
+    row.from_id = message.fromId;
+    row.date = message.date;
+    snprintf(row.note, sizeof(row.note), "%s", [message.text UTF8String]);
+    ExteriaGiftDetailController *detail = [[[ExteriaGiftDetailController alloc] initWithSession:_session gift:[ExteriaSavedGift savedGiftWithRow:&row] mine:NO
+                                                                                        avatars:_avatars media:_media] autorelease];
+    detail.stickers = _stickers;
+    [detail showInViewController:self];
 }
 
 /* a tap on a song plays it, and the songs of this chat from there on follow it; a tap on the one that plays pauses it */

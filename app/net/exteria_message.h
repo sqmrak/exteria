@@ -7,6 +7,7 @@
 #include "exteria_messages.h"
 
 @class ExteriaRemoteFile;
+@class ExteriaStarGift;
 
 /* the photo, sticker or file of a message, built off the main thread */
 @interface ExteriaMedia : NSObject {
@@ -221,6 +222,7 @@ typedef enum {
     NSString *_giftTitle;
     long long _giftStars;
     int32_t _giftNumber;
+    ExteriaStarGift *_gift;
     NSArray *_reactions;
     long long _viaBotId;
     int32_t _sendReplyTo;
@@ -332,6 +334,8 @@ typedef enum {
 @property (nonatomic, readonly, copy) NSString *giftTitle;
 @property (nonatomic, readonly) long long giftStars;
 @property (nonatomic, readonly) int32_t giftNumber;
+/* the whole gift of a gift service message, nil when the action could not be read */
+@property (nonatomic, readonly, retain) ExteriaStarGift *gift;
 
 @end
 

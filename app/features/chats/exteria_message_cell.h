@@ -17,6 +17,8 @@
 - (void)messageCellDidTapFailed:(ExteriaMessageCell *)cell;
 /* the preview of the message this one answers */
 - (void)messageCellDidTapReply:(ExteriaMessageCell *)cell;
+/* the card of a gift service message was tapped */
+- (void)messageCellDidTapGift:(ExteriaMessageCell *)cell;
 /* the play button or title of a song in a bubble was tapped */
 - (void)messageCellDidTapAudio:(ExteriaMessageCell *)cell;
 /* the file button of a document that has come was tapped: the file is at path, and name is what it was called */
@@ -29,6 +31,7 @@
 /* the name or picture of the sender of a group message was tapped */
 - (void)messageCellDidTapSender:(ExteriaMessageCell *)cell;
 @optional
+- (void)messageCell:(ExteriaMessageCell *)cell answerSharingRequest:(BOOL)accept;
 /* the card of a one-time photo, video, voice note or round video was tapped */
 - (void)messageCellDidTapViewOnce:(ExteriaMessageCell *)cell;
 /* the cross on the picture or file of a message that is still going up was tapped */

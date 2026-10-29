@@ -73,6 +73,8 @@
 @synthesize content = _content;
 @synthesize message = _message;
 @synthesize pillText = _pillText;
+@synthesize sharingExpired = _sharingExpired;
+@synthesize giftCard = _giftCard;
 @synthesize senderName = _senderName;
 @synthesize transcript = _transcript;
 @synthesize senderTag = _senderTag;
@@ -182,6 +184,18 @@ static NSString *ExteriaGiftText(ExteriaMessage *message, NSString *who) {
     NSString *line = message.outgoing ? [NSString stringWithFormat:NSLocalizedString(@"chat.service.gift.out", nil), what, price]
                                       : [NSString stringWithFormat:NSLocalizedString(@"chat.service.gift.in", nil), who, what, price];
     return message.text.length ? [NSString stringWithFormat:@"%@\n\u201c%@\u201d", line, message.text] : line;
+}
+
+/* the two lines over the note of a gift card: who gave it, and what it is */
+static void ExteriaGiftCardLines(ExteriaMessage *message, NSString *who, NSString **title, NSString **subtitle) {
+    ExteriaStarGift *gift = message.gift;
+    *title = message.outgoing ? NSLocalizedString(@"gifts.card.out", nil) : [NSString stringWithFormat:NSLocalizedString(@"gifts.card.from", nil), who];
+    if (gift.unique) {
+        *subtitle = [NSString stringWithFormat:@"%@ #%d", gift.title, (int)gift.number];
+        return;
+    }
+    NSString *name = gift.title.length ? gift.title : NSLocalizedString(@"gifts.gift", nil);
+    *subtitle = gift.stars > 0 ? [NSString stringWithFormat:@"%@ \u00b7 %@", name, ExteriaStarsText(gift.stars)] : name;
 }
 
 static NSString *ExteriaServiceText(ExteriaMessage *message, NSDictionary *people) {
@@ -410,6 +424,14 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     if (message.service && !isCall) {
         ExteriaChatItem *pill = [ExteriaChatItem pillWithText:ExteriaServiceText(message, people)];
         [pill captureMessage:message];
+        pill.sharingExpired = (message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 && (message.serviceValue & 4));
+        if (message.service - 1 == EXTERIA_SERVICE_GIFT && message.gift) {
+            ExteriaPerson *actor = [people objectForKey:[NSNumber numberWithLongLong:message.fromId]];
+            NSString *who = actor.name.length ? actor.name : NSLocalizedString(@"chat.someone", nil);
+            ExteriaGiftCardLines(message, who, &pill->_giftTitle, &pill->_giftSubtitle);
+            [pill->_giftTitle retain];
+            [pill->_giftSubtitle retain];
+        }
         return pill;
     }
     ExteriaChatItem *item = [[[ExteriaChatItem alloc] init] autorelease];
@@ -554,6 +576,9 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_markup release];
     [_markupButtons release];
     [_pillText release];
+    [_giftTitle release];
+    [_giftSubtitle release];
+    [_giftCard release];
     [_senderName release];
     [_transcript release];
     [_senderTag release];
@@ -728,7 +753,19 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     return CGSizeMake(ceil(width), ceil(height));
 }
 
+- (void)layoutGiftCardForWidth:(CGFloat)width {
+    CGFloat cardWidth = floor(MIN(width - 2 * SIDE_MARGIN, MAX(200.0, MIN(260.0, width * 0.66))));
+    [_giftCard release];
+    _giftCard = [[ExteriaGiftCardLayout layoutForGift:_message.gift title:_giftTitle subtitle:_giftSubtitle note:_message.text width:cardWidth] retain];
+    _bubbleFrame = CGRectMake(floor((width - cardWidth) / 2), 6, cardWidth, _giftCard.size.height);
+    _height = _giftCard.size.height + 12;
+}
+
 - (void)layoutPillForWidth:(CGFloat)width {
+    if (_giftTitle && _message.gift) {
+        [self layoutGiftCardForWidth:width];
+        return;
+    }
     [_pillLayout release];
     /* on the linen the dark capsule with white text reads as a stain, so a classic date is plain grey text with a shadow */
     UIColor *pillColor = ExteriaThemeIsClassic() ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.78 alpha:1] : [UIColor colorWithWhite:0.33 alpha:1])

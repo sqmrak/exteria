@@ -3,6 +3,7 @@
 NSString *ExteriaFileSizeText(long long bytes);
 
 #import "exteria_bot_markup.h"
+#import "exteria_gift_card.h"
 #import "exteria_message.h"
 #import "exteria_person.h"
 #import "exteria_text_layout.h"
@@ -36,6 +37,9 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     ExteriaChatItemContent _content;
     ExteriaMessage *_message;
     NSString *_pillText;
+    NSString *_giftTitle;
+    NSString *_giftSubtitle;
+    ExteriaGiftCardLayout *_giftCard;
     NSString *_senderName;
     /* the document drawn after the sender name: their status, or the Premium star, zero for none */
     long long _senderBadge;

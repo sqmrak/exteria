@@ -2052,6 +2052,10 @@
 "chat.service.sharing.still.enabled" = "Копирование и пересылка по-прежнему разрешены";
 "chat.service.sharing.disabled" = "%@ запретил(а) копирование и пересылку";
 "chat.service.sharing.enabled" = "%@ разрешил(а) копирование и пересылку";
+"gifts.card.from" = "Подарок от %@";
+"gifts.card.out" = "Ваш подарок";
+"gifts.card.view" = "Открыть";
+
 "chat.sharing.allow" = "Разрешить копирование";
 "chat.sharing.disable" = "Запретить копирование";
 "chat.sharing.allow.confirm" = "Предложить разрешить копирование и пересылку в этом чате?";
