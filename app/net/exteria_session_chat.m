@@ -749,7 +749,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
     ExteriaDialog *source = dialog.savedSource;
     exteria_peer_ref sourcePeer = source ? ExteriaPeerRefOfDialog(source) : peer;
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        return source ? exteria_saved_history_request(arena, &sourcePeer, beforeId, limit, request) : exteria_history_request(arena, &peer, beforeId, limit, request);
+        return source ? exteria_saved_history_window_request(arena, &sourcePeer, beforeId, addOffset, limit, request) : exteria_history_window_request(arena, &peer, beforeId, addOffset, limit, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         NSMutableArray *messages = nil;
         NSMutableDictionary *people = nil;
@@ -768,7 +768,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                         /* the cached copy preserves our selection when history carries only min counts */
                         exteria_arena storedArena;
                         exteria_tl_value *stored = NULL;
-                        exteria_peer storedPeer = {peer.kind, peer.id};
+                        exteria_peer storedPeer = {dialog.peerKind, dialog.peerId};
                         exteria_arena_init(&storedArena, 8u * 1024u * 1024u);
                         exteria_status status = exteria_store_get([self workerStore], EXTERIA_RECORD_MESSAGE,
                             storedPeer, rows[i].id, &storedArena, &stored);
@@ -794,10 +794,15 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
             /* what the person asked to keep joins the page; the kept deleted messages from the oldest of the page
                up to where the page began, which holes in the ids of the page (what was deleted) would otherwise
                leave out for good */
-            int32_t lowest = INT32_MAX;
-            for (ExteriaMessage *message in messages) lowest = MIN(lowest, message.messageId);
-            exteria_peer storedPeer = {peer.kind, peer.id};
-            NSMutableArray *kept = ExteriaSavedDeletedOfPeer([self workerStore], storedPeer, messages.count ? lowest : 1, beforeId > 0 ? beforeId - 1 : INT32_MAX);
+            int32_t lowest = INT32_MAX, highest = 0;
+            for (ExteriaMessage *message in messages) {
+                lowest = MIN(lowest, message.messageId);
+                highest = MAX(highest, message.messageId);
+            }
+            exteria_peer storedPeer = {dialog.peerKind, dialog.peerId};
+            /* a page that reaches toward newer messages ends at its own newest one, not at the offset */
+            int32_t upper = addOffset < 0 ? (highest ? highest : INT32_MAX) : (beforeId > 0 ? beforeId - 1 : INT32_MAX);
+            NSMutableArray *kept = ExteriaSavedDeletedOfPeer([self workerStore], storedPeer, messages.count ? lowest : 1, upper);
             ExteriaKeepTopic(kept, topic, discussion);
             [messages addObjectsFromArray:kept];
         }

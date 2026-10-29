@@ -733,7 +733,7 @@ static void test_post_counters(void) {
 }
 
 static void test_pinned_request(void) {
-    exteria_tl_value *request = NULL;
+    exteria_tl_value *request = NULL, *decoded = NULL;
     exteria_peer_ref channel = {3, 500, 7, 0, 0}, nohash = {3, 500, 0, 0, 0};
     exteria_writer writer;
     int32_t topic = 0;
@@ -1078,6 +1078,11 @@ static void test_saved_history(void) {
     check_encodes(request, EXTERIA_TL_ID_messages_getSavedHistory);
     CHECK_EQ_INT(exteria_tl_get_i32(request, "offset_id", &value), EXTERIA_OK);
     CHECK_EQ_INT(value, 30);
+    CHECK_EQ_INT(exteria_saved_history_window_request(&arena, &source, 31, -20, 40, &request), EXTERIA_OK);
+    check_encodes(request, EXTERIA_TL_ID_messages_getSavedHistory);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "add_offset", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, -20);
+    CHECK_EQ_INT(exteria_saved_history_window_request(&arena, &source, 31, -40, 40, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_saved_history_request(&arena, &self, 0, 40, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_messages_getSavedHistory);
     CHECK_EQ_INT(exteria_saved_history_request(&arena, &bare, 0, 40, &request), EXTERIA_E_ARG);
@@ -1100,6 +1105,9 @@ static void test_topic_requests(void) {
     exteria_peer_ref forum = {3, 7, 88, 0, 12}, general = {3, 7, 88, 0, 1}, whole = {3, 7, 88, 0, 0};
     exteria_tl_value *request = NULL, *reply;
     int32_t value = 0;
+    /* a topic is paged with getReplies, which takes the same window */
+    CHECK_EQ_INT(exteria_history_window_request(&arena, &forum, 51, -20, 40, &request), EXTERIA_OK);
+    check_encodes(request, EXTERIA_TL_ID_messages_getReplies);
     CHECK_EQ_INT(exteria_history_request(&arena, &forum, 50, 40, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_messages_getReplies);
     CHECK_EQ_INT(exteria_tl_get_i32(request, "msg_id", &value), EXTERIA_OK);
@@ -1155,6 +1163,13 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_history_request(&arena, &channel, 120, 40, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_history_request(&arena, &self, 0, 40, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "peer")), EXTERIA_TL_ID_inputPeerSelf);
+    /* a window around a message, and the page after the newest one held */
+    CHECK_EQ_INT(exteria_history_window_request(&arena, &chat, 121, -20, 40, &request), EXTERIA_OK);
+    check_encodes(request, EXTERIA_TL_ID_messages_getHistory);
+    { int32_t shift = 0; CHECK_EQ_INT(exteria_tl_get_i32(request, "add_offset", &shift), EXTERIA_OK); CHECK_EQ_INT(shift, -20); }
+    CHECK_EQ_INT(exteria_history_window_request(&arena, &chat, 500, -39, 40, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_history_window_request(&arena, &chat, 121, -40, 40, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_history_window_request(&arena, &chat, 121, 5, 40, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_history_request(&arena, &user, 0, 0, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_history_request(&arena, &user, 0, EXTERIA_MESSAGES_MAX + 1, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_history_request(&arena, &user, -1, 10, &request), EXTERIA_E_ARG);

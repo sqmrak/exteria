@@ -273,16 +273,23 @@ exteria_status exteria_input_peer(exteria_arena *arena, const exteria_peer_ref *
 exteria_status exteria_peer_dialogs_request(exteria_arena *arena, const exteria_peer_ref *peers, size_t count, exteria_tl_value **out);
 exteria_status exteria_history_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t limit,
                                       exteria_tl_value **out);
+/* the same with add_offset: a negative one moves the page toward newer messages, so offset_id of a message plus one with add_offset of minus half the limit gives the
+   page around that message, and offset_id of the newest message held with minus the limit gives the page after it. add_offset must stay under the limit */
+exteria_status exteria_history_window_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t add_offset, int32_t limit,
+                                              exteria_tl_value **out);
 /* messages.getSavedHistory: the messages of the favorites that came from one chat (the account itself for its own
    notes), newest first, read with exteria_messages_parse. source must be a user */
 exteria_status exteria_saved_history_request(exteria_arena *arena, const exteria_peer_ref *source, int32_t offset_id, int32_t limit,
                                              exteria_tl_value **out);
+/* the same with the negative add_offset of exteria_history_window_request */
+exteria_status exteria_saved_history_window_request(exteria_arena *arena, const exteria_peer_ref *source, int32_t offset_id, int32_t add_offset, int32_t limit,
+                                                    exteria_tl_value **out);
 /* channels.exportMessageLink for one message of a channel or supergroup: the link, public or private, that opens
    it */
 exteria_status exteria_message_link_request(exteria_arena *arena, const exteria_peer_ref *channel, int32_t id, exteria_tl_value **out);
 /* the exportedMessageLink it answers: the address in link (capacity cap, at most 255 bytes kept) */
 exteria_status exteria_message_link_parse(const exteria_tl_value *answer, char *link, size_t cap);
-/* messages.search for the pinned messages of a chat, newest first, up to limit (1 to EXTERIA_MESSAGES_MAX); the answer is read with
+/* messages.search for the pinned messages of a chat or its topic, newest first, up to limit (1 to EXTERIA_MESSAGES_MAX); the answer is read with
    exteria_messages_parse */
 /* messages.getStickers for one emoji: the stickers the server suggests for it, as the empty chat's greeting asks
    with a waving hand */

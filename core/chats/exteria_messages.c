@@ -1108,7 +1108,14 @@ static exteria_status chat_search_request(exteria_arena *arena, const exteria_pe
 }
 
 exteria_status exteria_pinned_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out) {
-    return chat_search_request(arena, peer, NULL, "", "inputMessagesFilterPinned", limit, out);
+    exteria_tl_value *request = NULL;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!peer || !out || peer->topic_id < 0 || (peer->topic_id > 0 && peer->kind != 3)) return EXTERIA_E_ARG;
+    status = chat_search_request(arena, peer, NULL, "", "inputMessagesFilterPinned", limit, &request);
+    if (status == EXTERIA_OK && peer->topic_id > 0) status = exteria_tl_set_i32(arena, request, "top_msg_id", peer->topic_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
 }
 
 exteria_status exteria_chat_photos_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out) {
@@ -1167,12 +1174,12 @@ exteria_status exteria_messages_by_id_request(exteria_arena *arena, const exteri
     return status;
 }
 
-exteria_status exteria_history_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t limit,
-                                      exteria_tl_value **out) {
+exteria_status exteria_history_window_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t add_offset, int32_t limit,
+                                              exteria_tl_value **out) {
     exteria_tl_value *request, *input;
     exteria_status status;
-    if (!arena || !out || offset_id < 0 || limit < 1 || limit > EXTERIA_MESSAGES_MAX) return EXTERIA_E_ARG;
-    *out = NULL;
+    if (out) *out = NULL;
+    if (!arena || !out || !peer || offset_id < 0 || limit < 1 || limit > EXTERIA_MESSAGES_MAX || add_offset > 0 || -add_offset >= limit) return EXTERIA_E_ARG;
     status = exteria_input_peer(arena, peer, &input);
     if (status != EXTERIA_OK) return status;
     request = exteria_tl_new_obj(arena, peer->topic_id > 0 ? "messages.getReplies" : "messages.getHistory");
@@ -1181,7 +1188,34 @@ exteria_status exteria_history_request(exteria_arena *arena, const exteria_peer_
     if (status == EXTERIA_OK && peer->topic_id > 0) status = exteria_tl_set_i32(arena, request, "msg_id", peer->topic_id);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_id", offset_id);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_date", 0);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "add_offset", 0);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "add_offset", add_offset);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "limit", limit);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "max_id", 0);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "min_id", 0);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "hash", 0);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_history_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t limit,
+                                      exteria_tl_value **out) {
+    return exteria_history_window_request(arena, peer, offset_id, 0, limit, out);
+}
+
+exteria_status exteria_saved_history_window_request(exteria_arena *arena, const exteria_peer_ref *source, int32_t offset_id, int32_t add_offset, int32_t limit,
+                                                    exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out || offset_id < 0 || limit < 1 || limit > EXTERIA_MESSAGES_MAX || add_offset > 0 || -add_offset >= limit) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, source, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.getSavedHistory");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_id", offset_id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_date", 0);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "add_offset", add_offset);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "limit", limit);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "max_id", 0);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "min_id", 0);
@@ -1192,24 +1226,7 @@ exteria_status exteria_history_request(exteria_arena *arena, const exteria_peer_
 
 exteria_status exteria_saved_history_request(exteria_arena *arena, const exteria_peer_ref *source, int32_t offset_id, int32_t limit,
                                              exteria_tl_value **out) {
-    exteria_tl_value *request, *input;
-    exteria_status status;
-    if (!arena || !out || offset_id < 0 || limit < 1 || limit > EXTERIA_MESSAGES_MAX) return EXTERIA_E_ARG;
-    *out = NULL;
-    status = exteria_input_peer(arena, source, &input);
-    if (status != EXTERIA_OK) return status;
-    request = exteria_tl_new_obj(arena, "messages.getSavedHistory");
-    if (!request) return EXTERIA_E_NOMEM;
-    status = exteria_tl_set(request, "peer", input);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_id", offset_id);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset_date", 0);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "add_offset", 0);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "limit", limit);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "max_id", 0);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "min_id", 0);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "hash", 0);
-    if (status == EXTERIA_OK) *out = request;
-    return status;
+    return exteria_saved_history_window_request(arena, source, offset_id, 0, limit, out);
 }
 
 exteria_status exteria_set_schedule(exteria_arena *arena, exteria_tl_value *request, int32_t date) {

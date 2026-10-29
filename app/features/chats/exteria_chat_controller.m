@@ -262,6 +262,13 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _layingOutChat;
     BOOL _followingBottom;
     BOOL _livePending;
+    /* the list shows a stretch of old history opened around a message, so its end is not the newest message of the chat */
+    BOOL _window;
+    BOOL _loadingWindow;
+    BOOL _loadingNewer;
+    BOOL _canLoadNewer;
+    BOOL _rebuildNow;
+    NSUInteger _windowToken;
     CADisplayLink *_liveLink;
     CADisplayLink *_followLink;
     /* the quick scroll to a message that was asked for (a reply, a search result, a pinned message, a bookmark): its own frame clock, so the rows load as it moves */
@@ -1431,6 +1438,12 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }
 }
 
+- (int32_t)newestLoadedId {
+    int32_t newest = 0;
+    for (NSNumber *key in [_server allKeys]) newest = MAX(newest, [key intValue]);
+    return newest;
+}
+
 - (void)scrollToTargetOrLoadMore {
     if (_scrollTarget <= 0) return;
     for (NSUInteger i = 0; i < _items.count; ++i) {
@@ -1439,6 +1452,16 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [self stopFollowingBottom];
         _stickToBottom = NO;
         [self scrollQuicklyToRow:i];
+        return;
+    }
+    if (_loadingWindow) return;
+    /* the message is held but its row is not built yet, which the rebuild that is waiting does */
+    if ([_server objectForKey:[NSNumber numberWithInt:_scrollTarget]]) return;
+    /* a message outside what is loaded is opened as the official clients do: the stretch of history around it is fetched and shown, instead of paging through
+       everything between it and the newest message, which never got to an old message of a busy group */
+    BOOL outside = (_oldestId && _scrollTarget < _oldestId) || (_window && _scrollTarget > [self newestLoadedId]);
+    if (outside && !_pinnedList && !_loadingOlder) {
+        [self openWindowAround:_scrollTarget];
         return;
     }
     if (_canLoadMore && !_loadingOlder && _scrollPages++ < PINNED_SEARCH_PAGES) [self loadOlder];
@@ -2539,10 +2562,12 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     /* the offset a list passes through while it settles on the newest message would ask for older rows, which then move it again */
     if (_loadingOlder || _olderDeferred || !_canLoadMore || !_loadedFirst || _opening || _oldestId <= 1) return;
     _loadingOlder = YES;
+    NSUInteger token = _windowToken;
     ExteriaWeakReference *weak = _weak;
     [_session loadHistoryOfDialog:_dialog beforeId:_oldestId limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
-        if (!chat) return;
+        /* a page asked for before the list moved to another stretch of history belongs to the old one */
+        if (!chat || token != chat->_windowToken) return;
         [chat didLoadOlder:messages people:people error:errorName];
     }];
 }
@@ -2575,6 +2600,17 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
    deleted, and what it holds replaces what is here */
 - (void)storeDidChange:(NSArray *)page {
     if (!_loadedFirst || !page.count) return;
+    if (_window) {
+        /* the live page of the store is the end of the chat, which a window around an old message is not next to: only a change of a message the window holds
+           is taken, so edits and reactions show while the new messages wait for the list to reach them */
+        NSMutableArray *held = [NSMutableArray array];
+        for (ExteriaMessage *message in page) if ([_server objectForKey:[NSNumber numberWithInt:message.messageId]]) [held addObject:message];
+        if (held.count) {
+            [self mergeMessages:held];
+            [self scheduleLiveMessages];
+        }
+        return;
+    }
     int32_t lowest = INT32_MAX;
     NSMutableSet *present = [NSMutableSet set];
     for (ExteriaMessage *message in page) {
@@ -2714,6 +2750,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 - (void)markReadIfNeeded {
+    if (_window) return;
     [self scheduleVisibleMentionsRead];
     int32_t newest = 0;
     for (ExteriaMessage *message in [_server allValues]) if (!message.outgoing && message.messageId > newest) newest = message.messageId;
@@ -2764,7 +2801,9 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
    no id yet after all of those, in the order it was written */
 - (NSArray *)orderedMessages {
     NSArray *server = [_server allValues];
-    NSUInteger count = server.count + _local.count;
+    /* a message on its way belongs to the end of the chat, which a window around an old message does not show */
+    NSArray *local = _window ? [NSArray array] : _local;
+    NSUInteger count = server.count + local.count;
     ExteriaMessageOrder *order = malloc(sizeof(ExteriaMessageOrder) * (count ? count : 1));
     NSMutableArray *all = [NSMutableArray arrayWithCapacity:count];
     if (!order) {
@@ -2772,7 +2811,7 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
         return all;
     }
     [all addObjectsFromArray:server];
-    [all addObjectsFromArray:_local];
+    [all addObjectsFromArray:local];
     for (NSUInteger i = 0; i < count; ++i) {
         ExteriaMessage *message = [all objectAtIndex:i];
         order[i].index = i;
@@ -3021,7 +3060,7 @@ static void ExteriaRedrawTree(UIView *view) {
 }
 
 - (void)rebuildItems {
-    if (_interacting || _keyboardMoving || _table.dragging || _table.decelerating) { _livePending = YES; return; }
+    if (!_rebuildNow && (_interacting || _keyboardMoving || _table.dragging || _table.decelerating)) { _livePending = YES; return; }
     if ([self replySwipeActive]) { [self scheduleLiveMessages]; return; }
     _livePending = NO;
     /* the history is what tells that a user is a bot, when the chat was opened from a link that did not */
@@ -3547,13 +3586,15 @@ static void ExteriaRedrawTree(UIView *view) {
         _stickToBottom = exteria_scroll_tracks_bottom(_stickToBottom, _interacting && moving,
                                                      _scroll.last_offset, scrollView.contentOffset.y, [self scrollLimitMax]);
     [self showNextChatHintForOverscroll:-distance scrollView:scrollView];
-    [self showToEnd:distance > scrollView.bounds.size.height * 1.2f];
+    if (_window) _stickToBottom = NO;
+    [self showToEnd:_window || distance > scrollView.bounds.size.height * 1.2f];
     /* a move the code made, such as a row inserted above or a keyboard, says nothing about how fast a finger goes */
     if (moving)
         exteria_scroll_sample(&_scroll, scrollView.contentOffset.y, CFAbsoluteTimeGetCurrent(), scrollView.bounds.size.height);
     else
         exteria_scroll_begin(&_scroll, scrollView.contentOffset.y, CFAbsoluteTimeGetCurrent());
     [self loadOlderIfNeeded];
+    [self loadNewerIfNeeded:distance];
     [self prepareAhead:NO];
     [self refreshAnimationsIfRowsChanged];
     [self scheduleVisibleMentionsRead];
@@ -3598,6 +3639,10 @@ static void ExteriaRedrawTree(UIView *view) {
 }
 
 - (void)toEndTapped {
+    if (_window) {
+        [self leaveWindow];
+        return;
+    }
     _stickToBottom = YES;
     [self scrollToBottomAnimated:YES];
 }
@@ -5674,6 +5719,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 /* the message shows at once as pending, and the file or point goes up behind it */
 /* several photos and videos at once go out as one album: a pending message for each shows at once, and one request sends them together */
 - (void)sendAlbum:(NSArray *)outgoings {
+    [self leaveWindow];
     int32_t now = (int32_t)[[NSDate date] timeIntervalSince1970];
     NSMutableArray *messages = [NSMutableArray arrayWithCapacity:outgoings.count], *randomIds = [NSMutableArray arrayWithCapacity:outgoings.count];
     long long albumNumber = [self newRandomId];
@@ -5728,6 +5774,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)afterAppendingLocal:(ExteriaMessage *)message {
+    [self leaveWindow];
     if (!_voice) ExteriaPlayInChatSound(NO);
     if (_dialog.kind == EXTERIA_DIALOG_CHANNEL) [message showAsChannelPost];
     if (!message.sendReplyTo) message.sendReplyTo = _replyToId;
