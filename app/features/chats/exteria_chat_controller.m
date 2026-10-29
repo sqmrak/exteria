@@ -667,8 +667,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _table.delegate = self;
     _table.hidden = YES;
     [root addSubview:_table];
-    /* a tap on the empty part of the list puts the keyboard or the panel away */
-    UITapGestureRecognizer *dismiss = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissInput)] autorelease];
+    /* a tap on the list puts the keyboard or the panel away, or brings the keyboard back while a message is edited from the panel */
+    UITapGestureRecognizer *dismiss = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(listTapped)] autorelease];
     dismiss.cancelsTouchesInView = NO;
     [_table addGestureRecognizer:dismiss];
 
@@ -2380,6 +2380,16 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 #pragma mark panel
+
+/* a tap on the list while a message is edited with the emoji panel open takes the person back to the keyboard of the edit, where it was left, instead of putting
+   the field away and leaving the chat with an edit nobody can see */
+- (void)listTapped {
+    if (_editingId && _panelShown) {
+        [self inputBarDidTapPanelButton:_input];
+        return;
+    }
+    [self dismissInput];
+}
 
 - (void)dismissInput {
     if (_panelShown) {
