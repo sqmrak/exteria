@@ -180,6 +180,9 @@ static NSArray *ExteriaInfoMentions(NSString *text) {
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaOpenLinkNotification object:self userInfo:[NSDictionary dictionaryWithObject:link forKey:@"url"]];
         return;
     }
+    ExteriaEmojiLabel *caption = (ExteriaEmojiLabel *)[row viewWithTag:2];
+    if ([caption.text isEqualToString:NSLocalizedString(@"profile.about", nil)] ||
+        [caption.text isEqualToString:NSLocalizedString(@"channel.description", nil)]) return;
     [UIPasteboard generalPasteboard].string = value.text;
     if (_copyHandler) _copyHandler();
 }
