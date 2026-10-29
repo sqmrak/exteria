@@ -71,6 +71,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     ExteriaSession *_session;
     ExteriaChatFolder *_filter;
     ExteriaListCompletion _completion;
+    void (^_progress)(NSArray *);
     NSMutableDictionary *_dialogs;
     exteria_peer_ref _offset;
     int32_t _offsetId;
@@ -82,17 +83,18 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     BOOL _cancelled;
     BOOL _finished;
 }
-- (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder completion:(ExteriaListCompletion)completion;
+- (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder progress:(void (^)(NSArray *))progress completion:(ExteriaListCompletion)completion;
 - (void)advance;
 @end
 
 @implementation ExteriaFolderDialogsLoad
-- (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder completion:(ExteriaListCompletion)completion {
+- (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder progress:(void (^)(NSArray *))progress completion:(ExteriaListCompletion)completion {
     self = [super init];
     if (self) {
         _session = [session retain];
         _filter = [folder copy];
         _completion = [completion copy];
+        _progress = [progress copy];
         _dialogs = [[NSMutableDictionary alloc] init];
         NSMutableData *extra = [NSMutableData dataWithData:folder.included];
         [extra appendData:folder.pinned];
@@ -104,6 +106,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     [_session release];
     [_filter release];
     [_completion release];
+    [_progress release];
     [_dialogs release];
     [_extraPeers release];
     [super dealloc];
@@ -118,6 +121,20 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
         return _cancelled;
     }
 }
+- (NSArray *)sortedDialogs {
+    return [[_dialogs allValues] sortedArrayUsingComparator:^NSComparisonResult(ExteriaDialog *a, ExteriaDialog *b) {
+        NSUInteger ai = [_filter pinIndexForDialog:a], bi = [_filter pinIndexForDialog:b];
+        if (ai != bi) return ai < bi ? NSOrderedAscending : NSOrderedDescending;
+        if (a.date != b.date) return a.date > b.date ? NSOrderedAscending : NSOrderedDescending;
+        if (a.peerKind != b.peerKind) return a.peerKind < b.peerKind ? NSOrderedAscending : NSOrderedDescending;
+        return a.peerId < b.peerId ? NSOrderedAscending : (a.peerId > b.peerId ? NSOrderedDescending : NSOrderedSame);
+    }];
+}
+- (void)reportProgress {
+    if (!_progress || !_dialogs.count) return;
+    NSArray *items = [self sortedDialogs];
+    [_session deliverMain:^{ if (![self cancelled] && _progress) _progress(items); }];
+}
 - (void)finish:(NSString *)errorName {
     @synchronized(self) {
         if (_finished)
@@ -126,16 +143,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     }
     NSArray *result = nil;
     if (!errorName)
-        result = [[_dialogs allValues] sortedArrayUsingComparator:^NSComparisonResult(ExteriaDialog *a, ExteriaDialog *b) {
-            NSUInteger ai = [_filter pinIndexForDialog:a], bi = [_filter pinIndexForDialog:b];
-            if (ai != bi)
-                return ai < bi ? NSOrderedAscending : NSOrderedDescending;
-            if (a.date != b.date)
-                return a.date > b.date ? NSOrderedAscending : NSOrderedDescending;
-            if (a.peerKind != b.peerKind)
-                return a.peerKind < b.peerKind ? NSOrderedAscending : NSOrderedDescending;
-            return a.peerId < b.peerId ? NSOrderedAscending : (a.peerId > b.peerId ? NSOrderedDescending : NSOrderedSame);
-        }];
+        result = [self sortedDialogs];
     ExteriaListCompletion done = [_completion copy];
     [_completion release];
     _completion = nil;
@@ -202,6 +210,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                     [_dialogs setObject:dialog forKey:[NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId]];
             }
             free(rows);
+            [self reportProgress];
             if (_dialogs.count > 5000) {
                 [self finish:@"FOLDER_HISTORY_LIMIT"];
                 return;
@@ -217,6 +226,10 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     }
     NSString *wait = [_session folderFloodError];
     if (wait) { [self finish:wait]; return; }
+    if (!exteria_folder_scans_dialogs(_filter.flags, _archive)) {
+        [self loadIncludedPeers];
+        return;
+    }
     if (++_pages > 200) {
         [self finish:@"FOLDER_HISTORY_LIMIT"];
         return;
@@ -287,6 +300,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                     [_dialogs setObject:dialog forKey:[NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId]];
             }
             free(rows);
+            [self reportProgress];
             if (_dialogs.count > 5000) {
                 [self finish:@"FOLDER_HISTORY_LIMIT"];
                 return;
@@ -308,7 +322,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                 _offsetId = last.top_message;
                 _offsetDate = last.date;
                 [self advance];
-            } else if (!_archive) {
+            } else if (!_archive && exteria_folder_scans_dialogs(_filter.flags, 1)) {
                 _archive = 1;
                 memset(&_offset, 0, sizeof(_offset));
                 _offsetId = 0;
@@ -556,13 +570,17 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
 }
 
 - (id<ExteriaFolderDialogRequest>)loadDialogsForChatFolder:(ExteriaChatFolder *)folder completion:(ExteriaListCompletion)completion {
+    return [self loadDialogsForChatFolder:folder progress:nil completion:completion];
+}
+
+- (id<ExteriaFolderDialogRequest>)loadDialogsForChatFolder:(ExteriaChatFolder *)folder progress:(void (^)(NSArray *))progress completion:(ExteriaListCompletion)completion {
     if (!folder.folderId) {
         [self loadDialogsInFolder:0 completion:completion];
         return nil;
     }
     NSString *wait = [self folderFloodError];
     if (wait) { if (completion) completion(nil, wait); return nil; }
-    ExteriaFolderDialogsLoad *load = [[[ExteriaFolderDialogsLoad alloc] initWithSession:self folder:folder completion:completion] autorelease];
+    ExteriaFolderDialogsLoad *load = [[[ExteriaFolderDialogsLoad alloc] initWithSession:self folder:folder progress:progress completion:completion] autorelease];
     [load advance];
     return load;
 }

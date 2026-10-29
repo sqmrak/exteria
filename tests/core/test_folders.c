@@ -8,6 +8,12 @@ int main(void) {
     memset(&rules, 0, sizeof(rules));
     memset(&dialog, 0, sizeof(dialog));
     memset(peers, 0, sizeof(peers));
+    CHECK(!exteria_folder_scans_dialogs(0, 0));
+    CHECK(!exteria_folder_scans_dialogs(EXTERIA_FOLDER_SKIP_ARCHIVED, 0));
+    CHECK(exteria_folder_scans_dialogs(EXTERIA_FOLDER_GROUPS, 0));
+    CHECK(exteria_folder_scans_dialogs(EXTERIA_FOLDER_GROUPS, 1));
+    CHECK(exteria_folder_scans_dialogs(EXTERIA_FOLDER_GROUPS | EXTERIA_FOLDER_SKIP_ARCHIVED, 0));
+    CHECK(!exteria_folder_scans_dialogs(EXTERIA_FOLDER_GROUPS | EXTERIA_FOLDER_SKIP_ARCHIVED, 1));
     dialog.peer_kind = 1;
     dialog.peer_id = 42;
     dialog.kind = EXTERIA_DIALOG_USER;

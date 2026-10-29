@@ -30,6 +30,7 @@ typedef struct exteria_folder_rules {
 } exteria_folder_rules;
 
 int exteria_folder_contains(const exteria_folder_rules *rules, const exteria_dialog_row *dialog);
+int exteria_folder_scans_dialogs(uint32_t flags, int archived);
 /* SIZE_MAX means that this chat is not pinned in the folder */
 size_t exteria_folder_pin_index(const exteria_folder_rules *rules, const exteria_dialog_row *dialog);
 

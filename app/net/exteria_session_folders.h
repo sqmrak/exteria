@@ -28,4 +28,5 @@ extern NSString *const ExteriaChatFoldersDidChangeNotification;
 - (void)orderChatFolders:(NSArray *)folders completion:(void (^)(NSString *errorName))completion;
 /* the main list and archive are both inputs to custom folder rules */
 - (id<ExteriaFolderDialogRequest>)loadDialogsForChatFolder:(ExteriaChatFolder *)folder completion:(ExteriaListCompletion)completion;
+- (id<ExteriaFolderDialogRequest>)loadDialogsForChatFolder:(ExteriaChatFolder *)folder progress:(void (^)(NSArray *items))progress completion:(ExteriaListCompletion)completion;
 @end

@@ -1,5 +1,10 @@
 #include "exteria_folders.h"
 
+int exteria_folder_scans_dialogs(uint32_t flags, int archived) {
+    uint32_t categories = EXTERIA_FOLDER_CONTACTS | EXTERIA_FOLDER_NON_CONTACTS | EXTERIA_FOLDER_GROUPS | EXTERIA_FOLDER_CHANNELS | EXTERIA_FOLDER_BOTS;
+    return (flags & categories) != 0 && (!archived || !(flags & EXTERIA_FOLDER_SKIP_ARCHIVED));
+}
+
 static size_t peer_index(const exteria_peer_ref *peers, size_t count, const exteria_dialog_row *dialog) {
     if (!peers || count > EXTERIA_FOLDER_PEERS_MAX)
         return SIZE_MAX;
