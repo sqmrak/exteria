@@ -4484,7 +4484,8 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     if (message.edited && !message.deletedLocally && ExteriaChatFlagGet(ExteriaChatFlagAyuSaveEdits)) mask |= EXTERIA_ACTION_EDIT_HISTORY;
     /* a kept message can be removed locally, but the server no longer has it for other actions */
     if (message.deletedLocally) mask = (mask & (EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE)) | EXTERIA_ACTION_DELETE;
-    else if (message.messageId > 0 && message.reactions.count) mask |= EXTERIA_ACTION_REACTORS;
+    /* the server refuses the list of who reacted in a broadcast channel (BROADCAST_FORBIDDEN, so that readers cannot be told apart), so the entry is not offered there */
+    else if (message.messageId > 0 && message.reactions.count && _dialog.kind != EXTERIA_DIALOG_CHANNEL) mask |= EXTERIA_ACTION_REACTORS;
     /* a one-time file must not be kept, sent on or sent again by this client */
     if (ExteriaMessageIsViewOnce(message)) mask &= ~(uint32_t)(EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_SAVE | EXTERIA_ACTION_GALLERY |
                                                               EXTERIA_ACTION_COPY_PHOTO | EXTERIA_ACTION_REPEAT | EXTERIA_ACTION_BOOKMARK | EXTERIA_ACTION_UNBOOKMARK);
