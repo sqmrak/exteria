@@ -7,6 +7,10 @@
    once the server took the request and an error name otherwise */
 @interface ExteriaSession (Actions)
 
+- (void)setSharingRestricted:(BOOL)restricted ofDialog:(ExteriaDialog *)dialog requestId:(int32_t)requestId completion:(void (^)(NSString *errorName))completion;
+/* delivers the cached lifetime and clock offset first, then the refreshed values or an error on the main thread */
+- (void)loadSharingPeriod:(void (^)(int32_t seconds, int64_t offsetMilliseconds, NSString *errorName))completion;
+
 /* revoke takes the messages from the other side too; a channel ignores it */
 - (void)deleteMessageIds:(NSArray *)ids ofDialog:(ExteriaDialog *)dialog revoke:(BOOL)revoke completion:(void (^)(NSString *errorName))completion;
 - (void)pinMessageId:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog unpin:(BOOL)unpin completion:(void (^)(NSString *errorName))completion;
@@ -38,5 +42,9 @@
 /* when the other side of a private chat read a message of ours, unix seconds; an error name when they did not yet or keep it private */
 - (void)loadReadDateOfMessageId:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(int32_t date, NSString *errorName))completion;
 - (void)loadGroupReadDatesOfMessageId:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSArray *readers, NSString *errorName))completion;
+
+/* one page of reactors, their reactions and server dates; next is nil at the end */
+- (void)loadReactorsOfMessageId:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
+                    completion:(void (^)(NSArray *reactors, NSDictionary *people, NSString *next, NSString *errorName))completion;
 
 @end

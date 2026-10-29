@@ -189,6 +189,10 @@ static NSString *ExteriaServiceText(ExteriaMessage *message, NSDictionary *peopl
     ExteriaPerson *target = [people objectForKey:[NSNumber numberWithLongLong:message.targetId]];
     NSString *who = actor.name.length ? actor.name : NSLocalizedString(@"chat.someone", nil);
     if (message.service - 1 == EXTERIA_SERVICE_GIFT) return ExteriaGiftText(message, who);
+    if (message.outgoing && message.service - 1 == EXTERIA_SERVICE_SHARING_REQUEST && !(message.serviceValue & 4))
+        return NSLocalizedString((message.serviceValue & 2) ? @"chat.sharing.request.out.disable" : @"chat.sharing.request.out.enable", nil);
+    if (message.outgoing && message.service - 1 == EXTERIA_SERVICE_SHARING_TOGGLE && !!(message.serviceValue & 1) != !!(message.serviceValue & 2))
+        return NSLocalizedString((message.serviceValue & 2) ? @"chat.sharing.changed.out.disable" : @"chat.sharing.changed.out.enable", nil);
     return ExteriaServiceLine((exteria_service_kind)(message.service - 1), actor.name, target.name, message.text, message.serviceValue,
                               message.fromId == message.targetId);
 }
@@ -219,6 +223,14 @@ static void ExteriaViewOnceCaptions(ExteriaMessage *message, NSString **title, N
     else *detail = NSLocalizedString(expired ? @"viewonce.expired" : @"viewonce.tap", nil);
 }
 
+- (void)setSharingExpired:(BOOL)expired {
+    _sharingExpired = expired;
+    if (expired && _message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1) {
+        [_pillText release];
+        _pillText = [NSLocalizedString(@"chat.service.sharing.expired", nil) copy];
+    }
+}
+
 - (void)captureMessage:(ExteriaMessage *)message {
     _message = [message retain];
     _builtMessageId = message.messageId;
@@ -228,6 +240,7 @@ static void ExteriaViewOnceCaptions(ExteriaMessage *message, NSString **title, N
     _builtDeleted = message.deletedLocally;
     _builtOnceExpired = ExteriaMessageIsViewOnce(message) && ExteriaViewOnceExpired(message);
     _builtService = message.service;
+    _builtServiceValue = message.serviceValue;
     _builtText = [message.text copy];
     _builtReactionKey = [message.reactionKey copy];
     _builtMarkupKey = [message.markupKey copy];
@@ -243,7 +256,7 @@ static BOOL ExteriaSameString(NSString *a, NSString *b) {
            _message.replyPeerKind == message.replyPeerKind && _message.replyPeerId == message.replyPeerId && ExteriaSameString(_message.replyQuote, message.replyQuote) &&
            _message.senderKey == message.senderKey && ExteriaSameString(_message.senderRank, message.senderRank) &&
            _builtMessageId == message.messageId && _builtRandomId == message.randomId &&
-           _builtState == message.state && _builtEdited == message.edited && _builtDeleted == message.deletedLocally && _builtService == message.service &&
+           _builtState == message.state && _builtEdited == message.edited && _builtDeleted == message.deletedLocally && _builtService == message.service && _builtServiceValue == message.serviceValue &&
            _builtOnceExpired == (ExteriaMessageIsViewOnce(message) && ExteriaViewOnceExpired(message)) &&
            ExteriaSameString(_builtText, message.text) && ExteriaSameString(_builtReactionKey, message.reactionKey) &&
            ExteriaSameString(_builtMarkupKey, message.markupKey) && ExteriaSameString(_builtPollKey, message.pollKey);
@@ -727,6 +740,8 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     CGFloat pillHeight = MAX(PILL_HEIGHT, ceil(_pillLayout.size.height) + 10);
     _bubbleFrame = CGRectMake(floor((width - pillWidth) / 2), 6, pillWidth, pillHeight);
     _height = pillHeight + 10;
+    if (_message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 && !_message.outgoing && !_sharingExpired && _message.messageId > 0)
+        _height += 45;
 }
 
 - (NSArray *)shownReactions {

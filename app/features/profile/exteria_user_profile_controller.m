@@ -38,6 +38,7 @@
 #import "exteria_report_flow.h"
 #import "exteria_session_channels.h"
 #import "exteria_session_profile.h"
+#import "exteria_session_actions.h"
 #import "exteria_star_gift.h"
 #import "exteria_status_label.h"
 #import "exteria_rating_view.h"
@@ -716,7 +717,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 
 #pragma mark menu
 
-typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNotifications, ExteriaUserMenuReport, ExteriaUserMenuEditContact } ExteriaUserMenuEntry;
+typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNotifications, ExteriaUserMenuReport, ExteriaUserMenuEditContact, ExteriaUserMenuSharing } ExteriaUserMenuEntry;
 
 - (BOOL)canGift {
     return _dialog.kind == EXTERIA_DIALOG_USER && !_dialog.saved;
@@ -776,7 +777,12 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
 - (void)showMenu {
     NSMutableArray *titles = [NSMutableArray array];
     NSMutableArray *entries = [NSMutableArray array];
-    ExteriaSymbol symbols[5];
+    ExteriaSymbol symbols[6];
+    if (_fullUser && [self canGift] && !_fullUser.person.bot && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
+        symbols[titles.count] = ExteriaSymbolLock;
+        [titles addObject:NSLocalizedString(_fullUser.sharingRestricted ? @"chat.sharing.allow" : @"chat.sharing.disable", nil)];
+        [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuSharing]];
+    }
     /* a person the account can rename: a user with a hash, once the profile is in */
     if ([self canGift] && _fullUser.person.accessHash && !_fullUser.person.bot) {
         symbols[titles.count] = ExteriaSymbolCompose;
@@ -809,6 +815,23 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
         ExteriaUserProfileController *profile = me.target;
         if (!profile || index >= entries.count) return;
         switch ([[entries objectAtIndex:index] intValue]) {
+        case ExteriaUserMenuSharing: {
+            BOOL restricted = !profile->_fullUser.sharingRestricted;
+            ExteriaConfirm(nil, NSLocalizedString(restricted ? @"chat.sharing.disable.confirm" : @"chat.sharing.allow.confirm", nil),
+                           NSLocalizedString(restricted ? @"chat.sharing.disable" : @"chat.sharing.allow", nil), ^{
+                ExteriaUserProfileController *owner = me.target;
+                if (!owner) return;
+                [owner.session setSharingRestricted:restricted ofDialog:owner->_dialog requestId:0 completion:^(NSString *errorName) {
+                    ExteriaUserProfileController *current = me.target;
+                    if (errorName) ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"chat.sharing.error", nil), errorName]);
+                    else {
+                        ExteriaShowNotice(nil, NSLocalizedString(@"chat.sharing.sent", nil));
+                        [current load];
+                    }
+                }];
+            });
+            break;
+        }
         case ExteriaUserMenuEditContact: [profile askContactName]; break;
         case ExteriaUserMenuCopyLink: [profile copyLink]; break;
         case ExteriaUserMenuGift: [profile sendGift]; break;

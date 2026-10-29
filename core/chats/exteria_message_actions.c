@@ -3,6 +3,34 @@
 #include <string.h>
 
 #include "exteria_tl_ids.h"
+#include "exteria_app_config.h"
+
+exteria_status exteria_sharing_period_parse(const exteria_tl_value *answer, int32_t *seconds) {
+    return exteria_app_config_i32(answer, "no_forwards_request_expire_period", seconds);
+}
+
+int exteria_sharing_expired(int server_expired, int32_t date, int32_t period, int64_t now) {
+    if (server_expired) return 1;
+    if (date <= 0 || period < 0 || now <= 0) return 0;
+    return now > (int64_t)date + period;
+}
+
+exteria_status exteria_sharing_request(exteria_arena *arena, const exteria_peer_ref *peer, int enabled, int32_t request_id, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *value;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !peer || !out || peer->kind != 1 || peer->self || request_id < 0 || (enabled != 0 && enabled != 1)) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.toggleNoForwards");
+    value = exteria_tl_new_obj(arena, enabled ? "boolTrue" : "boolFalse");
+    if (!request || !value) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "enabled", value);
+    if (status == EXTERIA_OK && request_id) status = exteria_tl_set_i32(arena, request, "request_msg_id", request_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
 
 uint32_t exteria_message_actions_for(const exteria_action_context *c) {
     uint32_t mask = 0;

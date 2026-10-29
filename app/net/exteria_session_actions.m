@@ -6,6 +6,8 @@
 #import "exteria_session_actions.h"
 
 #include "exteria_poll.h"
+#include "exteria_reactions.h"
+#include <string.h>
 
 /* the ids of an array of numbers, in a buffer the worker block owns */
 static NSData *ExteriaPackIds(NSArray *ids) {
@@ -19,7 +21,95 @@ static NSData *ExteriaPackIds(NSArray *ids) {
     return data;
 }
 
+static int32_t ExteriaCachedSharingPeriod(ExteriaSession *session) {
+    NSString *key = [NSString stringWithFormat:@"exteria.sharing.period.%lld", (long long)[session workerAccount]];
+    id stored = [[NSUserDefaults standardUserDefaults] objectForKey:key];
+    if ([stored isKindOfClass:[NSNumber class]] && [stored longLongValue] >= 0 && [stored longLongValue] <= INT32_MAX) return [stored intValue];
+    return EXTERIA_SHARING_PERIOD_DEFAULT;
+}
+
 @implementation ExteriaSession (Actions)
+
+- (void)loadReactorsOfMessageId:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
+                    completion:(void (^)(NSArray *, NSDictionary *, NSString *, NSString *))completion {
+    void (^done)(NSArray *, NSDictionary *, NSString *, NSString *) = [completion copy];
+    NSString *cursor = [offset copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_reaction_people_request(arena, &peer, messageId, cursor.UTF8String, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        NSMutableArray *items = nil;
+        NSDictionary *people = nil;
+        NSString *next = nil;
+        if (!error) {
+            exteria_reaction_person rows[EXTERIA_REACTION_PEOPLE_PAGE];
+            size_t count = 0;
+            char nextOffset[EXTERIA_REACTION_OFFSET_MAX];
+            exteria_status status = exteria_reaction_people_parse(result->value, rows, EXTERIA_REACTION_PEOPLE_PAGE, &count, nextOffset, sizeof(nextOffset));
+            if (status == EXTERIA_OK && nextOffset[0] && (!count || (cursor && !strcmp(cursor.UTF8String, nextOffset)))) status = EXTERIA_E_MALFORMED;
+            if (status != EXTERIA_OK) {
+                NSLog(@"exteria: reaction participants rejected: %s", exteria_status_name(status));
+                error = @"MALFORMED";
+            } else {
+                items = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) {
+                    long long key = rows[i].peer_kind == 1 ? rows[i].peer_id : -rows[i].peer_id;
+                    [items addObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:key], @"peer", [NSNumber numberWithInt:rows[i].date], @"date",
+                                      [ExteriaReaction reactionWithRow:&rows[i].reaction], @"reaction", nil]];
+                }
+                people = ExteriaPeopleOfAnswer(self, result->value);
+                if (nextOffset[0]) next = [NSString stringWithUTF8String:nextOffset];
+            }
+        }
+        [self noteRpcError:error];
+        NSArray *delivered = [[items copy] autorelease];
+        NSDictionary *names = [[people copy] autorelease];
+        NSString *following = [[next copy] autorelease];
+        NSString *problem = [[error copy] autorelease];
+        [self deliverMain:^{ done(delivered, names, following, problem); [done release]; }];
+    }];
+    [cursor release];
+}
+
+- (void)loadSharingPeriod:(void (^)(int32_t, int64_t, NSString *))completion {
+    void (^done)(int32_t, int64_t, NSString *) = [completion copy];
+    [self post:^{
+        int32_t cached = ExteriaCachedSharingPeriod(self);
+        int64_t offset = [self workerServerTimeOffsetMilliseconds];
+        [self deliverMain:^{ done(cached, offset, nil); }];
+    }];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        *request = exteria_tl_new_obj(arena, "help.getAppConfig");
+        return *request ? exteria_tl_set_i32(arena, *request, "hash", 0) : EXTERIA_E_NOMEM;
+    } handler:^(const exteria_mt_rpc_result *result) {
+        int32_t period = ExteriaCachedSharingPeriod(self);
+        NSString *key = [NSString stringWithFormat:@"exteria.sharing.period.%lld", (long long)[self workerAccount]];
+        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        if (!error) {
+            int32_t parsed = 0;
+            exteria_status status = exteria_sharing_period_parse(result->value, &parsed);
+            if (status == EXTERIA_OK || status == EXTERIA_E_NOTFOUND) {
+                period = status == EXTERIA_OK ? parsed : EXTERIA_SHARING_PERIOD_DEFAULT;
+                [[NSUserDefaults standardUserDefaults] setInteger:period forKey:key];
+            } else error = @"CONFIG_INVALID";
+        }
+        int64_t offset = [self workerServerTimeOffsetMilliseconds];
+        [self noteRpcError:error];
+        NSString *delivered = [[error copy] autorelease];
+        [self deliverMain:^{ done(period, offset, delivered); [done release]; }];
+    }];
+}
+
+- (void)setSharingRestricted:(BOOL)restricted ofDialog:(ExteriaDialog *)dialog requestId:(int32_t)requestId completion:(void (^)(NSString *))completion {
+    void (^done)(NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_sharing_request(arena, &peer, restricted ? 1 : 0, requestId, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        [self finishAction:result completion:done];
+    }];
+}
 
 - (void)finishAction:(const exteria_mt_rpc_result *)result completion:(void (^)(NSString *))done {
     NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);

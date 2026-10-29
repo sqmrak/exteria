@@ -453,6 +453,8 @@ static exteria_service_kind service_kind(const exteria_tl_value *action) {
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionGiveawayLaunch)) return EXTERIA_SERVICE_GIVEAWAY;
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionGiveawayResults)) return EXTERIA_SERVICE_GIVEAWAY_RESULTS;
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionPaymentRefunded)) return EXTERIA_SERVICE_PAYMENT_REFUNDED;
+    if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionNoForwardsRequest)) return EXTERIA_SERVICE_SHARING_REQUEST;
+    if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionNoForwardsToggle)) return EXTERIA_SERVICE_SHARING_TOGGLE;
     return EXTERIA_SERVICE_OTHER;
 }
 
@@ -498,6 +500,11 @@ uint8_t exteria_service_summary(const exteria_tl_value *action, char *text, size
             users->u.vec.items[0]->kind == EXTERIA_TL_V_I64) *target = users->u.vec.items[0]->u.i64;
     }
     if (value) {
+        if (kind == EXTERIA_SERVICE_SHARING_REQUEST || kind == EXTERIA_SERVICE_SHARING_TOGGLE) {
+            if (exteria_tl_is(exteria_tl_get(action, "prev_value"), EXTERIA_TL_ID_boolTrue)) *value |= 1;
+            if (exteria_tl_is(exteria_tl_get(action, "new_value"), EXTERIA_TL_ID_boolTrue)) *value |= 2;
+            if (kind == EXTERIA_SERVICE_SHARING_REQUEST && exteria_tl_has(action, "expired")) *value |= 4;
+        }
         if (kind == EXTERIA_SERVICE_VIDEO_CHAT) exteria_tl_get_i32(action, "duration", value);
         if (kind == EXTERIA_SERVICE_TTL) exteria_tl_get_i32(action, "period", value);
         if (kind == EXTERIA_SERVICE_BOOST) exteria_tl_get_i32(action, "boosts", value);

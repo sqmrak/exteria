@@ -2038,3 +2038,25 @@
 "chat.voice.start.confirm" = "Начать голосовой чат в этом чате?";
 "chat.menu.voicechat.join" = "Голосовой чат";
 "chat.menu.voicechat.start" = "Начать голосовой чат";
+
+"chat.service.sharing.expired" = "Срок запроса истёк";
+"chat.service.sharing.request.disable" = "%@ предлагает запретить копирование и пересылку";
+"chat.service.sharing.request.enable" = "%@ предлагает разрешить копирование и пересылку";
+"chat.service.sharing.still.disabled" = "Копирование и пересылка по-прежнему запрещены";
+"chat.service.sharing.still.enabled" = "Копирование и пересылка по-прежнему разрешены";
+"chat.service.sharing.disabled" = "%@ запретил(а) копирование и пересылку";
+"chat.service.sharing.enabled" = "%@ разрешил(а) копирование и пересылку";
+"chat.sharing.allow" = "Разрешить копирование";
+"chat.sharing.disable" = "Запретить копирование";
+"chat.sharing.allow.confirm" = "Предложить разрешить копирование и пересылку в этом чате?";
+"chat.sharing.disable.confirm" = "Запретить копирование и пересылку в этом чате? Может потребоваться согласие собеседника.";
+"chat.sharing.accept" = "Принять";
+"chat.sharing.decline" = "Отклонить";
+"chat.sharing.accept.confirm" = "Принять запрос на изменение доступа?";
+"chat.sharing.decline.confirm" = "Отклонить запрос на изменение доступа?";
+"chat.sharing.error" = "Не удалось изменить доступ: %@";
+"chat.sharing.sent" = "Запрос отправлен. Его состояние можно посмотреть в чате.";
+"chat.sharing.request.out.disable" = "Вы предложили запретить копирование и пересылку";
+"chat.sharing.request.out.enable" = "Вы предложили разрешить копирование и пересылку";
+"chat.sharing.changed.out.disable" = "Вы запретили копирование и пересылку";
+"chat.sharing.changed.out.enable" = "Вы разрешили копирование и пересылку";

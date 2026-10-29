@@ -66,6 +66,12 @@ NSString *ExteriaServiceLine(exteria_service_kind kind, NSString *who, NSString 
     case EXTERIA_SERVICE_GIVEAWAY: return NSLocalizedString(@"chat.service.giveaway", nil);
     case EXTERIA_SERVICE_GIVEAWAY_RESULTS: return [NSString stringWithFormat:NSLocalizedString(@"chat.service.giveaway.results", nil), (int)value];
     case EXTERIA_SERVICE_PAYMENT_REFUNDED: return NSLocalizedString(@"chat.service.refunded", nil);
+    case EXTERIA_SERVICE_SHARING_REQUEST:
+        if (value & 4) return NSLocalizedString(@"chat.service.sharing.expired", nil);
+        return [NSString stringWithFormat:NSLocalizedString((value & 2) ? @"chat.service.sharing.request.disable" : @"chat.service.sharing.request.enable", nil), actor];
+    case EXTERIA_SERVICE_SHARING_TOGGLE:
+        if (!!(value & 1) == !!(value & 2)) return NSLocalizedString((value & 2) ? @"chat.service.sharing.still.disabled" : @"chat.service.sharing.still.enabled", nil);
+        return [NSString stringWithFormat:NSLocalizedString((value & 2) ? @"chat.service.sharing.disabled" : @"chat.service.sharing.enabled", nil), actor];
     case EXTERIA_SERVICE_OTHER:
         /* no wording for it: the action's own name, as readable as it gets, beats a line that says nothing */
         if (text.length) return text;

@@ -243,6 +243,9 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     /* the ids the store page held the last time it arrived, so what it stops holding can be told from what it never held */
     NSMutableSet *_storeIds;
     NSMutableSet *_confirmingGone;
+    NSMutableSet *_sharingBusy;
+    int32_t _sharingPeriod;
+    int64_t _sharingOffsetMilliseconds;
     BOOL _canLoadMore;
     BOOL _loadingOlder;
     /* a page of older history arrived while the list was moving, and waits for it to stop */
@@ -404,6 +407,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     self = [super init];
     if (!self) return nil;
     _animatedFirst = _animatedLast = -2;
+    _sharingPeriod = EXTERIA_SHARING_PERIOD_DEFAULT;
     _session = [session retain];
     _dialog = [dialog retain];
     _avatars = [avatars retain];
@@ -431,6 +435,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
 }
 
 - (void)dealloc {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];
     [self stopFollowingBottom];
     [_liveLink invalidate];
     [_liveLink release];
@@ -515,6 +520,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_pinnedTitle release];
     [_pinnedText release];
     [_confirmingGone release];
+    [_sharingBusy release];
     [_toast release];
     [_menuButton release];
     [_callButton release];
@@ -893,6 +899,17 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self loadStories];
+    if (_dialog.peerKind == 1 && !_dialog.saved && !_pinnedList) {
+        ExteriaWeakReference *weak = _weak;
+        [_session loadSharingPeriod:^(int32_t seconds, int64_t offset, NSString *errorName) {
+            ExteriaChatController *chat = weak.target;
+            if (!chat) return;
+            if (errorName) NSLog(@"exteria: sharing request lifetime was not refreshed: %@", errorName);
+            chat->_sharingPeriod = seconds;
+            chat->_sharingOffsetMilliseconds = offset;
+            [chat rebuildItems];
+        }];
+    }
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liteModeChanged) name:ExteriaLiteModeDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(developersChanged) name:ExteriaDevelopersDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(readOutboxChanged:) name:ExteriaReadOutboxDidChangeNotification object:_session];
@@ -1992,6 +2009,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     _visible = NO;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];
     [self stopFollowingBottom];
     [_liveLink invalidate];
     [_liveLink release];
@@ -2428,6 +2446,40 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     }];
 }
 
+- (void)messageCell:(ExteriaMessageCell *)cell answerSharingRequest:(BOOL)accept {
+    ExteriaMessage *message = cell.item.message;
+    if (message.service != EXTERIA_SERVICE_SHARING_REQUEST + 1 || message.outgoing || [self sharingExpired:message] || message.messageId <= 0) return;
+    NSNumber *key = [NSNumber numberWithInt:message.messageId];
+    if ([_sharingBusy containsObject:key]) return;
+    BOOL restricted = accept ? (message.serviceValue & 2) != 0 : (message.serviceValue & 1) != 0;
+    ExteriaWeakReference *weak = _weak;
+    ExteriaConfirm(nil, NSLocalizedString(accept ? @"chat.sharing.accept.confirm" : @"chat.sharing.decline.confirm", nil),
+                   NSLocalizedString(accept ? @"chat.sharing.accept" : @"chat.sharing.decline", nil), ^{
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if ([chat sharingExpired:message]) { [chat rebuildItems]; return; }
+        if (!chat->_sharingBusy) chat->_sharingBusy = [[NSMutableSet alloc] init];
+        if ([chat->_sharingBusy containsObject:key]) return;
+        [chat->_sharingBusy addObject:key];
+        [chat->_session setSharingRestricted:restricted ofDialog:chat->_dialog requestId:key.intValue completion:^(NSString *errorName) {
+            ExteriaChatController *current = weak.target;
+            if (!current) return;
+            [current->_sharingBusy removeObject:key];
+            if (errorName) {
+                ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"chat.sharing.error", nil), errorName]);
+                return;
+            }
+            [current->_session loadMessagesWithIds:[NSArray arrayWithObject:key] ofDialog:current->_dialog completion:^(NSArray *messages, NSString *error) {
+                ExteriaChatController *owner = weak.target;
+                if (!owner) return;
+                if (error) { ExteriaShowNotice(nil, [owner failureTextForError:error]); return; }
+                [owner mergeMessages:messages];
+                [owner scheduleLiveMessages];
+            }];
+        }];
+    });
+}
+
 /* a burst of updates shares one table transaction per frame; a drag keeps its rows until the finger settles */
 - (void)scheduleLiveMessages {
     _livePending = YES;
@@ -2788,6 +2840,8 @@ static void ExteriaRedrawTree(UIView *view) {
     [self loadCustomEmoji];
     BOOL group = _dialog.kind == EXTERIA_DIALOG_GROUP;
     NSArray *messages = [self orderedMessages];
+    NSTimeInterval serverNow = [[NSDate date] timeIntervalSince1970] + _sharingOffsetMilliseconds / 1000.0;
+    NSTimeInterval nextExpiry = 0;
     NSMutableArray *items = [NSMutableArray arrayWithCapacity:messages.count + 8];
     NSMutableDictionary *kept = [NSMutableDictionary dictionaryWithCapacity:messages.count];
     ExteriaMessage *previous = nil;
@@ -2797,6 +2851,12 @@ static void ExteriaRedrawTree(UIView *view) {
     BOOL unreadShown = _unreadAnchor < 0 || _pinnedList || _startMessageId > 0;
     for (NSUInteger at = 0; at < messages.count; ++at) {
         ExteriaMessage *message = [messages objectAtIndex:at];
+        BOOL sharingExpired = message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 &&
+            exteria_sharing_expired((message.serviceValue & 4) != 0, message.date, _sharingPeriod, (int64_t)serverNow);
+        if (message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 && !sharingExpired && message.date > 0) {
+            NSTimeInterval deadline = (NSTimeInterval)message.date + _sharingPeriod + 1;
+            if (deadline > serverNow && (!nextExpiry || deadline < nextExpiry)) nextExpiry = deadline;
+        }
         if (message.messageId > 0 && [_openedOnce containsObject:[NSNumber numberWithInt:message.messageId]]) message.viewOnceOpened = YES;
         /* photos and videos sent together are one item: the run of messages that share an album number, from one sender on one day */
         NSMutableArray *album = nil;
@@ -2858,8 +2918,10 @@ static void ExteriaRedrawTree(UIView *view) {
                      (replyId > 0 && ![item.replyColor isEqual:replyColor]) ||
                      !(item.replyEntities == replyEntities || [item.replyEntities isEqualToArray:replyEntities]))) item = nil;
         if (item && (![item reflectsMessage:message] || ![item reflectsPeople:_people role:role] || ![item reflectsAlbum:album ? album : [NSArray arrayWithObject:message]])) item = nil;
+        if (item && message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 && item.sharingExpired != sharingExpired) item = nil;
         if (!item) {
             item = album ? [ExteriaChatItem itemForAlbum:album group:group people:_people role:role] : [ExteriaChatItem itemForMessage:message group:group people:_people role:role];
+            if (message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1) item.sharingExpired = sharingExpired;
             [item setReplyTitle:replyTitle text:replyText color:replyColor];
             item.replyEntities = replyEntities;
             item.reactionsHidden = [self reactionsHidden];
@@ -2883,8 +2945,20 @@ static void ExteriaRedrawTree(UIView *view) {
     [_itemCache release];
     _itemCache = [kept retain];
     [self applyItems:items];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];
+    if (_visible && nextExpiry > serverNow)
+        [self performSelector:@selector(sharingExpiryReached) withObject:nil afterDelay:nextExpiry - serverNow];
     [self scheduleReplyPreviews];
     if (!_pinnedList) [_bots messagesChanged:messages loaded:_loadedFirst];
+}
+
+- (BOOL)sharingExpired:(ExteriaMessage *)message {
+    int64_t now = (int64_t)([[NSDate date] timeIntervalSince1970] + _sharingOffsetMilliseconds / 1000.0);
+    return exteria_sharing_expired((message.serviceValue & 4) != 0, message.date, _sharingPeriod, now) != 0;
+}
+
+- (void)sharingExpiryReached {
+    [self scheduleLiveMessages];
 }
 
 /* only missing originals on screen are fetched, in one bounded batch; reply history never adds rows to the chat */

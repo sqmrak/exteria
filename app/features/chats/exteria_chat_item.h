@@ -76,6 +76,8 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     /* what the row said about a one-time file: waiting, or gone */
     BOOL _builtOnceExpired;
     int _builtService;
+    int32_t _builtServiceValue;
+    BOOL _sharingExpired;
     NSString *_builtText;
     /* the reactions and the faces on their chips as they were when the row was laid out, to tell whether a message changed them */
     NSString *_builtReactionKey;
@@ -159,6 +161,9 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly) ExteriaChatItemContent content;
 @property (nonatomic, readonly, retain) ExteriaMessage *message;
 @property (nonatomic, readonly, copy) NSString *pillText;
+@property (nonatomic, assign) BOOL sharingExpired;
+/* a gift service row is a card instead of a capsule; its frame is bubbleFrame. nil for every other row */
+@property (nonatomic, readonly, retain) ExteriaGiftCardLayout *giftCard;
 @property (nonatomic, readonly, copy) NSString *senderName;
 /* the words of a voice message that the server wrote down, shown under it as the text of a message would be; nil
    until asked for */

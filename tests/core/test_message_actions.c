@@ -1,8 +1,76 @@
 #include "test_util.h"
 #include "exteria_message_actions.h"
 #include "exteria_tl_ids.h"
+#include <math.h>
 
 static exteria_arena arena;
+
+static void test_sharing_expiry(void) {
+    int32_t period = -1;
+    exteria_tl_value *answer = exteria_tl_new_obj(&arena, "help.appConfig");
+    exteria_tl_value *config = exteria_tl_new_obj(&arena, "jsonObject");
+    exteria_tl_value *entry = exteria_tl_new_obj(&arena, "jsonObjectValue");
+    exteria_tl_value *number = exteria_tl_new_obj(&arena, "jsonNumber");
+    exteria_tl_value *entries = exteria_tl_new_vec(&arena, 1);
+    CHECK(answer && config && entry && number && entries);
+    CHECK_EQ_INT(exteria_tl_set_str(&arena, entry, "key", "no_forwards_request_expire_period"), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", 60), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(entry, "value", number), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(entries, 0, entry), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(config, "value", entries), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(answer, "config", config), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_OK);
+    CHECK_EQ_INT(period, 60);
+    CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", 0), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_OK);
+    CHECK_EQ_INT(period, 0);
+    CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", -1), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", 1.5), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(period, 0);
+    CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", NAN), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", 2147483648.0), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_tl_set_str(&arena, entry, "key", "other"), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, &period), EXTERIA_E_NOTFOUND);
+    CHECK_EQ_INT(exteria_sharing_period_parse(NULL, &period), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_sharing_period_parse(answer, NULL), EXTERIA_E_MALFORMED);
+    CHECK(!exteria_sharing_expired(0, 1000, 60, 1059));
+    CHECK(!exteria_sharing_expired(0, 1000, 60, 1060));
+    CHECK(exteria_sharing_expired(0, 1000, 60, 1061));
+    CHECK(exteria_sharing_expired(1, 1000, 60, 1000));
+    CHECK(!exteria_sharing_expired(0, 0, 60, 1061));
+    CHECK(!exteria_sharing_expired(0, 1000, -1, 1061));
+    CHECK(!exteria_sharing_expired(0, INT32_MAX, INT32_MAX, INT32_MAX));
+    CHECK(exteria_sharing_expired(0, INT32_MAX, INT32_MAX, (int64_t)INT32_MAX * 2 + 1));
+}
+
+static void test_sharing(void) {
+    exteria_peer_ref peer = {1, 123, 456, 0, 0}, group = {2, 123, 0, 0, 0};
+    exteria_tl_value *request = NULL, *decoded = NULL;
+    exteria_writer writer;
+    int32_t id = 0;
+    CHECK_EQ_INT(exteria_sharing_request(&arena, &peer, 1, 0, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(request, EXTERIA_TL_ID_messages_toggleNoForwards));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "enabled"), EXTERIA_TL_ID_boolTrue));
+    CHECK(!exteria_tl_has(request, "request_msg_id"));
+    CHECK_EQ_INT(exteria_sharing_request(&arena, &peer, 0, 42, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "enabled"), EXTERIA_TL_ID_boolFalse));
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "request_msg_id", &id), EXTERIA_OK);
+    CHECK_EQ_INT(id, 42);
+    exteria_writer_init(&writer, 4096);
+    CHECK_EQ_INT(exteria_tl_encode(request, &writer, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_decode_all(&arena, NULL, EXTERIA_TL_REF_ANY, writer.data, writer.len, &decoded), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(decoded, "request_msg_id", &id), EXTERIA_OK);
+    CHECK_EQ_INT(id, 42);
+    exteria_writer_free(&writer);
+    CHECK_EQ_INT(exteria_sharing_request(&arena, &group, 1, 0, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_sharing_request(&arena, &peer, 2, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_sharing_request(&arena, &peer, 1, -1, &request), EXTERIA_E_ARG);
+}
 
 static exteria_action_context sent_text(void) {
     exteria_action_context c;
@@ -601,6 +669,8 @@ static void test_schedule(void) {
 
 int main(void) {
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
+    test_sharing();
+    test_sharing_expiry();
     test_rules();
     test_broadcast();
     test_gallery_and_selection();

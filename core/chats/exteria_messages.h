@@ -115,7 +115,9 @@ typedef enum exteria_service_kind {
     EXTERIA_SERVICE_GAME_SCORE,       /* value is the score */
     EXTERIA_SERVICE_GIVEAWAY,
     EXTERIA_SERVICE_GIVEAWAY_RESULTS, /* value is the number of winners */
-    EXTERIA_SERVICE_PAYMENT_REFUNDED
+    EXTERIA_SERVICE_PAYMENT_REFUNDED,
+    EXTERIA_SERVICE_SHARING_REQUEST, /* value bits: previous, requested, expired */
+    EXTERIA_SERVICE_SHARING_TOGGLE   /* value bits: previous, new */
 } exteria_service_kind;
 
 /* how a call ended, as the server says: nothing for a call that was talked through and hung up */

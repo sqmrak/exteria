@@ -38,6 +38,7 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
 @synthesize about = _about;
 @synthesize person = _person;
 @synthesize requiresPremium = _requiresPremium;
+@synthesize sharingRestricted = _sharingRestricted;
 @synthesize hasBirthday = _hasBirthday;
 @synthesize birthdayDay = _birthdayDay;
 @synthesize birthdayMonth = _birthdayMonth;
@@ -52,6 +53,7 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
     _about = [ExteriaProfileUtf8(row->about) copy];
     if (row->has_person) _person = [[ExteriaPerson alloc] initWithRow:&row->person];
     _requiresPremium = row->require_premium != 0;
+    _sharingRestricted = row->sharing_restricted != 0;
     _hasBirthday = row->has_birthday;
     _birthdayDay = row->birthday_day;
     _birthdayMonth = row->birthday_month;

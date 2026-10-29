@@ -7,6 +7,14 @@
 #include "exteria_messages.h"
 #include "exteria_tl.h"
 
+/* requests a change of sharing, or answers a request when request_id is positive */
+exteria_status exteria_sharing_request(exteria_arena *arena, const exteria_peer_ref *peer, int enabled, int32_t request_id, exteria_tl_value **out);
+
+#define EXTERIA_SHARING_PERIOD_DEFAULT 86400
+exteria_status exteria_sharing_period_parse(const exteria_tl_value *answer, int32_t *seconds);
+/* the server's expired bit wins; the deadline is inclusive as in Telegram */
+int exteria_sharing_expired(int server_expired, int32_t date, int32_t period, int64_t now);
+
 /* what a long press on a message can offer; the rules below pick the ones that can work */
 typedef enum exteria_message_action {
     EXTERIA_ACTION_REACT = 1 << 0,
@@ -33,7 +41,8 @@ typedef enum exteria_message_action {
     EXTERIA_ACTION_FORWARD_HIDDEN = 1 << 21,    /* forward without the name of the author */
     EXTERIA_ACTION_REMIND = 1 << 22,            /* a reminder about the message arrives in the favorites at a time the person picks */
     EXTERIA_ACTION_REPLY_PRIVATE = 1 << 23,     /* the sender of a group message is written to in a chat of their own */
-    EXTERIA_ACTION_EDIT_HISTORY = 1 << 24       /* what the message said before its edits; the client adds it, since only it knows whether the versions were kept */
+    EXTERIA_ACTION_EDIT_HISTORY = 1 << 24,      /* what the message said before its edits; the client adds it, since only it knows whether the versions were kept */
+    EXTERIA_ACTION_REACTORS = 1 << 25          /* the people and dates of a message's reactions */
 } exteria_message_action;
 
 typedef struct exteria_action_context {
