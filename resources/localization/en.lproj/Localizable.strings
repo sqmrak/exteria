@@ -2003,6 +2003,11 @@
 "update.page.error.security" = "the connection to GitHub failed the certificate check.";
 "update.page.error.format" = "GitHub gave an answer that could not be read.";
 
+"peek.loading" = "Loading messages…";
+"peek.empty" = "No messages";
+"peek.error" = "Could not load messages";
+"peek.select" = "Select chats";
+
 "group.title" = "Voice chat";
 "group.you" = "%@ (you)";
 "group.speaking" = "speaking";

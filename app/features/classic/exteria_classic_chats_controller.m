@@ -5,6 +5,7 @@
 #import "exteria_folder_tabs.h"
 #import "exteria_chat_settings.h"
 #import "exteria_chat_controller.h"
+#import "exteria_chat_peek.h"
 #import "exteria_dialog_cell.h"
 #import "exteria_developers.h"
 #import "exteria_classic_chrome.h"
@@ -29,6 +30,7 @@
 #import "exteria_topics_screen.h"
 #import "exteria_weak_reference.h"
 #include "exteria_list_state.h"
+#include "exteria_clock.h"
 #import "exteria_time.h"
 
 /* a list older than this is fetched again when its screen comes back */
@@ -63,6 +65,7 @@
     BOOL _loading;
     BOOL _liveRefreshScheduled;
     BOOL _liveRefreshPending;
+    uint64_t _lastLiveRefreshMs;
     BOOL _failed;
     BOOL _floodRetried;
     BOOL _archiveHidden;
@@ -291,12 +294,15 @@
     (void)note;
     if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
     _liveRefreshScheduled = YES;
-    [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:0.5];
+    uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
+    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 15000, 500);
+    [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
 }
 
 - (void)refreshLiveDialogs {
     _liveRefreshScheduled = NO;
     if (!self.view.window) return;
+    _lastLiveRefreshMs = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
     if (_loading) _liveRefreshPending = YES;
     else [self reload];
 }
@@ -436,7 +442,19 @@
     [_folderLoad cancel];
     [_folderLoad release];
     _folderLoad = nil;
-    if (!_folderId && _folders.selectedFolder.folderId) _folderLoad = [[_session loadDialogsForChatFolder:_folders.selectedFolder completion:loaded] retain];
+    if (!_folderId && _folders.selectedFolder.folderId) {
+        ExteriaWeakReference *weak = _badgeWeak;
+        _folderLoad = [[_session loadDialogsForChatFolder:_folders.selectedFolder progress:^(NSArray *items) {
+            ExteriaClassicChatsController *controller = weak.target;
+            if (!controller || generation != controller->_generation) return;
+            [items retain];
+            [controller->_dialogs release];
+            controller->_dialogs = items;
+            [controller applyFilters];
+            [controller reloadList:NO];
+            [controller refreshStatus];
+        } completion:loaded] retain];
+    }
     else [_session loadDialogsInFolder:_folderId completion:loaded];
 }
 
@@ -913,8 +931,37 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
 - (void)rowPressed:(UILongPressGestureRecognizer *)press {
     if (press.state != UIGestureRecognizerStateBegan || _selection || self.editing) return;
     NSIndexPath *path = [self.tableView indexPathForRowAtPoint:[press locationInView:self.tableView]];
-    if (!path || [[_shown objectAtIndex:(NSUInteger)path.row] folder]) return;
-    [self beginSelectionAt:path];
+    if (!path || (NSUInteger)path.row >= _shown.count) return;
+    ExteriaDialog *dialog = [_shown objectAtIndex:(NSUInteger)path.row];
+    if (dialog.folder || dialog.community) return;
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:path];
+    UIWindow *window = self.view.window;
+    if (!cell || !window) return;
+    CGRect source = [self.tableView convertRect:cell.frame toView:window];
+    ExteriaWeakReference *weak = _badgeWeak;
+    ExteriaShowChatPeek(window, source, dialog, _session, _avatars, _media, YES, ^(ExteriaChatPeekAction action) {
+        ExteriaClassicChatsController *controller = weak.target;
+        if (!controller) return;
+        NSUInteger index = NSNotFound;
+        for (NSUInteger i = 0; i < controller->_shown.count; ++i) {
+            ExteriaDialog *current = [controller->_shown objectAtIndex:i];
+            if (current.peerKind == dialog.peerKind && current.peerId == dialog.peerId && current.topicId == dialog.topicId) { index = i; break; }
+        }
+        if (index == NSNotFound) return;
+        NSIndexPath *currentPath = [NSIndexPath indexPathForRow:(NSInteger)index inSection:0];
+        ExteriaDialog *current = [controller->_shown objectAtIndex:index];
+        if (action == ExteriaChatPeekOpen) [controller tableView:controller.tableView didSelectRowAtIndexPath:currentPath];
+        else if (action == ExteriaChatPeekSelect) [controller beginSelectionAt:currentPath];
+        else if (action == ExteriaChatPeekPin || action == ExteriaChatPeekMute) {
+            ExteriaChatCommand command = action == ExteriaChatPeekPin ? (current.pinned ? ExteriaChatCommandUnpin : ExteriaChatCommandPin)
+                                                                        : (current.muted ? ExteriaChatCommandUnmute : ExteriaChatCommandMute);
+            [controller applyAction:command toDialogs:[NSArray arrayWithObject:current]];
+        } else if (action == ExteriaChatPeekArchive) {
+            [controller applyToDialogs:[NSArray arrayWithObject:current] perform:^(ExteriaDialog *item, void (^finished)(NSString *)) {
+                [controller->_session moveDialog:item toFolder:item.folderId ? 0 : 1 completion:finished];
+            }];
+        }
+    });
 }
 
 /* runs the action on every picked chat, then asks for the list again; the first refusal is shown once */

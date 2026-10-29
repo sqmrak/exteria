@@ -13,6 +13,7 @@
 #import "exteria_table_update.h"
 #import "exteria_bookmarks_controller.h"
 #import "exteria_chat_controller.h"
+#import "exteria_chat_peek.h"
 #import "exteria_search_controller.h"
 #import "exteria_search_field.h"
 #import "exteria_dialog_cell.h"
@@ -35,6 +36,8 @@
 #import "exteria_topics_screen.h"
 #import "exteria_weak_reference.h"
 #import "exteria_string_drawing.h"
+#include "exteria_clock.h"
+#include "exteria_list_state.h"
 
 #define SEARCH_HEIGHT 38.0
 #define HEADER_HEIGHT (SEARCH_HEIGHT + 12)
@@ -71,6 +74,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     ExteriaFolderTabs *_folders;
     ExteriaMiniPlayer *_miniPlayer;
     id<ExteriaFolderDialogRequest> _folderLoad;
+    NSUInteger _folderProgressToken;
+    uint64_t _lastLiveRefreshMs;
     UITextField *_search;
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickerLibrary;
@@ -120,16 +125,20 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 - (void)liveDialogsChanged:(NSNotification *)note {
     (void)note;
-    [_folderSnapshots removeAllObjects];
-    [_folderSnapshotDates removeAllObjects];
     if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
     _liveRefreshScheduled = YES;
-    [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:0.5];
+    uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
+    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 15000, 500);
+    [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
 }
 
 - (void)refreshLiveDialogs {
     _liveRefreshScheduled = NO;
-    if (self.view.window) [self reloadAfterCurrent];
+    if (self.view.window) {
+        _lastLiveRefreshMs = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
+        [_folderSnapshotDates removeAllObjects];
+        [self reloadAfterCurrent];
+    }
 }
 
 - (void)dialogListChanged:(NSNotification *)note {
@@ -423,7 +432,48 @@ static CGFloat ExteriaChatsHeaderTop(void) {
         [_folders refresh];
     }
     self.table.tableHeaderView = _header;
+    UILongPressGestureRecognizer *peek = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(peekChat:)] autorelease];
+    [self.table addGestureRecognizer:peek];
     [self loadOwnTitle];
+}
+
+- (void)peekChat:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan) return;
+    NSIndexPath *path = [self.table indexPathForRowAtPoint:[gesture locationInView:self.table]];
+    if (!path || (NSUInteger)path.row >= _shown.count) return;
+    ExteriaDialog *dialog = [_shown objectAtIndex:(NSUInteger)path.row];
+    if (dialog.folder || dialog.community) return;
+    UITableViewCell *cell = [self.table cellForRowAtIndexPath:path];
+    UIWindow *window = self.view.window;
+    if (!cell || !window) return;
+    [self closeOpenCell];
+    CGRect source = [self.table convertRect:cell.frame toView:window];
+    ExteriaWeakReference *weak = _badgeWeak;
+    ExteriaShowChatPeek(window, source, dialog, self.session, self.avatars, _media, NO, ^(ExteriaChatPeekAction action) {
+        ExteriaChatsController *controller = weak.target;
+        if (!controller) return;
+        NSUInteger index = NSNotFound;
+        for (NSUInteger i = 0; i < controller->_shown.count; ++i) {
+            ExteriaDialog *current = [controller->_shown objectAtIndex:i];
+            if (current.peerKind == dialog.peerKind && current.peerId == dialog.peerId && current.topicId == dialog.topicId) { index = i; break; }
+        }
+        if (index == NSNotFound) return;
+        NSIndexPath *currentPath = [NSIndexPath indexPathForRow:(NSInteger)index inSection:0];
+        ExteriaDialog *current = [controller->_shown objectAtIndex:index];
+        if (action == ExteriaChatPeekOpen) [controller tableView:controller.table didSelectRowAtIndexPath:currentPath];
+        else if (action == ExteriaChatPeekPin || action == ExteriaChatPeekMute) {
+            ExteriaChatCommand command = action == ExteriaChatPeekPin ? (current.pinned ? ExteriaChatCommandUnpin : ExteriaChatCommandPin)
+                                                                        : (current.muted ? ExteriaChatCommandUnmute : ExteriaChatCommandMute);
+            [controller runCommand:command onDialog:current cell:(ExteriaDialogCell *)[controller.table cellForRowAtIndexPath:currentPath]];
+        } else if (action == ExteriaChatPeekArchive) {
+            [controller.session moveDialog:current toFolder:current.folderId ? 0 : 1 completion:^(NSString *error) {
+                ExteriaChatsController *again = weak.target;
+                if (!again) return;
+                if (error) [again showFailureText:[NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), error]];
+                else [again reload];
+            }];
+        }
+    });
 }
 
 - (void)viewDidLayoutSubviews {
@@ -474,6 +524,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 #pragma mark data
 
 - (void)loadItemsWithCompletion:(ExteriaListCompletion)completion {
+    NSUInteger token = ++_folderProgressToken;
     [_folderLoad cancel];
     [_folderLoad release];
     _folderLoad = nil;
@@ -487,7 +538,18 @@ static CGFloat ExteriaChatsHeaderTop(void) {
             completion(snapshot, nil);
             return;
         }
-        _folderLoad = [[self.session loadDialogsForChatFolder:_folders.selectedFolder completion:completion] retain];
+        ExteriaWeakReference *weak = _badgeWeak;
+        _folderLoad = [[self.session loadDialogsForChatFolder:_folders.selectedFolder progress:^(NSArray *items) {
+            ExteriaChatsController *controller = weak.target;
+            if (!controller || token != controller->_folderProgressToken) return;
+            NSNumber *key = [NSNumber numberWithInt:controller->_folders.selectedFolder.folderId];
+            [controller->_folderSnapshots setObject:items forKey:key];
+            [items retain];
+            [controller->_dialogs release];
+            controller->_dialogs = items;
+            [controller applyFilters];
+            [controller reloadTable];
+        } completion:completion] retain];
     } else [self.session loadDialogsInFolder:_folderId completion:completion];
 }
 

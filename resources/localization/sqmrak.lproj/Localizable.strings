@@ -2009,6 +2009,11 @@
 "update.page.error.security" = "соединение с github не прошло проверку сертификата.";
 "update.page.error.format" = "github ответил непонятно.";
 
+"peek.loading" = "загрузка сообщений…";
+"peek.empty" = "нет сообщений";
+"peek.error" = "не удалось загрузить сообщения";
+"peek.select" = "выбрать чаты";
+
 "group.title" = "голосовой чат";
 "group.you" = "%@ (вы)";
 "group.speaking" = "говорит";
