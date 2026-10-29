@@ -371,9 +371,13 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     [self rebuild];
     [self refresh];
 }
+/* the sticker is loaded before the screen is on, so its first frame is drawn while the push still moves and the card is not empty until the animation parses */
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [_sticker setLoaded:YES];
+}
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    [_sticker setLoaded:YES];
     [_sticker playOnce];
 }
 - (void)viewWillDisappear:(BOOL)animated {
@@ -396,6 +400,7 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     _headerWidth = width;
     if (!_sticker) {
         _sticker = [[ExteriaLottieView alloc] initWithAnimationNamed:@"folders_hint"];
+        [_sticker setLoaded:YES];
         _sticker.userInteractionEnabled = YES;
         [_sticker addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(replaySticker)] autorelease]];
     }
