@@ -596,6 +596,11 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
     }];
 }
 
+- (BOOL)showsPlayerStrip {
+    UIViewController *screen = _classicTabs ? [(UINavigationController *)_classicTabs.selectedViewController topViewController] : _current;
+    return [screen isKindOfClass:[ExteriaChatsController class]] && [(ExteriaChatsController *)screen playerStripShowing];
+}
+
 - (UIViewController *)screenForTab:(NSInteger)tab {
     id existing = [_screens objectAtIndex:(NSUInteger)tab];
     if (existing != [NSNull null]) return existing;

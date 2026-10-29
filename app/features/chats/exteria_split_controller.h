@@ -6,9 +6,12 @@
 /* the ipad shows the lists on the left and what a tap opens on the right */
 @interface ExteriaDetailHost : NSObject {
     ExteriaDetailNavigationController *_detail;
+    ExteriaMainController *_main;
 }
 
 @property (nonatomic, assign) ExteriaDetailNavigationController *detail;
+/* the left pane, which the pages of the right one ask whether it shows the strip of the song already */
+@property (nonatomic, assign) ExteriaMainController *main;
 
 /* NO for the screens that are lists of the left pane: the search and an archive folder of the chat list */
 - (BOOL)opensInDetail:(UIViewController *)screen;
@@ -43,6 +46,8 @@
 
 /* YES for the page that stands alone in the right pane, which has no left pane to go back to, so its back button stays away */
 BOOL ExteriaIsDetailRoot(UIViewController *screen);
+/* YES for a page of the right pane while the chat list on the left shows the strip of the song, so the page does not show a second one */
+BOOL ExteriaListShowsPlayer(UIViewController *screen);
 
 @interface ExteriaSplitController : UIViewController {
     ExteriaDetailHost *_host;

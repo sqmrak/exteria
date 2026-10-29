@@ -76,6 +76,7 @@
 @implementation ExteriaDetailHost
 
 @synthesize detail = _detail;
+@synthesize main = _main;
 
 - (BOOL)opensInDetail:(UIViewController *)screen {
     if ([screen isKindOfClass:[ExteriaSearchController class]] || [screen isKindOfClass:[ExteriaClassicSearchController class]]) return NO;
@@ -184,6 +185,12 @@
 
 @end
 
+BOOL ExteriaListShowsPlayer(UIViewController *screen) {
+    UINavigationController *navigation = screen.navigationController;
+    if (![navigation isKindOfClass:[ExteriaDetailNavigationController class]]) return NO;
+    return [[[(ExteriaDetailNavigationController *)navigation detailHost] main] showsPlayerStrip];
+}
+
 BOOL ExteriaIsDetailRoot(UIViewController *screen) {
     UINavigationController *navigation = screen.navigationController;
     return [navigation isKindOfClass:[ExteriaDetailNavigationController class]] && navigation.viewControllers.count && [navigation.viewControllers objectAtIndex:0] == screen;
@@ -216,12 +223,14 @@ BOOL ExteriaIsDetailRoot(UIViewController *screen) {
     _detailNavigation = [[ExteriaDetailNavigationController alloc] initWithRootViewController:placeholder];
     _detailNavigation.detailHost = _host;
     _host.detail = _detailNavigation;
+    _host.main = _main;
     [_host styleDidChange:NO];
     return self;
 }
 
 - (void)dealloc {
     _host.detail = nil;
+    _host.main = nil;
     _masterNavigation.detailHost = nil;
     _detailNavigation.detailHost = nil;
     _main.detailHost = nil;

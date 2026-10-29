@@ -17,6 +17,8 @@
 @property (nonatomic, assign) id<ExteriaChatsControllerDelegate> chatsDelegate;
 /* 0 lists the chats, 1 the archive; set before the view loads */
 @property (nonatomic, assign) int32_t folderId;
+/* whether the strip of the song that plays is up in this list */
+@property (nonatomic, readonly) BOOL playerStripShowing;
 /* what a chat opened from the list needs for its pictures and its sticker panel; set before the first tap */
 @property (nonatomic, retain) ExteriaMediaCache *media;
 @property (nonatomic, retain) ExteriaStickerLibrary *stickerLibrary;

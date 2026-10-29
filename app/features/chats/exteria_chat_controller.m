@@ -2118,7 +2118,10 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _voiceTitle.frame = CGRectMake(24, 5, width - 150, 18);
     _voiceInfo.frame = CGRectMake(24, 23, width - 150, 16);
     headerHeight += voiceHeight;
-    CGFloat playerHeight = _miniPlayer.showing ? [ExteriaMiniPlayer height] : 0;
+    /* on a tablet the chat list beside the chat already shows the strip, and a second one would stand over the messages */
+    BOOL listHasStrip = ExteriaListShowsPlayer(self);
+    CGFloat playerHeight = _miniPlayer.showing && !listHasStrip ? [ExteriaMiniPlayer height] : 0;
+    _miniPlayer.hidden = !_miniPlayer.showing || listHasStrip;
     _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
     headerHeight += playerHeight;
     CGRect viewport = CGRectMake(left, headerHeight, width, MAX(0, inputY - contextHeight - headerHeight));

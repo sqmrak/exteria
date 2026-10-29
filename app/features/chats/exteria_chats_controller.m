@@ -302,6 +302,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     });
 }
 
+- (BOOL)playerStripShowing { return _miniPlayer.showing; }
+
 - (void)dealloc {
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];
