@@ -356,7 +356,7 @@ static NSString *ExteriaSupportDirectory(void) {
     /* the classic bars are dark, but the login of that style has none, so its status bar follows the color of the screen */
     UIApplication *application = [UIApplication sharedApplication];
     if ([application respondsToSelector:@selector(setStatusBarStyle:animated:)]) {
-        [application setStatusBarStyle:ExteriaThemeIsDark() ? (UIStatusBarStyle)1 : UIStatusBarStyleDefault animated:NO];
+        [application setStatusBarStyle:ExteriaStatusBarStyle(ExteriaThemeIsDark()) animated:NO];
     }
     ExteriaWelcomeController *welcome = [[[ExteriaWelcomeController alloc] init] autorelease];
     welcome.delegate = self;

@@ -15,6 +15,8 @@ BOOL ExteriaThemeStoredDark(void);
 void ExteriaThemeStoreDark(BOOL dark);
 BOOL ExteriaThemeIsDark(void);
 void ExteriaThemeApply(BOOL dark);
+/* the status bar style of a tone: light content on dark, black content on light */
+UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark);
 void ExteriaThemeApplyStored(void);
 
 /* the wallpaper of the chat gives the whole modern palette its hue */

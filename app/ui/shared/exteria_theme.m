@@ -134,6 +134,13 @@ void ExteriaThemeStoreTint(BOOL on, float hue) {
     if (![defaults synchronize]) NSLog(@"exteria: the theme tint was not saved");
 }
 
+/* ios 13 and later turn the default style into light content when the system is dark, and the app is not told; UIStatusBarStyleDarkContent (3) keeps the text
+   black on the light theme. UIWindowScene marks the systems that know the value, older ones keep the default style */
+UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark) {
+    if (dark) return (UIStatusBarStyle)1;
+    return NSClassFromString(@"UIWindowScene") ? (UIStatusBarStyle)3 : UIStatusBarStyleDefault;
+}
+
 /* ios 5 to 6 call style 1 black translucent, ios 7 on call it light content; both are light text on a dark bar */
 void ExteriaThemeApply(BOOL dark) {
     ExteriaDark = dark;
@@ -142,7 +149,7 @@ void ExteriaThemeApply(BOOL dark) {
     ExteriaClassic = NO;
     UIApplication *application = [UIApplication sharedApplication];
     if ([application respondsToSelector:@selector(setStatusBarStyle:animated:)]) {
-        [application setStatusBarStyle:dark ? (UIStatusBarStyle)1 : UIStatusBarStyleDefault animated:NO];
+        [application setStatusBarStyle:ExteriaStatusBarStyle(dark) animated:NO];
     }
 }
 
