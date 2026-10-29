@@ -1118,6 +1118,36 @@ exteria_status exteria_pinned_request(exteria_arena *arena, const exteria_peer_r
     return status;
 }
 
+/* messages.getUnreadReactions or messages.readReactions of a chat or its topic; the history one takes the newest limit and nothing else */
+static exteria_status reactions_request(exteria_arena *arena, const exteria_peer_ref *peer, const char *name, int32_t limit, exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !peer || !out || peer->topic_id < 0 || (peer->topic_id > 0 && peer->kind != 3)) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, name);
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK && peer->topic_id > 0) status = exteria_tl_set_i32(arena, request, "top_msg_id", peer->topic_id);
+    if (status == EXTERIA_OK && limit > 0) status = exteria_tl_set_i32(arena, request, "offset_id", 0);
+    if (status == EXTERIA_OK && limit > 0) status = exteria_tl_set_i32(arena, request, "add_offset", 0);
+    if (status == EXTERIA_OK && limit > 0) status = exteria_tl_set_i32(arena, request, "limit", limit);
+    if (status == EXTERIA_OK && limit > 0) status = exteria_tl_set_i32(arena, request, "max_id", 0);
+    if (status == EXTERIA_OK && limit > 0) status = exteria_tl_set_i32(arena, request, "min_id", 0);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_unread_reactions_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out) {
+    if (limit < 1 || limit > EXTERIA_MESSAGES_MAX) return EXTERIA_E_ARG;
+    return reactions_request(arena, peer, "messages.getUnreadReactions", limit, out);
+}
+
+exteria_status exteria_read_reactions_request(exteria_arena *arena, const exteria_peer_ref *peer, exteria_tl_value **out) {
+    return reactions_request(arena, peer, "messages.readReactions", 0, out);
+}
+
 exteria_status exteria_chat_photos_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out) {
     return chat_search_request(arena, peer, NULL, "", "inputMessagesFilterChatPhotos", limit, out);
 }

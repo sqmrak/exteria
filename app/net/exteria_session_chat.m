@@ -881,6 +881,28 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
     }];
 }
 
+- (void)loadUnreadReactionsOfDialog:(ExteriaDialog *)dialog completion:(ExteriaHistoryCompletion)completion {
+    ExteriaHistoryCompletion done = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_unread_reactions_request(arena, &peer, EXTERIA_MESSAGES_MAX, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        [self deliverMessagesOfResult:result what:"unread reactions" completion:done];
+    }];
+}
+
+- (void)markReactionsReadOfDialog:(ExteriaDialog *)dialog {
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_read_reactions_request(arena, &peer, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        if (result->status == EXTERIA_OK) return;
+        NSString *error = ExteriaRpcErrorName(result);
+        [self noteRpcError:error];
+        NSLog(@"exteria: marking reactions of chat %lld seen failed: %@", peer.id, error);
+    }];
+}
+
 - (void)searchMessagesOfDialog:(ExteriaDialog *)dialog query:(NSString *)query completion:(ExteriaHistoryCompletion)completion {
     ExteriaHistoryCompletion done = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);

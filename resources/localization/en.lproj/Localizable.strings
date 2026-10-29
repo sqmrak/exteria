@@ -1835,6 +1835,7 @@
 "profile.contact.placeholder" = "First and last name";
 "profile.contact.error" = "The contact could not be changed. Try again.";
 "chat.toend" = "Down to the newest messages";
+"chat.reactions.jump" = "Unread reactions";
 "crash.title" = "Oops…";
 "crash.text" = "The app closed because of an error. Send a report about it to the lead developer? It holds none of your messages, names or numbers, only what is known of the error and the phone.";
 "crash.send" = "Send the report";

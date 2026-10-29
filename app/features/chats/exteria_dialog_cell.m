@@ -78,6 +78,7 @@
     UIImageView *_forwardIcon;
     UILabel *_badge;
     UILabel *_mention;
+    UILabel *_reaction;
     UIImageView *_pin;
     UIView *_line;
 }
@@ -243,6 +244,14 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     atMark.center = CGPointMake(BADGE_HEIGHT / 2, BADGE_HEIGHT / 2);
     [_mention addSubview:atMark];
     [_slider addSubview:_mention];
+    _reaction = [ExteriaCellPill(ExteriaFontSemibold(11.5), [UIColor whiteColor], ExteriaTextAlignmentCenter) retain];
+    _reaction.layer.cornerRadius = BADGE_HEIGHT / 2;
+    _reaction.layer.masksToBounds = YES;
+    _reaction.backgroundColor = [UIColor colorWithRed:230.0 / 255 green:62.0 / 255 blue:72.0 / 255 alpha:1];
+    UIImageView *heartMark = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolHeart, 11, [UIColor whiteColor])] autorelease];
+    heartMark.center = CGPointMake(BADGE_HEIGHT / 2, BADGE_HEIGHT / 2);
+    [_reaction addSubview:heartMark];
+    [_slider addSubview:_reaction];
     _pin = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPin, 14, ExteriaColorMuted())];
     [_slider addSubview:_pin];
     _line = [[UIView alloc] init];
@@ -280,6 +289,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_forwardIcon release];
     [_badge release];
     [_mention release];
+    [_reaction release];
     [_pin release];
     [_line release];
     [super dealloc];
@@ -347,7 +357,8 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _badge.text = dialog.unreadCount > 999 ? @"999+" : (dialog.unreadCount > 0 ? [NSString stringWithFormat:@"%ld", (long)dialog.unreadCount] : @"");
     _badge.backgroundColor = ExteriaColorAccent();
     _mention.hidden = dialog.mentions <= 0;
-    _pin.hidden = !dialog.pinned || showsBadge || !_mention.hidden;
+    _reaction.hidden = dialog.reactions <= 0;
+    _pin.hidden = !dialog.pinned || showsBadge || !_mention.hidden || !_reaction.hidden;
     self.accessibilityLabel = [NSString stringWithFormat:@"%@, %@", dialog.title, dialog.preview];
     [self setNeedsLayout];
 }
@@ -591,6 +602,8 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     }
     /* a chat that mentions the person marks it with an @ next to the count */
     if (!_mention.hidden) trailing += BADGE_HEIGHT + (trailing ? 4 : 8);
+    /* a reaction we have not seen gets a red disc with a heart, left of the @ */
+    if (!_reaction.hidden) trailing += BADGE_HEIGHT + (trailing ? 4 : 8);
     /* a preview that wraps pulls the nick up and leaves a wider gap under it; a one line preview sits close under the nick */
     CGFloat thumbRoom = _thumb.hidden ? 0 : [ExteriaPreviewThumb room];
     /* the small picture of the sender stands first in the line, and what follows it moves over */
@@ -633,10 +646,12 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
                                   _mutedIcon.image.size.width, _mutedIcon.image.size.height);
 
     CGFloat markCenter = previewY + (wraps ? 16 : 9);
+    CGFloat badgesRight = width - SIDE_MARGIN - (_badge.hidden ? 0 : badgeSize.width + 4);
     if (!_mention.hidden) {
-        CGFloat right = width - SIDE_MARGIN - (_badge.hidden ? 0 : badgeSize.width + 4);
-        _mention.frame = CGRectMake(right - BADGE_HEIGHT, markCenter - BADGE_HEIGHT / 2, BADGE_HEIGHT, BADGE_HEIGHT);
+        _mention.frame = CGRectMake(badgesRight - BADGE_HEIGHT, markCenter - BADGE_HEIGHT / 2, BADGE_HEIGHT, BADGE_HEIGHT);
+        badgesRight -= BADGE_HEIGHT + 4;
     }
+    if (!_reaction.hidden) _reaction.frame = CGRectMake(badgesRight - BADGE_HEIGHT, markCenter - BADGE_HEIGHT / 2, BADGE_HEIGHT, BADGE_HEIGHT);
     if (!_badge.hidden) {
         _badge.layer.cornerRadius = badgeSize.height / 2;
         _badge.frame = CGRectMake(width - SIDE_MARGIN - badgeSize.width, markCenter - badgeSize.height / 2, badgeSize.width, badgeSize.height);

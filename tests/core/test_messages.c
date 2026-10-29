@@ -732,6 +732,34 @@ static void test_post_counters(void) {
     free(row);
 }
 
+static void test_reactions_request(void) {
+    exteria_tl_value *request = NULL, *decoded = NULL;
+    exteria_peer_ref group = {2, 500, 0, 0, 0}, channel = {3, 500, 7, 0, 42}, bad = {3, 500, 7, 0, -1};
+    exteria_writer writer;
+    int32_t value = 0;
+    CHECK_EQ_INT(exteria_unread_reactions_request(&arena, &group, 100, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_messages_getUnreadReactions);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "limit", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 100);
+    CHECK(!exteria_tl_has(request, "top_msg_id"));
+    CHECK_EQ_INT(exteria_unread_reactions_request(&arena, &channel, 100, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 42);
+    exteria_writer_init(&writer, 4096);
+    CHECK_EQ_INT(exteria_tl_encode(request, &writer, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_decode_all(&arena, NULL, EXTERIA_TL_REF_ANY, writer.data, writer.len, &decoded), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(decoded, "top_msg_id", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 42);
+    exteria_writer_free(&writer);
+    CHECK_EQ_INT(exteria_unread_reactions_request(&arena, &group, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_unread_reactions_request(&arena, &group, EXTERIA_MESSAGES_MAX + 1, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_unread_reactions_request(&arena, &bad, 10, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_read_reactions_request(&arena, &group, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_messages_readReactions);
+    CHECK(!exteria_tl_has(request, "limit"));
+}
+
 static void test_pinned_request(void) {
     exteria_tl_value *request = NULL, *decoded = NULL;
     exteria_peer_ref channel = {3, 500, 7, 0, 0}, nohash = {3, 500, 0, 0, 0};
@@ -1829,6 +1857,7 @@ int main(void) {
     test_sent_as_channel();
     test_post_counters();
     test_pinned_request();
+    test_reactions_request();
     test_greeting_stickers();
     test_answers();
     test_sticker_sets();

@@ -214,6 +214,7 @@ static exteria_dialog_row folder_dialog(ExteriaDialog *dialog) {
     row.unread_count = (int32_t)MIN(INT32_MAX, dialog.unreadCount);
     row.unread_mark = dialog.unread;
     row.mentions = (int32_t)MIN(INT32_MAX, dialog.mentions);
+    row.reactions = (int32_t)MIN(INT32_MAX, dialog.reactions);
     row.community = dialog.community;
     return row;
 }

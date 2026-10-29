@@ -662,6 +662,7 @@ static void test_forum_topics(void) {
     set_i32(t[1], "icon_color", 0x6FB9F0);
     set_i64(t[1], "icon_emoji_id", 777);
     set_i32(t[1], "unread_mentions_count", 2);
+    set_i32(t[1], "unread_reactions_count", 3);
     set_i32(t[1], "read_inbox_max_id", 35);
     settings = obj("peerNotifySettings");
     set_i32(settings, "mute_until", 5000);
@@ -695,6 +696,8 @@ static void test_forum_topics(void) {
     CHECK_EQ_INT(rows[1].muted, 1);
     CHECK_EQ_INT(rows[1].unread_count, 5);
     CHECK_EQ_INT(rows[1].mentions, 2);
+    CHECK_EQ_INT(rows[1].reactions, 3);
+    CHECK_EQ_INT(rows[0].reactions, 0);
     CHECK_EQ_INT(rows[1].read_inbox_max_id, 35);
     CHECK_EQ_INT(rows[1].topic_icon_color, 0x6FB9F0);
     CHECK(rows[1].topic_icon_emoji == 777);

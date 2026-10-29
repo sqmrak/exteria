@@ -84,6 +84,7 @@ typedef struct exteria_dialog_row {
     int32_t date;
     int32_t unread_count;
     int32_t mentions;
+    int32_t reactions;      /* messages of ours that got a reaction we have not seen */
     int32_t participants_count;
     exteria_preview_kind preview;
     /* a small picture of the photo, video, gif or round video of the last message, for the chat list; source none for everything else */

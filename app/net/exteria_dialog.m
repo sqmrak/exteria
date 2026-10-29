@@ -52,6 +52,7 @@
 @synthesize seen = _seen;
 @synthesize unreadCount = _unreadCount;
 @synthesize mentions = _mentions;
+@synthesize reactions = _reactions;
 @synthesize participantsCount = _participantsCount;
 @synthesize title = _title;
 @synthesize preview = _preview;
@@ -129,6 +130,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _seen = row->seen;
     _unreadCount = row->unread_count;
     _mentions = row->mentions;
+    _reactions = row->reactions;
     _participantsCount = row->participants_count;
     if (row->folder) _title = [NSLocalizedString(@"chats.archive", nil) copy];
     else if (row->saved) _title = [NSLocalizedString(@"chats.saved", nil) copy];

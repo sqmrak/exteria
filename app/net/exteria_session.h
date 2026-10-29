@@ -270,6 +270,9 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* the pinned messages of a chat, newest first, up to a hundred, with the people they mention keyed as for the
    history */
 - (void)loadPinnedMessagesOfDialog:(ExteriaDialog *)dialog completion:(ExteriaHistoryCompletion)completion;
+/* the messages of the person that got a reaction not seen yet, newest first */
+- (void)loadUnreadReactionsOfDialog:(ExteriaDialog *)dialog completion:(ExteriaHistoryCompletion)completion;
+- (void)markReactionsReadOfDialog:(ExteriaDialog *)dialog;
 /* the messages of a chat that contain a text, newest first; the query is not empty and at most EXTERIA_CHAT_SEARCH_QUERY_MAX bytes of UTF-8 */
 - (void)searchMessagesOfDialog:(ExteriaDialog *)dialog query:(NSString *)query completion:(ExteriaHistoryCompletion)completion;
 /* everything one person wrote in the chat, newest first, as the "history" of the menu of a message in a group */

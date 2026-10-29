@@ -342,6 +342,10 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     int _scrollPages;
     UILabel *_toast;
     UIButton *_toEnd;
+    /* the heart over the way down: the messages that got a reaction not seen yet, oldest last, and the count on its corner */
+    UIButton *_reactionJump;
+    UILabel *_reactionBadge;
+    NSMutableArray *_unreadReactionIds;
     ExteriaNextChatHint *_nextHint;
     ExteriaDialog *_nextDialog;
     BOOL _toEndShown;
@@ -508,6 +512,9 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     _miniPlayer.changeHandler = nil;
     [_miniPlayer release];
     [_toEnd release];
+    [_reactionJump release];
+    [_reactionBadge release];
+    [_unreadReactionIds release];
     [_wallpaper release];
     [_table release];
     [_header release];
@@ -779,6 +786,37 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _toEnd.alpha = 0;
     _toEnd.hidden = YES;
     [root addSubview:_toEnd];
+    _reactionJump = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _reactionJump.layer.cornerRadius = 22;
+    if (classic) {
+        /* the classic style draws its buttons as a lit red dome, clipped to the circle */
+        _reactionJump.layer.masksToBounds = YES;
+        [_reactionJump setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossRed, NO) forState:UIControlStateNormal];
+        [_reactionJump setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossRed, YES) forState:UIControlStateHighlighted];
+        [_reactionJump setImage:ExteriaSymbolImage(ExteriaSymbolHeart, 20, [UIColor whiteColor]) forState:UIControlStateNormal];
+    } else {
+        _reactionJump.backgroundColor = ExteriaColorCard();
+        _reactionJump.layer.shadowColor = [UIColor blackColor].CGColor;
+        _reactionJump.layer.shadowOpacity = 0.25f;
+        _reactionJump.layer.shadowRadius = 5;
+        _reactionJump.layer.shadowOffset = CGSizeMake(0, 2);
+        [_reactionJump setImage:ExteriaSymbolImage(ExteriaSymbolHeartOutline, 22, ExteriaColorTitle()) forState:UIControlStateNormal];
+    }
+    [_reactionJump addTarget:self action:@selector(reactionJumpTapped) forControlEvents:UIControlEventTouchUpInside];
+    _reactionJump.accessibilityLabel = NSLocalizedString(@"chat.reactions.jump", nil);
+    _reactionJump.hidden = YES;
+    [root addSubview:_reactionJump];
+    _reactionBadge = [[UILabel alloc] init];
+    _reactionBadge.font = ExteriaFontSemibold(12);
+    _reactionBadge.textColor = [UIColor whiteColor];
+    _reactionBadge.textAlignment = ExteriaTextAlignmentCenter;
+    _reactionBadge.backgroundColor = classic ? [UIColor colorWithRed:0.20 green:0.50 blue:0.92 alpha:1] : ExteriaColorAccent();
+    _reactionBadge.layer.cornerRadius = 11;
+    _reactionBadge.layer.masksToBounds = YES;
+    _reactionBadge.userInteractionEnabled = NO;
+    _reactionBadge.hidden = YES;
+    [root addSubview:_reactionBadge];
+    [self loadUnreadReactions];
     _nextHint = [[ExteriaNextChatHint alloc] init];
     [root addSubview:_nextHint];
 
@@ -2105,6 +2143,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _pinnedTitle.frame = CGRectMake(pinnedX, 6, width - pinnedX - pinnedRight, 17);
     _pinnedText.frame = CGRectMake(pinnedX, 24, width - pinnedX - pinnedRight, 18);
     _toEnd.frame = CGRectMake(CGRectGetMaxX(column) - 56, inputY - contextHeight - 56, 44, 44);
+    [self placeReactionJump];
     CGSize hintSize = [_nextHint sizeThatFits:CGSizeMake(width, 0)];
     _nextHint.frame = CGRectMake(CGRectGetMidX(column) - hintSize.width / 2, inputY - contextHeight - hintSize.height - 12, hintSize.width, hintSize.height);
     _toast.frame = CGRectMake(CGRectGetMidX(column) - 60, headerHeight + pinnedHeight + 10, 120, 28);
@@ -3637,9 +3676,59 @@ static void ExteriaRedrawTree(UIView *view) {
     if (show == _toEndShown) return;
     _toEndShown = show;
     if (show) _toEnd.hidden = NO;
-    [UIView animateWithDuration:0.18 animations:^{ _toEnd.alpha = show ? 1 : 0; } completion:^(BOOL finished) {
+    [UIView animateWithDuration:0.18 animations:^{
+        _toEnd.alpha = show ? 1 : 0;
+        [self placeReactionJump];
+    } completion:^(BOOL finished) {
         if (finished && !_toEndShown) _toEnd.hidden = YES;
     }];
+}
+
+/* the heart takes the place of the way down when that is hidden, and stands over it when it shows */
+- (void)placeReactionJump {
+    CGRect base = _toEnd.frame;
+    CGFloat y = _toEndShown ? base.origin.y - 52 : base.origin.y;
+    _reactionJump.frame = CGRectMake(base.origin.x, y, 44, 44);
+    CGFloat width = MAX(22, ceil([_reactionBadge sizeThatFits:CGSizeMake(80, 22)].width) + 12);
+    _reactionBadge.frame = CGRectMake(CGRectGetMaxX(_reactionJump.frame) - width + 6, y - 6, width, 22);
+}
+
+- (void)refreshReactionJump {
+    BOOL show = _unreadReactionIds.count > 0;
+    _reactionJump.hidden = !show;
+    _reactionBadge.hidden = !show;
+    _reactionBadge.text = _unreadReactionIds.count > 999 ? @"999+" : [NSString stringWithFormat:@"%lu", (unsigned long)_unreadReactionIds.count];
+    [self placeReactionJump];
+}
+
+/* the server lists the messages that got a reaction we have not seen; a chat opened from the list knows how many there are before it asks */
+- (void)loadUnreadReactions {
+    if (_dialog.reactions <= 0 || self.pinnedList) return;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadUnreadReactionsOfDialog:_dialog completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        (void)people;
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (!messages) {
+            NSLog(@"exteria: the unread reactions of chat %lld did not load: %@", chat->_dialog.peerId, errorName);
+            return;
+        }
+        NSMutableArray *ids = [[NSMutableArray alloc] init];
+        for (ExteriaMessage *message in messages) if (message.messageId > 0) [ids addObject:[NSNumber numberWithInt:message.messageId]];
+        [chat->_unreadReactionIds release];
+        chat->_unreadReactionIds = ids;
+        [chat refreshReactionJump];
+    }];
+}
+
+/* the oldest unseen reaction first, which reads forward; the last one seen tells the server that all of them were */
+- (void)reactionJumpTapped {
+    if (!_unreadReactionIds.count) return;
+    int32_t messageId = [[_unreadReactionIds lastObject] intValue];
+    [_unreadReactionIds removeLastObject];
+    if (!_unreadReactionIds.count) [_session markReactionsReadOfDialog:_dialog];
+    [self refreshReactionJump];
+    [self jumpToMessageId:messageId];
 }
 
 - (void)toEndTapped {

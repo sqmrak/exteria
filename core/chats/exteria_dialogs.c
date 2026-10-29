@@ -391,6 +391,7 @@ exteria_status exteria_dialogs_parse(const exteria_tl_value *answer, int64_t sel
         row->unread_mark = exteria_tl_has(d, "unread_mark") ? 1 : 0;
         if (exteria_tl_get_i32(d, "unread_count", &value) == EXTERIA_OK && value > 0) row->unread_count = value;
         if (exteria_tl_get_i32(d, "unread_mentions_count", &value) == EXTERIA_OK && value > 0) row->mentions = value;
+        if (exteria_tl_get_i32(d, "unread_reactions_count", &value) == EXTERIA_OK && value > 0) row->reactions = value;
         if (exteria_tl_get_i32(d, "read_inbox_max_id", &value) == EXTERIA_OK && value > 0) row->read_inbox_max_id = value;
         if (exteria_tl_get_i32(d, "read_outbox_max_id", &value) == EXTERIA_OK && value > 0) row->read_outbox_max_id = value;
         settings = exteria_tl_get(d, "notify_settings");
@@ -474,7 +475,7 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
         row->topic_id = value;
         row->topic_closed = exteria_tl_has(t, "closed") ? 1 : 0;
         row->unread_mark = row->outgoing = row->read = row->sender_is_self = row->forwarded = 0;
-        row->unread_count = row->mentions = row->date = row->top_message = 0;
+        row->unread_count = row->mentions = row->reactions = row->date = row->top_message = 0;
         row->read_inbox_max_id = row->read_outbox_max_id = 0;
         row->preview = EXTERIA_PREVIEW_NONE;
         row->sender[0] = row->text[0] = 0;
@@ -484,6 +485,7 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
         if (exteria_tl_get_i64(t, "icon_emoji_id", &icon) == EXTERIA_OK && icon > 0) row->topic_icon_emoji = icon;
         if (exteria_tl_get_i32(t, "unread_count", &value) == EXTERIA_OK && value > 0) row->unread_count = value;
         if (exteria_tl_get_i32(t, "unread_mentions_count", &value) == EXTERIA_OK && value > 0) row->mentions = value;
+        if (exteria_tl_get_i32(t, "unread_reactions_count", &value) == EXTERIA_OK && value > 0) row->reactions = value;
         if (exteria_tl_get_i32(t, "read_inbox_max_id", &value) == EXTERIA_OK && value > 0) row->read_inbox_max_id = value;
         if (exteria_tl_get_i32(t, "read_outbox_max_id", &value) == EXTERIA_OK && value > 0) row->read_outbox_max_id = value;
         settings = exteria_tl_get(t, "notify_settings");
@@ -568,6 +570,7 @@ exteria_status exteria_community_previews_apply(const exteria_tl_value *answer, 
             row->read_outbox_max_id = source->read_outbox_max_id;
             row->unread_count = source->unread_count;
             row->mentions = source->mentions;
+            row->reactions = source->reactions;
             row->unread_mark = source->unread_mark;
             row->muted = source->muted;
             row->notify = source->notify;

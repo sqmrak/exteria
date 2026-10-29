@@ -47,6 +47,7 @@
     exteria_presence _presence;
     NSInteger _unreadCount;
     NSInteger _mentions;
+    NSInteger _reactions;
     NSInteger _participantsCount;
     NSString *_title;
     BOOL _showsSender;
@@ -123,6 +124,8 @@
 @property (nonatomic, readonly) int32_t seen;
 @property (nonatomic, readonly) NSInteger unreadCount;
 @property (nonatomic, readonly) NSInteger mentions;
+/* messages of the person that got a reaction they have not seen yet */
+@property (nonatomic, readonly) NSInteger reactions;
 @property (nonatomic, readonly) NSInteger participantsCount;
 @property (nonatomic, readonly, copy) NSString *title;
 /* the last message ready to show, with a "You:" or sender prefix where that helps */

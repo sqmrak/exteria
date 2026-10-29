@@ -298,6 +298,11 @@ exteria_status exteria_stickers_request(exteria_arena *arena, const char *emotic
 /* a messages.Stickers: EXTERIA_E_NOTFOUND for stickersNotModified, which a request with hash zero never gets */
 exteria_status exteria_stickers_parse(const exteria_tl_value *answer, exteria_sticker_row *stickers, size_t cap, size_t *count);
 exteria_status exteria_pinned_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out);
+/* messages.getUnreadReactions for the messages of ours that got a reaction not seen yet, newest first, up to limit (1 to EXTERIA_MESSAGES_MAX);
+   read with exteria_messages_parse */
+exteria_status exteria_unread_reactions_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out);
+/* messages.readReactions: every reaction of the chat or its topic counts as seen */
+exteria_status exteria_read_reactions_request(exteria_arena *arena, const exteria_peer_ref *peer, exteria_tl_value **out);
 /* messages.search for the messages that set a new photo of a group or channel, newest first, up to limit (1 to EXTERIA_MESSAGES_MAX); the answer is
    read with exteria_chat_avatars_parse */
 exteria_status exteria_chat_photos_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t limit, exteria_tl_value **out);
