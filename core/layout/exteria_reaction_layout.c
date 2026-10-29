@@ -5,17 +5,23 @@
 
 #include "exteria_reactions.h"
 
-exteria_status exteria_reaction_menu_stack(double top, double bottom, double bubble_bottom, double pill_height,
+exteria_status exteria_reaction_menu_stack(double top, double bottom, double bubble_top, double bubble_bottom, double pill_height,
                                            double card_height, double gap, double *pill_y, double *card_y, double *bubble_shift) {
+    double pill_start, card_start, shift;
     if (pill_y) *pill_y = 0;
     if (card_y) *card_y = 0;
     if (bubble_shift) *bubble_shift = 0;
-    if (!pill_y || !card_y || !bubble_shift || !isfinite(top) || !isfinite(bottom) || !isfinite(bubble_bottom) ||
+    if (!pill_y || !card_y || !bubble_shift || !isfinite(top) || !isfinite(bottom) || !isfinite(bubble_top) || !isfinite(bubble_bottom) ||
         !isfinite(pill_height) || !isfinite(card_height) || !isfinite(gap) || pill_height < 0 || card_height < 0 || gap < 0 ||
-        bottom - top < pill_height + gap + card_height) return EXTERIA_E_ARG;
-    *card_y = fmin(fmax(bubble_bottom + 2 * gap + pill_height, top + pill_height + gap), bottom - card_height);
-    *pill_y = *card_y - gap - pill_height;
-    *bubble_shift = fmin(0, *pill_y - gap - bubble_bottom);
+        bubble_bottom < bubble_top || bottom - top < pill_height + gap + card_height) return EXTERIA_E_ARG;
+    pill_start = bubble_top - gap - pill_height;
+    card_start = bubble_bottom + gap;
+    /* a message too near the top comes down to make room for the pill; one too near the bottom goes up for the card, but never past the pill's room at the top */
+    shift = pill_start < top ? top - pill_start : fmin(0, bottom - card_height - card_start);
+    if (pill_start + shift < top) shift = top - pill_start;
+    *pill_y = pill_start + shift;
+    *card_y = fmin(card_start + shift, bottom - card_height);
+    *bubble_shift = shift;
     return EXTERIA_OK;
 }
 

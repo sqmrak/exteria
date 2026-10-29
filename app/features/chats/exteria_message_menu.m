@@ -372,7 +372,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
 
 #pragma mark layout
 
-/* the reaction pill and the card sit below the visible message */
+/* the reaction pill sits above the visible message and the card below it */
 - (void)layoutStack {
     CGSize size = self.bounds.size;
     CGFloat top = EDGE + (ExteriaThemeIsClassic() ? 0 : 20), bottom = size.height - EDGE;
@@ -381,7 +381,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     CGFloat cardY = MIN(CGRectGetMaxY(_bubble) + GAP, bottom - cardHeight);
     CGFloat pillY = top;
     double calculatedPill = 0, calculatedCard = 0, shift = 0;
-    if (_pill && exteria_reaction_menu_stack(top, bottom, CGRectGetMaxY(_bubble), pillHeight, cardHeight, GAP,
+    if (_pill && exteria_reaction_menu_stack(top, bottom, CGRectGetMinY(_bubble), CGRectGetMaxY(_bubble), pillHeight, cardHeight, GAP,
                                              &calculatedPill, &calculatedCard, &shift) == EXTERIA_OK) {
         pillY = (CGFloat)calculatedPill;
         cardY = (CGFloat)calculatedCard;

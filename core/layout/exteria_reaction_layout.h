@@ -9,8 +9,10 @@
 exteria_status exteria_reaction_layout_compute(double width, double scale, const double *chip_widths, size_t count,
                                                exteria_rect *frames, size_t cap, double *height);
 
-/* positions the reaction pill and the menu below the visible message, moving the message up if needed */
-exteria_status exteria_reaction_menu_stack(double top, double bottom, double bubble_bottom, double pill_height,
+/* stacks the reaction pill, the visible message and the menu in that order, one gap apart, between top and bottom. the message moves by bubble_shift (down
+   when the pill would not fit above it, up when the menu would not fit below it); a message too tall for both keeps the pill at the top and lets the menu
+   cover its end */
+exteria_status exteria_reaction_menu_stack(double top, double bottom, double bubble_top, double bubble_bottom, double pill_height,
                                            double card_height, double gap, double *pill_y, double *card_y, double *bubble_shift);
 
 #endif
