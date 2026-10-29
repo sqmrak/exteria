@@ -26,8 +26,28 @@ static UIColor *ExteriaClassicBarColor(void) {
     return ExteriaThemeTinted([UIColor colorWithRed:0.60 green:0.44 blue:0.78 alpha:1]);
 }
 
+/* ios 15 draws a bar that has nothing scrolled under it from scrollEdgeAppearance, which is clear by default and ignores barTintColor: the classic bar came out
+   white with white buttons and title. the appearance classes are looked up by name, so the slices linked against old sdks never see them */
+static void ExteriaClassicApplyBarAppearance(UIView *bar) {
+    BOOL navigation = [bar isKindOfClass:[UINavigationBar class]];
+    Class kind = NSClassFromString(navigation ? @"UINavigationBarAppearance" : @"UIToolbarAppearance");
+    SEL opaque = NSSelectorFromString(@"configureWithOpaqueBackground");
+    if (!kind || ![kind instancesRespondToSelector:opaque]) return;
+    id appearance = [[[kind alloc] init] autorelease];
+    [appearance performSelector:opaque];
+    [appearance setValue:ExteriaClassicBarColor() forKey:@"backgroundColor"];
+    if (navigation) {
+        [appearance setValue:[NSDictionary dictionaryWithObject:[UIColor whiteColor] forKey:NSForegroundColorAttributeName] forKey:@"titleTextAttributes"];
+    }
+    for (NSString *key in [NSArray arrayWithObjects:@"standardAppearance", @"compactAppearance", @"scrollEdgeAppearance", nil]) {
+        NSString *setter = [NSString stringWithFormat:@"set%@%@:", [[key substringToIndex:1] uppercaseString], [key substringFromIndex:1]];
+        if ([bar respondsToSelector:NSSelectorFromString(setter)]) [bar setValue:appearance forKey:key];
+    }
+}
+
 static void ExteriaClassicTintBar(id bar) {
     if (ExteriaClassicIsFlatSystem()) {
+        ExteriaClassicApplyBarAppearance(bar);
         /* black style makes the title and the buttons white; the tint then colors the bar itself */
         [bar setValue:ExteriaClassicBarColor() forKey:@"barTintColor"];
         [bar setValue:[UIColor whiteColor] forKey:@"tintColor"];
