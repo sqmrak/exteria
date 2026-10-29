@@ -453,6 +453,75 @@ static void arguments(void) {
     exteria_tgc_ice_tick(NULL, 0);
 }
 
+static void direct_agents_connect(void) {
+    world *w = (world *)calloc(1, sizeof(*w));
+    exteria_tgc_ice_events ev;
+    unsigned index, duplicate;
+    int a, tick;
+    CHECK(w != NULL);
+    for (a = 0; a < AGENTS; ++a) {
+        contexts[a].w = w;
+        contexts[a].agent = a;
+        memset(&ev, 0, sizeof(ev));
+        ev.context = &contexts[a];
+        ev.send = on_send;
+        ev.state = on_state;
+        ev.payload = on_payload;
+        CHECK_EQ_INT(exteria_tgc_ice_init_direct(&w->ice[a], a == 0, (uint64_t)(a + 1), a == 0 ? ufrag_a : ufrag_b,
+                                                  a == 0 ? pwd_a : pwd_b, &ev), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tgc_ice_set_remote(&w->ice[a], a == 0 ? ufrag_b : ufrag_a, a == 0 ? pwd_b : pwd_a), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tgc_ice_add_direct(&w->ice[a], 0x7f000001u, 1000, 1, &index), EXTERIA_OK);
+        CHECK_EQ_INT(index, 0);
+        CHECK_EQ_INT(exteria_tgc_ice_add_direct(&w->ice[a], 0x7f000001u, 1000, 1, &duplicate), EXTERIA_OK);
+        CHECK_EQ_INT(duplicate, index);
+    }
+    for (tick = 1; tick < 100; ++tick) {
+        w->now = (uint64_t)tick * 50;
+        for (a = 0; a < AGENTS; ++a) exteria_tgc_ice_tick(&w->ice[a], w->now);
+        while (w->queued) {
+            packet p = w->queue[0];
+            memmove(&w->queue[0], &w->queue[1], (--w->queued) * sizeof(packet));
+            CHECK_EQ_INT(exteria_tgc_ice_input(&w->ice[1 - p.agent], p.reflector, p.data, p.len, w->now), EXTERIA_OK);
+        }
+        if (w->agent_state[0] == EXTERIA_TGC_ICE_CONNECTED && w->agent_state[1] == EXTERIA_TGC_ICE_CONNECTED) break;
+    }
+    CHECK_EQ_INT(w->agent_state[0], EXTERIA_TGC_ICE_CONNECTED);
+    CHECK_EQ_INT(w->agent_state[1], EXTERIA_TGC_ICE_CONNECTED);
+    CHECK_EQ_INT(exteria_tgc_ice_send(&w->ice[0], (const uint8_t *)"media", 5), EXTERIA_OK);
+    CHECK_EQ_INT(w->queued, 1);
+    CHECK_EQ_INT(exteria_tgc_ice_input(&w->ice[1], 0, w->queue[0].data, w->queue[0].len, w->now), EXTERIA_OK);
+    CHECK_EQ_INT(w->got_count[1], 1);
+    free(w);
+}
+
+static void response_must_match_path(void) {
+    world *w = make_world(1, 0, 0);
+    exteria_tgc_ice_pair *pair;
+    exteria_stun response;
+    exteria_tgc_reflector sender = w->ice[1].reflectors[0].wire;
+    uint8_t stun[EXTERIA_STUN_MAX_MESSAGE], packet_data[EXTERIA_TGC_REFLECTOR_MAX_DATAGRAM];
+    size_t stun_len = 0, packet_len = 0;
+    CHECK_EQ_INT(exteria_tgc_ice_add_remote_candidate(&w->ice[0], "candidate:1 1 udp 1 reflector-1-8192.reflector 599 typ relay", 0), EXTERIA_OK);
+    pair = &w->ice[0].pairs[0];
+    CHECK(pair->used);
+    pair->outstanding = 1;
+    memset(pair->txid, 42, sizeof(pair->txid));
+    memset(&response, 0, sizeof(response));
+    response.type = EXTERIA_STUN_BINDING_SUCCESS;
+    memcpy(response.txid, pair->txid, sizeof(response.txid));
+    CHECK_EQ_INT(exteria_stun_write(&response, (const uint8_t *)pwd_b, strlen(pwd_b), 1, stun, sizeof(stun), &stun_len), EXTERIA_OK);
+    sender.local_tag = 8193;
+    CHECK_EQ_INT(exteria_tgc_reflector_wrap(&sender, 4096, stun, stun_len, packet_data, sizeof(packet_data), &packet_len), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tgc_ice_input(&w->ice[0], 0, packet_data, packet_len, 10), EXTERIA_OK);
+    CHECK_EQ_INT(pair->valid, 0);
+    CHECK_EQ_INT(pair->outstanding, 1);
+    sender.local_tag = 8192;
+    CHECK_EQ_INT(exteria_tgc_reflector_wrap(&sender, 4096, stun, stun_len, packet_data, sizeof(packet_data), &packet_len), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tgc_ice_input(&w->ice[0], 0, packet_data, packet_len, 20), EXTERIA_OK);
+    CHECK_EQ_INT(pair->valid, 1);
+    free(w);
+}
+
 int main(void) {
     connects_and_carries_data();
     dead_server_is_skipped();
@@ -463,6 +532,8 @@ int main(void) {
     wrong_password_never_connects();
     payload_before_authentication_is_dropped();
     candidate_handling();
+    direct_agents_connect();
+    response_must_match_path();
     arguments();
     return test_finish("test_tgc_ice");
 }

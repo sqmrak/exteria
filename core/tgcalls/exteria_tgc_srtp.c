@@ -275,3 +275,12 @@ exteria_status exteria_tgc_srtcp_unprotect(exteria_tgc_srtp *s, uint8_t *pkt, si
 void exteria_tgc_srtp_wipe(exteria_tgc_srtp *s) {
     if (s) memset(s, 0, sizeof(*s));
 }
+
+void exteria_tgc_srtp_forget(exteria_tgc_srtp *s, uint32_t ssrc) {
+    int i;
+    if (!s) return;
+    for (i = 0; i < EXTERIA_TGC_SRTP_STREAMS; ++i) {
+        if (s->streams[i].used && s->streams[i].ssrc == ssrc) memset(&s->streams[i], 0, sizeof(s->streams[i]));
+        if (s->rtcp_streams[i].used && s->rtcp_streams[i].ssrc == ssrc) memset(&s->rtcp_streams[i], 0, sizeof(s->rtcp_streams[i]));
+    }
+}

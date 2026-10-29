@@ -47,6 +47,7 @@ static path path_of(const exteria_tgc_ice_pair *p) {
 
 static int same_path(const exteria_tgc_ice_pair *p, const path *s) {
     if (p->turn != s->turn) return 0;
+    if (s->turn == 2) return p->remote_ip == s->ip && p->remote_port == s->port;
     if (s->turn) return p->server == s->server && p->remote_ip == s->ip && p->remote_port == s->port;
     return p->reflector == s->server && p->remote_tag == s->tag;
 }
@@ -78,6 +79,22 @@ static int credentials_ok(const char *s, size_t min, size_t max) {
         if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '/')) return 0;
     }
     return 1;
+}
+
+exteria_status exteria_tgc_ice_init_direct(exteria_tgc_ice *ice, int controlling, uint64_t tie_breaker, const char *local_ufrag, const char *local_pwd,
+                                           const exteria_tgc_ice_events *events) {
+    if (!ice) return EXTERIA_E_ARG;
+    memset(ice, 0, sizeof(*ice));
+    if (!events || !events->send || !credentials_ok(local_ufrag, 4, EXTERIA_TGC_ICE_UFRAG_MAX - 1) ||
+        !credentials_ok(local_pwd, 22, EXTERIA_TGC_ICE_PWD_MAX - 1)) return EXTERIA_E_ARG;
+    ice->events = *events;
+    ice->controlling = controlling ? 1 : 0;
+    ice->tie_breaker = tie_breaker;
+    memcpy(ice->local_ufrag, local_ufrag, strlen(local_ufrag) + 1);
+    memcpy(ice->local_pwd, local_pwd, strlen(local_pwd) + 1);
+    ice->selected = -1;
+    ice->direct_mode = 1;
+    return EXTERIA_OK;
 }
 
 exteria_status exteria_tgc_ice_init(exteria_tgc_ice *ice, int controlling, uint64_t tie_breaker, const char *local_ufrag, const char *local_pwd,
@@ -183,6 +200,23 @@ static exteria_tgc_ice_pair *add_pair(exteria_tgc_ice *ice, const path *s, uint3
     return NULL;
 }
 
+exteria_status exteria_tgc_ice_add_direct(exteria_tgc_ice *ice, uint32_t ip, uint16_t port, uint32_t priority, unsigned *index) {
+    path s;
+    exteria_tgc_ice_pair *pair;
+    if (index) *index = 0;
+    if (!ice || !ice->direct_mode || !index || !ip || !port) return EXTERIA_E_ARG;
+    memset(&s, 0, sizeof(s));
+    s.turn = 2;
+    s.ip = ip;
+    s.port = port;
+    pair = find_pair(ice, &s);
+    if (!pair) pair = add_pair(ice, &s, priority);
+    if (!pair) return EXTERIA_E_LIMIT;
+    *index = (unsigned)(pair - ice->pairs);
+    pair->server = (uint8_t)*index;
+    return EXTERIA_OK;
+}
+
 /* the fields of "candidate:F 1 udp P a.b.c.d PORT typ T ...", for the kinds this agent can reach through TURN; 0
    for anything else */
 static int parse_ip_candidate(const char *sdp, uint32_t *ip, uint16_t *port, uint32_t *priority) {
@@ -279,12 +313,14 @@ static void turn_transmit(exteria_tgc_ice *ice, unsigned server, uint32_t ip, ui
 }
 
 static void transmit_path(exteria_tgc_ice *ice, const path *s, const uint8_t *payload, size_t len) {
-    if (s->turn) turn_transmit(ice, s->server, s->ip, s->port, payload, len);
+    if (s->turn == 2) ice->events.send(ice->events.context, s->server, payload, len);
+    else if (s->turn) turn_transmit(ice, s->server, s->ip, s->port, payload, len);
     else transmit(ice, s->server, s->tag, payload, len);
 }
 
 /* a pair can carry a check once its server is ready: a reflector that answered, a TURN allocation that has the permission for the other phone's address */
 static int path_ready(exteria_tgc_ice *ice, const path *s) {
+    if (s->turn == 2) return 1;
     if (!s->turn) return ice->reflectors[s->server].wire.ready;
     return exteria_tgc_turn_permit(&ice->turns[s->server], s->ip) == 1;
 }
@@ -400,12 +436,13 @@ static void handle_request(exteria_tgc_ice *ice, const path *src, const uint8_t 
     if (ice->state == EXTERIA_TGC_ICE_DISCONNECTED && ice->selected >= 0 && &ice->pairs[ice->selected] == p) set_state(ice, EXTERIA_TGC_ICE_CONNECTED);
 }
 
-static void handle_response(exteria_tgc_ice *ice, const uint8_t *data, size_t len, const exteria_stun *m, uint64_t now_ms) {
+static void handle_response(exteria_tgc_ice *ice, const path *src, const uint8_t *data, size_t len, const exteria_stun *m, uint64_t now_ms) {
     int i;
     exteria_tgc_ice_pair *p = NULL;
     if (!ice->has_remote) return;
     for (i = 0; i < EXTERIA_TGC_ICE_MAX_PAIRS; ++i) {
-        if (ice->pairs[i].used && ice->pairs[i].outstanding && memcmp(ice->pairs[i].txid, m->txid, sizeof(m->txid)) == 0) {
+        if (ice->pairs[i].used && ice->pairs[i].outstanding && same_path(&ice->pairs[i], src) &&
+            memcmp(ice->pairs[i].txid, m->txid, sizeof(m->txid)) == 0) {
             p = &ice->pairs[i];
             break;
         }
@@ -458,7 +495,7 @@ static exteria_status handle_payload(exteria_tgc_ice *ice, const path *src, cons
     if (exteria_stun_looks_like(payload, plen)) {
         if (exteria_stun_parse(payload, plen, &m) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
         if (m.type == EXTERIA_STUN_BINDING_REQUEST) handle_request(ice, src, payload, plen, &m, now_ms);
-        else if (m.type == EXTERIA_STUN_BINDING_SUCCESS || m.type == EXTERIA_STUN_BINDING_ERROR) handle_response(ice, payload, plen, &m, now_ms);
+        else if (m.type == EXTERIA_STUN_BINDING_SUCCESS || m.type == EXTERIA_STUN_BINDING_ERROR) handle_response(ice, src, payload, plen, &m, now_ms);
         return EXTERIA_OK;
     }
     p = find_pair(ice, src);
@@ -477,6 +514,13 @@ exteria_status exteria_tgc_ice_input(exteria_tgc_ice *ice, unsigned index, const
     path src;
     if (!ice || !data) return EXTERIA_E_ARG;
     memset(&src, 0, sizeof(src));
+    if (ice->direct_mode) {
+        const exteria_tgc_ice_pair *pair;
+        if (index >= EXTERIA_TGC_ICE_MAX_PAIRS || !ice->pairs[index].used || ice->pairs[index].turn != 2) return EXTERIA_E_ARG;
+        pair = &ice->pairs[index];
+        src = path_of(pair);
+        return handle_payload(ice, &src, data, len, now_ms);
+    }
     if (index >= ice->reflector_count) {
         unsigned server = index - ice->reflector_count;
         exteria_tgc_turn_output out;

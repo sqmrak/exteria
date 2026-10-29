@@ -12,7 +12,8 @@
 #define EXTERIA_TGC_SRTP_KEY_LEN 16
 #define EXTERIA_TGC_SRTP_SALT_LEN 14
 #define EXTERIA_TGC_SRTP_TAG_LEN 10
-#define EXTERIA_TGC_SRTP_STREAMS 8
+/* a group call hears one stream per speaker, so the table is larger than a call of two needs */
+#define EXTERIA_TGC_SRTP_STREAMS 32
 #define EXTERIA_TGC_SRTCP_TRAILER_LEN (4 + EXTERIA_TGC_SRTP_TAG_LEN)
 #define EXTERIA_TGC_SRTP_AUTH_KEY_LEN 20
 #define EXTERIA_TGC_SRTP_WINDOW 128
@@ -61,6 +62,9 @@ exteria_status exteria_tgc_srtp_unprotect(exteria_tgc_srtp *s, uint8_t *pkt, siz
    8 bytes, and the SRTCP index and the tag are appended */
 exteria_status exteria_tgc_srtcp_protect(exteria_tgc_srtp *s, uint8_t *pkt, size_t len, size_t capacity, size_t *out_len);
 exteria_status exteria_tgc_srtcp_unprotect(exteria_tgc_srtp *s, uint8_t *pkt, size_t len, size_t *out_len);
+
+/* drops the state of the stream of this ssrc (RTP and RTCP), for a source that left; a later packet of the ssrc starts a new stream */
+void exteria_tgc_srtp_forget(exteria_tgc_srtp *s, uint32_t ssrc);
 
 void exteria_tgc_srtp_wipe(exteria_tgc_srtp *s);
 

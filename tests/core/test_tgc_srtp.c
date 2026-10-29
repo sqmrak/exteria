@@ -422,7 +422,7 @@ static void stream_table(void) {
         CHECK_EQ_INT(exteria_tgc_srtp_protect(&tx, pkt, 12, sizeof(pkt), &n), EXTERIA_OK);
         CHECK_EQ_INT(exteria_tgc_srtp_unprotect(&rx, pkt, n, &m), EXTERIA_OK);
     }
-    /* a ninth sender does not fit, on either end, but the first eight go on */
+    /* a sender more than the table holds does not fit, on either end, but the others go on */
     exteria_rtp_write_header(pkt, sizeof(pkt), 111, 0, 1, 1, 99);
     CHECK_EQ_INT(exteria_tgc_srtp_protect(&tx, pkt, 12, sizeof(pkt), &n), EXTERIA_E_LIMIT);
     {
@@ -435,6 +435,13 @@ static void stream_table(void) {
         CHECK_EQ_INT(exteria_tgc_srtp_unprotect(&rx, again, k, &m), EXTERIA_E_LIMIT);
     }
     exteria_rtp_write_header(pkt, sizeof(pkt), 111, 0, 2, 2, 3);
+    CHECK_EQ_INT(exteria_tgc_srtp_protect(&tx, pkt, 12, sizeof(pkt), &n), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tgc_srtp_unprotect(&rx, pkt, n, &m), EXTERIA_OK);
+    /* a sender that left gives its place back, on both ends, and the new one starts from a fresh stream */
+    exteria_tgc_srtp_forget(&tx, 1);
+    exteria_tgc_srtp_forget(&rx, 1);
+    exteria_tgc_srtp_forget(NULL, 1);
+    exteria_rtp_write_header(pkt, sizeof(pkt), 111, 0, 7, 7, 99);
     CHECK_EQ_INT(exteria_tgc_srtp_protect(&tx, pkt, 12, sizeof(pkt), &n), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tgc_srtp_unprotect(&rx, pkt, n, &m), EXTERIA_OK);
 }

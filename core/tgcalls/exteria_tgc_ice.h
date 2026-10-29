@@ -113,6 +113,7 @@ typedef struct exteria_tgc_ice {
     exteria_tgc_ice_state state;
     uint64_t last_check_ms;
     uint8_t started;
+    uint8_t direct_mode;
     unsigned rejected_stun;
     unsigned stun_in;
 } exteria_tgc_ice;
@@ -121,6 +122,11 @@ typedef struct exteria_tgc_ice {
    call; tie_breaker random */
 exteria_status exteria_tgc_ice_init(exteria_tgc_ice *ice, int controlling, uint64_t tie_breaker, const char *local_ufrag, const char *local_pwd,
                                     const exteria_tgc_ice_reflector_config *reflectors, size_t reflector_count, const exteria_tgc_ice_events *events);
+
+/* direct mode uses one connected UDP socket per candidate, indexed by the returned path */
+exteria_status exteria_tgc_ice_init_direct(exteria_tgc_ice *ice, int controlling, uint64_t tie_breaker, const char *local_ufrag, const char *local_pwd,
+                                           const exteria_tgc_ice_events *events);
+exteria_status exteria_tgc_ice_add_direct(exteria_tgc_ice *ice, uint32_t ip, uint16_t port, uint32_t priority, unsigned *index);
 
 /* a TURN server of the call (IPv4, host order); call it after init and before the first tick */
 exteria_status exteria_tgc_ice_add_turn(exteria_tgc_ice *ice, uint32_t ip, uint16_t port, const char *username, const char *password);
