@@ -8,6 +8,7 @@
 #include <spawn.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include "exteria_icon_environment.h"
 
@@ -37,9 +38,21 @@ static NSString *ExteriaBundlePlistPath(void) {
     return [[[NSBundle mainBundle] bundlePath] stringByAppendingPathComponent:@"Info.plist"];
 }
 
-/* the plist is replaced by a new file, which needs the folder; a bundle installed by the system, or by a root install, fails one of the two */
+/* the plist is replaced by a new file, which needs the folder. access() does not see what the sandbox denies: a bundle installed by the system lets
+   access() say yes while the write fails with permErr (-54) on ios 6, so the folder is tried with a real file once per run */
 static BOOL ExteriaBundleWritable(void) {
-    return access([[[NSBundle mainBundle] bundlePath] fileSystemRepresentation], W_OK) == 0 && access([ExteriaBundlePlistPath() fileSystemRepresentation], W_OK) == 0;
+    static BOOL writable;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSString *bundle = [[NSBundle mainBundle] bundlePath];
+        if (access([bundle fileSystemRepresentation], W_OK) != 0 || access([ExteriaBundlePlistPath() fileSystemRepresentation], W_OK) != 0) return;
+        NSString *probe = [bundle stringByAppendingPathComponent:@".exteria-write-probe"];
+        int fd = open([probe fileSystemRepresentation], O_WRONLY | O_CREAT | O_EXCL, 0644);
+        if (fd < 0) return;
+        close(fd);
+        writable = unlink([probe fileSystemRepresentation]) == 0;
+    });
+    return writable;
 }
 
 static const char *ExteriaKillallPath(void) {
