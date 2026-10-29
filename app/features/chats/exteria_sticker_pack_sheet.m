@@ -4,6 +4,7 @@
 
 #import "exteria_alert.h"
 #import "exteria_animation.h"
+#import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
 #import "exteria_plural.h"
 #import "exteria_popup_menu.h"
@@ -82,6 +83,7 @@
     _card.layer.cornerRadius = CARD_RADIUS;
     _card.clipsToBounds = YES;
     [self addSubview:_card];
+    ExteriaAddDismissPan(_card, self, @selector(close));
     _close = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     [_close setImage:ExteriaSymbolImage(ExteriaSymbolClose, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
     [_close addTarget:self action:@selector(close) forControlEvents:UIControlEventTouchUpInside];

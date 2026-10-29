@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 
@@ -48,6 +49,7 @@ static UIButton *ExteriaSheetButton(NSString *title, UIColor *color, BOOL bold) 
     _panel = [[UIView alloc] init];
     _panel.backgroundColor = ExteriaColorCard();
     [self addSubview:_panel];
+    ExteriaAddDismissPan(_panel, self, @selector(cancelTapped));
     _picker = [[UIDatePicker alloc] init];
     _picker.datePickerMode = UIDatePickerModeDate;
     _picker.maximumDate = [NSDate date];

@@ -1,6 +1,8 @@
 #import "exteria_music_sheet.h"
 
 #import <QuartzCore/QuartzCore.h>
+
+#import "exteria_dismiss_pan.h"
 #import "exteria_emoji_label.h"
 #import "exteria_music_player.h"
 #import "exteria_platform.h"
@@ -94,6 +96,7 @@
     UILabel *_remaining;
     UIButton *_toggle;
     BOOL _scrubbing;
+    BOOL _closing;
     NSArray *_shownQueue;
     ExteriaMedia *_shownTrack;
     ExteriaMusicState _shownState;
@@ -182,6 +185,7 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     _panel.layer.cornerRadius = 12;
     _panel.clipsToBounds = YES;
     [self addSubview:_panel];
+    ExteriaAddDismissPan(_panel, self, @selector(dismiss));
     _cover = [[UIImageView alloc] init];
     _cover.contentMode = UIViewContentModeScaleAspectFill;
     _cover.clipsToBounds = YES;
@@ -302,7 +306,15 @@ static NSString *SheetTime(NSTimeInterval value) {
 - (void)previous { [[ExteriaMusicPlayer sharedPlayer] previous]; }
 - (void)toggle { [[ExteriaMusicPlayer sharedPlayer] togglePause]; }
 - (void)next { [[ExteriaMusicPlayer sharedPlayer] next]; }
-- (void)dismiss { [self removeFromSuperview]; }
+- (void)dismiss {
+    if (_closing) return;
+    _closing = YES;
+    self.userInteractionEnabled = NO;
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 delay:0
+                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseIn
+                     animations:^{ _panel.transform = CGAffineTransformMakeTranslation(0, _panel.bounds.size.height); self.alpha = 0; }
+                     completion:^(BOOL finished) { (void)finished; [self removeFromSuperview]; }];
+}
 - (NSInteger)tableView:(UITableView *)table numberOfRowsInSection:(NSInteger)section { (void)table; (void)section; return (NSInteger)[ExteriaMusicPlayer sharedPlayer].queue.count; }
 - (UITableViewCell *)tableView:(UITableView *)table cellForRowAtIndexPath:(NSIndexPath *)path {
     ExteriaQueueCell *cell = (ExteriaQueueCell *)[table dequeueReusableCellWithIdentifier:@"track"];

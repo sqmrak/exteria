@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_dismiss_pan.h"
 #import "exteria_blur.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
@@ -405,6 +406,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     [_pill release];
     _pill = _reactions.count ? [[self buildPill] retain] : nil;
     [self addSubview:_card];
+    ExteriaAddDismissPan(_card, self, @selector(dismiss));
     if (_pill) [self addSubview:_pill];
     [self layoutStack];
     if (animated) {

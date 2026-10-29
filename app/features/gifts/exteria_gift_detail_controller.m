@@ -6,6 +6,7 @@
 #import "exteria_gift_folders.h"
 #import "exteria_weak_reference.h"
 #import "exteria_animation.h"
+#import "exteria_dismiss_pan.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_custom_emoji.h"
 #import "exteria_emoji_label.h"
@@ -80,6 +81,7 @@ enum {
     _card.layer.cornerRadius = 18;
     _card.clipsToBounds = YES;
     [root addSubview:_card];
+    ExteriaAddDismissPan(_card, self, @selector(close));
     [self addChildViewController:_navigation];
     [_card addSubview:_navigation.view];
     [_navigation didMoveToParentViewController:self];
@@ -111,14 +113,22 @@ enum {
     ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
 }
 
+- (BOOL)exteriaCanDismissByPan {
+    return !_closing && [_detail popupCanClose];
+}
+
 - (void)close {
-    if (_closing || ![_detail popupCanClose]) return;
+    if (_closing) return;
+    if (![_detail popupCanClose]) {
+        _card.transform = CGAffineTransformIdentity;
+        return;
+    }
     _closing = YES;
     self.view.userInteractionEnabled = NO;
     [_detail popupWillClose];
     /* the plate stays whole while it slides: it is told it has left only once it is off the screen, since telling it first tears down its pictures and leaves an empty card moving down */
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.view.bounds.size.height - _card.frame.origin.y), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.view.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
         (void)finished;
         [self willMoveToParentViewController:nil];
         [self.view removeFromSuperview];

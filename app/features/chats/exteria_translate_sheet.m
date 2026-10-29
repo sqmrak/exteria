@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_dismiss_pan.h"
 #import "exteria_language.h"
 #import "exteria_platform.h"
 #import "exteria_sheet.h"
@@ -202,6 +203,7 @@
     [_card addSubview:_copy];
     [_card addSubview:_close];
     [self addSubview:_card];
+    ExteriaAddDismissPan(_card, self, @selector(dismiss));
     [self refreshLanguage];
 }
 
@@ -370,7 +372,7 @@
     [_job cancel];
     [self retain];
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - _card.frame.origin.y), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         [self release];

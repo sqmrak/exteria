@@ -4,6 +4,7 @@
 
 #import "exteria_alert.h"
 #import "exteria_animation.h"
+#import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 
@@ -138,6 +139,7 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     CGFloat total = cardHeight + GAP + cancelHeight;
     _stack = [[UIView alloc] initWithFrame:CGRectMake((size.width - width) / 2, size.height - total - MAX(GAP + 4, _bottomInset + GAP), width, total)];
     _stack.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
+    ExteriaAddDismissPan(_stack, self, @selector(cancel));
     [_stack addSubview:card];
     [_stack addSubview:cancel];
     [self addSubview:_stack];
