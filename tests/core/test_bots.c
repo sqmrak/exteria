@@ -153,6 +153,27 @@ static void test_invite(void) {
     CHECK_EQ_INT(invite.participants, 4200);
     CHECK(!strcmp(invite.title, "Secret club"));
     CHECK(!strcmp(invite.about, "line one\nline two"));
+    CHECK_EQ_INT(invite.photo.source, EXTERIA_MEDIA_SOURCE_NONE);
+    {
+        exteria_tl_value *photo = obj("photo"), *small = obj("photoSize"), *large = obj("photoSize");
+        exteria_tl_value *sizes[2] = {small, large};
+        i64(photo, "id", 31);
+        i64(photo, "access_hash", 32);
+        CHECK_EQ_INT(exteria_tl_set_bytes(&arena, photo, "file_reference", "abc", 3), EXTERIA_OK);
+        i32(photo, "dc_id", 4);
+        str(small, "type", "s"); i32(small, "w", 90); i32(small, "h", 90); i32(small, "size", 1000);
+        str(large, "type", "m"); i32(large, "w", 180); i32(large, "h", 180); i32(large, "size", 5000);
+        set(photo, "sizes", vec_of(sizes, 2));
+        set(answer, "photo", photo);
+        CHECK_EQ_INT(exteria_invite_parse(answer, 1, &invite), EXTERIA_OK);
+        CHECK_EQ_INT(invite.photo.source, EXTERIA_MEDIA_SOURCE_PHOTO);
+        CHECK_EQ_INT(invite.photo.id, 31);
+        CHECK_EQ_INT(invite.photo.dc, 4);
+        CHECK(!strcmp(invite.photo.thumb, "m"));
+        set(answer, "photo", obj("photoEmpty"));
+        CHECK_EQ_INT(exteria_invite_parse(answer, 1, &invite), EXTERIA_OK);
+        CHECK_EQ_INT(invite.photo.source, EXTERIA_MEDIA_SOURCE_NONE);
+    }
 
     answer = obj("chatInvite");
     str(answer, "title", "");

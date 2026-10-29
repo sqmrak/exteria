@@ -90,7 +90,8 @@ static NSString *ExteriaParseFailure(const char *method, exteria_status status) 
         NSString *deliveredError = [[error copy] autorelease];
         NSInteger count = invite.participants;
         BOOL broadcast = invite.broadcast, request = invite.request_needed;
-        [self deliverMain:^{ done(member, title, about, count, broadcast, request, deliveredError); [done release]; }];
+        ExteriaRemoteFile *photo = [ExteriaRemoteFile fileForMedia:&invite.photo];
+        [self deliverMain:^{ done(member, title, about, photo, count, broadcast, request, deliveredError); [done release]; }];
     }];
     [value release];
 }

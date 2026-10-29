@@ -265,6 +265,11 @@ exteria_status exteria_invite_parse(const exteria_tl_value *answer, int64_t self
     copy_text(out->title, sizeof(out->title), answer, "title", 0);
     if (!out->title[0]) return EXTERIA_E_MALFORMED;
     copy_text(out->about, sizeof(out->about), answer, "about", 1);
+    {
+        exteria_media_info photo;
+        exteria_photo_read(exteria_tl_get(answer, "photo"), 180, &photo);
+        out->photo = photo.ref;
+    }
     exteria_tl_get_i32(answer, "participants_count", &out->participants);
     if (out->participants < 0) out->participants = 0;
     out->broadcast = exteria_tl_has(answer, "broadcast") ? 1 : 0;

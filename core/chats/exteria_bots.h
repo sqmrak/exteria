@@ -38,6 +38,7 @@ typedef struct exteria_invite {
     exteria_dialog_row dialog;
     char title[EXTERIA_DIALOG_TITLE_MAX];
     char about[EXTERIA_INVITE_ABOUT_MAX];
+    exteria_media_ref photo;
     int32_t participants;
     uint8_t broadcast;              /* a channel, not a group */
     uint8_t request_needed;         /* joining sends a request that an admin approves */

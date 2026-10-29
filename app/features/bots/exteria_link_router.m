@@ -10,6 +10,7 @@
 #import "exteria_session_channels.h"
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
+#import "exteria_invite_sheet.h"
 #import "exteria_theme.h"
 #import "exteria_proxy_settings.h"
 #import "exteria_user_profile_controller.h"
@@ -272,7 +273,7 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
 - (void)openInviteOfHash:(NSString *)hash {
     NSUInteger token = [self beginBusy];
     [self retain];
-    [_session checkInviteHash:hash completion:^(ExteriaDialog *member, NSString *title, NSString *about, NSInteger participants, BOOL broadcast, BOOL requestNeeded, NSString *errorName) {
+    [_session checkInviteHash:hash completion:^(ExteriaDialog *member, NSString *title, NSString *about, ExteriaRemoteFile *photo, NSInteger participants, BOOL broadcast, BOOL requestNeeded, NSString *errorName) {
         [self endBusy:token];
         if (errorName) {
             [self showNote:[ExteriaLinkRouter textForError:errorName]];
@@ -285,12 +286,10 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
             return;
         }
         NSString *kind = NSLocalizedString(broadcast ? @"invite.channel" : @"invite.group", nil);
-        NSMutableString *message = [NSMutableString stringWithFormat:NSLocalizedString(@"invite.members", nil), kind, (long)participants];
-        if (about.length) [message appendFormat:@"\n\n%@", about];
-        if (requestNeeded) [message appendFormat:@"\n\n%@", NSLocalizedString(@"invite.request", nil)];
-        ExteriaConfirm(title, message, NSLocalizedString(requestNeeded ? @"invite.send" : @"invite.join", nil), ^{
+        NSString *subtitle = [NSString stringWithFormat:NSLocalizedString(@"invite.members", nil), kind, (long)participants];
+        [ExteriaInviteSheet showInView:ExteriaOverlayHost() title:title subtitle:subtitle about:about photo:photo media:_media requestNeeded:requestNeeded join:^{
             [self joinInviteOfHash:hash];
-        });
+        }];
         [self autorelease];
     }];
 }

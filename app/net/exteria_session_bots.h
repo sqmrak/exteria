@@ -3,6 +3,8 @@
 #import "exteria_bot.h"
 #import "exteria_session.h"
 
+@class ExteriaRemoteFile;
+
 /* the answers of the bot calls; every completion runs on the main thread */
 typedef void (^ExteriaResolveCompletion)(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName);
 typedef void (^ExteriaCallbackCompletion)(ExteriaCallbackAnswer *answer, NSString *errorName);
@@ -17,7 +19,7 @@ typedef void (^ExteriaCallbackCompletion)(ExteriaCallbackAnswer *answer, NSStrin
 - (void)loadStoredPersonOfUserId:(long long)userId completion:(void (^)(ExteriaPerson *person))completion;
 /* an invite link to a private group or channel (the hash of t.me/+hash): what it leads to without joining, and the join itself.
    member is set when the account is in the chat already, and then the chat opens as it is */
-typedef void (^ExteriaInviteCheckCompletion)(ExteriaDialog *member, NSString *title, NSString *about, NSInteger participants, BOOL broadcast, BOOL requestNeeded, NSString *errorName);
+typedef void (^ExteriaInviteCheckCompletion)(ExteriaDialog *member, NSString *title, NSString *about, ExteriaRemoteFile *photo, NSInteger participants, BOOL broadcast, BOOL requestNeeded, NSString *errorName);
 - (void)checkInviteHash:(NSString *)hash completion:(ExteriaInviteCheckCompletion)completion;
 - (void)joinInviteHash:(NSString *)hash completion:(void (^)(ExteriaDialog *dialog, NSString *errorName))completion;
 /* stores the name the person gives a user (contacts.addContact), which the server shows instead of the user's own;
