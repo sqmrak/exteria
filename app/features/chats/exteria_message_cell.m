@@ -432,6 +432,13 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
         ExteriaAddCorners(context, rect, outgoing ? inner : joinTop, outgoing ? joinTop : inner, outgoing ? joinBottom : inner, outgoing ? inner : joinBottom);
         [(outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn()) setFill];
         CGContextFillPath(context);
+        /* a near white bubble melts into the light wallpaper, so the ones that came in get a thin outline, drawn half a point in so the view does not clip it */
+        if (!outgoing && !ExteriaThemeIsDark()) {
+            ExteriaAddCorners(context, CGRectInset(rect, 0.5, 0.5), joinTop, inner, inner, joinBottom);
+            [[ExteriaColorAccent() colorWithAlphaComponent:0.3f] setStroke];
+            CGContextSetLineWidth(context, 1);
+            CGContextStrokePath(context);
+        }
     }
     if (_item.senderName.length) {
         [_item.senderLayout drawAtPoint:_item.senderOrigin];
