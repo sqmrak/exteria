@@ -192,6 +192,12 @@
 @end
 
 @implementation ExteriaOnlineDotView
+@synthesize inverted = _inverted;
+- (void)setInverted:(BOOL)inverted {
+    if (inverted == _inverted) return;
+    _inverted = inverted;
+    [self setNeedsDisplay];
+}
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) { self.backgroundColor = [UIColor clearColor]; self.opaque = NO; self.userInteractionEnabled = NO; }
@@ -199,7 +205,7 @@
 }
 - (void)drawRect:(CGRect)rect {
     (void)rect;
-    [[UIColor colorWithRed:0.30f green:0.78f blue:0.37f alpha:1] setFill];
+    [(_inverted ? [UIColor whiteColor] : [UIColor colorWithRed:0.30f green:0.78f blue:0.37f alpha:1]) setFill];
     [[UIBezierPath bezierPathWithOvalInRect:self.bounds] fill];
 }
 @end

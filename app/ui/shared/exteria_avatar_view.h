@@ -29,4 +29,6 @@
 @end
 
 @interface ExteriaOnlineDotView : UIView
+/* the dot of a row that is chosen is white, as the green one would vanish on the colored plate of the row */
+@property (nonatomic, assign) BOOL inverted;
 @end

@@ -56,7 +56,7 @@
     ExteriaAvatarView *_avatar;
     ExteriaStoryRing *_storyRing;
     /* the green dot on the corner of the avatar of a user who is on line */
-    UIView *_onlineDot;
+    ExteriaOnlineDotView *_onlineDot;
     /* the small picture of who wrote the last message of a group, when the setting asks for it */
     ExteriaAvatarView *_mini;
     UIImageView *_topicIcon;
@@ -130,6 +130,23 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
 
 - (void)communityTapped {
     if (_communityHandler) _communityHandler();
+}
+
+/* on the plate of a chosen row the green dot is white, with the ring in the color of the plate; elsewhere it is green on the ring of the screen */
+- (void)refreshOnlineDot {
+    BOOL chosen = self.selected || self.highlighted;
+    _onlineDot.inverted = chosen;
+    _onlineDot.layer.borderColor = (chosen ? ExteriaColorField() : ExteriaColorScreen()).CGColor;
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+    [self refreshOnlineDot];
+}
+
+- (void)setHighlighted:(BOOL)highlighted animated:(BOOL)animated {
+    [super setHighlighted:highlighted animated:animated];
+    [self refreshOnlineDot];
 }
 
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
@@ -286,7 +303,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _topicIcon.image = topic ? ExteriaTopicIconImage(dialog) : nil;
     /* only a private chat with a live account has a presence; the saved messages row would show the own one */
     _onlineDot.hidden = topic || dialog.kind != EXTERIA_DIALOG_USER || dialog.saved || dialog.presence != EXTERIA_PRESENCE_ONLINE;
-    _onlineDot.layer.borderColor = ExteriaColorScreen().CGColor;
+    [self refreshOnlineDot];
     _storyRing.hidden = YES;
     /* a chat that was added to a community wears the arrow of its avatar too, and the arrow opens the community */
     _communityBadge.hidden = !(dialog.community || dialog.linkedCommunityId);
