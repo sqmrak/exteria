@@ -14,6 +14,11 @@
 #import "exteria_weak_reference.h"
 
 #define PEEK_COUNT 12
+/* each pull to the top of the list brings one page of older messages, up to a bounded total so a long chat cannot fill the memory of an old device */
+#define PEEK_PAGE 30
+#define PEEK_TOTAL_MAX 300
+/* pages made only of hidden messages add no rows, so the pages asked for are counted too */
+#define PEEK_PAGES_MAX 30
 #define PEEK_ACTION_HEIGHT 42.0
 
 @interface ExteriaChatPeek : UIView <UITableViewDataSource, UITableViewDelegate> {
@@ -31,6 +36,11 @@
     UITableView *_table;
     UIView *_menu;
     NSArray *_items;
+    NSMutableDictionary *_people;
+    int32_t _oldestId;
+    BOOL _loadingOlder;
+    NSUInteger _pages;
+    BOOL _reachedStart;
     NSArray *_buttons;
     BOOL _networkFinished;
     CGFloat _layoutWidth;
@@ -86,7 +96,8 @@
     ExteriaScrollViewOwnsInsets(_table);
     ExteriaTableUsesExactHeights(_table);
     _table.backgroundColor = [UIColor clearColor]; _table.separatorStyle = UITableViewCellSeparatorStyleNone;
-    _table.dataSource = self; _table.delegate = self; _table.userInteractionEnabled = NO;
+    _table.dataSource = self; _table.delegate = self;
+    /* the table scrolls the loaded messages; a tap on it reaches the tap on the card behind it, which opens the chat, as the messages have no delegate here to act on their own */
     [_card addSubview:_table];
     _menu = [[UIView alloc] init];
     _menu.backgroundColor = ExteriaColorCard(); _menu.layer.cornerRadius = 14; _menu.clipsToBounds = YES;
@@ -117,7 +128,7 @@
     [_weak clear]; [_weak release]; _table.delegate = nil; _table.dataSource = nil;
     [_dialog release]; [_session release]; [_avatars release]; [_media release]; [_handler release];
     [_dim release]; [_card release]; [_header release]; [_avatar release]; [_title release]; [_status release]; [_table release]; [_menu release];
-    [_items release]; [_buttons release]; [super dealloc];
+    [_items release]; [_people release]; [_buttons release]; [super dealloc];
 }
 - (void)showInView:(UIView *)host source:(CGRect)source {
     self.frame = host.bounds;
@@ -154,23 +165,69 @@
         }
     }];
 }
-- (void)showMessages:(NSArray *)messages people:(NSDictionary *)people {
-    NSArray *ordered = [messages sortedArrayUsingComparator:^NSComparisonResult(ExteriaMessage *a, ExteriaMessage *b) {
+static NSArray *ExteriaPeekOrdered(NSArray *messages) {
+    return [messages sortedArrayUsingComparator:^NSComparisonResult(ExteriaMessage *a, ExteriaMessage *b) {
         return a.messageId < b.messageId ? NSOrderedAscending : (a.messageId > b.messageId ? NSOrderedDescending : NSOrderedSame);
     }];
+}
+- (NSArray *)itemsForMessages:(NSArray *)ordered people:(NSDictionary *)people {
     NSMutableArray *items = [NSMutableArray array];
-    NSUInteger start = ordered.count > PEEK_COUNT ? ordered.count - PEEK_COUNT : 0;
-    for (NSUInteger i = start; i < ordered.count; ++i) {
-        ExteriaMessage *message = [ordered objectAtIndex:i];
+    for (ExteriaMessage *message in ordered) {
         if (!message.outgoing && ExteriaAyuHidesText(message.text)) continue;
         ExteriaChatItem *item = [ExteriaChatItem itemForMessage:message group:_dialog.kind == EXTERIA_DIALOG_GROUP people:people];
         if (item) [items addObject:item];
     }
-    [_items release]; _items = [items copy];
+    return items;
+}
+- (void)showMessages:(NSArray *)messages people:(NSDictionary *)people {
+    NSArray *ordered = ExteriaPeekOrdered(messages);
+    NSUInteger start = ordered.count > PEEK_COUNT ? ordered.count - PEEK_COUNT : 0;
+    NSArray *shown = [ordered subarrayWithRange:NSMakeRange(start, ordered.count - start)];
+    [_people release]; _people = [people mutableCopy];
+    _oldestId = shown.count ? [(ExteriaMessage *)[shown objectAtIndex:0] messageId] : 0;
+    _reachedStart = NO;
+    _pages = 0;
+    [_items release]; _items = [[self itemsForMessages:shown people:_people] copy];
     _status.text = _items.count ? @"" : NSLocalizedString(@"peek.empty", nil);
     [_table reloadData]; [_table layoutIfNeeded];
     CGFloat end = MAX(0, _table.contentSize.height - _table.bounds.size.height);
     [_table setContentOffset:CGPointMake(0, end) animated:NO];
+}
+/* the page that came before what is on the list goes above it, and the list keeps showing the same messages where they were */
+- (void)loadOlder {
+    if (_loadingOlder || _reachedStart || !_networkFinished || _oldestId <= 0 || _items.count >= PEEK_TOTAL_MAX || _pages >= PEEK_PAGES_MAX) return;
+    _loadingOlder = YES;
+    ++_pages;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadHistoryOfDialog:_dialog beforeId:_oldestId limit:PEEK_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *error) {
+        ExteriaChatPeek *peek = weak.target;
+        if (!peek) return;
+        peek->_loadingOlder = NO;
+        if (!messages) {
+            NSLog(@"exteria: older messages of the chat preview failed: %@", error);
+            return;
+        }
+        [peek prependMessages:messages people:people];
+    }];
+}
+- (void)prependMessages:(NSArray *)messages people:(NSDictionary *)people {
+    NSMutableArray *older = [NSMutableArray array];
+    for (ExteriaMessage *message in ExteriaPeekOrdered(messages)) if (message.messageId < _oldestId) [older addObject:message];
+    if (!older.count) {
+        _reachedStart = YES;
+        return;
+    }
+    if (people) [_people addEntriesFromDictionary:people];
+    _oldestId = [(ExteriaMessage *)[older objectAtIndex:0] messageId];
+    NSMutableArray *items = [NSMutableArray arrayWithArray:[self itemsForMessages:older people:_people]];
+    [items addObjectsFromArray:_items];
+    CGFloat height = _table.contentSize.height, offset = _table.contentOffset.y;
+    [_items release]; _items = [items copy];
+    [_table reloadData]; [_table layoutIfNeeded];
+    [_table setContentOffset:CGPointMake(0, offset + _table.contentSize.height - height) animated:NO];
+}
+- (void)scrollViewDidScroll:(UIScrollView *)scroll {
+    if (scroll == _table && scroll.contentOffset.y < 120) [self loadOlder];
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
