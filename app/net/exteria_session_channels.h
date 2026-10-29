@@ -112,6 +112,12 @@ typedef enum {
 - (void)loadMessage:(int32_t)messageId ofChannelDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaMessage *message, NSString *errorName))completion;
 /* the signed in account joins the public channel or group */
 - (void)joinChannelOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
+/* whether this account is in the channel, asked of the server: the flags of a min channel say nothing about it. an account that never joined is a member of NO
+   with no error; the completion runs on the main thread */
+/* the chat of a channel or group this account knows, by its number (the one a t.me/c link carries); CHANNEL_PRIVATE when the account has never seen it or is not
+   let in. the completion runs on the main thread */
+- (void)loadChannelDialogWithId:(long long)channelId completion:(void (^)(ExteriaDialog *dialog, NSString *errorName))completion;
+- (void)loadMembershipOfDialog:(ExteriaDialog *)dialog completion:(void (^)(BOOL member, NSString *errorName))completion;
 
 /* one page of a list of the channel */
 - (void)loadMembersOfDialog:(ExteriaDialog *)dialog list:(ExteriaChannelList)list query:(NSString *)query offset:(NSInteger)offset

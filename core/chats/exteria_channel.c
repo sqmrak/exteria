@@ -145,6 +145,41 @@ int exteria_channel_already_left(int peer_kind, const char *error_name) {
     return peer_kind == 3 && error_name && strcmp(error_name, "USER_NOT_PARTICIPANT") == 0;
 }
 
+exteria_status exteria_channel_member_request(exteria_arena *arena, const exteria_peer_ref *channel, exteria_tl_value **out) {
+    exteria_tl_value *input, *me, *request;
+    exteria_peer_ref self;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !channel || !out || channel->kind != 3 || channel->id <= 0 || channel->access_hash == 0) return EXTERIA_E_ARG;
+    memset(&self, 0, sizeof(self));
+    self.kind = 1;
+    self.self = 1;
+    input = exteria_tl_new_obj(arena, "inputChannel");
+    request = exteria_tl_new_obj(arena, "channels.getParticipant");
+    if (!input || !request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_i64(arena, input, "channel_id", channel->id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, input, "access_hash", channel->access_hash);
+    if (status == EXTERIA_OK) status = exteria_input_peer(arena, &self, &me);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "channel", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "participant", me);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_channel_member_parse(const exteria_tl_value *answer, int *member) {
+    const exteria_tl_value *participant;
+    if (member) *member = 0;
+    if (!member || !exteria_tl_is(answer, EXTERIA_TL_ID_channels_channelParticipant)) return EXTERIA_E_MALFORMED;
+    participant = exteria_tl_get(answer, "participant");
+    if (exteria_tl_is(participant, EXTERIA_TL_ID_channelParticipantLeft) || exteria_tl_is(participant, EXTERIA_TL_ID_channelParticipantBanned)) return EXTERIA_OK;
+    if (exteria_tl_is(participant, EXTERIA_TL_ID_channelParticipant) || exteria_tl_is(participant, EXTERIA_TL_ID_channelParticipantSelf) ||
+        exteria_tl_is(participant, EXTERIA_TL_ID_channelParticipantCreator) || exteria_tl_is(participant, EXTERIA_TL_ID_channelParticipantAdmin)) {
+        *member = 1;
+        return EXTERIA_OK;
+    }
+    return EXTERIA_E_MALFORMED;
+}
+
 static const struct {
     uint32_t bit;
     const char *field;

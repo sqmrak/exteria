@@ -343,6 +343,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     ExteriaPremiumGateView *_premiumGate;
     BOOL _greetingAsked;
     BOOL _joinPending;
+    BOOL _membershipAsked;
     BOOL _joining;
     ExteriaComposeContext *_context;
     int32_t _replyToId;
@@ -1199,6 +1200,33 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
                     cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:pick];
 }
 
+/* the way in stands where the field would be while the account is outside the channel */
+- (void)applyMembership:(BOOL)member {
+    if (_joining) return;
+    _joinPending = !member && !_pinnedList;
+    _input.actionWithInput = _joinPending && _dialog.kind == EXTERIA_DIALOG_GROUP;
+    _input.actionTitle = _joinPending ? NSLocalizedString(@"chat.join", nil) : nil;
+    [self.view setNeedsLayout];
+}
+
+/* a chat opened from a link carries a channel whose flags do not say whether the account is in, so the button used to flash with the first guess and go;
+   getParticipant of this account is the answer, asked once per screen */
+- (void)checkMembership {
+    if (_membershipAsked || _pinnedList) return;
+    _membershipAsked = YES;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadMembershipOfDialog:_dialog completion:^(BOOL member, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) {
+            NSLog(@"exteria: membership of channel %lld was not read: %@", chat->_dialog.peerId, errorName);
+            chat->_membershipAsked = NO;
+            return;
+        }
+        [chat applyMembership:member];
+    }];
+}
+
 - (void)loadChannelFull {
     if (_dialog.topicId > 0 && !_pinnedList) [self loadTopicPinned];
     ExteriaWeakReference *weak = _weak;
@@ -1212,9 +1240,9 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [chat->_channelFull release];
         chat->_channelFull = [channel retain];
         /* a channel or group the account is not in shows the way in where the field would be */
-        if (channel.membershipKnown) chat->_joinPending = channel.dialog.left && !chat->_pinnedList;
-        chat->_input.actionWithInput = chat->_joinPending && chat->_dialog.kind == EXTERIA_DIALOG_GROUP;
-        chat->_input.actionTitle = chat->_joinPending ? NSLocalizedString(@"chat.join", nil) : nil;
+        /* the flag is only trusted on a full object; a min one says nothing, and the server is asked once */
+        if (channel.membershipKnown) [chat applyMembership:!channel.dialog.left];
+        else [chat checkMembership];
         [chat refreshStatusLine];
         /* the full channel is the authority on posting rights, whatever the chat list's entry said */
         if (chat->_dialog.kind == EXTERIA_DIALOG_CHANNEL) {
@@ -1417,6 +1445,128 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     else if (!_loadingOlder) _scrollTarget = 0;
 }
 
+- (void)openWindowAround:(int32_t)target {
+    _loadingWindow = YES;
+    NSUInteger token = ++_windowToken;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadHistoryOfDialog:_dialog offsetId:target + 1 addOffset:-(HISTORY_PAGE / 2) limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat || token != chat->_windowToken) return;
+        chat->_loadingWindow = NO;
+        BOOL found = NO;
+        for (ExteriaMessage *message in messages) if (message.messageId == target) found = YES;
+        if (!found) {
+            NSLog(@"exteria: the history around message %d of chat %lld did not hold it: %@", (int)target, chat->_dialog.peerId, errorName);
+            chat->_scrollTarget = 0;
+            ExteriaShowNotice(nil, NSLocalizedString(@"chat.reply.unavailable", nil));
+            return;
+        }
+        [chat enterWindowWithMessages:messages people:people];
+        [chat scrollToTargetOrLoadMore];
+    }];
+}
+
+/* the stretch replaces what the list held; older pages and newer pages are fetched from its two ends as the person scrolls */
+- (void)enterWindowWithMessages:(NSArray *)messages people:(NSDictionary *)people {
+    [self stopFollowingBottom];
+    [_server removeAllObjects];
+    _oldestId = 0;
+    _window = YES;
+    _canLoadNewer = YES;
+    _loadingNewer = NO;
+    _loadingOlder = NO;
+    _olderDeferred = NO;
+    _stickToBottom = NO;
+    [_people addEntriesFromDictionary:people];
+    [self mergeMessages:messages];
+    _canLoadMore = _oldestId > 1;
+    _rebuildNow = YES;
+    [self rebuildItems];
+    _rebuildNow = NO;
+    [_table setContentOffset:CGPointMake(0, -_table.contentInset.top) animated:NO];
+    [self showToEnd:YES];
+}
+
+- (void)loadNewerIfNeeded:(CGFloat)distance {
+    if (!_window || !_canLoadNewer || _loadingNewer || _loadingWindow || distance > _table.bounds.size.height * 1.5f) return;
+    int32_t newest = [self newestLoadedId];
+    if (newest <= 0) return;
+    _loadingNewer = YES;
+    NSUInteger token = _windowToken;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadHistoryOfDialog:_dialog offsetId:newest addOffset:-(HISTORY_PAGE - 1) limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat || token != chat->_windowToken) return;
+        chat->_loadingNewer = NO;
+        if (!messages) {
+            /* the list stays as it is and the next scroll to its end asks again */
+            NSLog(@"exteria: newer messages of chat %lld not loaded: %@", chat->_dialog.peerId, errorName);
+            return;
+        }
+        NSUInteger fresh = 0;
+        for (ExteriaMessage *message in messages) if (message.messageId > newest) ++fresh;
+        [chat->_people addEntriesFromDictionary:people];
+        [chat mergeMessages:messages];
+        /* a page that came back short ends at the newest message of the chat: the list is the chat again, and the live updates of the store join it */
+        if (fresh + 2 < HISTORY_PAGE) {
+            chat->_window = NO;
+            chat->_canLoadNewer = NO;
+        }
+        [chat rebuildItems];
+        if (!chat->_window) [chat markReadIfNeeded];
+    }];
+}
+
+/* back from the window to the end of the chat: what was loaded goes, and the newest page is fetched as when the chat opened */
+- (void)leaveWindow {
+    if (!_window && !_loadingWindow) return;
+    ++_windowToken;
+    _window = NO;
+    _loadingWindow = NO;
+    _loadingNewer = NO;
+    _loadingOlder = NO;
+    _olderDeferred = NO;
+    _canLoadNewer = NO;
+    _scrollTarget = 0;
+    [_server removeAllObjects];
+    _oldestId = 0;
+    _canLoadMore = NO;
+    _loadedFirst = NO;
+    _stickToBottom = YES;
+    [self loadNewest];
+}
+
+#pragma mark voice chat
+
+/* the voice chat of a group or channel is asked for each time the chat comes up, and the bar shows only one this app can join */
+- (void)refreshVoiceChat {
+    if (_pinnedList || _dialog.saved || (_dialog.peerKind != 2 && _dialog.peerKind != 3) || _joinPending) return;
+    NSUInteger token = ++_voiceToken;
+    ExteriaWeakReference *weak = _weak;
+    [_session.groupCalls loadVoiceChatOfDialog:_dialog completion:^(ExteriaVoiceChat *chat, NSString *errorName) {
+        ExteriaChatController *controller = weak.target;
+        if (!controller || token != controller->_voiceToken) return;
+        if (!chat && errorName && ![errorName isEqualToString:@"NOCALL"]) NSLog(@"exteria: the voice chat of the chat was not read: %@", errorName);
+        [controller->_voiceChat release];
+        controller->_voiceChat = [chat retain];
+        BOOL show = chat != nil && chat.joinable;
+        if (show) controller->_voiceInfo.text = chat.participantsCount > 0 ? [NSString stringWithFormat:NSLocalizedString(@"group.members", nil), chat.participantsCount]
+                                                                           : NSLocalizedString(@"chat.voice.empty", nil);
+        if (controller->_voiceBar.hidden == show) {
+            controller->_voiceBar.hidden = !show;
+            [controller layoutChat];
+        }
+    }];
+}
+
+- (void)openVoiceChat {
+    if (_voiceChat) {
+        [_session.groupCalls joinVoiceChatOfDialog:_dialog inviteHash:nil];
+        return;
+    }
+    [self askWithMessage:NSLocalizedString(@"chat.voice.start.confirm", nil) action:NSLocalizedString(@"chat.menu.voicechat.start", nil) tag:ExteriaChatAlertStartVoice];
+}
+
 #pragma mark menu
 
 typedef enum { ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete } ExteriaChatMenuEntry;
@@ -1463,6 +1613,9 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
 #define MENU_ROW(symbol, key, entry) do { symbols[titles.count] = (symbol); [titles addObject:NSLocalizedString((key), nil)]; [entries addObject:[NSNumber numberWithInt:(entry)]]; } while (0)
     MENU_ROW(ExteriaSymbolMagnifier, @"chat.menu.search", ExteriaChatMenuSearch);
     MENU_ROW(ExteriaSymbolPinLine, @"chat.menu.pinned", ExteriaChatMenuPinned);
+    if ((_dialog.peerKind == 2 || _dialog.peerKind == 3) && !_dialog.saved && !_pinnedList && !_joinPending) {
+        MENU_ROW(ExteriaSymbolMicrophone, _voiceChat ? @"chat.menu.voicechat.join" : @"chat.menu.voicechat.start", ExteriaChatMenuVoiceChat);
+    }
     if (_dialog.saved && !_dialog.savedSource) MENU_ROW(ExteriaSymbolGroupsMenu, @"chat.menu.saved.dialogs", ExteriaChatMenuSavedDialogs);
     /* the linked chat comes from the full channel, so it waits for it instead of showing a row that cannot work yet */
     if (channelLike && _channelFull.linked) {
@@ -1539,6 +1692,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         }
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
         chat->_joinPending = NO;
+        chat->_membershipAsked = NO;
         chat->_input.actionWithInput = NO;
         chat->_input.actionTitle = nil;
         /* the full channel is the authority on posting rights and on membership, so it decides what the bar shows now */

@@ -129,6 +129,11 @@ exteria_status exteria_channel_join_request(exteria_arena *arena, const exteria_
    EXTERIA_E_MALFORMED for anything else */
 exteria_status exteria_channel_join_parse(const exteria_tl_value *answer);
 int exteria_channel_already_left(int peer_kind, const char *error_name);
+/* channels.getParticipant for this account: the one answer that says whether it is in the channel, since the flags of a min channel say nothing about it */
+exteria_status exteria_channel_member_request(exteria_arena *arena, const exteria_peer_ref *channel, exteria_tl_value **out);
+/* the answer to it: *member is 1 for a creator, an admin or a plain member and 0 for one that left or is banned; EXTERIA_E_MALFORMED for anything else. the error
+   USER_NOT_PARTICIPANT of the request is "not in" too, which exteria_channel_already_left tells */
+exteria_status exteria_channel_member_parse(const exteria_tl_value *answer, int *member);
 /* resolves a min channel through the message that named it, without reusing its unusable hash */
 exteria_status exteria_channel_from_message_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t message_id,
                                                    int64_t channel_id, exteria_tl_value **out);
