@@ -107,6 +107,8 @@
     UIImageView *_stickerPreview;
     ExteriaLottieView *_stickerLottie;
     BOOL _stickerAsked;
+    /* the table width the card was laid out for */
+    CGFloat _headerWidth;
 }
 @end
 
@@ -242,6 +244,7 @@
 
 - (void)rebuildHeader {
     CGFloat width = self.table.bounds.size.width;
+    _headerWidth = width;
     CGFloat cardWidth = width - 2 * HEADER_INSET;
     BOOL scanning = [ExteriaQrScanController scanningAvailable];
     UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 100)] autorelease];
@@ -283,9 +286,9 @@
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    /* the card is laid out for the width of the table, so a turn of the phone builds it again */
-    UIView *header = self.headerView;
-    if (header && fabs(header.bounds.size.width - self.table.bounds.size.width) > 0.5) [self rebuildHeader];
+    /* the card is laid out for the width of the table, so a turn of the phone or a pane that is narrower than the first guess builds it again; the header
+       view itself is no measure, since the table resizes it to its own width at once while the card inside keeps the old one */
+    if (self.headerView && fabs(_headerWidth - self.table.bounds.size.width) > 0.5) [self rebuildHeader];
 }
 
 #pragma mark sections
