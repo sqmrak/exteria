@@ -4,7 +4,9 @@
 
 #import "exteria_avatar_view.h"
 #import "exteria_emoji_label.h"
+#import "exteria_developers.h"
 #import "exteria_image_decoder.h"
+#import "exteria_name_badge.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 
@@ -55,7 +57,12 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     [ExteriaShownBanner leaveNow];
     ExteriaInAppBanner *banner = [[[ExteriaInAppBanner alloc] initWithFrame:CGRectZero] autorelease];
     banner->_tap = [tap copy];
-    banner->_title.text = title.length ? title : @"Telegram";
+    /* a person's name wears the marks of the app and the Premium star as it does in the chat list; the card has no media cache, so a status picture that is not
+       on the device is left out instead of drawn as a box */
+    NSArray *titleEntities = nil;
+    banner->_title.dropsUndrawable = YES;
+    banner->_title.text = ExteriaNameWithBadges(title.length ? title : @"Telegram", dialog ? ExteriaDialogBadgeDocument(dialog) : 0, ExteriaDialogIsDeveloper(dialog), &titleEntities);
+    banner->_title.entities = titleEntities;
     banner->_body.text = body;
     if (dialog) {
         ExteriaAvatarView *avatar = banner->_avatar;
