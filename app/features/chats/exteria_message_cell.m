@@ -1561,7 +1561,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _reactions.inBubble = item.reactionsInside;
     _reactions.outgoing = item.message.outgoing;
     [_reactions setReactions:[item shownReactions] counts:YES animated:reactionsChanged];
-    _reactions.alignRight = item.message.outgoing && !item.reactionsInside;
+    _reactions.alignRight = item.message.outgoing && !item.reactionsInside && !item.giftCard;
     _reactions.frame = item.reactionFrame;
     _reactions.hidden = ![item shownReactions].count && !_reactions.animatingOut;
     [self configureMarkupForItem:item];

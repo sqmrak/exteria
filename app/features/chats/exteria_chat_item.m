@@ -1180,6 +1180,12 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
             x = _bubbleFrame.origin.x;
             chipsWidth = MIN(width - edge - x, 380);
         }
+        if (_giftCard) {
+            CGFloat used = 0;
+            ExteriaReactionsMetrics([self shownReactions], MIN(width - 2 * edge, 380), YES, &used, NULL);
+            chipsWidth = used;
+            x = floor((width - chipsWidth) / 2);
+        }
         CGFloat chipsHeight = ExteriaReactionsHeight([self shownReactions], chipsWidth, YES);
         _reactionFrame = CGRectMake(x, _height + 4, chipsWidth, chipsHeight);
         _height += chipsHeight + 4;
