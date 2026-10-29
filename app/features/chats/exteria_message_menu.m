@@ -189,9 +189,9 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     if (!_pill) return;
     [self addSubview:_pill];
     _pill.alpha = 0;
-    _pill.transform = CGAffineTransformMakeScale(0.92, 0.92);
+    _pill.transform = CGAffineTransformMakeTranslation(0, 8);
     [self layoutStack];
-    ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
 }
 
 /* the rows that show now: all of them, or the first few and the entry that opens the rest */
@@ -417,6 +417,65 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
 
 #pragma mark show and close
 
+/* the card opens as the popup of exteraless does: its background grows from the edge that is next to the message while it fades in, and the rows come one after
+   another, each from 6 points off, over 150 ms plus 16 ms a row; nothing scales, so there is no overshoot to see */
+static void ExteriaRevealCard(UIView *card, BOOL fromTop) {
+    UIView *content = nil;
+    if (card.subviews.count) {
+        UIView *clip = [card.subviews objectAtIndex:0];
+        if (clip.subviews.count) content = [clip.subviews objectAtIndex:0];
+    }
+    NSUInteger count = content.subviews.count;
+    CFTimeInterval duration = 0.15 + 0.016 * (CFTimeInterval)count;
+    /* the margin keeps the shadow outside the card visible while the mask grows */
+    const CGFloat margin = 24;
+    CGRect full = CGRectInset(card.bounds, -margin, -margin);
+    CGRect start = CGRectMake(full.origin.x, fromTop ? full.origin.y : CGRectGetMaxY(full) - margin, full.size.width, margin);
+    CAShapeLayer *mask = [CAShapeLayer layer];
+    mask.frame = card.bounds;
+    mask.fillColor = [UIColor blackColor].CGColor;
+    mask.path = [UIBezierPath bezierPathWithRect:full].CGPath;
+    card.layer.mask = mask;
+    CAMediaTimingFunction *ease = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+    [CATransaction begin];
+    [CATransaction setCompletionBlock:^{ card.layer.mask = nil; }];
+    CABasicAnimation *grow = [CABasicAnimation animationWithKeyPath:@"path"];
+    grow.fromValue = (id)[UIBezierPath bezierPathWithRect:start].CGPath;
+    grow.toValue = (id)[UIBezierPath bezierPathWithRect:full].CGPath;
+    grow.duration = duration;
+    grow.timingFunction = ease;
+    [mask addAnimation:grow forKey:@"exteria.menu.reveal"];
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = [NSNumber numberWithFloat:0];
+    fade.toValue = [NSNumber numberWithFloat:1];
+    fade.duration = duration;
+    fade.timingFunction = ease;
+    [card.layer addAnimation:fade forKey:@"exteria.menu.fade"];
+    [CATransaction commit];
+    for (NSUInteger i = 0; i < count; ++i) {
+        UIView *row = [content.subviews objectAtIndex:i];
+        CFTimeInterval delay = count > 1 ? duration * 0.4 * (CFTimeInterval)i / (CFTimeInterval)(count - 1) : 0;
+        CABasicAnimation *rowFade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        rowFade.fromValue = [NSNumber numberWithFloat:0];
+        rowFade.toValue = [NSNumber numberWithFloat:1];
+        CABasicAnimation *rowMove = [CABasicAnimation animationWithKeyPath:@"transform.translation.y"];
+        rowMove.fromValue = [NSNumber numberWithFloat:fromTop ? -6 : 6];
+        rowMove.toValue = [NSNumber numberWithFloat:0];
+        CAAnimationGroup *group = [CAAnimationGroup animation];
+        group.animations = [NSArray arrayWithObjects:rowFade, rowMove, nil];
+        group.duration = duration * 0.6;
+        group.beginTime = [row.layer convertTime:CACurrentMediaTime() fromLayer:nil] + delay;
+        group.fillMode = kCAFillModeBackwards;
+        group.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        [row.layer addAnimation:group forKey:@"exteria.menu.row"];
+    }
+}
+
+/* the card is below the message unless the screen had no room for it there */
+- (BOOL)cardOpensDownward {
+    return CGRectGetMidY(_card.frame) >= CGRectGetMidY(_bubble);
+}
+
 - (void)showInView:(UIView *)host bubble:(CGRect)bubble outgoing:(BOOL)outgoing snapshot:(UIImage *)snapshot snapshotFrame:(CGRect)snapshotFrame clip:(CGRect)clip {
     if (self.superview) return;
     self.frame = host.bounds;
@@ -451,13 +510,13 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     [host addSubview:self];
     _shown = YES;
     _dim.alpha = 0;
-    _card.alpha = 0;
-    _card.transform = CGAffineTransformMakeScale(0.92, 0.92);
-    _pill.alpha = 0;
-    _pill.transform = CGAffineTransformMakeScale(0.92, 0.92);
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
-    if (_pill) ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    if (!ExteriaReduceMotionEnabled()) ExteriaRevealCard(_card, [self cardOpensDownward]);
+    if (_pill && !ExteriaReduceMotionEnabled()) {
+        _pill.alpha = 0;
+        _pill.transform = CGAffineTransformMakeTranslation(0, 8);
+        ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    }
 }
 
 - (void)leaveThen:(void (^)(void))after {
@@ -467,8 +526,9 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     void (^next)(void) = [after copy];
     [self retain];
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    if (_pill) ExteriaAnimateView(_pill, CGAffineTransformMakeScale(0.92, 0.92), 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeScale(0.92, 0.92), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    /* the popup of exteraless leaves by fading while it slips 5 points toward the message */
+    if (_pill) ExteriaAnimateView(_pill, CGAffineTransformMakeTranslation(0, 5), 0, EXTERIA_MOTION_EXIT, nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, [self cardOpensDownward] ? -5 : 5), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         if (next) next();
