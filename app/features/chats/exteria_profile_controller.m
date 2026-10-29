@@ -10,6 +10,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_avatar_view.h"
+#import "exteria_alert.h"
 #import "exteria_channel_card.h"
 #import "exteria_chat_controller.h"
 #import "exteria_info_card_view.h"
@@ -41,13 +42,13 @@
 #import "exteria_weak_reference.h"
 
 #define BAR_HEIGHT 44.0
-#define ACTION_HEIGHT 66.0
+#define ACTION_HEIGHT 44.0
 #define INFO_ROW 62.0
 #define CARD_ROW 52.0
 #define GAP 14.0
 #define SEND_HEIGHT 48.0
 
-/* a card with a symbol over a caption, the three of them in a row under the name */
+/* the edit action under the profile */
 @interface ExteriaProfileAction : UIControl {
     UIImageView *_icon;
     UILabel *_caption;
@@ -79,7 +80,6 @@
 }
 
 - (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
     [_icon release];
     [_caption release];
     [super dealloc];
@@ -88,8 +88,10 @@
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGSize size = self.bounds.size;
-    _icon.frame = CGRectMake(0, 8, size.width, 28);
-    _caption.frame = CGRectMake(6, 38, size.width - 12, 18);
+    CGFloat text = MIN(MAX(0, size.width - 52), ceil([_caption sizeThatFits:CGSizeMake(size.width, 24)].width));
+    CGFloat left = floor((size.width - text - 28) / 2);
+    _icon.frame = CGRectMake(left, (size.height - 22) / 2, 22, 22);
+    _caption.frame = CGRectMake(left + 28, 0, text, size.height);
 }
 
 - (void)setHighlighted:(BOOL)highlighted {
@@ -117,7 +119,7 @@
     ExteriaEmojiLabel *_name;
     UILabel *_status;
     ExteriaRatingBadge *_ratingBadge;
-    ExteriaProfileAction *_actions[3];
+    ExteriaProfileAction *_editAction;
     ExteriaInfoCardView *_info;
     UIView *_signOutCard;
     UIButton *_signOut;
@@ -170,6 +172,7 @@
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
     [_weak clear];
     [_weak release];
     _grid.delegate = nil;
@@ -195,10 +198,8 @@
     [_name release];
     [_status release];
     [_ratingBadge release];
-    for (int i = 0; i < 3; ++i) {
-        [_actions[i] release];
-        [_feeds[i] release];
-    }
+    [_editAction release];
+    for (int i = 0; i < 3; ++i) [_feeds[i] release];
     [_info release];
     [_signOutCard release];
     [_signOut release];
@@ -255,14 +256,9 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
     [_identity addSubview:_ratingBadge];
 
-    NSString *titles[3] = {NSLocalizedString(@"profile.photo", nil), NSLocalizedString(@"profile.edit", nil), NSLocalizedString(@"tab.settings", nil)};
-    ExteriaSymbol symbols[3] = {ExteriaSymbolGallery, ExteriaSymbolCompose, ExteriaSymbolGear};
-    SEL handlers[3] = {@selector(choosePhoto), @selector(editProfile), @selector(openSettings)};
-    for (int i = 0; i < 3; ++i) {
-        _actions[i] = [[ExteriaProfileAction alloc] initWithSymbol:symbols[i] title:titles[i]];
-        [_actions[i] addTarget:self action:handlers[i] forControlEvents:UIControlEventTouchUpInside];
-        [_head addSubview:_actions[i]];
-    }
+    _editAction = [[ExteriaProfileAction alloc] initWithSymbol:ExteriaSymbolCompose title:NSLocalizedString(@"profile.edit", nil)];
+    [_editAction addTarget:self action:@selector(editProfile) forControlEvents:UIControlEventTouchUpInside];
+    [_head addSubview:_editAction];
 
     _music = [[ExteriaMusicPill alloc] init];
     [_music addTarget:self action:@selector(openMusic) forControlEvents:UIControlEventTouchUpInside];
@@ -374,6 +370,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     NSString *text = NSLocalizedString(ExteriaChatFlagGet(ExteriaChatFlagGhostOffline) ? @"profile.offline.question" : @"profile.online", nil);
     _status.text = text;
     _barStatus.text = text;
+    _moreButton.hidden = !_person.username.length && !ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
     [self layoutHead];
 }
 
@@ -460,7 +457,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [infoRows addObjectsFromArray:ExteriaIdentityRows(_person.userId, _person.photo)];
     [_info setRows:infoRows];
     [_info setStarsBalance:_starsImage caption:NSLocalizedString(@"profile.stars", nil)];
-    _moreButton.hidden = !_person.username.length;
+    _moreButton.hidden = !_person.username.length && !ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
     _music.savedTrack = _full.music;
     [self refreshChannelCard];
     [self layoutHead];
@@ -600,8 +597,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     CGFloat statusWidth = MIN(width - 70, ceil([_status sizeThatFits:CGSizeMake(width - 70, 22)].width));
     _ratingBadge.frame = CGRectMake(floor((width - statusWidth) / 2) - 26, _status.frame.origin.y + 1, 22, 20);
     y += EXTERIA_IDENTITY_HEIGHT + GAP + 4;
-    CGFloat each = (contentWidth - 2 * 10) / 3;
-    for (int i = 0; i < 3; ++i) _actions[i].frame = CGRectMake(x + i * (each + 10), y, each, ACTION_HEIGHT);
+    _editAction.frame = CGRectMake(x, y, contentWidth, ACTION_HEIGHT);
     y += ACTION_HEIGHT + GAP;
     if (_music.hasContent) {
         _music.frame = CGRectMake(x, y - GAP + 8, contentWidth, [ExteriaMusicPill height]);
@@ -699,15 +695,49 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 }
 
 - (void)showMenu {
-    if (!_person.username.length) return;
-    ExteriaSymbol symbols[1] = {ExteriaSymbolLink};
+    BOOL hasLink = _person.username.length > 0;
+    BOOL ghost = ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
+    if (!hasLink && !ghost) return;
+    NSMutableArray *titles = [NSMutableArray array];
+    ExteriaSymbol symbols[2];
+    NSUInteger count = 0;
+    if (hasLink) {
+        [titles addObject:NSLocalizedString(@"profile.qr.copy", nil)];
+        symbols[count++] = ExteriaSymbolLink;
+    }
+    if (ghost) {
+        [titles addObject:NSLocalizedString(@"profile.peek.online", nil)];
+        symbols[count++] = ExteriaSymbolEye;
+    }
     ExteriaWeakReference *me = _weak;
-    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:[NSArray arrayWithObject:NSLocalizedString(@"profile.qr.copy", nil)] symbols:symbols
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols
                                                               handler:^(NSUInteger index) {
-        (void)index;
-        [(ExteriaProfileController *)me.target copyLink];
+        ExteriaProfileController *profile = me.target;
+        if (hasLink && index == 0) [profile copyLink];
+        else if (ghost && index == (hasLink ? 1u : 0u)) [profile peekOnline];
     }] autorelease];
     [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(_moreButton.frame) - 6, CGRectGetMaxY(_moreButton.frame) - 8)];
+}
+
+- (void)peekOnline {
+    [self toast:NSLocalizedString(@"profile.peek.loading", nil)];
+    ExteriaWeakReference *weak = _weak;
+    [_session loadSelf:^(NSArray *items, NSString *errorName) {
+        ExteriaProfileController *profile = weak.target;
+        if (!profile || !profile.view.window) return;
+        ExteriaPerson *person = items.count ? [items objectAtIndex:0] : nil;
+        NSString *message;
+        if (errorName) {
+            message = [errorName isEqualToString:@"TIMEOUT"] || [errorName isEqualToString:@"OFFLINE"] ? NSLocalizedString(@"error.offline", nil) : [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName];
+        } else if (!person || person.presence == EXTERIA_PRESENCE_UNKNOWN || (person.presence == EXTERIA_PRESENCE_OFFLINE && person.seen <= 0)) {
+            message = NSLocalizedString(@"profile.peek.unavailable", nil);
+        } else if (person.presence == EXTERIA_PRESENCE_OFFLINE) {
+            message = [NSString stringWithFormat:NSLocalizedString(@"profile.peek.lastseen", nil), ExteriaMediaTimeText(person.seen)];
+        } else {
+            message = ExteriaLastSeenText(person.presence, person.seen);
+        }
+        ExteriaShowNotice(NSLocalizedString(@"profile.peek.online", nil), message);
+    }];
 }
 
 - (void)copyLink {
@@ -730,9 +760,6 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [UIView animateWithDuration:0.3 delay:1.2 options:0 animations:^{ _toast.alpha = 0; } completion:nil];
 }
 
-- (void)openSettings {
-    [_delegate profileControllerRequestsSettings:self];
-}
 
 - (void)editProfile {
     if (!_person) return;

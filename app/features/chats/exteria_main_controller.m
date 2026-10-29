@@ -70,7 +70,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     badge.frame = CGRectMake(floor(width * (CGFloat)(2 * index + 1) / (CGFloat)(ExteriaTabCount * 2)) + 4, 1, badge.frame.size.width, badge.frame.size.height);
 }
 
-@interface ExteriaMainController () <UITabBarControllerDelegate> {
+@interface ExteriaMainController () <UITabBarControllerDelegate, UIGestureRecognizerDelegate> {
     ExteriaSession *_session;
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
@@ -159,6 +159,12 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     root.backgroundColor = ExteriaColorScreen();
     root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.view = root;
+    for (NSUInteger i = 0; i < 2; ++i) {
+        UISwipeGestureRecognizer *swipe = [[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipedTab:)] autorelease];
+        swipe.direction = i == 0 ? UISwipeGestureRecognizerDirectionRight : UISwipeGestureRecognizerDirectionLeft;
+        swipe.delegate = self;
+        [root addGestureRecognizer:swipe];
+    }
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(themeChanged:)
                                                  name:ExteriaThemeDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tabOrderChanged:)
@@ -743,6 +749,39 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
 
 #pragma mark delegates
 
+static BOOL ExteriaSwipeTabKind(NSInteger kind) {
+    return kind == ExteriaTabProfile || kind == ExteriaTabSettings || kind == ExteriaTabContacts;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
+    (void)gesture;
+    if (_classicTabs || !_tabBar || _currentTab < 0 || _currentTab >= ExteriaTabCount || !ExteriaSwipeTabKind(_kinds[_currentTab])) return NO;
+    for (UIView *view = touch.view; view && view != self.view; view = view.superview) {
+        if ([view isKindOfClass:[UISlider class]] || [view isKindOfClass:[UISwitch class]] ||
+            [view isKindOfClass:[UITextField class]] || [view isKindOfClass:[UITextView class]]) return NO;
+        if ([view isKindOfClass:[UIScrollView class]]) {
+            UIScrollView *scroll = (UIScrollView *)view;
+            if (scroll.contentSize.width > scroll.bounds.size.width + 1) return NO;
+        }
+    }
+    return YES;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    (void)gesture;
+    return [other.view isKindOfClass:[UIScrollView class]] && other == [(UIScrollView *)other.view panGestureRecognizer];
+}
+
+- (void)swipedTab:(UISwipeGestureRecognizer *)swipe {
+    if (swipe.state != UIGestureRecognizerStateRecognized || !_tabBar) return;
+    NSInteger step = swipe.direction == UISwipeGestureRecognizerDirectionRight ? -1 : 1;
+    NSInteger next = _currentTab + step;
+    while (next >= 0 && next < ExteriaTabCount && !ExteriaSwipeTabKind(_kinds[next])) next += step;
+    if (next < 0 || next >= ExteriaTabCount) return;
+    _tabBar.selectedIndex = next;
+    [self showTab:next];
+}
+
 - (void)tabBar:(ExteriaTabBar *)tabBar didSelectIndex:(NSInteger)index {
     (void)tabBar;
     [self showTab:index];
@@ -752,14 +791,6 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
     (void)controller;
     NSInteger chatsIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabChats);
     if (chatsIndex >= 0) [_tabBar setBadge:total forIndex:chatsIndex];
-}
-
-- (void)profileControllerRequestsSettings:(ExteriaProfileController *)controller {
-    (void)controller;
-    NSInteger settingsIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabSettings);
-    if (settingsIndex < 0) return;
-    _tabBar.selectedIndex = settingsIndex;
-    [self showTab:settingsIndex];
 }
 
 - (void)profileController:(ExteriaProfileController *)controller requestsSignOut:(void (^)(NSString *errorName))completion {

@@ -384,6 +384,10 @@
 "chat.service.gift.in" = "%@ sent you a gift: %@%@";
 "profile.online" = "online";
 "profile.offline.question" = "offline?";
+"profile.peek.online" = "Check online status";
+"profile.peek.loading" = "Checking status…";
+"profile.peek.unavailable" = "Telegram did not provide the last seen time.";
+"profile.peek.lastseen" = "Last seen: %@";
 "profile.photo" = "Set photo";
 "profile.edit" = "Edit";
 "profile.tab.stories" = "Stories";

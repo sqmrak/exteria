@@ -385,6 +385,10 @@
 "chat.service.gift.in" = "%@ отправил(а) вам подарок: %@%@";
 "profile.online" = "в сети";
 "profile.offline.question" = "не в сети?";
+"profile.peek.online" = "подглядеть онлайн";
+"profile.peek.loading" = "проверяем статус…";
+"profile.peek.unavailable" = "telegram не сообщил время последнего посещения.";
+"profile.peek.lastseen" = "последний раз в сети: %@";
 "profile.photo" = "выбрать фото";
 "profile.edit" = "изменить";
 "profile.tab.stories" = "истории";
