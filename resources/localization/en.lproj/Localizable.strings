@@ -549,6 +549,7 @@
 "media.caption" = "Add a caption…";
 "media.edit" = "Edit photo";
 "attach.pager.remove" = "Remove";
+"attach.pager.add" = "Add photo or video";
 "media.failed" = "Could not open media. Tap to retry.";
 "media.preview" = "Preview";
 "media.count" = "%ld of %ld";

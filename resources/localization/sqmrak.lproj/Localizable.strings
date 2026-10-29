@@ -551,6 +551,7 @@
 "media.caption" = "добавить подпись…";
 "media.edit" = "редактировать";
 "attach.pager.remove" = "убрать";
+"attach.pager.add" = "добавить фото или видео";
 "media.failed" = "не удалось открыть файл. нажмите, чтобы повторить :#";
 "media.preview" = "предпросмотр";
 "media.count" = "%ld из %ld";

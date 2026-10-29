@@ -177,6 +177,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
         return;
     }
     if (_cancelled || _picker || _preview || _export || _busy) return;
+    [_options release]; _options = nil;
     UIImagePickerController *picker = [[[UIImagePickerController alloc] init] autorelease];
     _picker = [picker retain];
     picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
@@ -195,6 +196,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) {
         [self alert:NSLocalizedString(@"attach.camera.unavailable", nil)]; return;
     }
+    [_options release]; _options = nil;
     _picker = [[UIImagePickerController alloc] init];
     _picker.sourceType = UIImagePickerControllerSourceTypeCamera;
     _picker.mediaTypes = [UIImagePickerController availableMediaTypesForSourceType:UIImagePickerControllerSourceTypeCamera];
@@ -309,6 +311,10 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
         ExteriaAttachFlow *flow = weak.target;
         if (!flow || flow->_cancelled) return;
         [flow->_pager release]; flow->_pager = nil;
+        if (kept.count > 1) {
+            flow->_options->viewOnce = NO;
+            if (!flow->_album) flow->_album = [[NSMutableArray alloc] init];
+        }
         /* the words of the pager replace those of the sheet, and the first item that goes out takes them */
         [flow->_options->caption release];
         flow->_options->caption = [caption copy];
@@ -353,6 +359,14 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
         return;
     }
     if (_collected) {
+        ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+        item->image = [image retain];
+        [self collectItem:item];
+        return;
+    }
+    if (_options && _options->preview) {
+        _options->preview = NO;
+        _collected = [[NSMutableArray alloc] init];
         ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
         item->image = [image retain];
         [self collectItem:item];
@@ -537,19 +551,12 @@ static NSString *ExteriaMimeOfPath(NSString *path);
         dispatch_async(dispatch_get_main_queue(), ^{
             [self hideBusy];
             if (!_cancelled && bounded) {
-                ExteriaWeakReference *weak = _weak;
-                _preview = [[ExteriaMediaViewer alloc] initWithImage:bounded send:^(UIImage *edited, NSString *caption) {
-                    ExteriaAttachFlow *flow = weak.target;
-                    if (!flow || flow->_cancelled) return;
-                    [flow->_caption release]; flow->_caption = [caption copy];
-                    [flow->_preview release]; flow->_preview = nil;
-                    [flow preparePhoto:edited];
-                }];
-                _preview.cancelHandler = ^{
-                    ExteriaAttachFlow *flow = weak.target;
-                    if (flow) { [flow->_preview release]; flow->_preview = nil; [flow endQueue]; }
-                };
-                [_host presentViewController:_preview animated:YES completion:nil];
+                if (!_options) _options = [[ExteriaAttachOptions alloc] init];
+                _options->preview = NO;
+                _collected = [[NSMutableArray alloc] init];
+                ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+                item->image = [bounded retain];
+                [self collectItem:item];
             } else if (!_cancelled) [self alert:NSLocalizedString(@"attach.failed", nil)];
             [bounded release];
         });

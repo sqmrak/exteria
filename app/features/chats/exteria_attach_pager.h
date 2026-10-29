@@ -9,7 +9,7 @@
 }
 @end
 
-/* the screen that holds a selection of two or more pictures before they go out: the person pages between them, edits a photo, drops one, and writes a
+/* the screen that holds a selection before it goes out: the person pages between pictures, edits a photo, drops one, and writes a
    caption for the whole album */
 @interface ExteriaAttachPager : UIViewController
 /* send gets the items that are left, in order, and the caption, after the screen has gone; cancel runs after it has gone with nothing to send */

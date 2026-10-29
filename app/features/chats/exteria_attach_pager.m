@@ -1,7 +1,11 @@
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
+#import <MobileCoreServices/MobileCoreServices.h>
 #import "exteria_attach_pager.h"
 
+#import "exteria_chat_settings.h"
+#import "exteria_image_decoder.h"
+#import "exteria_photo_library.h"
 #import "exteria_photo_editor.h"
 #import "exteria_platform.h"
 #import "exteria_symbol.h"
@@ -26,7 +30,7 @@
 
 @end
 
-@interface ExteriaAttachPager () <UIScrollViewDelegate, UITextFieldDelegate> {
+@interface ExteriaAttachPager () <UIScrollViewDelegate, UITextFieldDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIPopoverControllerDelegate> {
     NSMutableArray *_items;
     NSString *_initialCaption;
     void (^_send)(NSArray *, NSString *);
@@ -38,12 +42,16 @@
     UIView *_bottom;
     UILabel *_count;
     UIButton *_edit;
+    UIButton *_add;
     UIButton *_remove;
     UITextField *_caption;
     UIButton *_sendButton;
     NSInteger _index;
     CGFloat _keyboardHeight;
     BOOL _finished;
+    BOOL _loadingPhoto;
+    UIImagePickerController *_picker;
+    UIPopoverController *_popover;
 }
 @end
 
@@ -68,6 +76,11 @@
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     _pages.delegate = nil;
     _caption.delegate = nil;
+    _picker.delegate = nil;
+    _popover.delegate = nil;
+    [_popover dismissPopoverAnimated:NO];
+    [_popover release];
+    [_picker release];
     [_items release];
     [_initialCaption release];
     [_send release];
@@ -79,6 +92,7 @@
     [_bottom release];
     [_count release];
     [_edit release];
+    [_add release];
     [_remove release];
     [_caption release];
     [_sendButton release];
@@ -127,6 +141,8 @@
     [_top addSubview:_count];
     _edit = [self newButtonWithSymbol:ExteriaSymbolHeaderDraw action:@selector(edit) label:NSLocalizedString(@"media.edit", nil)];
     [_top addSubview:_edit];
+    _add = [self newButtonWithSymbol:ExteriaSymbolPlusCircle action:@selector(addPhoto) label:NSLocalizedString(@"attach.pager.add", nil)];
+    [_top addSubview:_add];
     _remove = [self newButtonWithSymbol:ExteriaSymbolTrash action:@selector(remove) label:NSLocalizedString(@"attach.pager.remove", nil)];
     [_top addSubview:_remove];
     _caption = [[UITextField alloc] init];
@@ -278,7 +294,8 @@
     close.frame = CGRectMake(safe.left, barTop + 2, buttonSide, buttonSide);
     _remove.frame = CGRectMake(size.width - safe.right - buttonSide, barTop + 2, buttonSide, buttonSide);
     _edit.frame = CGRectMake(size.width - safe.right - 2 * buttonSide, barTop + 2, buttonSide, buttonSide);
-    _count.frame = CGRectMake(buttonSide + 8 + safe.left, barTop + 2, MAX(0, size.width - 2 * (2 * buttonSide + 8) - safe.left - safe.right), buttonSide);
+    _add.frame = CGRectMake(size.width - safe.right - 3 * buttonSide, barTop + 2, buttonSide, buttonSide);
+    _count.frame = CGRectMake(buttonSide + 8 + safe.left, barTop + 2, MAX(0, size.width - 4 * buttonSide - 16 - safe.left - safe.right), buttonSide);
     _sendButton.frame = CGRectMake(size.width - safe.right - buttonSide - 8, (INPUT_BAR - buttonSide) / 2, buttonSide, buttonSide);
     _caption.frame = CGRectMake(16 + safe.left, 8, MAX(0, size.width - safe.left - safe.right - buttonSide - 32), INPUT_BAR - 16);
     if (resized) _pages.contentOffset = CGPointMake((CGFloat)_index * size.width, 0);
@@ -289,6 +306,8 @@
     _count.text = [NSString stringWithFormat:@"%ld / %lu", (long)_index + 1, (unsigned long)_items.count];
     ExteriaAttachItem *current = _index < (NSInteger)_items.count ? [_items objectAtIndex:(NSUInteger)_index] : nil;
     _edit.hidden = !current || current->movie != nil;
+    _add.enabled = _items.count < 10 && !_loadingPhoto;
+    _add.alpha = _add.enabled ? 1 : 0.4;
     for (UIView *view in _strip.subviews) {
         BOOL selected = view.tag == _index;
         view.layer.borderWidth = selected ? 2 : 0;
@@ -316,6 +335,109 @@
 }
 
 #pragma mark actions
+
+- (void)addPhoto {
+    if (_finished || _loadingPhoto || _picker || _items.count >= 10) return;
+    if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypePhotoLibrary]) {
+        [self photoError:NSLocalizedString(@"attach.gallery.unavailable", nil)];
+        return;
+    }
+    [self.view endEditing:YES];
+    _picker = [[UIImagePickerController alloc] init];
+    _picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    _picker.mediaTypes = [UIImagePickerController availableMediaTypesForSourceType:UIImagePickerControllerSourceTypePhotoLibrary];
+    _picker.delegate = self;
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        _popover = [[UIPopoverController alloc] initWithContentViewController:_picker];
+        _popover.delegate = self;
+        [_popover presentPopoverFromRect:_add.bounds inView:_add permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+    } else {
+        [self presentViewController:_picker animated:YES completion:nil];
+    }
+}
+
+- (void)photoError:(NSString *)message {
+    Class alertClass = NSClassFromString(@"UIAlertView");
+    id alert = [[alertClass alloc] initWithTitle:nil message:message delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
+    [alert show];
+    [alert release];
+}
+
+- (void)releasePicker {
+    _picker.delegate = nil;
+    _popover.delegate = nil;
+    [_popover dismissPopoverAnimated:YES];
+    [_popover release]; _popover = nil;
+    [_picker release]; _picker = nil;
+}
+
+- (void)popoverControllerDidDismissPopover:(UIPopoverController *)popover {
+    if (popover == _popover) [self releasePicker];
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    if (!_popover) [picker dismissViewControllerAnimated:YES completion:nil];
+    [self releasePicker];
+}
+
+- (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info {
+    UIImage *source = [info objectForKey:UIImagePickerControllerOriginalImage];
+    NSURL *url = [info objectForKey:@"UIImagePickerControllerImageURL"];
+    NSURL *movie = [info objectForKey:UIImagePickerControllerMediaURL];
+    NSString *type = [info objectForKey:UIImagePickerControllerMediaType];
+    if ([type isEqualToString:(NSString *)kUTTypeMovie] && movie) {
+        ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+        item->movie = [movie retain];
+        [_items addObject:item];
+        _index = (NSInteger)_items.count - 1;
+        if (!_popover) [picker dismissViewControllerAnimated:YES completion:nil];
+        [self releasePicker];
+        [self rebuild];
+        [_pages setContentOffset:CGPointMake((CGFloat)_index * _pages.bounds.size.width, 0) animated:NO];
+        [self loadPosters];
+        return;
+    }
+    _loadingPhoto = YES;
+    _sendButton.enabled = NO;
+    [self showSelection];
+    if (!_popover) [picker dismissViewControllerAnimated:YES completion:nil];
+    [self releasePicker];
+    ExteriaWeakReference *weak = _weak;
+    CGFloat side = (ExteriaChatFlagGet(ExteriaChatFlagAlwaysHD) || ExteriaPhotosAvailable()) ? 2560.0 : 1280.0;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        UIImage *image = url ? ExteriaDecodeImageAtURL(url, side) : nil;
+        if (!image && source.size.width > 0 && source.size.height > 0) {
+            CGFloat scale = MIN(1, side / MAX(source.size.width, source.size.height));
+            CGSize size = CGSizeMake(MAX(1, floor(source.size.width * scale)), MAX(1, floor(source.size.height * scale)));
+            UIGraphicsBeginImageContextWithOptions(size, YES, 1);
+            [source drawInRect:CGRectMake(0, 0, size.width, size.height)];
+            image = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+        }
+        [image retain];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ExteriaAttachPager *pager = weak.target;
+            if (pager && !pager->_finished) {
+                pager->_loadingPhoto = NO;
+                pager->_sendButton.enabled = YES;
+                if (image && pager->_items.count < 10) {
+                    ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+                    item->image = [image retain];
+                    [pager->_items addObject:item];
+                    pager->_index = (NSInteger)pager->_items.count - 1;
+                    [pager rebuild];
+                    [pager->_pages setContentOffset:CGPointMake((CGFloat)pager->_index * pager->_pages.bounds.size.width, 0) animated:NO];
+                } else if (!image) {
+                    [pager showSelection];
+                    [pager photoError:NSLocalizedString(@"attach.failed", nil)];
+                }
+            }
+            [image release];
+        });
+        [pool drain];
+    });
+}
 
 - (void)edit {
     if (_index >= (NSInteger)_items.count) return;

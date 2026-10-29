@@ -550,6 +550,7 @@
 "media.caption" = "Добавить подпись…";
 "media.edit" = "Редактировать";
 "attach.pager.remove" = "Убрать";
+"attach.pager.add" = "Добавить фото или видео";
 "media.failed" = "Не удалось открыть файл. Нажмите, чтобы повторить.";
 "media.preview" = "Предпросмотр";
 "media.count" = "%ld из %ld";
