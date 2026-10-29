@@ -4,6 +4,7 @@
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 #import "exteria_tunnel_protocol.h"
+#import "exteria_weak_reference.h"
 
 BOOL ExteriaIsArticleURL(NSURL *url) {
     NSString *scheme = [url.scheme lowercaseString];
@@ -24,6 +25,9 @@ BOOL ExteriaIsArticleURL(NSURL *url) {
     UIButton *_browser;
     BOOL _moving;
     BOOL _closing;
+    ExteriaArticleLoad *_load;
+    ExteriaWeakReference *_weak;
+    NSUInteger _loadToken;
 }
 - (id)initWithURL:(NSURL *)url;
 - (void)enter;
@@ -47,11 +51,19 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
 @implementation ExteriaArticleController
 - (id)initWithURL:(NSURL *)url {
     self = [super init];
-    if (self) _url = [url retain];
+    if (self) {
+        NSString *address = url.absoluteString;
+        _url = [[[url.scheme lowercaseString] isEqualToString:@"http"] ? [NSURL URLWithString:[@"https:" stringByAppendingString:[address substringFromIndex:5]]] : url retain];
+        _weak = [[ExteriaWeakReference referenceTo:self] retain];
+    }
     return self;
 }
 - (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaTunnelHTMLDidLoadNotification object:nil];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    [_weak clear];
+    [_weak release];
+    [_load cancel];
+    [_load release];
     _web.delegate = nil;
     [_web stopLoading];
     [_url release];
@@ -93,7 +105,6 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
     _web.backgroundColor = [UIColor whiteColor];
     _web.alpha = 0;
     [_card addSubview:_web];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(articleHTMLLoaded:) name:ExteriaTunnelHTMLDidLoadNotification object:nil];
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
     [_card addSubview:_spinner];
@@ -123,30 +134,50 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
 }
 /* a page the network holds back says so after 25 seconds, instead of staying white for the minute the system waits */
 - (void)load {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(loadTimedOut) object:nil];
+    [_load cancel];
+    [_load release];
+    _load = [[ExteriaArticleLoad alloc] init];
+    NSUInteger token = ++_loadToken;
     _web.alpha = 0;
     _error.hidden = YES;
     _retry.hidden = YES;
     _browser.hidden = YES;
     [_spinner startAnimating];
-    [_web loadRequest:[NSURLRequest requestWithURL:_url cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:25]];
+    [self performSelector:@selector(loadTimedOut) withObject:nil afterDelay:30];
+    ExteriaWeakReference *weak = _weak;
+    [_load startURL:_url completion:^(NSData *html, NSURL *address, NSString *error) {
+        ExteriaArticleController *article = weak.target;
+        if (!article || article->_closing || token != article->_loadToken) return;
+        if (!html) {
+            NSLog(@"exteria: article %@ failed: %@", address, error);
+            [article showFailure:error];
+            return;
+        }
+        [NSObject cancelPreviousPerformRequestsWithTarget:article selector:@selector(loadTimedOut) object:nil];
+        [article->_spinner stopAnimating];
+        article->_web.alpha = 1;
+        [article->_web loadData:html MIMEType:@"text/html" textEncodingName:@"UTF-8" baseURL:address];
+    }];
 }
 - (void)retry {
     [_web stopLoading];
     [self load];
 }
-- (void)articleHTMLLoaded:(NSNotification *)note {
-    if (_closing || ![note.object isKindOfClass:[NSURL class]]) return;
-    NSURL *loaded = note.object;
-    NSURL *current = _web.request.mainDocumentURL ? _web.request.mainDocumentURL : _web.request.URL;
-    if (!current) return;
-    NSString *loadedAddress = [[[loaded absoluteString] componentsSeparatedByString:@"#"] objectAtIndex:0];
-    NSString *currentAddress = [[[current absoluteString] componentsSeparatedByString:@"#"] objectAtIndex:0];
-    if (![loadedAddress isEqualToString:currentAddress]) return;
+- (void)showFailure:(NSString *)reason {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(loadTimedOut) object:nil];
     [_spinner stopAnimating];
-    _error.hidden = YES;
-    _retry.hidden = YES;
-    _browser.hidden = YES;
-    _web.alpha = 1;
+    _web.alpha = 0;
+    _error.text = [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(@"article.failed", nil), reason ? reason : @""];
+    _error.hidden = NO;
+    _retry.hidden = NO;
+    _browser.hidden = NO;
+}
+- (void)loadTimedOut {
+    ++_loadToken;
+    [_load cancel];
+    [_web stopLoading];
+    [self showFailure:NSLocalizedString(@"error.offline", nil)];
 }
 - (void)openInBrowser {
     if (![[UIApplication sharedApplication] openURL:_url]) NSLog(@"exteria: the article %@ was not handed to the browser", _url);
@@ -179,6 +210,8 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
 - (void)close {
     if (_closing) return;
     _closing = YES;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(loadTimedOut) object:nil];
+    [_load cancel];
     _moving = YES;
     [_web stopLoading];
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.3 delay:0 options:UIViewAnimationOptionCurveEaseIn animations:^{
@@ -193,22 +226,21 @@ void ExteriaPresentArticle(NSURL *url, UIViewController *host) {
 }
 - (BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(UIWebViewNavigationType)type {
     (void)webView;
-    (void)type;
     NSString *scheme = [request.URL.scheme lowercaseString];
+    /* UIWebView uses applewebdata for the HTML supplied by loadData on old systems */
+    if (type != UIWebViewNavigationTypeLinkClicked && [scheme isEqualToString:@"applewebdata"]) return YES;
     return [scheme isEqualToString:@"https"] || [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"about"];
 }
 - (void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error {
     (void)webView;
     if (_closing || ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled)) return;
-    [_spinner stopAnimating];
-    _error.text = [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(@"article.failed", nil), [error localizedDescription]];
-    _error.hidden = NO;
-    _retry.hidden = NO;
-    _browser.hidden = NO;
+    [self showFailure:[error localizedDescription]];
     NSLog(@"exteria: the article %@ did not load: %@ (%ld)", _url, error.domain, (long)error.code);
 }
 - (void)webViewDidFinishLoad:(UIWebView *)webView {
     (void)webView;
+    if (_closing) return;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(loadTimedOut) object:nil];
     [_spinner stopAnimating];
     _error.hidden = YES;
     /* the title can load while the article body is empty or hidden by the page */

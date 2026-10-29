@@ -9,7 +9,6 @@
 
 static NSString *const ExteriaTunnelHandledKey = @"exteria.tunnel.handled";
 static NSString *const ExteriaTunnelRedirectsKey = @"exteria.tunnel.redirects";
-NSString *const ExteriaTunnelHTMLDidLoadNotification = @"ExteriaTunnelHTMLDidLoad";
 
 /* what one load shares with the thread that runs it: the cancel flag the HTTPS client polls */
 @interface ExteriaTunnelJob : NSObject {
@@ -73,6 +72,95 @@ static NSString *ExteriaTunnelPath(NSURL *url) {
     if ([path rangeOfCharacterFromSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].location != NSNotFound) return nil;
     return path;
 }
+
+@interface ExteriaArticleLoad ()
+- (BOOL)isCancelled;
+@end
+
+static int ExteriaArticleCancelled(void *context) {
+    return [(ExteriaArticleLoad *)context isCancelled] ? 1 : 0;
+}
+
+@implementation ExteriaArticleLoad
+- (BOOL)isCancelled { return _cancelled != 0; }
+- (void)cancel { _cancelled = 1; }
+- (void)startURL:(NSURL *)url completion:(void (^)(NSData *, NSURL *, NSString *))completion {
+    void (^done)(NSData *, NSURL *, NSString *) = [completion copy];
+    NSURL *first = [url retain];
+    [self retain];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        NSURL *current = first;
+        NSData *html = nil;
+        NSString *error = nil;
+        NSData *roots = ExteriaTunnelRoots();
+        for (int hop = 0; hop <= REDIRECTS_MAX && !_cancelled; ++hop) {
+            exteria_https_request request;
+            exteria_https_response response;
+            const char *headers[] = {"Accept: text/html", "Accept-Encoding: identity", "User-Agent: Exteria", NULL};
+            NSString *path = ExteriaTunnelPath(current);
+            memset(&request, 0, sizeof(request));
+            memset(&response, 0, sizeof(response));
+            if (!roots.length || !path || ![[current.scheme lowercaseString] isEqualToString:@"https"] || !ExteriaTunnelHostAllowed(current.host) ||
+                (current.port && current.port.integerValue != 443) || current.user.length || current.password.length) {
+                error = @"invalid article address or missing trust roots";
+                break;
+            }
+            request.host = current.host.UTF8String;
+            request.path = path.UTF8String;
+            request.port = 443;
+            request.headers = headers;
+            request.roots_pem = roots.bytes;
+            request.roots_len = roots.length;
+            request.timeout_ms = TIMEOUT_MS;
+            request.max_response = EXTERIA_HTTPS_MAX_RESPONSE_LIMIT;
+            request.connect_socket = ExteriaShiroNetworkConnectSocket;
+            request.is_cancelled = ExteriaArticleCancelled;
+            request.cancel_ctx = self;
+            exteria_status status = exteria_https_get(&request, &response);
+            if (status != EXTERIA_OK) {
+                error = [NSString stringWithUTF8String:exteria_status_name(status)];
+            } else {
+                NSDictionary *fields = ExteriaTunnelHeaders(response.headers);
+                NSString *type = [[fields objectForKey:@"content-type"] lowercaseString];
+                NSString *encoding = [[fields objectForKey:@"content-encoding"] lowercaseString];
+                NSString *location = [fields objectForKey:@"location"];
+                if ((response.status == 301 || response.status == 302 || response.status == 303 || response.status == 307 || response.status == 308) && location.length) {
+                    NSURL *next = [[NSURL URLWithString:location relativeToURL:current] absoluteURL];
+                    if (hop == REDIRECTS_MAX || !next) error = @"invalid article redirect";
+                    else current = next;
+                } else if (response.status != 200) error = [NSString stringWithFormat:@"HTTP %d", response.status];
+                else if (![type hasPrefix:@"text/html"] || (encoding.length && ![encoding isEqualToString:@"identity"])) error = @"unsupported article response";
+                else {
+                    NSMutableData *readable = [NSMutableData dataWithLength:response.body_len];
+                    size_t length = 0;
+                    status = exteria_article_readonly(response.body, response.body_len, readable.mutableBytes, readable.length, &length);
+                    if (status != EXTERIA_OK) error = [NSString stringWithUTF8String:exteria_status_name(status)];
+                    else if (!length) error = @"empty article";
+                    else { [readable setLength:length]; html = readable; }
+                }
+            }
+            exteria_https_response_free(&response);
+            if (html || error) break;
+        }
+        if (!_cancelled) {
+            NSData *result = [html retain];
+            NSURL *address = [current retain];
+            NSString *failure = [error copy];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!_cancelled && done) done(result, address, failure);
+                [result release]; [address release]; [failure release];
+                [done release]; [self release];
+            });
+        } else {
+            [done release];
+            [self release];
+        }
+        [first release];
+        [pool drain];
+    });
+}
+@end
 
 @interface ExteriaTunnelURLProtocol () {
     ExteriaTunnelJob *_job;
@@ -222,12 +310,6 @@ static NSString *ExteriaTunnelPath(NSURL *url) {
     [self.client URLProtocol:self didReceiveResponse:answer cacheStoragePolicy:NSURLCacheStorageNotAllowed];
     [self.client URLProtocol:self didLoadData:body];
     [self.client URLProtocolDidFinishLoading:self];
-    NSString *contentType = [[headers objectForKey:@"content-type"] lowercaseString];
-    if (code >= 200 && code < 300 && body.length && [contentType hasPrefix:@"text/html"]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaTunnelHTMLDidLoadNotification object:url];
-        });
-    }
 }
 
 @end
