@@ -4,12 +4,16 @@
 #import "exteria_person.h"
 #import "exteria_time.h"
 #import "exteria_weak_reference.h"
+#import "exteria_custom_emoji.h"
+#import "exteria_custom_emoji_loader.h"
+#import "exteria_emoji_store.h"
 
 #define REACTORS_MAX 500
 
 @interface ExteriaReactionPeopleController () {
     ExteriaSession *_session;
     ExteriaDialog *_dialog;
+    ExteriaMediaCache *_media;
     int32_t _messageId;
     NSMutableArray *_reactors;
     NSMutableDictionary *_people;
@@ -25,25 +29,29 @@
 
 @implementation ExteriaReactionPeopleController
 
-- (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog messageId:(int32_t)messageId {
+- (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog messageId:(int32_t)messageId media:(ExteriaMediaCache *)media {
     self = [super init];
     if (!self) return nil;
     _session = [session retain];
     _dialog = [dialog retain];
+    _media = [media retain];
     _messageId = messageId;
     _reactors = [[NSMutableArray alloc] init];
     _people = [[NSMutableDictionary alloc] init];
     _offsets = [[NSMutableSet alloc] init];
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     self.pageTitle = NSLocalizedString(@"chat.reactors.title", nil);
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(customEmojiLoaded:) name:ExteriaCustomEmojiDidLoadNotification object:nil];
     return self;
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_weak clear];
     [_weak release];
     [_session release];
     [_dialog release];
+    [_media release];
     [_reactors release];
     [_people release];
     [_offsets release];
@@ -59,6 +67,27 @@
 
 - (void)themeDidChange { [self rebuild]; }
 
+- (void)customEmojiLoaded:(NSNotification *)notification {
+    long long document = [[notification object] longLongValue];
+    for (NSDictionary *entry in _reactors) {
+        ExteriaReaction *reaction = [entry objectForKey:@"reaction"];
+        if (reaction.row.kind == EXTERIA_REACTION_CUSTOM && reaction.row.document_id == document) {
+            if (self.isViewLoaded) [self rebuild];
+            return;
+        }
+    }
+}
+
+static UIImage *ExteriaReactorEmoji(ExteriaReaction *reaction) {
+    if (reaction.row.kind == EXTERIA_REACTION_CUSTOM) return [ExteriaCustomEmoji imageForDocument:reaction.row.document_id];
+    NSString *text = reaction.displayText;
+    unichar units[64];
+    size_t entry = 0;
+    if (!text.length || text.length > 64) return nil;
+    [text getCharacters:units range:NSMakeRange(0, text.length)];
+    return exteria_emoji_single(units, text.length, &entry) ? ExteriaEmojiImageNow(entry) : nil;
+}
+
 - (void)rebuild {
     NSMutableArray *rows = [NSMutableArray array];
     for (NSDictionary *entry in _reactors) {
@@ -68,7 +97,11 @@
         int32_t date = [[entry objectForKey:@"date"] intValue];
         NSString *time = date > 0 ? ExteriaMediaTimeText(date) : NSLocalizedString(@"chat.reactors.time.unknown", nil);
         ExteriaReaction *reaction = [entry objectForKey:@"reaction"];
-        [rows addObject:[ExteriaSettingsRow rowWithTitle:name subtitle:time value:reaction.displayText tap:nil]];
+        UIImage *image = ExteriaReactorEmoji(reaction);
+        ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTitle:name subtitle:time value:image ? nil : reaction.displayText tap:nil];
+        row.trailingImage = image;
+        row.trailingImageUnclipped = YES;
+        [rows addObject:row];
     }
     ExteriaWeakReference *weak = _weak;
     if (_loading) [rows addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chat.reactors.loading", nil) value:nil tap:nil]];
@@ -110,6 +143,19 @@
             NSUInteger room = REACTORS_MAX - page->_reactors.count;
             NSUInteger take = MIN(room, items.count);
             if (take) [page->_reactors addObjectsFromArray:[items subarrayWithRange:NSMakeRange(0, take)]];
+            NSMutableArray *documents = [NSMutableArray array];
+            for (NSDictionary *entry in items) {
+                ExteriaReaction *reaction = [entry objectForKey:@"reaction"];
+                if (reaction.row.kind == EXTERIA_REACTION_CUSTOM && reaction.row.document_id)
+                    [documents addObject:[NSNumber numberWithLongLong:reaction.row.document_id]];
+            }
+            [ExteriaCustomEmojiLoader loadDocuments:documents session:page->_session media:page->_media documents:^(NSArray *found) {
+                NSMutableDictionary *texts = [NSMutableDictionary dictionary];
+                for (ExteriaCustomEmojiDocument *document in found) [texts setObject:document.alt forKey:[NSNumber numberWithLongLong:document.documentId]];
+                [ExteriaReaction rememberCustomTexts:texts];
+                ExteriaReactionPeopleController *owner = weak.target;
+                if (owner) [owner rebuild];
+            } picture:nil];
             page->_limited = take < items.count || (next && page->_reactors.count >= REACTORS_MAX);
             [page->_next release];
             page->_next = [next copy];

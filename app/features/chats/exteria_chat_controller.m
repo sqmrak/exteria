@@ -4744,7 +4744,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     case EXTERIA_ACTION_UNPIN: [self pinMessage:message unpin:YES]; break;
     case EXTERIA_ACTION_DETAILS: [self showDetailsOfMessage:message]; break;
     case EXTERIA_ACTION_REACTORS: {
-        ExteriaReactionPeopleController *page = [[[ExteriaReactionPeopleController alloc] initWithSession:_session dialog:_dialog messageId:message.messageId] autorelease];
+        ExteriaReactionPeopleController *page = [[[ExteriaReactionPeopleController alloc] initWithSession:_session dialog:_dialog messageId:message.messageId media:_media] autorelease];
         [self.navigationController pushViewController:page animated:YES];
         break;
     }
