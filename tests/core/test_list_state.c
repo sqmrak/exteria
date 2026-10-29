@@ -57,5 +57,9 @@ int main(void) {
     CHECK_EQ_INT(exteria_list_flood_deadline(deadline, 6000, 1), deadline);
     CHECK_EQ_INT(exteria_list_flood_deadline(deadline, 6000, 30), 36000);
     CHECK(exteria_list_flood_deadline(0, UINT64_MAX - 5, 1) == UINT64_MAX);
+    CHECK_EQ_INT(exteria_list_refresh_delay(1000, 0, 15000, 500), 500);
+    CHECK_EQ_INT(exteria_list_refresh_delay(2000, 1000, 15000, 500), 14000);
+    CHECK_EQ_INT(exteria_list_refresh_delay(16000, 1000, 15000, 500), 500);
+    CHECK_EQ_INT(exteria_list_refresh_delay(500, 1000, 15000, 500), 15000);
     return test_finish("test_list_state");
 }

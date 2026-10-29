@@ -45,3 +45,9 @@ uint32_t exteria_list_flood_remaining(uint64_t deadline, uint64_t now) {
     uint64_t seconds = ms / 1000u + (ms % 1000u != 0);
     return seconds > UINT32_MAX ? UINT32_MAX : (uint32_t)seconds;
 }
+
+uint64_t exteria_list_refresh_delay(uint64_t now, uint64_t last, uint32_t interval_ms, uint32_t debounce_ms) {
+    uint64_t elapsed = now >= last ? now - last : 0;
+    uint64_t remaining = last && elapsed < interval_ms ? interval_ms - elapsed : 0;
+    return remaining > debounce_ms ? remaining : debounce_ms;
+}

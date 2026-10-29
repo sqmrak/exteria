@@ -50,6 +50,7 @@ exteria_status ExteriaApplySendAs(ExteriaSession *session, const exteria_peer_re
 - (void)workerForgetSend:(long long)randomId;
 - (int64_t)workerAccount;
 - (int32_t)workerDc;
+- (int64_t)workerServerTimeOffsetMilliseconds;
 /* the next step of an upload runs on the worker; the declarations the chat code shares */
 - (void)finishSend:(const exteria_mt_rpc_result *)result randomId:(long long)randomId completion:(ExteriaSendCompletion)done;
 /* the observer runs on the worker each time the client changed the store; nil removes it; worker only */
