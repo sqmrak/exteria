@@ -64,6 +64,18 @@ static exteria_status ExteriaCollectSaved(void *ctx, int64_t id, const exteria_t
     }];
 }
 
+- (void)deleteSavedMessage:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    void (^done)(NSString *) = [completion copy];
+    exteria_peer peer = {dialog.peerKind, dialog.peerId};
+    [self post:^{
+        exteria_store *store = [self workerStore];
+        exteria_status status = store && messageId > 0 ? exteria_store_delete(store, EXTERIA_RECORD_DELETED_MESSAGE, peer, messageId) : EXTERIA_E_ARG;
+        if (status == EXTERIA_OK) [self storeChanged];
+        NSString *error = status == EXTERIA_OK ? nil : @"STORAGE";
+        [self deliverMain:^{ if (done) done(error); [done release]; }];
+    }];
+}
+
 - (void)clearSavedMessages:(void (^)(NSString *))completion {
     void (^done)(NSString *) = [completion copy];
     [self post:^{

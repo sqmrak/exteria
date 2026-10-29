@@ -4446,8 +4446,8 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     if (!ExteriaChatFlagGet(ExteriaChatFlagMenuReplyPrivate)) mask &= ~(uint32_t)EXTERIA_ACTION_REPLY_PRIVATE;
     /* a message that was edited may have kept its earlier texts, and the person sees them from here */
     if (message.edited && !message.deletedLocally && ExteriaChatFlagGet(ExteriaChatFlagAyuSaveEdits)) mask |= EXTERIA_ACTION_EDIT_HISTORY;
-    /* what was deleted is only read: it cannot be answered, changed, pinned or sent on, since the server no longer has it */
-    if (message.deletedLocally) mask &= EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE | EXTERIA_ACTION_SELECT;
+    /* a kept message can be removed locally, but the server no longer has it for other actions */
+    if (message.deletedLocally) mask = (mask & (EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE)) | EXTERIA_ACTION_DELETE;
     else if (message.messageId > 0 && message.reactions.count) mask |= EXTERIA_ACTION_REACTORS;
     /* a one-time file must not be kept, sent on or sent again by this client */
     if (ExteriaMessageIsViewOnce(message)) mask &= ~(uint32_t)(EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_SAVE | EXTERIA_ACTION_GALLERY |
@@ -4462,7 +4462,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     menu.pickHandler = ^(NSUInteger tag) {
         ExteriaChatController *chat = weak.target;
         /* the message may have gone while the menu was open */
-        ExteriaMessage *current = chat ? [chat messageWithId:messageId] : nil;
+        ExteriaMessage *current = chat ? [chat storedMessageWithId:messageId] : nil;
         if (current) [chat performAction:(exteria_message_action)tag onMessage:current];
     };
     menu.reactionHandler = ^(ExteriaReaction *reaction) {
@@ -4583,13 +4583,18 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     if (message) [self beginReplyToMessage:message];
 }
 
-- (ExteriaMessage *)messageWithId:(int32_t)messageId {
+- (ExteriaMessage *)storedMessageWithId:(int32_t)messageId {
     ExteriaMessage *message = [_server objectForKey:[NSNumber numberWithInt:messageId]];
-    /* a reply to a message that was deleted shows its words only when the person asked for it, and is a reply to a message that is gone otherwise */
-    if (message && message.deletedLocally && !ExteriaChatFlagGet(ExteriaChatFlagAyuReplyQuote)) return nil;
     if (message) return message;
     for (ExteriaMessage *local in _local) if (local.messageId == messageId) return local;
     return nil;
+}
+
+- (ExteriaMessage *)messageWithId:(int32_t)messageId {
+    ExteriaMessage *message = [self storedMessageWithId:messageId];
+    /* a reply to a message that was deleted shows its words only when the person asked for it, and is a reply to a message that is gone otherwise */
+    if (message && message.deletedLocally && !ExteriaChatFlagGet(ExteriaChatFlagAyuReplyQuote)) return nil;
+    return message;
 }
 
 - (void)performAction:(exteria_message_action)action onMessage:(ExteriaMessage *)message {
@@ -4639,7 +4644,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     case EXTERIA_ACTION_EDIT_HISTORY: [self showEditHistoryOfMessage:message]; break;
     case EXTERIA_ACTION_DELETE:
         _deleteId = message.messageId;
-        [self askWithMessage:NSLocalizedString(@"chat.msg.delete.confirm", nil) action:NSLocalizedString(@"chat.msg.delete", nil) tag:ExteriaChatAlertDeleteMessage];
+        [self askWithMessage:NSLocalizedString(message.deletedLocally ? @"chat.msg.delete.saved.confirm" : @"chat.msg.delete.confirm", nil) action:NSLocalizedString(@"chat.msg.delete", nil) tag:ExteriaChatAlertDeleteMessage];
         break;
     }
 }
@@ -5312,7 +5317,9 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
     _deleteId = 0;
     if (messageId <= 0) return;
     ExteriaWeakReference *weak = _weak;
-    [_session deleteMessageIds:[NSArray arrayWithObject:[NSNumber numberWithInt:messageId]] ofDialog:_dialog revoke:!ExteriaChatFlagGet(ExteriaChatFlagDeleteForMe) completion:^(NSString *errorName) {
+    ExteriaMessage *message = [self storedMessageWithId:messageId];
+    if (!message) return;
+    void (^finished)(NSString *) = ^(NSString *errorName) {
         ExteriaChatController *chat = weak.target;
         if (!chat) return;
         if (errorName) {
@@ -5325,7 +5332,9 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
         if (chat->_replyToId == messageId || chat->_editingId == messageId) [chat cancelCompose];
         [chat rebuildItems];
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
-    }];
+    };
+    if (message.deletedLocally) [_session deleteSavedMessage:messageId ofDialog:_dialog completion:finished];
+    else [_session deleteMessageIds:[NSArray arrayWithObject:[NSNumber numberWithInt:messageId]] ofDialog:_dialog revoke:!ExteriaChatFlagGet(ExteriaChatFlagDeleteForMe) completion:finished];
 }
 
 - (void)showDetailsOfMessage:(ExteriaMessage *)message {

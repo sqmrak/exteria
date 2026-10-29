@@ -638,6 +638,7 @@
 "chat.msg.unpin" = "Unpin";
 "chat.msg.details" = "Details";
 "chat.msg.delete" = "Delete";
+"chat.msg.delete.saved.confirm" = "Delete the saved copy of this message from this device?";
 "chat.msg.delete.confirm" = "Delete this message for everyone?";
 "chat.msg.cancel" = "Cancel";
 "chat.msg.you" = "You";

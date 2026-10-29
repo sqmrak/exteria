@@ -10,6 +10,7 @@
 - (void)setSavingSettingsFromDefaults;
 /* the kept deleted messages and the kept versions together */
 - (void)countSavedMessages:(void (^)(NSInteger count, NSString *errorName))completion;
+- (void)deleteSavedMessage:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 - (void)clearSavedMessages:(void (^)(NSString *errorName))completion;
 /* the kept deleted messages of a chat with ids from low to high, as ExteriaMessage items with deletedLocally set */
 - (void)loadSavedDeletedOfDialog:(ExteriaDialog *)dialog from:(int32_t)low to:(int32_t)high completion:(void (^)(NSArray *messages))completion;

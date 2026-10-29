@@ -641,6 +641,7 @@
 "chat.msg.unpin" = "открепить";
 "chat.msg.details" = "подробности";
 "chat.msg.delete" = "удалить";
+"chat.msg.delete.saved.confirm" = "удалить сохранённую копию этого сообщения с устройства?";
 "chat.msg.delete.confirm" = "удалить это сообщение у всех?";
 "chat.msg.cancel" = "отмена";
 "chat.msg.you" = "вы";

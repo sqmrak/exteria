@@ -96,6 +96,10 @@ static void test_deleted(void) {
     u.keep = EXTERIA_KEEP_DELETED | EXTERIA_KEEP_PRIVATE;
     CHECK_EQ_INT(exteria_updates_apply(&u, deletion(14, 99)), EXTERIA_OK);
 
+    CHECK_EQ_INT(exteria_store_delete(s, EXTERIA_RECORD_DELETED_MESSAGE, peer, 8), EXTERIA_OK);
+    CHECK(text_of(s, EXTERIA_RECORD_DELETED_MESSAGE, peer, 8, &read) == NULL);
+    CHECK_EQ_INT(exteria_store_count(s, EXTERIA_RECORD_DELETED_MESSAGE, &count), EXTERIA_OK);
+    CHECK_EQ_INT((int)count, 0);
     CHECK_EQ_INT(exteria_store_clear(s, EXTERIA_RECORD_DELETED_MESSAGE), EXTERIA_OK);
     CHECK_EQ_INT(exteria_store_count(s, EXTERIA_RECORD_DELETED_MESSAGE, &count), EXTERIA_OK);
     CHECK_EQ_INT((int)count, 0);
