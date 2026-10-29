@@ -2,6 +2,8 @@
 
 #import "exteria_session.h"
 
+@class ExteriaMedia;
+
 /* files of messages, kept by key on disk and decoded pictures kept in memory under a byte limit; one request goes
    to the network per file however many bubbles ask, and a file that failed is not asked for again for a while */
 @interface ExteriaMediaCache : NSObject {
@@ -14,6 +16,10 @@
 - (UIImage *)cachedImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide;
 /* a picture or the first frame of tgs/vp9, bounded by maxSide pixels; completion runs on main with nil on failure */
 - (void)loadImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion;
+/* the cover of a music track, bounded by maxSide pixels: the thumbnail Telegram stored with the track, else the picture in the ID3 tag at the head of the
+   file, which costs one ranged request of 64 KiB (a second one, up to 1 MiB, when the tag is larger) and is kept on disk, an empty copy standing for a
+   file that has none. nil on the main thread's completion for a track without a cover or when the network failed */
+- (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion;
 /* starts the fetch and decode of a picture a row below the fold will ask for, so it is in memory by then */
 - (void)prepareImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide;
 /* the raw bytes, for formats that are not pictures (a lottie sticker); the completion runs on the main thread */

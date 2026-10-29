@@ -6,6 +6,7 @@
 #import "exteria_message.h"
 #import "exteria_remote_file.h"
 #import "exteria_session_actions.h"
+#include "exteria_id3.h"
 #include "exteria_mt_files.h"
 
 #include <stdio.h>
@@ -13,6 +14,8 @@
 /* about two screens of stickers and photos at the sizes the app shows them */
 #define MEMORY_BYTES (10 * 1024 * 1024)
 #define RETRY_AFTER_SECONDS 300.0
+/* the first look at the head of a music file; a tag that does not fit asks for a second one, as large as the tag and a power of two for the server */
+#define COVER_HEAD_BYTES (64 * 1024)
 /* each prepared picture takes the single decode queue for its turn, so only a few wait there ahead of the visible ones */
 #define PREPARE_IN_FLIGHT_MAX 4
 /* what the disk cache holds per file; larger files are not fetched by the part limit anyway */
@@ -297,6 +300,173 @@ static BOOL ExteriaReferenceExpired(NSString *errorName) {
             dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image); [deliverCopy release]; });
             [pool drain];
         });
+    }];
+}
+
+#pragma mark music covers
+
+/* the first bytes of a file, from offset 0; a reference the server let expire is renewed once */
+- (void)fetchHeadOfFile:(ExteriaRemoteFile *)file limit:(int32_t)limit refreshed:(BOOL)refreshed completion:(void (^)(NSData *data, NSString *errorName))completion {
+    void (^done)(NSData *, NSString *) = [completion copy];
+    [_session downloadFile:file offset:0 limit:limit completion:^(NSData *data, NSString *errorName) {
+        if (data || refreshed || !ExteriaReferenceExpired(errorName)) {
+            done(data, errorName);
+            [done release];
+            return;
+        }
+        [self refreshReferenceOfFile:file completion:^(BOOL ok) {
+            if (ok) [self fetchHeadOfFile:file limit:limit refreshed:YES completion:done];
+            else done(nil, errorName);
+            [done release];
+        }];
+    }];
+}
+
+/* work queue: the picture of the head bytes, or why there is none. EXTERIA_E_TRUNCATED says the tag goes on past these bytes, with its size in *more */
+static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t *more) {
+    size_t offset = 0, size = 0, tag = 0;
+    exteria_status status;
+    *picture = nil;
+    *more = 0;
+    if (head.length < EXTERIA_ID3_HEADER) return EXTERIA_E_NOTFOUND;
+    status = exteria_id3_tag_size(head.bytes, head.length, &tag);
+    if (status != EXTERIA_OK) return status == EXTERIA_E_NOTFOUND ? status : EXTERIA_E_UNSUPPORTED;
+    status = exteria_id3_cover(head.bytes, head.length, &offset, &size);
+    if (status == EXTERIA_OK) *picture = [NSData dataWithBytes:(const uint8_t *)head.bytes + offset length:size];
+    if (status == EXTERIA_E_TRUNCATED) *more = tag;
+    return status;
+}
+
+- (void)loadEmbeddedCoverOfFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
+    NSString *coverKey = [@"cover-" stringByAppendingString:file.key];
+    NSString *imageKey = ExteriaImageKey(file, maxSide);
+    imageKey = [@"cover-" stringByAppendingString:imageKey];
+    UIImage *cached = [_memory objectForKey:imageKey];
+    if (cached) {
+        completion(cached);
+        return;
+    }
+    NSMutableArray *waiting = [_imageWaiters objectForKey:imageKey];
+    if (waiting) {
+        [waiting addObject:[[completion copy] autorelease]];
+        return;
+    }
+    if ([self recentlyFailed:coverKey]) {
+        completion(nil);
+        return;
+    }
+    waiting = [NSMutableArray arrayWithObject:[[completion copy] autorelease]];
+    [_imageWaiters setObject:waiting forKey:imageKey];
+    NSString *path = [_directory stringByAppendingPathComponent:coverKey];
+    void (^deliver)(UIImage *, BOOL) = ^(UIImage *image, BOOL failed) {
+        if (image) {
+            CGImageRef bitmap = image.CGImage;
+            [_memory setObject:image forKey:imageKey cost:CGImageGetBytesPerRow(bitmap) * CGImageGetHeight(bitmap)];
+        } else if (failed) {
+            [_failures setObject:[NSDate date] forKey:coverKey];
+        }
+        NSArray *done = [[_imageWaiters objectForKey:imageKey] retain];
+        [_imageWaiters removeObjectForKey:imageKey];
+        for (void (^waiter)(UIImage *) in done) waiter(image);
+        [done release];
+    };
+    void (^deliverCopy)(UIImage *, BOOL) = [deliver copy];
+    /* work queue: keeps the picture on disk, an empty file for a track that has none, and decodes it for this size */
+    void (^settle)(NSData *) = ^(NSData *picture) {
+        dispatch_async(_work, ^{
+            NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+            if (![(picture ? picture : [NSData data]) writeToFile:path atomically:YES]) NSLog(@"exteria: cannot cache the cover of %@", file.key);
+            UIImage *image = picture ? ExteriaDecodeImage(picture, maxSide) : nil;
+            dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, NO); [deliverCopy release]; });
+            [pool drain];
+        });
+    };
+    void (^settleCopy)(NSData *) = [settle copy];
+    dispatch_async(_work, ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        NSData *stored = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:NULL];
+        if (stored) {
+            UIImage *image = stored.length ? ExteriaDecodeImage(stored, maxSide) : nil;
+            dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, NO); [deliverCopy release]; [settleCopy release]; });
+            [pool drain];
+            return;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self fetchHeadOfFile:file limit:COVER_HEAD_BYTES refreshed:NO completion:^(NSData *head, NSString *errorName) {
+                if (!head) {
+                    NSLog(@"exteria: the head of %@ was not loaded: %@", file.key, errorName ? errorName : @"empty");
+                    deliverCopy(nil, YES);
+                    [deliverCopy release];
+                    [settleCopy release];
+                    return;
+                }
+                dispatch_async(_work, ^{
+                    NSAutoreleasePool *headPool = [[NSAutoreleasePool alloc] init];
+                    NSData *picture = nil;
+                    size_t tag = 0;
+                    exteria_status status = ExteriaCoverOfHead(head, &picture, &tag);
+                    if (status == EXTERIA_E_TRUNCATED && head.length >= COVER_HEAD_BYTES && tag > head.length) {
+                        uint32_t limit = COVER_HEAD_BYTES;
+                        while (limit < tag && limit < EXTERIA_ID3_TAG_MAX) limit *= 2;
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            [self fetchHeadOfFile:file limit:(int32_t)limit refreshed:NO completion:^(NSData *whole, NSString *wholeError) {
+                                if (!whole) {
+                                    NSLog(@"exteria: the tag of %@ was not loaded: %@", file.key, wholeError ? wholeError : @"empty");
+                                    deliverCopy(nil, YES);
+                                    [deliverCopy release];
+                                    [settleCopy release];
+                                    return;
+                                }
+                                dispatch_async(_work, ^{
+                                    NSAutoreleasePool *wholePool = [[NSAutoreleasePool alloc] init];
+                                    NSData *found = nil;
+                                    size_t again = 0;
+                                    ExteriaCoverOfHead(whole, &found, &again);
+                                    dispatch_async(dispatch_get_main_queue(), ^{ settleCopy(found); [settleCopy release]; });
+                                    [wholePool drain];
+                                });
+                            }];
+                        });
+                    } else {
+                        dispatch_async(dispatch_get_main_queue(), ^{ settleCopy(picture); [settleCopy release]; });
+                    }
+                    [headPool drain];
+                });
+            }];
+        });
+        [pool drain];
+    });
+}
+
+- (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
+    ExteriaRemoteFile *preview = track.previewFile, *audio = track.file;
+    void (^done)(UIImage *) = [completion copy];
+    void (^embedded)(void) = ^{
+        /* a voice message or a round video has no tag to read */
+        if (!audio || track.kind != EXTERIA_PREVIEW_AUDIO) {
+            done(nil);
+            [done release];
+            return;
+        }
+        [self loadEmbeddedCoverOfFile:audio maxSide:maxSide completion:^(UIImage *image) {
+            done(image);
+            [done release];
+        }];
+    };
+    void (^embeddedCopy)(void) = [embedded copy];
+    if (!preview) {
+        embeddedCopy();
+        [embeddedCopy release];
+        return;
+    }
+    [self loadImageForFile:preview maxSide:maxSide completion:^(UIImage *image) {
+        if (image) {
+            done(image);
+            [done release];
+        } else {
+            embeddedCopy();
+        }
+        [embeddedCopy release];
     }];
 }
 

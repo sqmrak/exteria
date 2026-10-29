@@ -95,16 +95,15 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
     _performer.text = ExteriaTrackPerformer(track);
     _length.text = track.duration > 0 ? ExteriaClock(track.duration) : @"";
     /* the cover shows once it is in; until then, and for songs without one, the square has the note */
-    ExteriaRemoteFile *coverFile = track.previewFile;
-    NSString *key = coverFile.key;
+    NSString *key = track.file.key;
     if (!(key == _coverKey || [key isEqualToString:_coverKey])) {
         [_coverKey release];
         _coverKey = [key copy];
         _cover.image = nil;
-        if (coverFile) {
+        if (key) {
             ExteriaSongCell *cell = self;
             [self retain];
-            [media loadImageForFile:coverFile maxSide:ICON_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
+            [media loadCoverForTrack:track maxSide:ICON_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
                 if (image && [key isEqualToString:cell->_coverKey]) cell->_cover.image = image;
                 [cell autorelease];
             }];

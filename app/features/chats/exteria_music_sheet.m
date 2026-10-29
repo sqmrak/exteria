@@ -57,14 +57,14 @@
     _title.text = ExteriaTrackTitle(track);
     _title.textColor = [player isCurrentTrack:track] ? ExteriaColorAccent() : ExteriaColorTitle();
     _performer.text = ExteriaTrackPerformer(track);
-    NSString *key = track.previewFile.key;
+    NSString *key = track.file.key;
     if (!(key == _key || [key isEqualToString:_key])) {
         [_key release];
         _key = [key copy];
         _cover.image = nil;
         if (key.length) {
             ExteriaWeakReference *weak = _weak;
-            [player.media loadImageForFile:track.previewFile maxSide:COVER_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
+            [player.media loadCoverForTrack:track maxSide:COVER_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
                 ExteriaQueueCell *cell = weak.target;
                 if (cell && [key isEqualToString:cell->_key]) cell->_cover.image = image ? image : ExteriaSymbolImage(ExteriaSymbolMusic, 24, ExteriaColorAccent());
             }];
