@@ -5,6 +5,7 @@
 
 #import "exteria_channel_picker_controller.h"
 #import "exteria_date_sheet.h"
+#import "exteria_emoji_label.h"
 #import "exteria_row_icon.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -15,6 +16,63 @@
 #define CAPTION_HEIGHT 30.0
 #define ABOUT_LIMIT 70
 #define GAP 16.0
+
+@interface ExteriaProfileNameField : UITextField {
+    ExteriaEmojiLabel *_namePreview;
+    UIColor *_nameColor;
+}
+- (void)setNameColor:(UIColor *)color;
+- (void)refreshNamePreview;
+@end
+
+@implementation ExteriaProfileNameField
+
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    _namePreview = [[ExteriaEmojiLabel alloc] initWithFrame:CGRectZero];
+    _namePreview.dropsUndrawable = YES;
+    [self addSubview:_namePreview];
+    [self addTarget:self action:@selector(refreshNamePreview) forControlEvents:UIControlEventEditingDidBegin | UIControlEventEditingDidEnd | UIControlEventEditingChanged];
+    return self;
+}
+
+- (void)dealloc {
+    [_namePreview release];
+    [_nameColor release];
+    [super dealloc];
+}
+
+- (void)setNameColor:(UIColor *)color {
+    if (color != _nameColor) {
+        [_nameColor release];
+        _nameColor = [color retain];
+    }
+    [self refreshNamePreview];
+}
+
+- (void)setText:(NSString *)text {
+    [super setText:text];
+    [self refreshNamePreview];
+}
+
+- (void)refreshNamePreview {
+    if (!_namePreview || !_nameColor) return;
+    BOOL preview = !self.editing && self.text.length > 0;
+    _namePreview.text = self.text;
+    _namePreview.font = self.font;
+    _namePreview.textColor = _nameColor;
+    _namePreview.hidden = !preview;
+    self.textColor = preview ? [UIColor clearColor] : _nameColor;
+    [self setNeedsLayout];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    _namePreview.frame = [self textRectForBounds:self.bounds];
+    [self bringSubviewToFront:_namePreview];
+}
+@end
 
 @interface ExteriaProfileEditController () <UITextFieldDelegate> {
     ExteriaPerson *_person;
@@ -126,11 +184,12 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     return label;
 }
 
-- (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text capitalized:(BOOL)capitalized {
-    UITextField *field = [[UITextField alloc] init];
+- (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text capitalized:(BOOL)capitalized name:(BOOL)name {
+    UITextField *field = name ? [[ExteriaProfileNameField alloc] initWithFrame:CGRectZero] : [[UITextField alloc] init];
     field.delegate = self;
     field.font = ExteriaFontRegular(17);
     field.textColor = ExteriaColorTitle();
+    if (name) [(ExteriaProfileNameField *)field setNameColor:ExteriaColorTitle()];
     field.placeholder = placeholder;
     field.text = text;
     field.clearButtonMode = UITextFieldViewModeWhileEditing;
@@ -188,16 +247,16 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     _nameCaption = ExteriaEditLabel(ExteriaColorAccent(), 14, YES);
     _nameCaption.text = NSLocalizedString(@"profile.edit.yourname", nil);
     [_nameCard addSubview:_nameCaption];
-    _first = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.first", nil) text:first capitalized:YES];
+    _first = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.first", nil) text:first capitalized:YES name:YES];
     [_nameCard addSubview:_first];
-    _last = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.last", nil) text:last capitalized:YES];
+    _last = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.last", nil) text:last capitalized:YES name:YES];
     [_nameCard addSubview:_last];
     _nameLine = ExteriaLine();
     [_nameCard addSubview:_nameLine];
 
     _aboutCard = ExteriaCard();
     [_scroll addSubview:_aboutCard];
-    _about = [self fieldWithPlaceholder:NSLocalizedString(@"profile.about", nil) text:_full.about capitalized:YES];
+    _about = [self fieldWithPlaceholder:NSLocalizedString(@"profile.about", nil) text:_full.about capitalized:YES name:NO];
     [_aboutCard addSubview:_about];
     _counter = ExteriaEditLabel(ExteriaColorSecondary(), 15, NO);
     _counter.textAlignment = ExteriaTextAlignmentRight;
@@ -219,7 +278,7 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     _usernameRow = [[self rowWithIcon:ExteriaRowIcon(ExteriaSymbolAt, [UIColor colorWithRed:0.96 green:0.62 blue:0.18 alpha:1])
                                 title:@"" subtitle:NSLocalizedString(@"profile.username", nil)] retain];
     [[_usernameRow viewWithTag:1] setHidden:YES];
-    _username = [self fieldWithPlaceholder:NSLocalizedString(@"profile.username", nil) text:_person.username ? _person.username : @"" capitalized:NO];
+    _username = [self fieldWithPlaceholder:NSLocalizedString(@"profile.username", nil) text:_person.username ? _person.username : @"" capitalized:NO name:NO];
     [_usernameRow addSubview:_username];
     [_infoCard addSubview:_usernameRow];
     _birthdayRow = [[self rowWithIcon:ExteriaRowIcon(ExteriaSymbolCake, [UIColor colorWithRed:0.24 green:0.58 blue:0.95 alpha:1])
