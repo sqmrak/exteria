@@ -45,14 +45,15 @@ for slice in armv7 arm64; do
             --cc="$EXTERIA_TC/clang" --cxx="$EXTERIA_TC/clang++" --ar="$EXTERIA_TC/llvm-ar" --ranlib="$EXTERIA_TC/llvm-ranlib" \
             --nm="$EXTERIA_TC/nm" --extra-cflags="$target_flags" --extra-ldflags="$target_flags -B$EXTERIA_TC" \
             --disable-everything --disable-autodetect --disable-asm --disable-network --disable-programs \
-            --disable-doc --disable-debug --disable-swscale --disable-swresample --disable-avfilter --disable-avdevice \
+            --disable-doc --disable-debug --disable-swscale --disable-avfilter --disable-avdevice \
             --disable-postproc --enable-pic --enable-small --enable-static --disable-shared --enable-libvpx \
-            --enable-decoder=libvpx_vp9 --enable-demuxer=matroska --enable-parser=vp9 --pkg-config-flags=--static
+            --enable-swresample --enable-protocol=file --enable-decoder=libvpx_vp9,flac --enable-demuxer=matroska,flac --enable-parser=vp9,flac --pkg-config-flags=--static
         grep -q '^#define CONFIG_LIBVPX_VP9_DECODER 1$' config_components.h || { echo "ffmpeg did not enable the VP9 decoder" >&2; exit 1; }
+        grep -q '^#define CONFIG_FLAC_DECODER 1$' config_components.h || { echo "ffmpeg did not enable the FLAC decoder" >&2; exit 1; }
         make -j"$JOBS"
         make install
     )
     cp "$EXTERIA_FFMPEG_SOURCE/COPYING.LGPLv2.1" "$prefix/FFmpeg-LGPLv2.1.txt"
     cp "$EXTERIA_LIBVPX_SOURCE/LICENSE" "$prefix/libvpx-license.txt"
-    "$EXTERIA_TC/lipo" -info "$prefix/lib/libavcodec.a" "$prefix/lib/libavformat.a" "$prefix/lib/libavutil.a" "$prefix/lib/libvpx.a"
+    "$EXTERIA_TC/lipo" -info "$prefix/lib/libavcodec.a" "$prefix/lib/libavformat.a" "$prefix/lib/libswresample.a" "$prefix/lib/libavutil.a" "$prefix/lib/libvpx.a"
 done

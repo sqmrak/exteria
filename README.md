@@ -19,7 +19,7 @@
 
 - chats, folders, archive, stories, polls, reactions, custom emoji
 - stickers: static, animated and video
-- voice notes, round videos, gifs, files, albums
+- voice notes, round videos, gifs, files, albums, flac music
 - location picker, nearby places and search, OpenStreetMap previews in messages
 - calls: voice and video (vp8), emoji fingerprint
 - voice chats of groups and channels: join, start, leave, mute, invite link and `?videochat=` links, audio only. no video, screen sharing, live streams or encrypted conferences (`t.me/call/...`)
@@ -62,7 +62,7 @@ make ipa
 
 needs `EXTERIA_TC EXTERIA_SDK_V7 EXTERIA_SDK_V64 EXTERIA_OPENSSL_V7 EXTERIA_OPENSSL_V64 EXTERIA_LDID`, optional `EXTERIA_CRT_V7`. api id and hash come from `local/credentials.env` (`EXTERIA_API_ID`, `EXTERIA_API_HASH`). output: `build/ios/Exteria-v<version>.ipa`.
 
-- `make test-video`: vp9 sticker decoder and the vp8 call codec under asan and ubsan, needs ffmpeg libraries, pkg-config and libvpx with vp8
+- `make test-video`: vp9 sticker decoder, flac decoder and the vp8 call codec under asan and ubsan, needs ffmpeg libraries (including swresample), pkg-config and libvpx with vp8
 - `make app-unsigned`, then `make inspect-unsigned`: both slices, deployment targets, frameworks and ios 5 imports. needs `EXTERIA_SDK_V5` and `EXTERIA_SDK_V6`
 - video stickers and calls link static ffmpeg and libvpx: set `EXTERIA_FFMPEG_SOURCE` and `EXTERIA_LIBVPX_SOURCE` to the sources listed in `resources/licenses/video_stickers.txt`, point `EXTERIA_VIDEO_V7` and `EXTERIA_VIDEO_V64` at the result
 

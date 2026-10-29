@@ -567,6 +567,12 @@ static void test_media_kinds(void) {
     set_i32(attributes[0], "duration", 200);
     exteria_media_classify(media_document(document(14, "audio/mpeg", attributes, 1)), &info);
     CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_AUDIO);
+    attributes[0] = obj("documentAttributeFilename");
+    set_str(attributes[0], "file_name", "track.FLAC");
+    exteria_media_classify(media_document(document(14, "application/octet-stream", attributes, 1)), &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_AUDIO);
+    exteria_media_classify(media_document(document(14, "audio/flac", NULL, 0)), &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_AUDIO);
     attributes[0] = obj("documentAttributeAnimated");
     attributes[1] = obj("documentAttributeVideo");
     set_f64(attributes[1], "duration", 2);
@@ -729,9 +735,35 @@ static void test_post_counters(void) {
 static void test_pinned_request(void) {
     exteria_tl_value *request = NULL;
     exteria_peer_ref channel = {3, 500, 7, 0, 0}, nohash = {3, 500, 0, 0, 0};
+    exteria_writer writer;
+    int32_t topic = 0;
     CHECK_EQ_INT(exteria_pinned_request(&arena, &channel, 100, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_messages_search);
     CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "filter")), EXTERIA_TL_ID_inputMessagesFilterPinned);
+    CHECK(!exteria_tl_has(request, "top_msg_id"));
+    channel.topic_id = 42;
+    CHECK_EQ_INT(exteria_pinned_request(&arena, &channel, 100, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &topic), EXTERIA_OK);
+    CHECK_EQ_INT(topic, 42);
+    exteria_writer_init(&writer, 4096);
+    CHECK_EQ_INT(exteria_tl_encode(request, &writer, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_decode_all(&arena, NULL, EXTERIA_TL_REF_ANY, writer.data, writer.len, &decoded), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(decoded, "top_msg_id", &topic), EXTERIA_OK);
+    CHECK_EQ_INT(topic, 42);
+    exteria_writer_free(&writer);
+    channel.topic_id = 1;
+    CHECK_EQ_INT(exteria_pinned_request(&arena, &channel, 100, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &topic), EXTERIA_OK);
+    CHECK_EQ_INT(topic, 1);
+    channel.topic_id = -1;
+    CHECK_EQ_INT(exteria_pinned_request(&arena, &channel, 100, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    {
+        exteria_peer_ref user = {1, 500, 7, 0, 42};
+        CHECK_EQ_INT(exteria_pinned_request(&arena, &user, 100, &request), EXTERIA_E_ARG);
+        CHECK(request == NULL);
+    }
+    channel.topic_id = 0;
     CHECK_EQ_INT(exteria_pinned_request(&arena, &nohash, 100, &request), EXTERIA_E_ARG);
     CHECK(request == NULL);
     CHECK_EQ_INT(exteria_pinned_request(&arena, &channel, 0, &request), EXTERIA_E_ARG);

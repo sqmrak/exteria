@@ -13,7 +13,20 @@
 #include <stdio.h>
 
 #include "exteria_voice.h"
+#include "exteria_flac.h"
 #import "exteria_remote_file.h"
+
+@interface ExteriaFlacJob : NSObject {
+@public
+    volatile int cancelled;
+}
+@end
+@implementation ExteriaFlacJob
+@end
+
+static int ExteriaFlacCancelled(void *context) {
+    return __sync_val_compare_and_swap(&((ExteriaFlacJob *)context)->cancelled, 0, 0);
+}
 
 NSString *const ExteriaMusicPlayerDidChangeNotification = @"ExteriaMusicPlayerDidChange";
 NSString *const ExteriaMusicPlayerDidTickNotification = @"ExteriaMusicPlayerDidTick";
@@ -62,6 +75,8 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     float _loadProgress;
     AVPlayer *_player;
     AVPlayerItem *_item;
+    ExteriaFlacJob *_flacJob;
+    NSString *_flacDirectory;
     NSTimer *_timer;
     NSUInteger _token;
     NSUInteger _pathRequest;
@@ -255,6 +270,11 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 }
 
 - (void)releasePlayer {
+    if (_flacJob) {
+        __sync_lock_test_and_set(&_flacJob->cancelled, 1);
+        [_flacJob release];
+        _flacJob = nil;
+    }
     [self stopTimer];
     if (_item) [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
     [_player pause];
@@ -262,6 +282,11 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     _player = nil;
     [_item release];
     _item = nil;
+    if (_flacDirectory) {
+        [[NSFileManager defaultManager] removeItemAtPath:_flacDirectory error:NULL];
+        [_flacDirectory release];
+        _flacDirectory = nil;
+    }
     ++_seekGeneration;
     _seeking = NO;
 }
@@ -400,7 +425,51 @@ static BOOL ExteriaIsOgg(NSString *path) {
     return head.length == 4 && !memcmp(head.bytes, "OggS", 4);
 }
 
+static BOOL ExteriaIsFlac(NSString *path) {
+    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
+    NSData *head = [handle readDataOfLength:4];
+    [handle closeFile];
+    return head.length == 4 && !memcmp(head.bytes, "fLaC", 4);
+}
+
 - (void)beginPlaybackAtPath:(NSString *)path {
+    if (ExteriaIsFlac(path) || [[_track.name.pathExtension lowercaseString] isEqualToString:@"flac"]) {
+        static dispatch_queue_t queue;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ queue = dispatch_queue_create("exteria.flac.decode", DISPATCH_QUEUE_SERIAL); });
+        NSUInteger token = _token;
+        ExteriaFlacJob *job = [[ExteriaFlacJob alloc] init];
+        _flacJob = job;
+        NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-flac-%lu", (unsigned long)token]];
+        dispatch_async(queue, ^{
+            NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+            NSFileManager *files = [NSFileManager defaultManager];
+            NSError *error = nil;
+            [files removeItemAtPath:directory error:NULL];
+            BOOL made = [files createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&error];
+            NSString *wav = [directory stringByAppendingPathComponent:@"music.wav"];
+            exteria_status status = made ? exteria_flac_to_wav(path.fileSystemRepresentation, wav.fileSystemRepresentation, ExteriaFlacCancelled, job) : EXTERIA_E_IO;
+            if (!made) NSLog(@"exteria: cannot create FLAC playback directory: %@", error);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (token != _token || _flacJob != job) {
+                    [[NSFileManager defaultManager] removeItemAtPath:directory error:NULL];
+                    return;
+                }
+                [_flacJob release];
+                _flacJob = nil;
+                if (status != EXTERIA_OK) {
+                    [[NSFileManager defaultManager] removeItemAtPath:directory error:NULL];
+                    [self fail:[NSString stringWithFormat:@"FLAC decode: %s", exteria_status_name(status)]];
+                    return;
+                }
+                [self playItemAtURL:[NSURL fileURLWithPath:wav]];
+                if (_state == ExteriaMusicStatePlaying) _flacDirectory = [directory copy];
+                else [[NSFileManager defaultManager] removeItemAtPath:directory error:NULL];
+            });
+            [pool drain];
+        });
+        return;
+    }
     if (ExteriaIsOgg(path)) {
         static dispatch_queue_t queue;
         if (!queue) queue = dispatch_queue_create("exteria.voice.decode", DISPATCH_QUEUE_SERIAL);
@@ -462,14 +531,11 @@ static BOOL ExteriaIsOgg(NSString *path) {
     }
     [self setState:ExteriaMusicStateLoading];
     NSUInteger token = _token;
-    ExteriaRemoteFile *coverFile = track.previewFile;
-    if (coverFile) {
-        [_media loadImageForFile:coverFile maxSide:COVER_SIDE completion:^(UIImage *image) {
-            if (token != _token || !image) return;
-            _cover = [image retain];
-            [self changed];
-        }];
-    }
+    [_media loadCoverForTrack:track maxSide:COVER_SIDE completion:^(UIImage *image) {
+        if (token != _token || !image) return;
+        _cover = [image retain];
+        [self changed];
+    }];
     _pathRequest = [_media loadPathForFile:file size:track.size progress:^(float fraction) {
         if (token != _token) return;
         _loadProgress = fraction;

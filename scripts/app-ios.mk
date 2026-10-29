@@ -65,9 +65,9 @@ V64_TARGET := -target arm64-apple-ios7.0 -isysroot $(EXTERIA_SDK_V64)
 # the core reaches openssl by its own headers on each slice
 V7_CC := -isystem $(EXTERIA_VIDEO_V7)/include $(V7_TARGET) -I$(EXTERIA_OPENSSL_V7)/include
 V64_CC := -isystem $(EXTERIA_VIDEO_V64)/include $(V64_TARGET) -I$(EXTERIA_OPENSSL_V64)/include
-LINK_LIBS := -framework UIKit -framework Foundation -framework Security -framework CoreGraphics -framework QuartzCore -framework ImageIO -framework CoreText -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AudioToolbox -framework CoreLocation -weak_framework CoreMotion -framework MobileCoreServices -framework CFNetwork -weak_framework AssetsLibrary -weak_framework AddressBook -weak_framework AddressBookUI -weak_framework MediaPlayer -lz -lc++ -lsqlite3 -liconv
+LINK_LIBS := -framework UIKit -framework Foundation -framework Security -framework CoreGraphics -framework QuartzCore -framework ImageIO -framework CoreText -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AudioToolbox -framework CoreLocation -framework Accelerate -weak_framework CoreMotion -framework MobileCoreServices -framework CFNetwork -weak_framework AssetsLibrary -weak_framework AddressBook -weak_framework AddressBookUI -weak_framework MediaPlayer -lz -lc++ -lsqlite3 -liconv
 
-VIDEO_LIB_NAMES := libavformat.a libavcodec.a libavutil.a libvpx.a
+VIDEO_LIB_NAMES := libavformat.a libavcodec.a libswresample.a libavutil.a libvpx.a
 VIDEO_V7_LIBS := $(addprefix $(EXTERIA_VIDEO_V7)/lib/,$(VIDEO_LIB_NAMES))
 VIDEO_V64_LIBS := $(addprefix $(EXTERIA_VIDEO_V64)/lib/,$(VIDEO_LIB_NAMES))
 SLICES := armv7 arm64
@@ -89,6 +89,7 @@ inputs:
 	@test -f "$(EXTERIA_SDK_V7)/usr/include/stdlib.h" -a -f "$(EXTERIA_SDK_V64)/usr/include/stdlib.h" || { echo "missing iphoneos sdk headers" >&2; exit 1; }
 	@$(if $(EXTERIA_CRT_V7),test -f "$(EXTERIA_CRT_V7)" || { echo "missing EXTERIA_CRT_V7 startup object" >&2; exit 1; },:)
 	@test -f "$(EXTERIA_OPENSSL_V7)/lib/libcrypto.a" -a -f "$(EXTERIA_OPENSSL_V64)/lib/libcrypto.a" -a -f "$(EXTERIA_OPENSSL_V7)/lib/libssl.a" -a -f "$(EXTERIA_OPENSSL_V64)/lib/libssl.a" || { echo "missing openssl static libraries" >&2; exit 1; }
+	@test -f "$(EXTERIA_VIDEO_V7)/lib/libswresample.a" -a -f "$(EXTERIA_VIDEO_V64)/lib/libswresample.a" || { echo "missing ffmpeg audio libraries, rebuild the codecs with scripts/build_sticker_codecs.sh" >&2; exit 1; }
 
 # a changed sdk or flag set must not reuse objects from a previous invocation
 force:

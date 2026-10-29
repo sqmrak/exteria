@@ -142,6 +142,14 @@ static void read_photo(const exteria_tl_value *photo, int32_t target, exteria_me
     }
 }
 
+static int flac_document(const exteria_media_info *media) {
+    size_t n = strlen(media->name);
+    if (!strcmp(media->mime, "audio/flac") || !strcmp(media->mime, "audio/x-flac")) return 1;
+    return n >= 5 && media->name[n - 5] == '.' &&
+           (media->name[n - 4] == 'f' || media->name[n - 4] == 'F') && (media->name[n - 3] == 'l' || media->name[n - 3] == 'L') &&
+           (media->name[n - 2] == 'a' || media->name[n - 2] == 'A') && (media->name[n - 1] == 'c' || media->name[n - 1] == 'C');
+}
+
 static void read_document(const exteria_tl_value *document, const exteria_tl_value *media, exteria_media_info *out) {
     const exteria_tl_value *attributes = exteria_tl_get(document, "attributes");
     int32_t dc = 0, w = 0, h = 0;
@@ -201,6 +209,7 @@ static void read_document(const exteria_tl_value *document, const exteria_tl_val
             }
         }
     }
+    if (out->kind == EXTERIA_PREVIEW_FILE && flac_document(out)) out->kind = EXTERIA_PREVIEW_AUDIO;
     if (sticker) {
         out->kind = EXTERIA_PREVIEW_STICKER;
         if (!strcmp(out->mime, "application/x-tgsticker")) out->sticker = EXTERIA_STICKER_ANIMATED;
