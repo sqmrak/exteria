@@ -72,6 +72,8 @@ static NSString *ExteriaUtf8(const char *bytes) {
 
 @implementation ExteriaSavedGift
 
+@synthesize customImageName = _customImageName;
+
 @synthesize gift = _gift;
 @synthesize fromName = _fromName;
 @synthesize note = _note;
@@ -113,6 +115,15 @@ static NSString *ExteriaUtf8(const char *bytes) {
 
 - (ExteriaPhoto *)fromPhoto { return _fromPerson.photo; }
 
+- (void)setSenderPerson:(ExteriaPerson *)person {
+    if (!person) return;
+    [_fromPerson release];
+    _fromPerson = [person retain];
+    _fromId = person.userId;
+    [_fromName release];
+    _fromName = [person.name copy];
+}
+
 - (BOOL)canConvertAt:(int64_t)now period:(int32_t)period {
     exteria_saved_gift gift;
     memset(&gift, 0, sizeof(gift));
@@ -129,6 +140,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
     [_note release];
     [_noteEntities release];
     [_fromPerson release];
+    [_customImageName release];
     [super dealloc];
 }
 

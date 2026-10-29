@@ -75,6 +75,7 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
     uint32_t _edgeColor;
     uint32_t _patternColor;
     UIImage *_symbol;
+    BOOL _expressive;
     NSString *_ribbon;
     CGPoint _focus;
 }
@@ -86,6 +87,7 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
 @synthesize edgeColor = _edgeColor;
 @synthesize patternColor = _patternColor;
 @synthesize symbol = _symbol;
+@synthesize expressive = _expressive;
 @synthesize ribbon = _ribbon;
 @synthesize focus = _focus;
 
@@ -110,6 +112,7 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
 - (void)setEdgeColor:(uint32_t)color { _edgeColor = color; [self setNeedsDisplay]; }
 - (void)setPatternColor:(uint32_t)color { _patternColor = color; [self setNeedsDisplay]; }
 - (void)setFocus:(CGPoint)focus { _focus = focus; [self setNeedsDisplay]; }
+- (void)setExpressive:(BOOL)expressive { _expressive = expressive; [self setNeedsDisplay]; }
 
 - (void)setSymbol:(UIImage *)symbol {
     if (symbol == _symbol) return;
@@ -147,7 +150,8 @@ static void ExteriaBlend(uint32_t from, uint32_t to, CGFloat amount, CGFloat out
     CGContextDrawRadialGradient(context, gradient, center, 0, center, reach, kCGGradientDrawsAfterEndLocation);
     CGGradientRelease(gradient);
     CGColorSpaceRelease(space);
-    if (_symbol) [self drawPatternAround:center size:size];
+    if (_expressive) [self drawShapesAround:center size:size];
+    else if (_symbol) [self drawPatternAround:center size:size];
     if (_ribbon.length) [self drawRibbon:size];
 }
 
@@ -160,6 +164,82 @@ static void ExteriaBlend(uint32_t from, uint32_t to, CGFloat amount, CGFloat out
             CGFloat x = center.x + cos(turn) * size.width * ExteriaRings[ring].radius;
             CGFloat y = center.y + sin(turn) * size.height * ExteriaRings[ring].radius;
             [_symbol drawInRect:CGRectMake(x - side / 2, y - side / 2, side, side) blendMode:kCGBlendModeNormal alpha:ExteriaRings[ring].alpha];
+        }
+    }
+}
+
+typedef enum { ShapeCookie, ShapeFlower, ShapeClover, ShapeBurst, ShapeSquircle, ShapePill, ShapeCircle, ShapeKinds } ExpressiveShape;
+
+/* a closed curve r(t) = 1 + depth * cos(lobes * t) around a point: the cookie, the flower, the clover and the burst of the expressive shape set are this with other
+   lobes and depths, which keeps them soft without a table of control points */
+static UIBezierPath *ExteriaLobedShape(CGPoint center, CGFloat radius, int lobes, CGFloat depth, CGFloat turn) {
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    const int steps = 72;
+    for (int i = 0; i <= steps; ++i) {
+        CGFloat t = (CGFloat)i / steps * 2 * (CGFloat)M_PI;
+        CGFloat r = radius * (1 + depth * cos(lobes * t)) / (1 + depth);
+        CGPoint point = CGPointMake(center.x + r * cos(t + turn), center.y + r * sin(t + turn));
+        if (i == 0) [path moveToPoint:point];
+        else [path addLineToPoint:point];
+    }
+    [path closePath];
+    return path;
+}
+
+/* |x|^4 + |y|^4 = r^4: the rounded square of the expressive set */
+static UIBezierPath *ExteriaSquircle(CGPoint center, CGFloat radius, CGFloat turn) {
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    const int steps = 72;
+    for (int i = 0; i <= steps; ++i) {
+        CGFloat t = (CGFloat)i / steps * 2 * (CGFloat)M_PI;
+        CGFloat c = cos(t), s = sin(t);
+        CGFloat x = radius * (c < 0 ? -1 : 1) * sqrt(fabs(c)), y = radius * (s < 0 ? -1 : 1) * sqrt(fabs(s));
+        CGPoint point = CGPointMake(center.x + x * cos(turn) - y * sin(turn), center.y + x * sin(turn) + y * cos(turn));
+        if (i == 0) [path moveToPoint:point];
+        else [path addLineToPoint:point];
+    }
+    [path closePath];
+    return path;
+}
+
+static UIBezierPath *ExteriaExpressiveShape(ExpressiveShape kind, CGPoint center, CGFloat radius, CGFloat turn) {
+    switch (kind) {
+    case ShapeCookie: return ExteriaLobedShape(center, radius, 9, 0.07, turn);
+    case ShapeFlower: return ExteriaLobedShape(center, radius, 5, 0.22, turn);
+    case ShapeClover: return ExteriaLobedShape(center, radius, 4, 0.30, turn);
+    case ShapeBurst: return ExteriaLobedShape(center, radius, 12, 0.10, turn);
+    case ShapeSquircle: return ExteriaSquircle(center, radius * 0.92, turn);
+    case ShapePill: {
+        CGAffineTransform move = CGAffineTransformMakeTranslation(center.x, center.y);
+        move = CGAffineTransformRotate(move, turn);
+        UIBezierPath *pill = [UIBezierPath bezierPathWithRoundedRect:CGRectMake(-radius, -radius * 0.5, radius * 2, radius) cornerRadius:radius * 0.5];
+        [pill applyTransform:move];
+        return pill;
+    }
+    default: return [UIBezierPath bezierPathWithOvalInRect:CGRectMake(center.x - radius * 0.9, center.y - radius * 0.9, radius * 1.8, radius * 1.8)];
+    }
+}
+
+/* big soft shapes in the corners and a ring of smaller ones round the gift, each of another kind, turned and sized a little differently; the same every time, since
+   nothing here is random */
+- (void)drawShapesAround:(CGPoint)center size:(CGSize)size {
+    CGFloat shortSide = MIN(size.width, size.height);
+    [[ExteriaGiftRgb(_patternColor) colorWithAlphaComponent:0.12] setFill];
+    [ExteriaExpressiveShape(ShapeCookie, CGPointMake(size.width * 0.02, size.height * 0.06), shortSide * 0.42, 0.3) fill];
+    [ExteriaExpressiveShape(ShapeFlower, CGPointMake(size.width * 0.98, size.height * 0.94), shortSide * 0.46, 0.9) fill];
+    [ExteriaExpressiveShape(ShapeSquircle, CGPointMake(size.width * 0.96, size.height * 0.04), shortSide * 0.22, 0.5) fill];
+    static const struct { CGFloat radius; int count; CGFloat phase; CGFloat size; CGFloat alpha; } rings[2] = {
+        {0.40, 7, 0.04, 0.085, 0.26},
+        {0.72, 11, 0.0, 0.07, 0.17}
+    };
+    for (int ring = 0; ring < 2; ++ring) {
+        for (int i = 0; i < rings[ring].count; ++i) {
+            CGFloat turn = (rings[ring].phase + (CGFloat)i / rings[ring].count) * 2 * (CGFloat)M_PI;
+            CGPoint at = CGPointMake(center.x + cos(turn) * size.width * rings[ring].radius, center.y + sin(turn) * size.height * rings[ring].radius);
+            CGFloat radius = shortSide * rings[ring].size * (0.8 + 0.2 * (CGFloat)((i + ring) % 3));
+            ExpressiveShape kind = (ExpressiveShape)((i * 3 + ring * 2) % ShapeKinds);
+            [[ExteriaGiftRgb(_patternColor) colorWithAlphaComponent:rings[ring].alpha] setFill];
+            [ExteriaExpressiveShape(kind, at, radius, turn * 1.7 + i) fill];
         }
     }
 }

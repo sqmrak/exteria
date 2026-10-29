@@ -16,6 +16,11 @@
 /* the same, and a tap anywhere on the value side of the row runs the handler; nil keeps the row inert */
 - (void)addRow:(NSString *)title name:(NSString *)name photo:(ExteriaPhoto *)photo seed:(NSUInteger)seed anonymous:(BOOL)anonymous
          onTap:(void (^)(void))handler;
+/* the same with the marks after the name as entities (ExteriaNameWithBadges) */
+- (void)addRow:(NSString *)title name:(NSString *)name entities:(NSArray *)entities photo:(ExteriaPhoto *)photo seed:(NSUInteger)seed
+    anonymous:(BOOL)anonymous onTap:(void (^)(void))handler;
+/* redraw the names after a picture of a status or a mark arrives */
+- (void)redrawNames;
 /* a price with the star picture */
 - (void)addRow:(NSString *)title stars:(long long)stars;
 /* a line across the whole row, such as the note that came with the gift */

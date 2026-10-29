@@ -75,6 +75,10 @@ BOOL ExteriaIsDeveloperUsername(NSString *username) {
     return ExteriaNameIn(username, ExteriaDeveloperNames, DEVELOPER_COUNT);
 }
 
+long long ExteriaDeveloperIdOfUsername(NSString *username) {
+    return username.length ? [[ExteriaDeveloperIds() objectForKey:username.lowercaseString] longLongValue] : 0;
+}
+
 BOOL ExteriaIsDeveloperId(long long userId) {
     return ExteriaIdIn(userId, ExteriaDeveloperNames, DEVELOPER_COUNT);
 }

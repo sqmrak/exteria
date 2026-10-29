@@ -10,6 +10,9 @@
 #import "exteria_custom_emoji.h"
 #import "exteria_emoji_label.h"
 #import "exteria_contact_picker_controller.h"
+#import "exteria_custom_gift.h"
+#import "exteria_developers.h"
+#import "exteria_name_badge.h"
 #import "exteria_gift_backdrop_view.h"
 #import "exteria_gift_facts_view.h"
 #import "exteria_lottie_view.h"
@@ -194,12 +197,13 @@ enum {
     self = [super initWithSession:session avatars:avatars media:media];
     if (!self) return nil;
     _saved = [gift retain];
-    _mine = mine;
+    /* nothing can be done with the gift of the app, whose profile it is on */
+    _mine = mine && !gift.customImageName;
     _buttons = [[NSMutableArray alloc] init];
     _convertPeriod = EXTERIA_GIFT_CONVERT_PERIOD_DEFAULT;
     _detailWeak = [[ExteriaWeakReference referenceTo:self] retain];
     ExteriaStarGift *star = gift.gift;
-    self.screenTitle = star.unique ? [NSString stringWithFormat:@"%@ #%d", star.title, (int)star.number] : NSLocalizedString(@"gifts.gift", nil);
+    self.screenTitle = star.unique ? [NSString stringWithFormat:@"%@ %@", star.title, [self numberText]] : NSLocalizedString(@"gifts.gift", nil);
     return self;
 }
 
@@ -227,6 +231,14 @@ enum {
     [_changedHandler release];
     [_folderDialog release];
     [super dealloc];
+}
+
+static NSString *ExteriaDetailCount(int32_t count);
+
+/* "#227,690" the way the original client writes it, "#001" for the gifts of the app, which count from one */
+- (NSString *)numberText {
+    int32_t number = _saved.gift.number;
+    return _saved.customImageName ? ExteriaCustomGiftNumberText(number) : [@"#" stringByAppendingString:ExteriaDetailCount(number)];
 }
 
 - (CGFloat)stickerSide {
@@ -260,6 +272,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
         _backdrop.centerColor = gift.backdropCenter;
         _backdrop.edgeColor = gift.backdropEdge;
         _backdrop.patternColor = gift.backdropPattern;
+        _backdrop.expressive = _saved.customImageName != nil;
         _backdrop.focus = CGPointMake(0.5, 0.42);
         [_scroll addSubview:_backdrop];
         if (gift.patternSticker) {
@@ -308,7 +321,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
 
 - (NSString *)headline {
     ExteriaStarGift *gift = _saved.gift;
-    if (gift.unique) return [NSString stringWithFormat:@"%@ #%@", gift.title, ExteriaDetailCount(gift.number)];
+    if (gift.unique) return [NSString stringWithFormat:@"%@ %@", gift.title, [self numberText]];
     if (_mine) return NSLocalizedString(@"gifts.detail.mine", nil);
     return gift.title.length ? gift.title : NSLocalizedString(@"gifts.gift", nil);
 }
@@ -321,7 +334,8 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
 
 - (void)fillFacts {
     ExteriaStarGift *gift = _saved.gift;
-    if (gift.unique) {
+    /* a gift of the app is a unique one in look only: it says who sent it, when, and the words that came with it, and none of the facts of a collectible */
+    if (gift.unique && !_saved.customImageName) {
         NSString *owner = gift.ownerName.length ? gift.ownerName : _ownerName;
         if (owner.length) [_facts addRow:NSLocalizedString(@"gifts.row.owner", nil) name:owner photo:nil seed:(NSUInteger)gift.ownerId anonymous:NO];
         if (gift.model.length) [_facts addRow:NSLocalizedString(@"gifts.row.model", nil) text:gift.model pill:ExteriaDetailRarity(gift.modelPermille)];
@@ -335,8 +349,21 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
     }
     BOOL anonymous = _saved.nameHidden || _saved.fromId == 0;
     ExteriaWeakReference *weak = _detailWeak;
-    [_facts addRow:NSLocalizedString(@"gifts.row.from", nil) name:anonymous ? NSLocalizedString(@"gifts.from.anonymous", nil) : _saved.fromName
-             photo:_saved.fromPhoto seed:(NSUInteger)_saved.fromId anonymous:anonymous
+    NSString *fromText = anonymous ? NSLocalizedString(@"gifts.from.anonymous", nil) : _saved.fromName;
+    NSArray *fromEntities = nil;
+    if (!anonymous) {
+        /* the name is drawn as everywhere in the app: emoji as pictures, the status and the marks after it */
+        NSUInteger marks = ExteriaPersonIsDeveloper(_saved.fromPerson) | ExteriaMarksOfId(_saved.fromId);
+        fromText = ExteriaNameWithBadges(_saved.fromName, ExteriaPersonBadgeDocument(_saved.fromPerson), marks, &fromEntities);
+        if (_saved.fromPerson.emojiStatus) {
+            ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:_saved.fromPerson.emojiStatus]], self.session, self.media, ^{
+                ExteriaGiftDetailController *me = weak.target;
+                [me->_facts redrawNames];
+            });
+        }
+    }
+    [_facts addRow:NSLocalizedString(@"gifts.row.from", nil) name:fromText entities:fromEntities photo:_saved.fromPhoto
+              seed:(NSUInteger)_saved.fromId anonymous:anonymous
              onTap:anonymous ? nil : ^{ [(ExteriaGiftDetailController *)weak.target openSender]; }];
     if (_saved.date) {
         NSDate *date = [NSDate dateWithTimeIntervalSince1970:_saved.date];
@@ -394,6 +421,10 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
 }
 
 - (void)showPicture {
+    if (_saved.customImageName) {
+        _picture.image = [UIImage imageNamed:_saved.customImageName];
+        return;
+    }
     ExteriaMedia *sticker = _saved.gift.sticker;
     ExteriaRemoteFile *thumb = sticker.previewFile;
     if (thumb) {

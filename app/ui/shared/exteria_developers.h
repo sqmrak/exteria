@@ -23,6 +23,8 @@ enum {
 
 BOOL ExteriaIsDeveloperUsername(NSString *username);
 BOOL ExteriaIsDeveloperId(long long userId);
+/* the user id learned for a username of the credits, zero while it is not known */
+long long ExteriaDeveloperIdOfUsername(NSString *username);
 NSUInteger ExteriaMarksOfId(long long userId);
 /* a chat row or a chat header: a private chat or a bot chat with one of them; zero when the person wears nothing */
 NSUInteger ExteriaDialogIsDeveloper(ExteriaDialog *dialog);

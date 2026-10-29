@@ -79,6 +79,7 @@
     long long _upgradeStars;
     long long _transferStars;
     int32_t _canTransferAt;
+    NSString *_customImageName;
 }
 + (ExteriaSavedGift *)savedGiftWithRow:(const exteria_saved_gift *)row;
 @property (nonatomic, readonly, retain) ExteriaStarGift *gift;
@@ -103,6 +104,11 @@
 @property (nonatomic, readonly) long long upgradeStars;
 @property (nonatomic, readonly) long long transferStars;
 @property (nonatomic, readonly) int32_t canTransferAt;
+/* a gift of the app itself, not of the server: the picture in the bundle that stands for it, nil for every gift of a profile. it has no message, no price and nothing
+   the owner can do with it */
+@property (nonatomic, copy) NSString *customImageName;
+/* who sent it, for a gift made by the app: the person as the server knows them, which gives the name, the id and the picture */
+- (void)setSenderPerson:(ExteriaPerson *)person;
 @end
 
 typedef enum {

@@ -26,6 +26,8 @@
 @implementation ExteriaGiftTileInfo
 
 @synthesize sticker = _sticker;
+@synthesize localImage = _localImage;
+@synthesize expressive = _expressive;
 @synthesize pictureFile = _pictureFile;
 @synthesize title = _title;
 @synthesize starsAmount = _starsAmount;
@@ -49,6 +51,7 @@
 
 - (void)dealloc {
     [_sticker release];
+    [_localImage release];
     [_pictureFile release];
     [_title release];
     [_caption release];
@@ -200,6 +203,7 @@
     self.backgroundColor = plain ? ExteriaColorCard() : ExteriaGiftRgb(info.backdropEdge);
     _backdrop.hidden = plain;
     _backdrop.symbol = nil;
+    _backdrop.expressive = info.expressive;
     if (!plain) {
         _backdrop.centerColor = info.backdropCenter;
         _backdrop.edgeColor = info.backdropEdge;
@@ -230,6 +234,10 @@
     _poster = nil;
     [self setNeedsLayout];
     [self layoutIfNeeded];
+    if (info.localImage) {
+        _picture.image = info.localImage;
+        return;
+    }
     ExteriaMedia *sticker = info.sticker;
     if (!sticker && !info.pictureFile) return;
     CGFloat pixels = [self pictureFrame].size.width * ExteriaScreenScale();

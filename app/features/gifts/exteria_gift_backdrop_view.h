@@ -12,6 +12,9 @@
 @property (nonatomic, assign) uint32_t patternColor;
 /* the symbol already tinted with the pattern color; nil draws none */
 @property (nonatomic, retain) UIImage *symbol;
+/* the ground of a gift the app makes itself: soft shapes in the manner of Material 3 Expressive (a scalloped cookie, a flower, a clover, a burst, a squircle, a
+   pill) in the pattern color, where a gift of the server has its symbol repeated */
+@property (nonatomic, assign) BOOL expressive;
 /* the line on the ribbon, nil for no ribbon */
 @property (nonatomic, copy) NSString *ribbon;
 /* where the gift sits, as a fraction of the bounds */

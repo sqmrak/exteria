@@ -27,8 +27,14 @@
     ExteriaPhoto *_fromPhoto;
     NSUInteger _fromSeed;
     NSString *_fromInitials;
+    UIImage *_localImage;
+    BOOL _expressive;
 }
 @property (nonatomic, retain) ExteriaMedia *sticker;
+/* a picture of the bundle that is the whole picture of the tile, for a gift the app makes itself */
+@property (nonatomic, retain) UIImage *localImage;
+/* the backdrop is drawn in expressive shapes, for a gift the app makes itself */
+@property (nonatomic, assign) BOOL expressive;
 /* a picture to show instead of the sticker's own file, such as the thumbnail of a video */
 @property (nonatomic, retain) ExteriaRemoteFile *pictureFile;
 /* the line under the picture: a price or a name */

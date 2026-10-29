@@ -1,6 +1,7 @@
 #import "exteria_profile_feed.h"
 
 #import "exteria_gift_folders.h"
+#import "exteria_custom_gift.h"
 #import "exteria_gift_tiles.h"
 #import "exteria_story.h"
 
@@ -71,6 +72,13 @@
     if (replacing) {
         [_items removeAllObjects];
         [_tiles removeAllObjects];
+        /* the gifts of the app stand before every gift of the profile, and not in a folder of them */
+        if (_kind == ExteriaFeedGifts && !_folderId) {
+            for (ExteriaSavedGift *custom in ExteriaCustomGiftsForDialog(_owner)) {
+                [_items addObject:custom];
+                [_tiles addObject:ExteriaTileForSavedGift(custom, _owner.saved)];
+            }
+        }
     }
     for (id item in page) {
         [_items addObject:item];
@@ -105,6 +113,17 @@
     } else if (_kind == ExteriaFeedArchivedStories) {
         int32_t before = replacing ? 0 : [(ExteriaStory *)[_items lastObject] storyId];
         [_session loadStoryArchiveBefore:before completion:storyPageCopy];
+    } else if (replacing && !_folderId && ExteriaCustomGiftNeedsSender(_owner)) {
+        /* the gift of the app names @sqmrak with his picture, so the first page waits for him, once per run */
+        [storyPageCopy release];
+        ExteriaCustomGiftLoadSender(_session, ^{
+            if (generation != _generation) { [self autorelease]; [notify release]; return; }
+            _loading = NO;
+            [self loadPageReplacing:replacing changed:notify];
+            [notify release];
+            [self autorelease];
+        });
+        return;
     } else {
         [_session loadSavedGiftsOfDialog:_owner folder:_folderId offset:replacing ? nil : _nextOffset completion:^(NSArray *gifts, NSInteger total, NSString *next, NSString *errorName) {
             (void)total;

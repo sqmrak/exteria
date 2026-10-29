@@ -1,5 +1,6 @@
 #import "exteria_gift_tiles.h"
 
+#import "exteria_custom_gift.h"
 #import "exteria_person.h"
 #import "exteria_time.h"
 
@@ -26,7 +27,8 @@ ExteriaGiftTileInfo *ExteriaTileForSavedGift(ExteriaSavedGift *saved, BOOL mine)
     tile.patternColor = gift.backdropPattern;
     tile.patternSticker = gift.patternSticker;
     if (gift.unique) {
-        tile.ribbon = ExteriaGiftNumberText(gift.number);
+        tile.ribbon = saved.customImageName ? ExteriaCustomGiftNumberText(gift.number) : ExteriaGiftNumberText(gift.number);
+        tile.expressive = saved.customImageName != nil;
     } else {
         /* a sender that is missing from the answer is as anonymous to the person as one who hid their name */
         tile.anonymous = saved.nameHidden || saved.fromId == 0;
@@ -34,6 +36,7 @@ ExteriaGiftTileInfo *ExteriaTileForSavedGift(ExteriaSavedGift *saved, BOOL mine)
         tile.fromSeed = (NSUInteger)saved.fromId;
         tile.fromInitials = ExteriaInitialsOfName(saved.fromName);
     }
+    if (saved.customImageName) tile.localImage = [UIImage imageNamed:saved.customImageName];
     tile.pinned = saved.pinned;
     tile.hiddenMark = mine && saved.hidden;
     return tile;

@@ -123,10 +123,20 @@ static ExteriaEmojiLabel *ExteriaFactsValue(UIColor *color, NSString *text) {
 
 - (void)addRow:(NSString *)title name:(NSString *)name photo:(ExteriaPhoto *)photo seed:(NSUInteger)seed anonymous:(BOOL)anonymous
          onTap:(void (^)(void))handler {
+    [self addRow:title name:name entities:nil photo:photo seed:seed anonymous:anonymous onTap:handler];
+}
+
+- (void)redrawNames {
+    for (ExteriaGiftFactsRow *row in _rows) [row->value setNeedsDisplay];
+}
+
+- (void)addRow:(NSString *)title name:(NSString *)name entities:(NSArray *)entities photo:(ExteriaPhoto *)photo seed:(NSUInteger)seed
+    anonymous:(BOOL)anonymous onTap:(void (^)(void))handler {
     ExteriaGiftFactsRow *row = [self rowTitled:title];
     row->tap = [handler copy];
     row->value = ExteriaFactsValue(anonymous ? ExteriaColorSecondary() : ExteriaColorAccent(), name);
     row->value.dropsUndrawable = YES;
+    row->value.entities = entities;
     [self addSubview:row->value];
     if (anonymous) {
         row->spy = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"gift_anonymous"]];
