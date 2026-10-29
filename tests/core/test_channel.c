@@ -61,6 +61,14 @@ static void test_discussion(void) {
     CHECK_EQ_INT(row.peer_id, 600);
     CHECK_EQ_INT(row.topic_id, 47);
     CHECK_EQ_INT(row.peer_hash, 4200);
+    {
+        exteria_tl_value *newer = obj("message"), *album[2] = {newer, message};
+        set(newer, "peer_id", target);
+        set_i32(newer, "id", 49);
+        set(answer, "messages", vec_of(album, 2));
+        CHECK_EQ_INT(exteria_discussion_parse(answer, 500, &row), EXTERIA_OK);
+        CHECK_EQ_INT(row.topic_id, 47);
+    }
     CHECK_EQ_INT(exteria_discussion_parse(answer, 600, &row), EXTERIA_E_NOTFOUND);
     CHECK_EQ_INT(row.topic_id, 0);
     CHECK_EQ_INT(exteria_discussion_parse(obj("boolTrue"), 500, &row), EXTERIA_E_MALFORMED);

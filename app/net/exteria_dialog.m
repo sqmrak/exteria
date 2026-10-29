@@ -30,6 +30,8 @@
 @synthesize discussionChannelHash = _discussionChannelHash;
 @synthesize discussionPost = _discussionPost;
 @synthesize discussionViaChannel = _discussionViaChannel;
+@synthesize discussionMessages = _discussionMessages;
+@synthesize discussionPeople = _discussionPeople;
 @synthesize topicIconEmoji = _topicIconEmoji;
 @synthesize topicIconColor = _topicIconColor;
 @synthesize topicClosed = _topicClosed;
@@ -241,6 +243,8 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
 }
 
 - (void)dealloc {
+    [_discussionMessages release];
+    [_discussionPeople release];
     [_linkedCommunityTitle release];
     [_savedSource release];
     [_title release];

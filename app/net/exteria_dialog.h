@@ -34,6 +34,8 @@
     long long _discussionChannelHash;
     int32_t _discussionPost;
     BOOL _discussionViaChannel;
+    NSArray *_discussionMessages;
+    NSDictionary *_discussionPeople;
     long long _topicIconEmoji;
     int32_t _topicIconColor;
     BOOL _topicClosed;
@@ -93,6 +95,8 @@
 @property (nonatomic, assign) int32_t discussionPost;
 /* the group's pair was refused, so every later page asks the channel at once */
 @property (nonatomic, assign) BOOL discussionViaChannel;
+@property (nonatomic, copy) NSArray *discussionMessages;
+@property (nonatomic, copy) NSDictionary *discussionPeople;
 /* the custom emoji document that is the icon of the topic, zero for the plain hash drawn in topicIconColor (0xRRGGBB) */
 @property (nonatomic, readonly) long long topicIconEmoji;
 @property (nonatomic, readonly) int32_t topicIconColor;

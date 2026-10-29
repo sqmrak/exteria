@@ -133,8 +133,8 @@ exteria_status exteria_discussion_parse(const exteria_tl_value *answer, int64_t 
     messages = exteria_tl_get(answer, "messages");
     chats = exteria_tl_get(answer, "chats");
     if (!messages || messages->kind != EXTERIA_TL_V_VEC) return EXTERIA_E_MALFORMED;
-    for (i = 0; i < messages->u.vec.count; ++i) {
-        const exteria_tl_value *message = messages->u.vec.items[i];
+    for (i = messages->u.vec.count; i > 0; --i) {
+        const exteria_tl_value *message = messages->u.vec.items[i - 1];
         exteria_peer peer;
         int32_t id = 0;
         if (exteria_peer_from_tl(exteria_tl_get(message, "peer_id"), &peer) != EXTERIA_OK || peer.kind != 3 || peer.id == channel_id ||

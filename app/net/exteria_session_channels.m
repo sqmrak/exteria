@@ -174,6 +174,22 @@ static void ExteriaChannelWrite(ExteriaSession *session, exteria_status (^build)
                 discussion.discussionChannel = (long long)peer.id;
                 discussion.discussionChannelHash = (long long)peer.access_hash;
                 discussion.discussionPost = postId;
+                const exteria_tl_value *list = exteria_tl_get(result->value, "messages");
+                NSMutableArray *roots = [NSMutableArray array];
+                exteria_message_row *messageRow = calloc(1, sizeof(*messageRow));
+                if (messageRow && list && list->kind == EXTERIA_TL_V_VEC) {
+                    for (uint32_t i = 0; i < list->u.vec.count && i < EXTERIA_MESSAGES_MAX; ++i) {
+                        const exteria_tl_value *value = list->u.vec.items[i];
+                        exteria_peer messagePeer;
+                        if (exteria_peer_from_tl(exteria_tl_get(value, "peer_id"), &messagePeer) != EXTERIA_OK ||
+                            messagePeer.kind != 3 || messagePeer.id != row.peer_id || exteria_message_read(value, messageRow) != EXTERIA_OK) continue;
+                        ExteriaMessage *message = [ExteriaMessage messageWithRow:messageRow];
+                        if (message) [roots addObject:message];
+                    }
+                } else if (!messageRow) NSLog(@"exteria: no memory for discussion messages");
+                free(messageRow);
+                discussion.discussionMessages = roots;
+                discussion.discussionPeople = ExteriaPeopleOfAnswer(self, result->value);
                 NSLog(@"exteria: the comments of post %d of channel %lld are thread %d of group %lld", postId, (long long)peer.id, (int)row.topic_id, (long long)row.peer_id);
             } else {
                 NSLog(@"exteria: discussion of post %d rejected: %s", postId, exteria_status_name(status));

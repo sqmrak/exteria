@@ -284,6 +284,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _loadedFirst;
     /* what the chat had read when it was opened, or -1 when it had nothing unread: the line of unread messages stays where it was while they are read */
     int32_t _unreadAnchor;
+    BOOL _openUnread;
     BOOL _loading;
     int32_t _markedRead;
     NSMutableSet *_readMentionIds;
@@ -447,6 +448,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     _stickToBottom = YES;
     _opening = YES;
     _unreadAnchor = dialog.unreadCount > 0 ? dialog.readInboxMaxId : -1;
+    _openUnread = dialog.kind == EXTERIA_DIALOG_GROUP && dialog.unreadCount > 0 && dialog.readInboxMaxId >= 0 && dialog.readInboxMaxId < INT32_MAX;
     _router = [[ExteriaLinkRouter alloc] initWithSession:session avatars:avatars media:media stickers:stickers];
     _router.anchor = self;
     _bots = [[ExteriaChatBots alloc] initWithSession:session dialog:dialog router:_router media:media host:self];
@@ -1466,6 +1468,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     int32_t messageId = _jumpMessageId;
     [self stopJump];
     [self flashRowOfMessage:messageId];
+    [self markReadIfNeeded];
 }
 
 - (void)flashRowOfMessage:(int32_t)messageId {
@@ -1551,7 +1554,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 - (void)loadNewerIfNeeded:(CGFloat)distance {
-    if (!_window || !_canLoadNewer || _loadingNewer || _loadingWindow || distance > _table.bounds.size.height * 1.5f) return;
+    if (_opening || !_window || !_canLoadNewer || _loadingNewer || _loadingWindow || distance > _table.bounds.size.height * 1.5f) return;
     int32_t newest = [self newestLoadedId];
     if (newest <= 0) return;
     _loadingNewer = YES;
@@ -2259,6 +2262,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     if (_interacting && !_table.dragging && !_table.decelerating) [self scrollSettled];
     [self flushLiveMessages];
     [self refreshAnimations];
+    [self performSelector:@selector(markReadIfNeeded) withObject:nil afterDelay:0];
     [_snow start];
     [_foxes start];
 }
@@ -2542,6 +2546,47 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _loading = YES;
     [self showStatus:nil retry:NO];
     ExteriaWeakReference *weak = _weak;
+    if (_openUnread && !_pinnedList && _startMessageId <= 0) {
+        _opening = YES;
+        int32_t anchor = _unreadAnchor;
+        [_session loadHistoryOfDialog:_dialog offsetId:anchor + 1 addOffset:-(HISTORY_PAGE / 2) limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+            ExteriaChatController *chat = weak.target;
+            if (!chat) return;
+            chat->_loading = NO;
+            if (!messages) {
+                chat->_opening = NO;
+                [chat showStatus:[chat failureTextForError:errorName] retry:YES];
+                return;
+            }
+            if (!messages.count) {
+                chat->_openUnread = NO;
+                [chat loadNewest];
+                return;
+            }
+            chat->_openUnread = NO;
+            chat->_loadedFirst = YES;
+            [chat enterWindowWithMessages:messages people:people];
+            [chat->_table layoutIfNeeded];
+            for (NSUInteger i = 0; i < chat->_items.count; ++i) {
+                ExteriaChatItem *item = [chat->_items objectAtIndex:i];
+                BOOL unread = !item.message.outgoing && item.message.messageId > anchor;
+                for (ExteriaMessage *part in item.albumMessages) if (!part.outgoing && part.messageId > anchor) unread = YES;
+                if (unread) {
+                    [chat->_table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:0] atScrollPosition:UITableViewScrollPositionTop animated:NO];
+                    break;
+                }
+            }
+            chat->_table.hidden = NO;
+            chat->_opening = NO;
+            [chat startWatchingHistory];
+            [chat markReadIfNeeded];
+            CGFloat distance = chat->_table.contentSize.height - chat->_table.contentOffset.y - chat->_table.bounds.size.height + chat->_table.contentInset.bottom;
+            [chat loadNewerIfNeeded:distance];
+            [chat pollReactions];
+        }];
+        return;
+    }
+    _openUnread = NO;
     /* the page kept on disk shows while the network works, and stays if the network fails */
     [_session loadCachedHistoryOfDialog:_dialog completion:^(NSArray *kept, NSDictionary *people, NSString *errorName) {
         (void)errorName;
@@ -2572,6 +2617,13 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [self showStatus:nil retry:NO];
 }
 
+- (void)mergeDiscussionMessagesAtHistoryEnd {
+    if (_canLoadMore || !_dialog.discussionMessages.count) return;
+    [_people addEntriesFromDictionary:_dialog.discussionPeople];
+    for (ExteriaMessage *root in _dialog.discussionMessages)
+        if (![_server objectForKey:[NSNumber numberWithInt:root.messageId]]) [self mergeMessages:[NSArray arrayWithObject:root]];
+}
+
 - (void)didLoadNewest:(NSArray *)messages people:(NSDictionary *)people error:(NSString *)errorName {
     _loading = NO;
     if (!messages && _server.count) {
@@ -2588,7 +2640,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
     _canLoadMore = messages.count >= HISTORY_PAGE;
-    if (!messages.count) [self showEmptyState];
+    [self mergeDiscussionMessagesAtHistoryEnd];
+    if (!_server.count) [self showEmptyState];
     [self rebuildItems];
     /* the list that followed its end already stands on it; this makes sure of the position once the real sizes are in, before anything may animate */
     if (_stickToBottom && _startMessageId <= 0) [self scrollToBottomAnimated:NO];
@@ -2601,6 +2654,11 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         [self jumpToMessageId:target];
     }
     [self markReadIfNeeded];
+    [self startWatchingHistory];
+    [self pollReactions];
+}
+
+- (void)startWatchingHistory {
     ExteriaWeakReference *weak = _weak;
     [_session watchDialog:_dialog owner:self peopleHandler:^(NSArray *page, NSDictionary *people) {
         ExteriaChatController *chat = weak.target;
@@ -2609,7 +2667,6 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
             [chat storeDidChange:page];
         }
     }];
-    [self pollReactions];
 }
 
 - (void)loadOlder {
@@ -2636,6 +2693,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
     _canLoadMore = messages.count >= HISTORY_PAGE;
+    [self mergeDiscussionMessagesAtHistoryEnd];
     /* putting rows above the ones in view moves the offset, and moving the offset ends the momentum of a swipe */
     if (_table.dragging || _table.decelerating) {
         _olderDeferred = YES;
@@ -2804,10 +2862,16 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 - (void)markReadIfNeeded {
-    if (_window) return;
+    if (!_visible || !_loadedFirst || _opening || _loadingWindow || _scrollTarget > 0 || _jumpLink || _pinnedList || ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) return;
     [self scheduleVisibleMentionsRead];
     int32_t newest = 0;
-    for (ExteriaMessage *message in [_server allValues]) if (!message.outgoing && message.messageId > newest) newest = message.messageId;
+    for (NSIndexPath *path in [_table indexPathsForVisibleRows]) {
+        if ((NSUInteger)path.row >= _items.count) continue;
+        ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)path.row];
+        ExteriaMessage *message = item.message;
+        if (!message.outgoing && message.messageId > newest) newest = message.messageId;
+        for (ExteriaMessage *part in item.albumMessages) if (!part.outgoing && part.messageId > newest) newest = part.messageId;
+    }
     if (newest <= _markedRead || newest <= _dialog.readInboxMaxId || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
     _markedRead = newest;
     [_session markDialogRead:_dialog upTo:newest];
@@ -3446,6 +3510,8 @@ static void ExteriaRedrawTree(UIView *view) {
         }
     }
     [self refreshAnimations];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markReadIfNeeded) object:nil];
+    [self performSelector:@selector(markReadIfNeeded) withObject:nil afterDelay:0];
 }
 
 /* the screen is up and drawing: a row that appears or goes while the app sleeps, or before the first page is on screen, is not worth an effect */
@@ -3662,6 +3728,8 @@ static void ExteriaRedrawTree(UIView *view) {
     [self prepareAhead:NO];
     [self refreshAnimationsIfRowsChanged];
     [self scheduleVisibleMentionsRead];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markReadIfNeeded) object:nil];
+    [self performSelector:@selector(markReadIfNeeded) withObject:nil afterDelay:0];
 }
 
 /* pulling past the end of a channel offers the next channel with unread posts; letting go far enough opens it */
