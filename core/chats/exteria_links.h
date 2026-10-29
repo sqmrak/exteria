@@ -20,7 +20,9 @@ typedef enum exteria_link_kind {
     EXTERIA_LINK_INVOICE,       /* an invoice by its slug */
     EXTERIA_LINK_PROXY,         /* an MTProto proxy: server, port and secret */
     EXTERIA_LINK_SOCKS,         /* a SOCKS5 proxy: server and port, with a user and a password or without */
-    EXTERIA_LINK_INVITE         /* an invite to a private group or channel: the hash is in slug */
+    EXTERIA_LINK_INVITE,        /* an invite to a private group or channel: the hash is in slug */
+    EXTERIA_LINK_CALL,          /* t.me/call/<slug>: a conference call by its slug */
+    EXTERIA_LINK_PRIVATE_POST   /* t.me/c/<channel>/<post> or tg://privatepost: a message of a channel or group by its number, for members */
 } exteria_link_kind;
 
 typedef struct exteria_tg_link {
@@ -32,6 +34,10 @@ typedef struct exteria_tg_link {
     uint8_t has_start_app;          /* ?startapp=, which opens the bot's main app when no app name is given */
     char start_app[EXTERIA_LINK_PARAM_MAX];
     int32_t message_id;             /* t.me/name/123, zero without one */
+    int64_t channel_id;             /* the number of the channel or group of a private post link, as it stands in the link (without the -100) */
+    /* ?videochat= or ?voicechat= on a name: the voice chat of that group or channel, joined with this invite hash (empty when the parameter has no value) */
+    uint8_t has_voice_chat;
+    char voice_chat[EXTERIA_LINK_PARAM_MAX];
     char slug[EXTERIA_LINK_SLUG_MAX];
     /* the proxy links: the secret stays as typed in the link (hex or base64url), for exteria_proxy_secret_decode */
     char proxy_server[EXTERIA_LINK_SERVER_MAX];

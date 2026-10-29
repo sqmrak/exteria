@@ -1,11 +1,13 @@
 #import "exteria_platform.h"
 #import "exteria_link_router.h"
+#import "exteria_group_call_engine.h"
 
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
 #import "exteria_article_controller.h"
 #import "exteria_chat_controller.h"
+#import "exteria_session_channels.h"
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
 #import "exteria_theme.h"
@@ -107,6 +109,7 @@ static NSUInteger sBusyToken = 0;
     if ([errorName isEqualToString:@"USERS_TOO_MUCH"] || [errorName isEqualToString:@"CHANNELS_TOO_MUCH"]) return NSLocalizedString(@"invite.error.full", nil);
     if ([errorName isEqualToString:@"JOIN_WEBVIEW"]) return NSLocalizedString(@"invite.error.webview", nil);
     if ([errorName isEqualToString:@"INTERNAL"]) return NSLocalizedString(@"error.internal", nil);
+    if ([errorName isEqualToString:@"CHANNEL_PRIVATE"] || [errorName isEqualToString:@"CHANNEL_INVALID"]) return NSLocalizedString(@"link.error.private", nil);
     return [NSString stringWithFormat:NSLocalizedString(@"bots.error.unknown", nil), errorName ? errorName : @"?"];
 }
 
@@ -222,11 +225,34 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
         });
         return;
     }
+    case EXTERIA_LINK_CALL:
+        /* a conference call is end-to-end encrypted with a protocol this app does not have, so its link is told apart from a person's */
+        ExteriaShowNotice(NSLocalizedString(@"group.title", nil), NSLocalizedString(@"group.notice.unsupported", nil));
+        return;
+    case EXTERIA_LINK_PRIVATE_POST: {
+        long long channelId = link.channel_id;
+        int32_t messageId = link.message_id;
+        NSUInteger token = [self beginBusy];
+        [self retain];
+        [_session loadChannelDialogWithId:channelId completion:^(ExteriaDialog *dialog, NSString *errorName) {
+            [self endBusy:token];
+            [self autorelease];
+            if (!dialog) {
+                [self showNote:[ExteriaLinkRouter textForError:errorName]];
+                return;
+            }
+            [self openDialog:dialog person:nil draft:nil startParam:nil messageId:messageId];
+        }];
+        return;
+    }
     case EXTERIA_LINK_PEER:
         break;
     }
     NSString *name = [NSString stringWithUTF8String:link.username];
     NSString *start = link.has_start && link.start[0] ? [NSString stringWithUTF8String:link.start] : nil;
+    int32_t messageId = link.message_id;
+    BOOL wantsVoiceChat = link.has_voice_chat != 0;
+    NSString *voiceHash = link.voice_chat[0] ? [NSString stringWithUTF8String:link.voice_chat] : nil;
     NSUInteger token = [self beginBusy];
     [self retain];
     [_session resolveUsername:name completion:^(ExteriaDialog *resolved, ExteriaPerson *person, NSString *errorName) {
@@ -236,7 +262,9 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
             [self showNote:[ExteriaLinkRouter textForError:errorName]];
             return;
         }
-        [self openDialog:resolved person:person draft:nil startParam:person.bot ? start : nil];
+        [self openDialog:resolved person:person draft:nil startParam:person.bot ? start : nil messageId:messageId];
+        /* ?videochat= names the voice chat of a group or channel: the chat opens behind it, and the call joins with the invite hash of the link */
+        if (wantsVoiceChat && (resolved.peerKind == 2 || resolved.peerKind == 3)) [_session.groupCalls joinVoiceChatOfDialog:resolved inviteHash:voiceHash];
     }];
 }
 
@@ -252,7 +280,7 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
             return;
         }
         if (member) {
-            [self openDialog:member person:nil draft:nil startParam:nil];
+            [self openDialog:member person:nil draft:nil startParam:nil messageId:0];
             [self autorelease];
             return;
         }
@@ -277,7 +305,7 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
             [self showNote:[ExteriaLinkRouter textForError:errorName]];
             return;
         }
-        [self openDialog:dialog person:nil draft:nil startParam:nil];
+        [self openDialog:dialog person:nil draft:nil startParam:nil messageId:0];
     }];
 }
 
@@ -299,7 +327,7 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
         }
         UINavigationController *navigation = [self navigation];
         if (!person || !navigation) {
-            [self openDialog:resolved person:person draft:nil startParam:nil];
+            [self openDialog:resolved person:person draft:nil startParam:nil messageId:0];
             return;
         }
         /* a user the server names without an access hash (the account itself) has no dialog made from the person, and a profile built on nil has no peer to ask for */
@@ -313,6 +341,10 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
 #pragma mark screens
 
 - (void)openDialog:(ExteriaDialog *)dialog person:(ExteriaPerson *)person draft:(NSString *)draft startParam:(NSString *)startParam {
+    [self openDialog:dialog person:person draft:draft startParam:startParam messageId:0];
+}
+
+- (void)openDialog:(ExteriaDialog *)dialog person:(ExteriaPerson *)person draft:(NSString *)draft startParam:(NSString *)startParam messageId:(int32_t)messageId {
     (void)person;
     UINavigationController *navigation = [self navigation];
     if (!navigation) return;
@@ -320,6 +352,7 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
                                                                           stickers:_stickers] autorelease];
     chat.draftText = draft;
     chat.startParam = startParam;
+    chat.startMessageId = messageId;
     [navigation pushViewController:chat animated:YES];
 }
 

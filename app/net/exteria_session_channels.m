@@ -252,6 +252,58 @@ static void ExteriaChannelWrite(ExteriaSession *session, exteria_status (^build)
     }];
 }
 
+- (void)loadChannelDialogWithId:(long long)channelId completion:(void (^)(ExteriaDialog *, NSString *))completion {
+    void (^done)(ExteriaDialog *, NSString *) = [completion copy];
+    [self post:^{
+        /* the hash is the one the chats of this account carry; a channel the account never saw has none, and the link cannot be opened */
+        ExteriaPerson *held = [self storedPersonWithKey:-(int64_t)channelId];
+        int64_t hash = held ? (int64_t)held.accessHash : 0;
+        if (!hash) {
+            [self deliverMain:^{ done(nil, @"CHANNEL_PRIVATE"); [done release]; }];
+            return;
+        }
+        [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+            return exteria_channel_by_id_request(arena, (int64_t)channelId, hash, request);
+        } handler:^(const exteria_mt_rpc_result *result) {
+            ExteriaDialog *dialog = nil;
+            NSString *error = nil;
+            if (result->status != EXTERIA_OK) {
+                error = ExteriaRpcErrorName(result);
+            } else {
+                exteria_dialog_row row;
+                exteria_status parsed = exteria_channel_dialog_parse(result->value, (int64_t)channelId, &row);
+                if (parsed == EXTERIA_OK) dialog = [[[ExteriaDialog alloc] initWithRow:&row] autorelease];
+                else error = parsed == EXTERIA_E_NOTFOUND ? @"CHANNEL_PRIVATE" : @"INTERNAL";
+            }
+            [self noteRpcError:error];
+            NSString *delivered = [[error copy] autorelease];
+            [self deliverMain:^{ done(dialog, delivered); [done release]; }];
+        }];
+    }];
+}
+
+- (void)loadMembershipOfDialog:(ExteriaDialog *)dialog completion:(void (^)(BOOL, NSString *))completion {
+    void (^done)(BOOL, NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_channel_member_request(arena, &peer, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = nil;
+        int member = 0;
+        if (result->status != EXTERIA_OK) {
+            NSString *name = ExteriaRpcErrorName(result);
+            /* the server's way of saying the account never joined, which is an answer and no failure */
+            if (!exteria_channel_already_left(3, [name UTF8String])) error = name;
+        } else if (exteria_channel_member_parse(result->value, &member) != EXTERIA_OK) {
+            error = @"MALFORMED";
+        }
+        if (error) [self noteRpcError:error];
+        NSString *delivered = [[error copy] autorelease];
+        BOOL joined = member != 0;
+        [self deliverMain:^{ done(joined, delivered); [done release]; }];
+    }];
+}
+
 - (void)loadMembersOfDialog:(ExteriaDialog *)dialog list:(ExteriaChannelList)list query:(NSString *)query offset:(NSInteger)offset
                  completion:(void (^)(NSArray *, NSInteger, NSString *))completion {
     void (^done)(NSArray *, NSInteger, NSString *) = [completion copy];

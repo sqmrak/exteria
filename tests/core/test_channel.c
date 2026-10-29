@@ -492,6 +492,59 @@ static void test_settings_requests(void) {
     CHECK_EQ_INT(exteria_channel_bool_parse(NULL), EXTERIA_E_MALFORMED);
 }
 
+static void test_by_id(void) {
+    exteria_tl_value *request, *answer, *list[1];
+    exteria_dialog_row row;
+    CHECK_EQ_INT(exteria_channel_by_id_request(&arena, 77, 5, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(request, EXTERIA_TL_ID_channels_getChannels));
+    CHECK(exteria_tl_get(request, "id") != NULL);
+    CHECK_EQ_INT(exteria_channel_by_id_request(&arena, 0, 5, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_channel_by_id_request(&arena, 77, 0, &request), EXTERIA_E_ARG);
+    list[0] = channel(77, "Group", 1);
+    answer = obj("messages.chats");
+    set(answer, "chats", vec_of(list, 1));
+    CHECK_EQ_INT(exteria_channel_dialog_parse(answer, 77, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.peer_kind, 3);
+    CHECK(row.peer_id == 77);
+    CHECK_EQ_INT(row.kind, EXTERIA_DIALOG_GROUP);
+    CHECK(strcmp(row.title, "Group") == 0);
+    CHECK_EQ_INT(exteria_channel_dialog_parse(answer, 78, &row), EXTERIA_E_NOTFOUND);
+    CHECK_EQ_INT(exteria_channel_dialog_parse(obj("boolTrue"), 77, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_channel_dialog_parse(NULL, 77, &row), EXTERIA_E_MALFORMED);
+}
+
+static void test_member(void) {
+    exteria_peer_ref ok = {3, 5, 99, 0, 0}, bad = {3, 5, 0, 0, 0}, group = {2, 5, 99, 0, 0};
+    exteria_tl_value *request, *answer, *kinds[7];
+    const char *names[] = {"channelParticipant", "channelParticipantSelf", "channelParticipantCreator", "channelParticipantAdmin", "channelParticipantLeft",
+                           "channelParticipantBanned", NULL};
+    int expect[] = {1, 1, 1, 1, 0, 0, -1};
+    int i, member = 5;
+    CHECK_EQ_INT(exteria_channel_member_request(&arena, &ok, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(request, EXTERIA_TL_ID_channels_getParticipant));
+    CHECK(exteria_tl_get(request, "channel") != NULL);
+    CHECK(exteria_tl_get(request, "participant") != NULL);
+    CHECK_EQ_INT(exteria_channel_member_request(&arena, &bad, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_channel_member_request(&arena, &group, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_channel_member_request(&arena, NULL, &request), EXTERIA_E_ARG);
+    for (i = 0; i < 7; ++i) {
+        answer = obj("channels.channelParticipant");
+        /* the last answer has no participant at all */
+        kinds[i] = names[i] ? obj(names[i]) : NULL;
+        if (kinds[i]) set(answer, "participant", kinds[i]);
+        member = 5;
+        if (expect[i] < 0) {
+            CHECK_EQ_INT(exteria_channel_member_parse(answer, &member), EXTERIA_E_MALFORMED);
+            CHECK_EQ_INT(member, 0);
+        } else {
+            CHECK_EQ_INT(exteria_channel_member_parse(answer, &member), EXTERIA_OK);
+            CHECK_EQ_INT(member, expect[i]);
+        }
+    }
+    CHECK_EQ_INT(exteria_channel_member_parse(obj("boolTrue"), &member), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_channel_member_parse(NULL, &member), EXTERIA_E_MALFORMED);
+}
+
 int main(void) {
     CHECK(exteria_channel_already_left(3, "USER_NOT_PARTICIPANT"));
     CHECK(!exteria_channel_already_left(2, "USER_NOT_PARTICIPANT"));
@@ -511,6 +564,8 @@ int main(void) {
     test_admin_and_ban();
     test_invite();
     test_settings_requests();
+    test_member();
+    test_by_id();
     exteria_arena_free(&arena);
     return test_finish("test_channel");
 }

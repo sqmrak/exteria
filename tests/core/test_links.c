@@ -11,6 +11,16 @@ static void test_invite_links(void) {
     exteria_tg_link l = link_of("https://t.me/+AbCd-Ef_12");
     CHECK_EQ_INT(l.kind, EXTERIA_LINK_INVITE);
     CHECK(!strcmp(l.slug, "AbCd-Ef_12"));
+    l = link_of("https://t.me/%2BAbCd-Ef_12?fbclid=long-tracking_value1234567890#fragment");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_INVITE);
+    CHECK(!strcmp(l.slug, "AbCd-Ef_12"));
+    l = link_of("https://t.me/%2bAbCd%2DEf_12?fbclid=value");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_INVITE);
+    CHECK(!strcmp(l.slug, "AbCd-Ef_12"));
+    CHECK_EQ_INT(link_of("https://t.me/%2B1234567?fbclid=value").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/%252BAbCd").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/%2Babc%2Fdef").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/%2Babc%00def").kind, EXTERIA_LINK_OTHER);
     l = link_of("https://t.me/joinchat/AAAA");
     CHECK_EQ_INT(l.kind, EXTERIA_LINK_INVITE);
     CHECK(!strcmp(l.slug, "AAAA"));
@@ -76,7 +86,8 @@ static void test_invoice_and_other(void) {
     CHECK_EQ_INT(link_of("https://t.me/+").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("https://t.me/+15551234567").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("https://t.me/addstickers/Cats").kind, EXTERIA_LINK_OTHER);
-    CHECK_EQ_INT(link_of("https://t.me/c/123/4").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/c/123/4").kind, EXTERIA_LINK_PRIVATE_POST);
+    CHECK_EQ_INT(link_of("https://t.me/call/abc123").kind, EXTERIA_LINK_CALL);
     CHECK_EQ_INT(link_of("https://t.me/").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("https://t.me").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("https://example.org/helper_bot").kind, EXTERIA_LINK_OTHER);
@@ -87,6 +98,36 @@ static void test_invoice_and_other(void) {
     CHECK_EQ_INT(link_of("https://t.me/bad-name").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("https://t.me/012345678901234567890123456789012").kind, EXTERIA_LINK_OTHER);
     CHECK_EQ_INT(link_of("").kind, EXTERIA_LINK_OTHER);
+}
+
+static void test_private_posts(void) {
+    exteria_tg_link l = link_of("https://t.me/c/1237513492/102643");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PRIVATE_POST);
+    CHECK(l.channel_id == 1237513492);
+    CHECK_EQ_INT(l.message_id, 102643);
+    /* the number of a channel may pass 32 bits */
+    l = link_of("https://t.me/c/2500000000/7");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PRIVATE_POST);
+    CHECK(l.channel_id == 2500000000LL);
+    /* a topic stands before the post, and the post is the last number */
+    l = link_of("https://www.telegram.me/c/55/3/900?single");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PRIVATE_POST);
+    CHECK(l.channel_id == 55);
+    CHECK_EQ_INT(l.message_id, 900);
+    l = link_of("https://t.me/c/55");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PRIVATE_POST);
+    CHECK_EQ_INT(l.message_id, 0);
+    l = link_of("tg://privatepost?channel=1237513492&post=102643");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PRIVATE_POST);
+    CHECK(l.channel_id == 1237513492);
+    CHECK_EQ_INT(l.message_id, 102643);
+    CHECK_EQ_INT(link_of("https://t.me/c/").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/c/abc/5").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/c/55/x").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/c/55/1/2/3").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/c/12345678901234/5").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("tg://privatepost?channel=0&post=1").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("tg://privatepost?post=1").kind, EXTERIA_LINK_OTHER);
 }
 
 static void test_tg_scheme(void) {
@@ -158,12 +199,47 @@ static void test_mentions_and_commands(void) {
     CHECK_EQ_INT(exteria_bot_command_split("/a", command, 8, bot, sizeof(bot)), EXTERIA_E_ARG);
 }
 
+static void test_voice_chat_links(void) {
+    exteria_tg_link l;
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/somegroup?videochat=AbC_123", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PEER);
+    CHECK(!strcmp(l.username, "somegroup"));
+    CHECK_EQ_INT(l.has_voice_chat, 1);
+    CHECK(!strcmp(l.voice_chat, "AbC_123"));
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/somegroup?voicechat=xyz&start=1", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.has_voice_chat, 1);
+    CHECK(!strcmp(l.voice_chat, "xyz"));
+    CHECK_EQ_INT(l.has_start, 1);
+    /* the parameter without a value still asks for the voice chat, without an invite hash */
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/somegroup?videochat", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.has_voice_chat, 1);
+    CHECK_EQ_INT(l.voice_chat[0], 0);
+    CHECK_EQ_INT(exteria_tg_link_parse("tg://resolve?domain=somegroup&videochat=h1", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PEER);
+    CHECK(!strcmp(l.voice_chat, "h1"));
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/somegroup", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.has_voice_chat, 0);
+    /* a hash with a character the server would not take is dropped */
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/somegroup?videochat=a%20b", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_PEER);
+    CHECK_EQ_INT(l.has_voice_chat, 0);
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/call/AbC-1_x", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_CALL);
+    CHECK(!strcmp(l.slug, "AbC-1_x"));
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/call/", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(exteria_tg_link_parse("https://t.me/call", &l), EXTERIA_OK);
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+}
+
 int main(void) {
     test_invite_links();
     test_web_links();
     test_invoice_and_other();
+    test_private_posts();
     test_tg_scheme();
     test_parameters();
     test_mentions_and_commands();
+    test_voice_chat_links();
     return test_finish("test_links");
 }

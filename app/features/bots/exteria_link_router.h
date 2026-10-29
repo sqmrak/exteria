@@ -35,6 +35,8 @@ BOOL ExteriaIsTelegramLink(NSURL *url);
 - (void)openLink:(NSString *)url;
 /* pushes the chat of a dialog; draft fills its field and startParam starts a bot with that parameter */
 - (void)openDialog:(ExteriaDialog *)dialog person:(ExteriaPerson *)person draft:(NSString *)draft startParam:(NSString *)startParam;
+/* the same, and the chat opens at the message with this number, zero for the usual place */
+- (void)openDialog:(ExteriaDialog *)dialog person:(ExteriaPerson *)person draft:(NSString *)draft startParam:(NSString *)startParam messageId:(int32_t)messageId;
 /* the profile of a user a message names; asks the server for the hash that opening it needs */
 - (void)openProfileOfUser:(long long)userId inMessage:(int32_t)messageId dialog:(ExteriaDialog *)dialog;
 /* lets the person pick chats the filter accepts, up to limit of them; the completion gets the ticked ones, not called when they back out */

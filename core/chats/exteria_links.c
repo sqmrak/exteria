@@ -53,7 +53,7 @@ static int decode_value(const char *s, size_t len, char *out, size_t cap) {
         } else {
             ++i;
         }
-        if (n + 1 >= cap) return 0;
+        if (!c || n + 1 >= cap) return 0;
         out[n++] = c;
     }
     out[n] = 0;
@@ -108,9 +108,47 @@ static int digits_only(const char *s, size_t len, int32_t *value) {
     return 1;
 }
 
+/* a channel number: more digits than a message id has, so it does not fit the 32 bits digits_only keeps */
+static int digits_wide(const char *s, size_t len, int64_t *value) {
+    size_t i;
+    int64_t v = 0;
+    if (len == 0 || len > 13) return 0;
+    for (i = 0; i < len; ++i) {
+        if (s[i] < '0' || s[i] > '9') return 0;
+        v = v * 10 + (s[i] - '0');
+    }
+    if (v <= 0) return 0;
+    *value = v;
+    return 1;
+}
+
+/* c/<channel>, c/<channel>/<post> and c/<channel>/<topic>/<post>: what follows the c, the post being the last number */
+static void parse_private_post(const char *rest, size_t len, exteria_tg_link *out) {
+    size_t at = 0, first_len = 0;
+    int64_t channel;
+    int32_t post = 0;
+    int segments = 0;
+    while (first_len < len && rest[first_len] != '/') ++first_len;
+    if (!digits_wide(rest, first_len, &channel)) return;
+    at = first_len < len ? first_len + 1 : len;
+    while (at < len) {
+        size_t end = at;
+        while (end < len && rest[end] != '/') ++end;
+        if (end > at) {
+            if (++segments > 2 || !digits_only(rest + at, end - at, &post)) return;
+        }
+        at = end < len ? end + 1 : len;
+    }
+    out->channel_id = channel;
+    out->message_id = post;
+    out->kind = EXTERIA_LINK_PRIVATE_POST;
+}
+
 static void read_start(span q, exteria_tg_link *out) {
     read_param(q, "start", out->start, sizeof(out->start), &out->has_start);
     read_param(q, "startapp", out->start_app, sizeof(out->start_app), &out->has_start_app);
+    read_param(q, "videochat", out->voice_chat, sizeof(out->voice_chat), &out->has_voice_chat);
+    if (!out->has_voice_chat) read_param(q, "voicechat", out->voice_chat, sizeof(out->voice_chat), &out->has_voice_chat);
 }
 
 static int copy_word(char *dst, size_t cap, const char *s, size_t len, int dash) {
@@ -189,6 +227,14 @@ static void parse_tg(const char *rest, exteria_tg_link *out) {
                 strcpy(out->app_name, app);
         }
         if (query_get(q, "post", &value)) digits_only(value.start, value.len, &out->message_id);
+    } else if (equals_nocase(rest, command_len, "privatepost") && query_get(q, "channel", &value)) {
+        int64_t channel;
+        int32_t post = 0;
+        if (!digits_wide(value.start, value.len, &channel)) return;
+        if (query_get(q, "post", &value) && !digits_only(value.start, value.len, &post)) return;
+        out->channel_id = channel;
+        out->message_id = post;
+        out->kind = EXTERIA_LINK_PRIVATE_POST;
     } else if (equals_nocase(rest, command_len, "invoice") && query_get(q, "slug", &value)) {
         if (copy_slug(out->slug, sizeof(out->slug), value.start, value.len)) out->kind = EXTERIA_LINK_INVOICE;
     } else if (equals_nocase(rest, command_len, "join") && query_get(q, "invite", &value)) {
@@ -203,7 +249,7 @@ static void parse_tg(const char *rest, exteria_tg_link *out) {
 /* names in the first path segment that are pages of telegram and not a user or a channel */
 static const char *const reserved[] = {
     "joinchat", "addstickers", "addemoji", "addtheme", "setlanguage", "share", "msg", "proxy", "socks", "bg", "login", "c", "s", "iv",
-    "confirmphone", "giftcode", "m", "boost", "addlist", "contact", "folder", "premium", "k", "a", "web", "webk", "webz", "invoice"
+    "confirmphone", "giftcode", "m", "boost", "addlist", "contact", "folder", "premium", "k", "a", "web", "webk", "webz", "invoice", "call"
 };
 
 static int is_reserved(const char *s, size_t len) {
@@ -238,12 +284,21 @@ static void parse_web(const char *path, size_t path_len, span q, exteria_tg_link
         read_proxy(q, equals_nocase(first, first_len, "socks"), out);
         return;
     }
+    if (equals_nocase(first, first_len, "call")) {
+        if (second_len && copy_slug(out->slug, sizeof(out->slug), second, second_len)) out->kind = EXTERIA_LINK_CALL;
+        return;
+    }
+    if (equals_nocase(first, first_len, "c")) {
+        if (first_len < path_len) parse_private_post(path + first_len + 1, path_len - first_len - 1, out);
+        return;
+    }
     if (equals_nocase(first, first_len, "invoice")) {
         if (second_len && copy_slug(out->slug, sizeof(out->slug), second, second_len)) out->kind = EXTERIA_LINK_INVOICE;
         return;
     }
-    if (first[0] == '+') {
-        if (copy_invite(out->slug, sizeof(out->slug), first + 1, first_len - 1)) out->kind = EXTERIA_LINK_INVITE;
+    if (first[0] == '+' || (first_len >= 3 && first[0] == '%' && first[1] == '2' && (first[2] == 'B' || first[2] == 'b'))) {
+        size_t prefix = first[0] == '+' ? 1 : 3;
+        if (copy_invite(out->slug, sizeof(out->slug), first + prefix, first_len - prefix)) out->kind = EXTERIA_LINK_INVITE;
         return;
     }
     if (equals_nocase(first, first_len, "joinchat")) {

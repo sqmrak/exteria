@@ -138,4 +138,10 @@ exteria_status exteria_channel_member_parse(const exteria_tl_value *answer, int 
 exteria_status exteria_channel_from_message_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t message_id,
                                                    int64_t channel_id, exteria_tl_value **out);
 
+/* channels.getChannels for one channel by the number and the hash this account knows it by, which a link to a post of a private channel only carries the number of */
+exteria_status exteria_channel_by_id_request(exteria_arena *arena, int64_t channel_id, int64_t access_hash, exteria_tl_value **out);
+/* the chat row of that channel from the answer; EXTERIA_E_NOTFOUND when the answer holds no channel of that number (a forbidden one included),
+   EXTERIA_E_MALFORMED for any other answer */
+exteria_status exteria_channel_dialog_parse(const exteria_tl_value *answer, int64_t channel_id, exteria_dialog_row *out);
+
 #endif

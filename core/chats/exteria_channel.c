@@ -26,6 +26,23 @@ exteria_status exteria_channel_from_message_request(exteria_arena *arena, const 
     return status;
 }
 
+exteria_status exteria_channel_by_id_request(exteria_arena *arena, int64_t channel_id, int64_t access_hash, exteria_tl_value **out) {
+    exteria_tl_value *input, *list, *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out || channel_id <= 0 || access_hash == 0) return EXTERIA_E_ARG;
+    input = exteria_tl_new_obj(arena, "inputChannel");
+    list = exteria_tl_new_vec(arena, 1);
+    request = exteria_tl_new_obj(arena, "channels.getChannels");
+    if (!input || !list || !request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_i64(arena, input, "channel_id", channel_id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, input, "access_hash", access_hash);
+    if (status == EXTERIA_OK) status = exteria_tl_vec_set(list, 0, input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "id", list);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
 static void copy_text(char *dst, size_t cap, const exteria_tl_value *object, const char *field) {
     const uint8_t *data;
     size_t len;
@@ -530,4 +547,15 @@ exteria_status exteria_channel_bool_parse(const exteria_tl_value *answer) {
     if (exteria_tl_is(answer, EXTERIA_TL_ID_boolTrue)) return EXTERIA_OK;
     if (exteria_tl_is(answer, EXTERIA_TL_ID_boolFalse)) return EXTERIA_E_STATE;
     return EXTERIA_E_MALFORMED;
+}
+
+exteria_status exteria_channel_dialog_parse(const exteria_tl_value *answer, int64_t channel_id, exteria_dialog_row *out) {
+    const exteria_tl_value *chats;
+    if (!out) return EXTERIA_E_ARG;
+    memset(out, 0, sizeof(*out));
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_chats) && !exteria_tl_is(answer, EXTERIA_TL_ID_messages_chatsSlice)) return EXTERIA_E_MALFORMED;
+    chats = exteria_tl_get(answer, "chats");
+    if (channel_id <= 0 || !find_channel(chats, channel_id)) return EXTERIA_E_NOTFOUND;
+    read_dialog(out, channel_id, chats);
+    return EXTERIA_OK;
 }

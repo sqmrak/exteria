@@ -2070,3 +2070,4 @@
 "chat.reactors.error" = "Could not load reactions: %@";
 "chat.reactors.badpage" = "Invalid reactions page";
 "chat.reactors.limit" = "Showing the first 500 reactions.";
+"link.error.private" = "This message is in a chat that this account has not joined, or the link is not meant for it.";
