@@ -869,6 +869,7 @@ static float ExteriaSpoilerRandom(void) {
     NSString *_loadedPath;
     NSUInteger _loadRequest;
     NSUInteger _loadToken;
+    BOOL _loadAsked;
     BOOL _loadFailed;
     float _loadProgress;
     BOOL _playWhenLoaded;
@@ -1842,16 +1843,17 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         return;
     }
     [[self loadAction] setIcon:ExteriaMediaIconDownload animated:NO];
-    if (startAtOnce) [self startMediaLoad];
+    if (startAtOnce) [self startMediaLoad:NO];
 }
 
-- (void)startMediaLoad {
+- (void)startMediaLoad:(BOOL)asked {
     ExteriaMedia *content = _item.message.media;
     if (_loadRequest || _loadedPath || !content.file) return;
     ExteriaMediaActionView *action = [self loadAction];
     /* a tap asks again for a file that did not come, without waiting out the pause the cache keeps after a failure */
     if (_loadFailed) [_media retryFile:content.file];
     _loadFailed = NO;
+    _loadAsked = asked;
     [action setIcon:ExteriaMediaIconCancel animated:YES];
     _loadProgress = 0;
     [action setProgress:0];
@@ -1931,7 +1933,17 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 /* the cell goes to another row, or ends */
 - (void)cancelMediaLoad {
-    [self cancelMediaTransfer];
+    /* a download the user asked for by a tap goes on in the cache when the row or the chat goes away, its bytes are
+       wanted; the token drop below only mutes the callbacks of this cell */
+    if (_loadRequest && _loadAsked) {
+        ++_loadToken;
+        _loadRequest = 0;
+        _playWhenLoaded = NO;
+        _body.fileProgressText = nil;
+    } else {
+        [self cancelMediaTransfer];
+    }
+    _loadAsked = NO;
     [_loadedPath release];
     _loadedPath = nil;
     _loadFailed = NO;
@@ -1953,7 +1965,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         return YES;
     }
     if (_loadFailed) return NO;
-    [self startMediaLoad];
+    [self startMediaLoad:YES];
     return !_loadFailed;
 }
 
@@ -1973,7 +1985,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         [_voiceAction setIcon:ExteriaMediaIconDownload animated:YES];
         return;
     }
-    [self startMediaLoad];
+    [self startMediaLoad:YES];
 }
 
 #pragma mark voice button
@@ -2101,7 +2113,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         return;
     }
     _playWhenLoaded = YES;
-    [self startMediaLoad];
+    [self startMediaLoad:YES];
 }
 
 - (void)beginRoundAtPath:(NSString *)path {
@@ -2208,7 +2220,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _gifFailed = NO;
     _gifPlayRequested = YES;
     [self setAnimating:YES];
-    if (!_loadedPath) [self startMediaLoad];
+    if (!_loadedPath) [self startMediaLoad:YES];
 }
 
 /* telegram animations are silent mp4 documents; AVFoundation on ios 5-10 needs an extension on their cache files */
