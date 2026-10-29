@@ -51,7 +51,8 @@ static NSMutableDictionary *ExteriaDeveloperIds(void) {
 
 /* the person whose Senko this is and who leads Exteria: the one name that wears the fox tail and the crossed hammers */
 static NSString *const ExteriaSenkoDeveloper = @"sqmrak";
-static NSString *const ExteriaBugHunter = @"not_a_modder";
+static NSString *const ExteriaBugHunters[] = {@"not_a_modder", @"xaxaxaxaxxaxaxaxaxaxaxaxaxaxa"};
+#define BUG_HUNTER_COUNT (sizeof(ExteriaBugHunters) / sizeof(ExteriaBugHunters[0]))
 
 static BOOL ExteriaNameIn(NSString *username, NSString *const *names, NSUInteger count) {
     if (!username.length) return NO;
@@ -84,7 +85,7 @@ static NSUInteger ExteriaMarksOfUsername(NSString *username) {
     if ([ExteriaSenkoDeveloper caseInsensitiveCompare:username ? username : @""] == NSOrderedSame) marks = (marks & ~(NSUInteger)ExteriaMarkDeveloper) | ExteriaMarkSenko | ExteriaMarkLead;
     if (ExteriaNameIn(username, ExteriaTesterNames, TESTER_COUNT)) marks |= ExteriaMarkTester;
     if (ExteriaNameIn(username, ExteriaOfficialTesterNames, OFFICIAL_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkOfficialTester;
-    if (ExteriaNameIn(username, &ExteriaBugHunter, 1)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
+    if (ExteriaNameIn(username, ExteriaBugHunters, BUG_HUNTER_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
     if (ExteriaNameIn(username, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
     if (ExteriaNameIn(username, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
     return marks;
@@ -96,7 +97,7 @@ NSUInteger ExteriaMarksOfId(long long userId) {
     if (ExteriaIdIn(userId, &ExteriaSenkoDeveloper, 1)) marks = (marks & ~(NSUInteger)ExteriaMarkDeveloper) | ExteriaMarkSenko | ExteriaMarkLead;
     if (ExteriaIdIn(userId, ExteriaTesterNames, TESTER_COUNT)) marks |= ExteriaMarkTester;
     if (ExteriaIdIn(userId, ExteriaOfficialTesterNames, OFFICIAL_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkOfficialTester;
-    if (ExteriaIdIn(userId, &ExteriaBugHunter, 1)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
+    if (ExteriaIdIn(userId, ExteriaBugHunters, BUG_HUNTER_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
     if (ExteriaIdIn(userId, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
     if (ExteriaIdIn(userId, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
     return marks;
@@ -143,7 +144,7 @@ static NSArray *ExteriaLookupNames(void) {
     add(ExteriaOfficialTesterNames, OFFICIAL_COUNT);
     add(&ExteriaCautionName, 1);
     add(ExteriaPromotionNames, PROMOTION_COUNT);
-    add(&ExteriaBugHunter, 1);
+    add(ExteriaBugHunters, BUG_HUNTER_COUNT);
     names = [list copy];
     return names;
 }
