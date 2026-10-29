@@ -157,6 +157,7 @@ enum {
     ExteriaEmojiLabel *_subtitle;
     ExteriaGiftFactsView *_facts;
     UILabel *_footer;
+    UILabel *_customCredit;
     UIButton *_footerLink;
     NSString *_ownerName;
     ExteriaStickerLibrary *_stickers;
@@ -231,6 +232,7 @@ enum {
     [_subtitle release];
     [_facts release];
     [_footer release];
+    [_customCredit release];
     [_footerLink release];
     [_ownerName release];
     [_stickers release];
@@ -311,6 +313,16 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
     _facts.avatars = self.avatars;
     [self fillFacts];
     [_scroll addSubview:_facts];
+    if (_saved.customImageName) {
+        _customCredit = [[UILabel alloc] init];
+        _customCredit.backgroundColor = [UIColor clearColor];
+        _customCredit.textColor = ExteriaColorSecondary();
+        _customCredit.font = ExteriaFontRegular(13);
+        _customCredit.textAlignment = ExteriaTextAlignmentCenter;
+        _customCredit.numberOfLines = 0;
+        _customCredit.text = @"by sqmrak, not a real telegram gift :3";
+        [_scroll addSubview:_customCredit];
+    }
     if (_mine) [self buildFooter];
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
@@ -546,6 +558,12 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
     for (UIButton *button in _buttons) {
         button.frame = CGRectMake(x, y, inner, 50);
         y += 58;
+    }
+    if (_customCredit) {
+        CGSize credit = [_customCredit sizeThatFits:CGSizeMake(inner, 100)];
+        y = MAX(y, body.size.height - credit.height - 20);
+        _customCredit.frame = CGRectMake(x, y, inner, credit.height);
+        y += credit.height;
     }
     _spinner.center = CGPointMake(width / 2, y + 12);
     _scroll.contentSize = CGSizeMake(width, y + 40);
