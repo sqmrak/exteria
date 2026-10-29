@@ -1,6 +1,7 @@
 #import "exteria_folder_tabs.h"
 #import "exteria_chat_settings.h"
 #import "exteria_filter_bar.h"
+#import "exteria_dialog_cell.h"
 #import "exteria_weak_reference.h"
 
 @interface ExteriaFolderTabs () <ExteriaFilterBarDelegate, UIGestureRecognizerDelegate> {
@@ -136,6 +137,13 @@
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture {
+    UIView *hit = [gesture.view hitTest:[gesture locationInView:gesture.view] withEvent:nil];
+    for (UIView *view = hit; view && view != gesture.view; view = view.superview) {
+        if ([view isKindOfClass:[ExteriaDialogCell class]] && [(ExteriaDialogCell *)view swipeOpen]) return NO;
+        if ([view isKindOfClass:[UITableViewCell class]] &&
+            ((UISwipeGestureRecognizer *)gesture).direction == UISwipeGestureRecognizerDirectionLeft &&
+            ExteriaChatSwipeStored() != ExteriaChatSwipeFolders) return NO;
+    }
     NSInteger index = [self pageAfterSwipe:(UISwipeGestureRecognizer *)gesture];
     return _folders.count > 1 && index >= 0 && (NSUInteger)index < _folders.count;
 }
