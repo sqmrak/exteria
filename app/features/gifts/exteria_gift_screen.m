@@ -85,7 +85,6 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     NSString *_actionTitle;
     void (^_actionHandler)(void);
     BOOL _clearBar;
-    UIView *_backChip;
     UIColor *_barTint;
     BOOL _barShaded;
 }
@@ -119,7 +118,6 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     [_header release];
     [_headerLine release];
     [_back release];
-    [_backChip release];
     [_barTint release];
     [_titleLabel release];
     [_action release];
@@ -137,7 +135,8 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _headerLine.hidden = _clearBar || tinted;
     _titleLabel.alpha = tinted && !_barShaded ? 0 : 1;
     _titleLabel.textColor = tinted ? [UIColor whiteColor] : ExteriaColorTitle();
-    _back.inkColor = tinted ? [UIColor whiteColor] : nil;
+    /* the arrow has the ink of the dots at the other end of the bar, whatever picture a clear bar lies over */
+    _back.inkColor = tinted ? [UIColor whiteColor] : (_clearBar ? ExteriaColorTitle() : nil);
 }
 
 - (void)setBarTint:(UIColor *)tint {
@@ -259,12 +258,6 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _headerLine.backgroundColor = ExteriaColorHairline();
     _headerLine.hidden = _clearBar;
     [_header addSubview:_headerLine];
-    /* a clear bar over a picture gives the arrow a dark disc */
-    _backChip = [[UIView alloc] init];
-    _backChip.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
-    _backChip.layer.cornerRadius = 18;
-    _backChip.userInteractionEnabled = NO;
-    [_header addSubview:_backChip];
     _back = [[ExteriaBarButton alloc] init];
     _back.chevron = YES;
     _back.title = @"";
@@ -318,10 +311,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
         CGFloat left = column.origin.x, edge = CGRectGetMaxX(column);
         BOOL alone = ExteriaIsDetailRoot(self);
         _back.hidden = alone;
-        _backChip.hidden = alone || !_clearBar;
         _back.frame = CGRectMake(left, insets.top, 52, BAR_HEIGHT);
-        /* the chevron is drawn 14 points in from the button's edge and about 5 wide, so the disc centers on it */
-        _backChip.frame = CGRectMake(left + 1, insets.top + (BAR_HEIGHT - 36) / 2, 36, 36);
         CGFloat actionWidth = _action.hidden ? 0 : MIN(column.size.width * 0.42, ceil([_action.title sizeWithFont:ExteriaFontSemibold(17)].width) + 28);
         CGFloat side = MAX(64, actionWidth + 6);
         _titleLabel.frame = CGRectMake(left + side, insets.top, MAX(0, column.size.width - 2 * side), BAR_HEIGHT);
