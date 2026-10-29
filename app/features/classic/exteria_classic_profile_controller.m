@@ -33,12 +33,14 @@
 @interface ExteriaClassicInfoCell : UITableViewCell {
     ExteriaEmojiLabel *_value;
     ExteriaEmojiLabel *_caption;
+    ExteriaWeakReference *_weak;
     BOOL _row;
 }
 - (void)setValue:(NSString *)value caption:(NSString *)caption;
 /* the cell stands as a plain row of the list: the title in bold at the margin of the others, with custom emoji after the words */
 - (void)setRowTitle:(NSString *)title entities:(NSArray *)entities;
 - (ExteriaEmojiLabel *)valueLabel;
+- (ExteriaWeakReference *)weakReference;
 /* the height a row needs for the table width; it assumes the widest grouped margin, so a row never clips a line */
 + (CGFloat)heightForValue:(NSString *)value caption:(NSString *)caption tableWidth:(CGFloat)width hasImage:(BOOL)hasImage;
 @end
@@ -55,6 +57,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)identifier {
     self = [super initWithStyle:style reuseIdentifier:identifier];
     if (!self) return nil;
+    _weak = [[ExteriaWeakReference referenceTo:self] retain];
     BOOL dark = ExteriaThemeIsDark();
     _value = [[ExteriaEmojiLabel alloc] init];
     _value.font = ExteriaClassicInfoValueFont();
@@ -69,6 +72,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 }
 
 - (void)dealloc {
+    [_weak clear];
+    [_weak release];
     [_value release];
     [_caption release];
     [super dealloc];
@@ -81,6 +86,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 }
 
 - (ExteriaEmojiLabel *)valueLabel { return _value; }
+- (ExteriaWeakReference *)weakReference { return _weak; }
 
 - (void)setRowTitle:(NSString *)title entities:(NSArray *)entities {
     _row = YES;
@@ -119,6 +125,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 
 @interface ExteriaClassicProfileController () {
     ExteriaSession *_session;
+    ExteriaWeakReference *_weak;
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickerLibrary;
@@ -147,6 +154,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 - (id)initWithSession:(ExteriaSession *)session avatars:(ExteriaAvatarCache *)avatars {
     self = [super initWithStyle:UITableViewStyleGrouped];
     if (!self) return nil;
+    _weak = [[ExteriaWeakReference referenceTo:self] retain];
     _session = [session retain];
     _avatars = [avatars retain];
     self.title = NSLocalizedString(@"tab.profile", nil);
@@ -161,6 +169,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 }
 
 - (void)dealloc {
+    [_weak clear];
+    [_weak release];
     /* a tab nobody opened has no view, and asking for it here would load one while the controller is being freed */
     if ([self isViewLoaded]) {
         self.tableView.delegate = nil;
@@ -222,8 +232,17 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    _avatar.frame = CGRectMake((self.tableView.bounds.size.width - AVATAR) / 2, 14, AVATAR, AVATAR);
     CGFloat width = self.tableView.bounds.size.width;
+    UIView *header = self.tableView.tableHeaderView;
+    if (header && width > 0 && header.frame.size.width != width) {
+        CGRect frame = header.frame;
+        frame.size.width = width;
+        header.frame = frame;
+        self.tableView.tableHeaderView = header;
+    }
+    _avatar.frame = CGRectMake((width - AVATAR) / 2, 14, AVATAR, AVATAR);
+    _name.frame = CGRectMake(16, 106, MAX(0, width - 32), 24);
+    _detail.frame = CGRectMake(16, 130, MAX(0, width - 32), 18);
     CGFloat detailWidth = MIN(width - 70, ceil([_detail sizeThatFits:CGSizeMake(width - 70, 20)].width));
     _ratingBadge.frame = CGRectMake(floor((width - detailWidth) / 2) - 26, _detail.frame.origin.y, 22, 20);
 }
@@ -239,10 +258,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     long long badge = ExteriaPersonBadgeDocument(_person);
     _name.text = ExteriaNameWithBadges(_person.name, badge, ExteriaPersonIsDeveloper(_person), &hammer);
     _name.entities = hammer;
-    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaWeakReference *weak = _weak;
     ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:badge]], _session, _media, ^{
         ExteriaClassicProfileController *profile = weak.target;
-        [profile->_name setNeedsDisplay];
+        if (profile) [profile->_name setNeedsDisplay];
     });
     NSMutableArray *parts = [NSMutableArray array];
     if (_person.phone.length) [parts addObject:ExteriaOwnPhoneText(_person.phone)];
@@ -387,7 +406,7 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
             ExteriaClassicInfoCell *info = (ExteriaClassicInfoCell *)cell;
             [info setRowTitle:title entities:entities];
             if (channel.emojiStatus) {
-                ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:info];
+                ExteriaWeakReference *weak = [info weakReference];
                 ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:channel.emojiStatus]], _session, _media, ^{
                     [[(ExteriaClassicInfoCell *)weak.target valueLabel] setNeedsDisplay];
                 });
@@ -462,7 +481,7 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
 - (void)choosePhoto {
     if (_uploading) return;
     /* a cancelled picker calls nothing back, so the screen is not held for it */
-    ExteriaWeakReference *me = [ExteriaWeakReference referenceTo:self];
+    ExteriaWeakReference *me = _weak;
     [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
         ExteriaClassicProfileController *profile = me.target;
         if (!path) return;
@@ -498,7 +517,7 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
 /* the question is the system alert in the middle of the screen: an action sheet on an ipad is a popover with nothing to point at, and it appeared in the middle of the chat beside the list */
 - (void)confirmSignOut {
     if (_working || !_signOutHandler) return;
-    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaWeakReference *weak = _weak;
     ExteriaConfirmAction(self, NSLocalizedString(@"profile.signout.confirm", nil), NSLocalizedString(@"profile.signout", nil),
                          ^{ [(ExteriaClassicProfileController *)weak.target signOutNow]; });
 }

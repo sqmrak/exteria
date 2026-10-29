@@ -380,7 +380,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
         if (_saved.fromPerson.emojiStatus) {
             ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:_saved.fromPerson.emojiStatus]], self.session, self.media, ^{
                 ExteriaGiftDetailController *me = weak.target;
-                [me->_facts redrawNames];
+                if (me) [me->_facts redrawNames];
             });
         }
     }
@@ -619,7 +619,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
         }
         NSMutableArray *titles = [NSMutableArray array];
         for (ExteriaGiftFolder *folder in folders) [titles addObject:folder.title];
-        ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+        ExteriaWeakReference *weak = _detailWeak;
         ExteriaChoose(NSLocalizedString(@"gifts.folder.add", nil), titles, -1, ^(NSInteger index) {
             ExteriaGiftDetailController *me = weak.target;
             if (!me || index < 0 || index >= (NSInteger)folders.count) return;

@@ -13,6 +13,19 @@
 
 @implementation ExteriaDismissPan
 
+/* the scroll view is kept while a touch is on it: the sheet may rebuild or close its lists before the finger lifts, and a bare pointer to a freed view
+   is read again by the delegate methods and by pulled: */
+- (void)setScroll:(UIScrollView *)scroll {
+    [scroll retain];
+    [_scroll release];
+    _scroll = scroll;
+}
+
+- (void)dealloc {
+    [_scroll release];
+    [super dealloc];
+}
+
 - (id)initWithOwner:(id)owner action:(SEL)action {
     self = [super initWithTarget:nil action:NULL];
     if (!self) return nil;
@@ -24,12 +37,14 @@
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
-    _scroll = nil;
+    [self setScroll:nil];
+    UIScrollView *found = nil;
     for (UIView *view = touch.view; view && view != gesture.view; view = view.superview) {
         if ([view isKindOfClass:[UISlider class]] || [view isKindOfClass:[UIDatePicker class]] ||
             [view isKindOfClass:[UITextField class]] || [view isKindOfClass:[UITextView class]]) return NO;
-        if (!_scroll && [view isKindOfClass:[UIScrollView class]]) _scroll = (UIScrollView *)view;
+        if (!found && [view isKindOfClass:[UIScrollView class]]) found = (UIScrollView *)view;
     }
+    [self setScroll:found];
     return YES;
 }
 
@@ -56,7 +71,7 @@
         if (pan.state == UIGestureRecognizerStateEnded && (distance > 80 || [pan velocityInView:card.superview].y > 900)) {
             id owner = _owner;
             SEL action = _action;
-            _scroll = nil;
+            [self setScroll:nil];
             [owner performSelector:action];
             return;
         } else {
@@ -64,7 +79,7 @@
                                 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
                              animations:^{ card.transform = CGAffineTransformIdentity; } completion:nil];
         }
-        _scroll = nil;
+        [self setScroll:nil];
     }
 }
 

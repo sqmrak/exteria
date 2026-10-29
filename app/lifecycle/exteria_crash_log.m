@@ -64,6 +64,30 @@ static void ExteriaPutImage(int fd) {
     ExteriaPut(fd, sBuild[0] ? sBuild : "unknown");
 }
 
+/* names the image a frame falls in and its offset in it, so a crash inside a system library or an injected one reads without the binary of the build; the
+   nearest header below the address stands for the image */
+static void ExteriaPutFrameImage(int fd, uintptr_t address) {
+    const char *name = NULL;
+    uintptr_t base = 0;
+    uint32_t total = _dyld_image_count();
+    for (uint32_t i = 0; i < total; ++i) {
+        uintptr_t header = (uintptr_t)_dyld_get_image_header(i);
+        if (header <= address && header > base) {
+            base = header;
+            name = _dyld_get_image_name(i);
+        }
+    }
+    ExteriaPut(fd, " ");
+    if (!name) {
+        ExteriaPut(fd, "?");
+        return;
+    }
+    const char *slash = strrchr(name, '/');
+    ExteriaPut(fd, slash ? slash + 1 : name);
+    ExteriaPut(fd, "+0x");
+    ExteriaPutNumber(fd, (unsigned long long)(address - base), 16);
+}
+
 static void ExteriaCrashSignal(int signal_number, siginfo_t *info, void *context) {
     (void)context;
     int fd = open(sPath, O_WRONLY | O_CREAT | O_APPEND, 0644);
@@ -201,6 +225,8 @@ static void ExteriaFaultSignal(int signal_number, siginfo_t *info, void *context
                 if (addresses[i] >= sTextLow && addresses[i] < sTextHigh) ExteriaPutHex(fd, addresses[i] - (uintptr_t)sSlide);
             ExteriaPut(fd, "\nraw stack");
             for (int i = 0; i < count; ++i) ExteriaPutHex(fd, addresses[i]);
+            ExteriaPut(fd, "\nimages");
+            for (int i = 0; i < count; ++i) ExteriaPutFrameImage(fd, addresses[i]);
         } else {
             ExteriaPut(fd, " context unavailable");
         }
