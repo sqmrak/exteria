@@ -2,6 +2,7 @@
 #import "exteria_person.h"
 
 #import "exteria_platform.h"
+#import "exteria_theme.h"
 
 NSString *const ExteriaChatSettingsDidChangeNotification = @"ExteriaChatSettingsDidChange";
 
@@ -161,11 +162,11 @@ void ExteriaChatListSetCustomTitle(NSString *text) {
 /* the avatar views read this at every draw, so it is kept in memory and changed with the stored value */
 static NSInteger ExteriaAvatarCornerCurrent = -1;
 NSInteger ExteriaAvatarCornerPercent(void) {
-    if (ExteriaAvatarCornerCurrent < 0) {
+    if (ExteriaAvatarCornerCurrent == -1) {
         NSNumber *stored = ExteriaStoredNumber(ExteriaAvatarCornerKey);
-        ExteriaAvatarCornerCurrent = stored && stored.integerValue >= 0 && stored.integerValue <= 100 ? stored.integerValue : EXTERIA_AVATAR_CORNER_DEFAULT;
+        ExteriaAvatarCornerCurrent = stored && stored.integerValue >= 0 && stored.integerValue <= 100 ? stored.integerValue : -2;
     }
-    return ExteriaAvatarCornerCurrent;
+    return ExteriaAvatarCornerCurrent == -2 ? (ExteriaThemeIsClassic() ? EXTERIA_AVATAR_CORNER_DEFAULT : 84) : ExteriaAvatarCornerCurrent;
 }
 void ExteriaAvatarCornerStore(NSInteger percent) {
     ExteriaAvatarCornerCurrent = MAX(0, MIN(100, percent));
