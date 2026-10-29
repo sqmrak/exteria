@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     if (got!=(size_t)length || closed!=0) { free(roots);return 2; }
     const char *hosts[]={"tile.openstreetmap.org"};
     const char *paths[]={"/0/0/0.png"};
-    const char *headers[]={"User-Agent: Exteria/1.0.0-stable (com.sqmrak.exteria; iOS integration probe)","Accept: image/png","Accept-Encoding: identity",NULL};
+    const char *headers[]={"User-Agent: Exteria/1.3.0-stable (com.sqmrak.exteria; iOS integration probe)","Accept: image/png","Accept-Encoding: identity",NULL};
     int failed=0;
     for (size_t i=0;i<1;++i) {
         exteria_https_request request;
