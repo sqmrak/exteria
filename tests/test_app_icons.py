@@ -55,13 +55,15 @@ class AppIconTests(unittest.TestCase):
                     with self.subTest(name=name, suffix=suffix):
                         self.assert_launcher_icon(out / (name.capitalize() + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
 
-    def test_primary_icon_allows_system_mask(self):
+    def test_primary_icon_is_prerendered(self):
         root = Path(make_assets.ROOT)
         with (root / "packaging/Info.plist").open("rb") as handle:
             plist = plistlib.load(handle)
-        self.assertFalse(plist["UIPrerenderedIcon"])
+        # the 57, 114, 72 and 144 files carry their own corners; springboard of ios 5 and 6 masks an icon not marked pre-rendered, and the mask is
+        # missing for an app installed from an ipa, which left a square icon
+        self.assertTrue(plist["UIPrerenderedIcon"])
         for key in ("CFBundleIcons", "CFBundleIcons~ipad"):
-            self.assertFalse(plist[key]["CFBundlePrimaryIcon"]["UIPrerenderedIcon"])
+            self.assertTrue(plist[key]["CFBundlePrimaryIcon"]["UIPrerenderedIcon"])
 
     def test_senkogram_generator(self):
         source = Path(make_assets.ROOT) / "resources/icons/source/senkogram.png"
@@ -71,6 +73,15 @@ class AppIconTests(unittest.TestCase):
                 self.assert_launcher_icon(Path(directory) / ("SenkoGram" + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
             for suffix, side in make_assets.SPLASH_SIDES:
                 self.assert_launcher_icon(Path(directory) / ("splash_senkogram" + suffix + ".png"), side, True)
+
+    def test_telegram_generator(self):
+        source = Path(make_assets.ROOT) / "resources/icons/source/telegram.png"
+        with tempfile.TemporaryDirectory() as directory:
+            make_assets.build_image_icons(source, "Telegram", directory)
+            for suffix, side in make_assets.ALTERNATE_ICON_SIZES:
+                self.assert_launcher_icon(Path(directory) / ("Telegram" + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
+            for suffix, side in make_assets.SPLASH_SIDES:
+                self.assert_launcher_icon(Path(directory) / ("splash_telegram" + suffix + ".png"), side, True)
 
     def test_every_plist_icon_has_expected_shape(self):
         root = Path(make_assets.ROOT)

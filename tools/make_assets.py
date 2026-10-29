@@ -37,6 +37,9 @@ MASTER = 1024
 APP_ICONS = {
     "Icon.png": 57,
     "Icon@2x.png": 114,
+    # the size in the name is what ios 6 matches against the icon size it wants; Icon@2x.png alone lost to the opaque Icon-60@2x.png
+    "Icon-57.png": 57,
+    "Icon-57@2x.png": 114,
     "Icon-60@2x.png": 120,
     "Icon-60@3x.png": 180,
     "Icon-72.png": 72,
@@ -80,9 +83,11 @@ GIFT_ANONYMOUS = {
 GIFT_ANONYMOUS_SOURCE = os.path.join(ROOT, "resources/icons/source/gift_anonymous.png")
 
 # springboard of ios 5 and 6 paints a pre-rendered icon as it is, and the rounded mask it adds to the others did not show on the iphone 4s with ios 6.1.3 (the
-# icon was a sharp square on the home screen). the sizes only those systems ask for (57 and 114 on the iphone, 72 and 144 on the ipad) are drawn with their
-# own rounded corners and the plist marks the icons pre-rendered; ios 7 and later ask for the 60, 76 and 83.5 point files, which stay opaque squares
-LEGACY_ICON_SIDES = (57, 114, 72, 144)
+# icon was a sharp square on the home screen). the sizes those systems ask for (57 and 114 on the iphone, 72 and 144 on the ipad) are drawn with their own
+# rounded corners and the plist marks the icons pre-rendered. that springboard also takes the 120 pixel file of the 60 point icon, whose size matches its
+# icon slot exactly, ahead of the 114 pixel one, so the 120 pixel files are rounded too; ios 7 and later mask them with a larger radius, which hides the
+# transparent corners. the 76, 83.5 and 180 pixel files stay opaque squares
+LEGACY_ICON_SIDES = (57, 114, 120, 72, 144)
 LEGACY_ICON_RADIUS = 0.18
 
 # share of the master edge dropped on every side, about the corner radius of the source artwork
@@ -702,14 +707,18 @@ def build_alternate_icons(res_dir, out_dir):
 SPLASH_SIDES = (("", 96), ("@2x", 192), ("@3x", 288))
 
 
-def build_senkogram_icons(source, out_dir):
+def build_image_icons(source, name, out_dir):
     icon = Image.open(source).convert("RGB")
     if icon.width != icon.height:
-        raise ValueError("SenkoGram icon must be square")
+        raise ValueError("%s icon must be square" % name)
     for suffix, pixels in ALTERNATE_ICON_SIZES:
-        write_png(legacy_icon(icon, pixels), os.path.join(out_dir, "SenkoGram" + suffix + ".png"))
+        write_png(legacy_icon(icon, pixels), os.path.join(out_dir, name + suffix + ".png"))
     for suffix, pixels in SPLASH_SIDES:
-        write_png(rounded_icon(icon, pixels), os.path.join(out_dir, "splash_senkogram" + suffix + ".png"))
+        write_png(rounded_icon(icon, pixels), os.path.join(out_dir, "splash_" + name.lower() + suffix + ".png"))
+
+
+def build_senkogram_icons(source, out_dir):
+    build_image_icons(source, "SenkoGram", out_dir)
 
 
 def build_alternate_splash_icons(res_dir, out_dir):
@@ -836,7 +845,7 @@ def build_flags(svg_dir, countries, out_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("part", choices=("icons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "senkogram", "phone", "flags", "all"))
+    parser.add_argument("part", choices=("icons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "senkogram", "telegram", "phone", "flags", "all"))
     parser.add_argument("--source", default=os.path.join(ROOT, "resources/icons/source/exteria.png"))
     parser.add_argument("--animations", default=os.environ.get("EXTERIA_LOTTIE_RAW", ""))
     parser.add_argument("--phone-video", default=os.environ.get("EXTERIA_PHONE_VIDEO", ""))
@@ -876,6 +885,8 @@ def main():
         build_alternate_splash_icons(args.icon_res, os.path.join(args.out, "icons"))
     if args.part in ("senkogram", "all"):
         build_senkogram_icons(os.path.join(ROOT, "resources/icons/source/senkogram.png"), os.path.join(args.out, "icons"))
+    if args.part in ("telegram", "all"):
+        build_image_icons(os.path.join(ROOT, "resources/icons/source/telegram.png"), "Telegram", os.path.join(args.out, "icons"))
     if args.part in ("phone", "all"):
         if not args.phone_video:
             sys.exit("set EXTERIA_PHONE_VIDEO to IntroPhone.mp4")
