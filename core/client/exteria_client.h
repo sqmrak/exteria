@@ -30,6 +30,9 @@ typedef struct exteria_client_events {
     void (*draft)(void *ctx, const exteria_tl_value *update);
     /* folder rules or their order changed on another client; one event per update container */
     void (*folders_changed)(void *ctx);
+    /* an updateGroupCall, updateGroupCallParticipants or updateGroupCallConnection, in a push or in the answer to a request of the call; container is the Updates
+       object it came in, which carries the users the participants refer to; both are valid only during the callback */
+    void (*group_call)(void *ctx, const exteria_tl_value *update, const exteria_tl_value *container);
 } exteria_client_events;
 
 typedef struct exteria_client {

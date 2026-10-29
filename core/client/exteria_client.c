@@ -77,6 +77,15 @@ static void deliver_signaling(exteria_client *c, const exteria_tl_value *update)
     c->events.phone_signaling(c->events.ctx, id, data, len);
 }
 
+static int group_call_update(const exteria_tl_value *item) {
+    return exteria_tl_is(item, EXTERIA_TL_ID_updateGroupCall) || exteria_tl_is(item, EXTERIA_TL_ID_updateGroupCallParticipants) ||
+           exteria_tl_is(item, EXTERIA_TL_ID_updateGroupCallConnection);
+}
+
+static void deliver_group_call(exteria_client *c, const exteria_tl_value *item, const exteria_tl_value *container) {
+    if (c->events.group_call && group_call_update(item)) c->events.group_call(c->events.ctx, item, container);
+}
+
 static void deliver_typing(exteria_client *c, const exteria_tl_value *item) {
     exteria_typing typing;
     if (c->events.typing && exteria_typing_read(item, &typing)) c->events.typing(c->events.ctx, &typing);
@@ -117,6 +126,7 @@ static void dispatch_live_updates(exteria_client *c, const exteria_tl_value *v) 
     deliver_typing(c, one);
     deliver_read_outbox(c, one);
     deliver_draft(c, one);
+    deliver_group_call(c, one, v);
     for (i = 0; vec && vec->kind == EXTERIA_TL_V_VEC && i < vec->u.vec.count; ++i) {
         const exteria_tl_value *item = vec->u.vec.items[i];
         if (exteria_tl_is(item, EXTERIA_TL_ID_updatePhoneCall) && c->events.phone_call) c->events.phone_call(c->events.ctx, exteria_tl_get(item, "phone_call"));
@@ -124,6 +134,7 @@ static void dispatch_live_updates(exteria_client *c, const exteria_tl_value *v) 
         deliver_typing(c, item);
         deliver_read_outbox(c, item);
         deliver_draft(c, item);
+        deliver_group_call(c, item, v);
         if (folder_update(item)) folders = 1;
     }
     if (folders && c->events.folders_changed) c->events.folders_changed(c->events.ctx);
