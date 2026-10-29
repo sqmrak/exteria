@@ -30,6 +30,10 @@ static ExteriaCrashPromptTarget *ExteriaCrashPromptShown;
     ExteriaCrashPromptShown = nil;
     void (^done)(BOOL) = [answer retain];
     UIView *shade = [dim retain], *plate = [card retain];
+    /* a second tap while the card fades out (the main thread is busy with the answer, so the fade can be late) must not reach a target that is gone: the
+       target lives until the fade ends, and nothing is tappable meanwhile */
+    shade.userInteractionEnabled = NO;
+    plate.userInteractionEnabled = NO;
     [UIView animateWithDuration:0.18 animations:^{
         shade.alpha = 0;
         plate.alpha = 0;
@@ -40,10 +44,10 @@ static ExteriaCrashPromptTarget *ExteriaCrashPromptShown;
         [plate removeFromSuperview];
         [shade release];
         [plate release];
+        [self release];
     }];
     if (done) done(send);
     [done release];
-    [self release];
 }
 
 - (void)sendTapped { [self finish:YES]; }

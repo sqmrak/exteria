@@ -30,6 +30,9 @@ static ExteriaShiroFailureTarget *ExteriaShiroFailureShown;
     if (ExteriaShiroFailureShown != self) return;
     ExteriaShiroFailureShown = nil;
     UIView *shade = [dim retain], *plate = [card retain];
+    /* the buttons and the tap of the backdrop send to this object, which therefore lives until the fade ends; a second tap meanwhile finds nothing to press */
+    shade.userInteractionEnabled = NO;
+    plate.userInteractionEnabled = NO;
     [UIView animateWithDuration:0.18 animations:^{
         shade.alpha = 0;
         plate.alpha = 0;
@@ -40,8 +43,8 @@ static ExteriaShiroFailureTarget *ExteriaShiroFailureShown;
         [plate removeFromSuperview];
         [shade release];
         [plate release];
+        [self release];
     }];
-    [self release];
 }
 
 - (void)retryTapped {
