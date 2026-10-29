@@ -383,6 +383,7 @@
 "chat.service.gift.out" = "Вы отправили подарок: %@%@";
 "chat.service.gift.in" = "%@ отправил(а) вам подарок: %@%@";
 "profile.online" = "в сети";
+"profile.offline.question" = "не в сети?";
 "profile.photo" = "Выбрать фото";
 "profile.edit" = "Изменить";
 "profile.tab.stories" = "Истории";

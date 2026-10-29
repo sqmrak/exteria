@@ -44,7 +44,9 @@ static ExteriaSettingsRow *ExteriaAyuSwitch(NSString *titleKey, NSString *infoKe
     NSMutableArray *rows = [NSMutableArray array];
     [rows addObject:ExteriaAyuSwitch(@"ayu.ghost.noread", @"ayu.ghost.noread.info", ExteriaChatFlagGhostNoRead, nil)];
     [rows addObject:ExteriaAyuSwitch(@"ayu.ghost.nostories", @"ayu.ghost.nostories.info", ExteriaChatFlagGhostNoStories, nil)];
-    [rows addObject:ExteriaAyuSwitch(@"ayu.ghost.offline", @"ayu.ghost.offline.info", ExteriaChatFlagGhostOffline, nil)];
+    [rows addObject:ExteriaAyuSwitch(@"ayu.ghost.offline", @"ayu.ghost.offline.info", ExteriaChatFlagGhostOffline, ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaChatSettingsDidChangeNotification object:nil];
+    })];
     self.sections = [NSArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"ayu.ghost.info", nil) rows:rows]];
     [self reloadSettings];
 }

@@ -5,6 +5,7 @@
 #import "exteria_text_filter.h"
 #import "exteria_profile_controller.h"
 #import "exteria_profile_identity_view.h"
+#import "exteria_chat_settings.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -78,6 +79,7 @@
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
     [_icon release];
     [_caption release];
     [super dealloc];
@@ -355,14 +357,24 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshOwnStatus) name:ExteriaChatSettingsDidChangeNotification object:nil];
+    [self refreshOwnStatus];
     [self loadProfile];
     [self selectTab:0];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self refreshOwnStatus];
     /* a story seen or a gift hidden while away shows on coming back */
     if (_person) [self refreshCurrentFeed];
+}
+
+- (void)refreshOwnStatus {
+    NSString *text = NSLocalizedString(ExteriaChatFlagGet(ExteriaChatFlagGhostOffline) ? @"profile.offline.question" : @"profile.online", nil);
+    _status.text = text;
+    _barStatus.text = text;
+    [self layoutHead];
 }
 
 #pragma mark data

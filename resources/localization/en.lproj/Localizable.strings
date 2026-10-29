@@ -383,6 +383,7 @@
 "chat.service.gift.out" = "You sent a gift: %@%@";
 "chat.service.gift.in" = "%@ sent you a gift: %@%@";
 "profile.online" = "online";
+"profile.offline.question" = "offline?";
 "profile.photo" = "Set photo";
 "profile.edit" = "Edit";
 "profile.tab.stories" = "Stories";
