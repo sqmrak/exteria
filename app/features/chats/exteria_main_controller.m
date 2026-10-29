@@ -166,7 +166,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(languageChanged)
                                                  name:ExteriaLanguageDidChangeNotification object:nil];
     [self buildContentWithTab:-1];
-    ExteriaLearnDevelopers(_session);
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openTeamPerson:) name:ExteriaOpenTeamPersonNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openChatRequested:) name:ExteriaOpenChatNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openLinkRequested:) name:ExteriaOpenLinkNotification object:nil];
 }
@@ -180,6 +180,17 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     if (_classicTabs) anchor = [(UINavigationController *)_classicTabs.selectedViewController topViewController];
     _linkRouter.anchor = anchor;
     [_linkRouter openLink:url];
+}
+
+- (void)openTeamPerson:(NSNotification *)note {
+    ExteriaPerson *person = [note.userInfo objectForKey:@"person"];
+    ExteriaDialog *dialog = [ExteriaDialog dialogWithPerson:person];
+    if (!dialog || !exteria_team_member_for_id(person.userId)) return;
+    if (!_linkRouter) _linkRouter = [[ExteriaLinkRouter alloc] initWithSession:_session avatars:_avatars media:_media stickers:_stickers];
+    UIViewController *anchor = self;
+    if (_classicTabs) anchor = [(UINavigationController *)_classicTabs.selectedViewController topViewController];
+    _linkRouter.anchor = anchor;
+    [_linkRouter openDialog:dialog person:person draft:nil startParam:nil];
 }
 
 /* a notification was tapped: the chat opens over the list, whichever screen was up */

@@ -7,6 +7,9 @@
 
 #import "exteria_chat_extras_controller.h"
 #import "exteria_developers.h"
+#import "exteria_gift_screen.h"
+#import "exteria_custom_emoji.h"
+#import "exteria_pill_tabs_view.h"
 #import "exteria_person.h"
 #import "exteria_session_bots.h"
 #import "exteria_settings_pages.h"
@@ -24,7 +27,7 @@ static NSString *const ExteriaChannelAddress = @"https://t.me/sqmrakdev";
 static NSString *const ExteriaSourceAddress = @"https://github.com/sqmrak/exteria";
 
 typedef struct {
-    NSString *name;
+    long long userId;
     NSString *role;
     /* the outline of the picture: a circle pressed in by lobes dents of the given depth, as the shapes of the material 3 expressive set are */
     int lobes;
@@ -35,15 +38,15 @@ typedef struct {
 } ExteriaCredit;
 
 static const ExteriaCredit ExteriaCredits[] = {
-    {@"sqmrak", @"about.lead", 9, 0.10, @"Senko", @"app_senko"},
-    {@"QWERTYU1OPZ", @"about.backend", 4, 0.14, @"LegacyGram", @"app_legacygram"},
-    {@"LimeDev", @"about.frontend", 8, 0.16, @"MintAI", @"app_mintai"},
-    {@"menstry", @"about.backend", 12, 0.08, @"TeleGloss", @"app_telegloss"},
-    {@"anazerka", @"about.backend", 5, 0.12, @"Twelve", @"app_twelve"},
-    {@"loveiOS6", @"about.frontend", 6, 0.14, @"iChatter", @"app_ichatter"},
-    {@"nestorvashenko", @"about.frontend", 7, 0.12, @"iKlassika", @"app_iklassika"},
-    {@"svcayon4ik", @"about.backend", 10, 0.10, @"FlowGram", @"app_flowgram"},
-    {@"illyagif", @"about.backend", 3, 0.12, @"OneGram", @"app_onegram"},
+    {8202789099LL, @"about.lead", 9, 0.10, @"Senko", @"app_senko"},
+    {5435278149LL, @"about.backend", 4, 0.14, @"LegacyGram", @"app_legacygram"},
+    {8510741400LL, @"about.frontend", 8, 0.16, @"MintAI", @"app_mintai"},
+    {588487063LL, @"about.backend", 12, 0.08, @"TeleGloss", @"app_telegloss"},
+    {8796163695LL, @"about.backend", 5, 0.12, @"Twelve", @"app_twelve"},
+    {5191291829LL, @"about.frontend", 6, 0.14, @"iChatter", @"app_ichatter"},
+    {5390055485LL, @"about.frontend", 7, 0.12, @"iKlassika", @"app_iklassika"},
+    {6233584668LL, @"about.backend", 10, 0.10, @"FlowGram", @"app_flowgram"},
+    {1448306214LL, @"about.backend", 3, 0.12, @"OneGram", @"app_onegram"},
 };
 
 /* the slice the running code was built for, which is what the version line shows */
@@ -117,13 +120,114 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     return image;
 }
 
+@interface ExteriaCreditView : UIControl {
+    UIImageView *_picture;
+    UILabel *_name;
+    UILabel *_role;
+    UILabel *_made;
+    UIImageView *_appIcon;
+    NSMutableArray *_marks;
+    long long _userId;
+}
+@property (nonatomic, assign) long long userId;
+- (id)initWithName:(NSString *)name role:(NSString *)role made:(NSString *)made picture:(UIImage *)picture appIcon:(UIImage *)icon marks:(NSUInteger)marks;
+@end
+
+@implementation ExteriaCreditView
+@synthesize userId = _userId;
+
+- (id)initWithName:(NSString *)name role:(NSString *)role made:(NSString *)made picture:(UIImage *)picture appIcon:(UIImage *)icon marks:(NSUInteger)marks {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) return nil;
+    self.backgroundColor = ExteriaColorCard();
+    self.layer.cornerRadius = 12;
+    self.isAccessibilityElement = YES;
+    self.accessibilityTraits = UIAccessibilityTraitButton;
+    self.accessibilityLabel = [NSString stringWithFormat:@"@%@, %@", name, role];
+    _picture = [[UIImageView alloc] initWithImage:picture];
+    _picture.contentMode = UIViewContentModeScaleAspectFit;
+    [self addSubview:_picture];
+    _name = [[UILabel alloc] init];
+    _name.backgroundColor = [UIColor clearColor];
+    _name.font = ExteriaFontSemibold(16);
+    _name.textColor = ExteriaColorTitle();
+    _name.text = [@"@" stringByAppendingString:name];
+    _name.adjustsFontSizeToFitWidth = YES;
+    _name.minimumFontSize = 10;
+    [self addSubview:_name];
+    _role = [[UILabel alloc] init];
+    _role.backgroundColor = [UIColor clearColor];
+    _role.font = ExteriaFontRegular(13);
+    _role.textColor = ExteriaColorSecondary();
+    _role.text = role;
+    [self addSubview:_role];
+    _made = [[UILabel alloc] init];
+    _made.backgroundColor = [UIColor clearColor];
+    _made.font = ExteriaFontRegular(13);
+    _made.textColor = ExteriaColorAccent();
+    _made.text = made;
+    [self addSubview:_made];
+    _appIcon = [[UIImageView alloc] initWithImage:icon];
+    _appIcon.contentMode = UIViewContentModeScaleAspectFit;
+    _appIcon.layer.cornerRadius = 5;
+    _appIcon.clipsToBounds = YES;
+    [self addSubview:_appIcon];
+    _marks = [[NSMutableArray alloc] init];
+    const NSUInteger bits[] = {ExteriaMarkDeveloper, ExteriaMarkLead, ExteriaMarkSenko, ExteriaMarkOfficialTester, ExteriaMarkBugHunter, ExteriaMarkManager, ExteriaMarkPromotion};
+    const long long documents[] = {EXTERIA_DEVELOPER_DOCUMENT, EXTERIA_LEAD_DOCUMENT, EXTERIA_SENKO_DOCUMENT, EXTERIA_OFFICIAL_TESTER_DOCUMENT, EXTERIA_BUG_HUNTER_DOCUMENT, EXTERIA_MANAGER_DOCUMENT, EXTERIA_PROMOTION_DOCUMENT};
+    for (NSUInteger i = 0; i < sizeof(bits) / sizeof(bits[0]); ++i) {
+        if (!(marks & bits[i])) continue;
+        UIImage *image = [ExteriaCustomEmoji imageForDocument:documents[i]];
+        if (!image) continue;
+        UIImageView *badge = [[[UIImageView alloc] initWithImage:image] autorelease];
+        badge.contentMode = UIViewContentModeScaleAspectFit;
+        [self addSubview:badge];
+        [_marks addObject:badge];
+    }
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGFloat width = self.bounds.size.width, height = self.bounds.size.height;
+    _picture.frame = CGRectMake(12, (height - LEAD_TILE) / 2, LEAD_TILE, LEAD_TILE);
+    CGFloat right = width - 12;
+    _appIcon.frame = CGRectMake(right - 26, (height - 26) / 2, 26, 26);
+    if (_appIcon.image) right -= 34;
+    CGFloat badges = _marks.count * 20;
+    CGFloat left = 12 + LEAD_TILE + 10;
+    CGFloat titleWidth = MAX(0, right - left - badges - 4);
+    CGFloat measured = ceil(ExteriaStringSize(_name.text, _name.font).width);
+    _name.frame = CGRectMake(left, _made.text.length ? 9 : 11, MIN(titleWidth, measured), 22);
+    CGFloat x = CGRectGetMaxX(_name.frame) + 4;
+    for (UIImageView *badge in _marks) {
+        badge.frame = CGRectMake(x, _name.frame.origin.y + 2, 18, 18);
+        x += 20;
+    }
+    _role.frame = CGRectMake(left, CGRectGetMaxY(_name.frame), MAX(0, right - left), 18);
+    _made.frame = CGRectMake(left, CGRectGetMaxY(_role.frame), MAX(0, right - left), 18);
+}
+
+- (void)dealloc {
+    [_picture release];
+    [_name release];
+    [_role release];
+    [_made release];
+    [_appIcon release];
+    [_marks release];
+    [super dealloc];
+}
+@end
+
 @interface ExteriaAboutController () {
     ExteriaSession *_session;
     ExteriaAvatarCache *_avatars;
     ExteriaWeakReference *_weak;
-    /* the current profile photo of each name that the server answered for, by name; the bundled picture stands in until then */
+    /* photos and people by their stable account id */
     NSMutableDictionary *_fresh;
-    BOOL _fetched;
+    NSMutableDictionary *_people;
+    NSMutableSet *_requested;
+    NSUInteger _teamTab;
 }
 @end
 
@@ -135,6 +239,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     _session = [session retain];
     _avatars = [avatars retain];
     _fresh = [[NSMutableDictionary alloc] init];
+    _people = [[NSMutableDictionary alloc] init];
+    _requested = [[NSMutableSet alloc] init];
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     self.pageTitle = NSLocalizedString(@"settings.exteria", nil);
     return self;
@@ -144,6 +250,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     [_weak clear];
     [_weak release];
     [_fresh release];
+    [_people release];
+    [_requested release];
     [_avatars release];
     [_session release];
     [super dealloc];
@@ -155,44 +263,33 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     [self fetchPhotos];
 }
 
-/* the photo a person has now. the user id the credits learned names the person first, as it stays when a username changes: the account's own copy of that user
-   gives the photo. a person it has not seen, or one without a photo there, is asked for by the @name, which also gives the access hash a photo needs */
+/* the id stays with the account when its username changes */
 - (void)fetchPhotos {
-    if (_fetched) return;
-    _fetched = YES;
-    for (size_t i = 0; i < sizeof(ExteriaCredits) / sizeof(ExteriaCredits[0]); ++i) {
-        NSString *name = ExteriaCredits[i].name;
+    NSMutableArray *ids = [NSMutableArray array];
+    for (size_t i = 0; i < sizeof(ExteriaCredits) / sizeof(ExteriaCredits[0]); ++i)
+        [ids addObject:[NSNumber numberWithLongLong:ExteriaCredits[i].userId]];
+    if (_teamTab == 1) [ids addObjectsFromArray:ExteriaOfficialTesterIds()];
+    for (NSNumber *identifier in ids) {
+        if ([_requested containsObject:identifier]) continue;
+        [_requested addObject:identifier];
         ExteriaWeakReference *weak = _weak;
-        void (^show)(ExteriaPerson *) = ^(ExteriaPerson *person) {
+        ExteriaLoadTeamPerson(_session, identifier.longLongValue, ^(ExteriaPerson *person, NSString *error) {
             ExteriaAboutController *me = weak.target;
-            if (!me || !person.photo) return;
+            if (!me) return;
+            if (!person) {
+                NSLog(@"exteria: team user %@ could not be loaded: %@", identifier, error);
+                return;
+            }
+            [me->_people setObject:person forKey:identifier];
+            [me rebuildSections];
+            if (!person.photo) return;
             [me->_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) {
                 ExteriaAboutController *again = weak.target;
                 if (!again || !image) return;
-                [again->_fresh setObject:image forKey:name];
+                [again->_fresh setObject:image forKey:identifier];
                 [again rebuildSections];
             }];
-        };
-        void (^byName)(void) = [^{
-            [_session resolveUsername:name completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
-                (void)dialog;
-                if (!person.photo) {
-                    if (errorName) NSLog(@"exteria: no photo for @%@: %@", name, errorName);
-                    return;
-                }
-                show(person);
-            }];
-        } copy];
-        long long userId = ExteriaDeveloperIdOfUsername(name);
-        if (userId > 0) {
-            [_session loadStoredPersonOfUserId:userId completion:^(ExteriaPerson *held) {
-                if (held.photo) show(held);
-                else byName();
-            }];
-        } else {
-            byName();
-        }
-        [byName release];
+        });
     }
 }
 
@@ -272,28 +369,28 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
 }
 
 - (ExteriaSettingsRow *)personRow:(const ExteriaCredit *)person {
-    ExteriaWeakReference *weak = _weak;
-    NSString *address = [@"https://t.me/" stringByAppendingString:person->name];
-    NSString *title = [@"@" stringByAppendingString:person->name];
+    NSNumber *identifier = [NSNumber numberWithLongLong:person->userId];
+    ExteriaPerson *known = [_people objectForKey:identifier];
+    NSString *name = known.username.length ? known.username : ExteriaTeamUsername(person->userId);
     NSString *role = NSLocalizedString(person->role, nil);
-    /* the app they made is named under the role and shown by its icon at the right end of the row */
     NSString *made = person->app ? [NSString stringWithFormat:NSLocalizedString(@"about.made", nil), person->app] : nil;
-    UIImage *picture = [_fresh objectForKey:person->name] ?: ExteriaInitialPicture(person->name, 2 * LEAD_TILE);
+    UIImage *picture = [_fresh objectForKey:identifier] ?: ExteriaInitialPicture(name, 2 * LEAD_TILE);
     UIImage *icon = person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
-    void (^tap)(void) = ^{ [(ExteriaAboutController *)weak.target open:address]; };
-    BOOL lead = person == &ExteriaCredits[0];
-    ExteriaSettingsRow *row;
-    /* the classic table draws only a tile picture, so there the lead keeps the plain row */
-    if (lead && !ExteriaThemeIsClassic()) {
-        row = [ExteriaSettingsRow sessionRowWithPicture:ExteriaShapedPicture(picture, person->lobes, person->depth, LEAD_TILE) title:title line2:role
-                                                  line3:made accentLine3:YES tap:tap];
-    } else {
-        CGFloat side = ExteriaThemeIsClassic() ? 29 : PERSON_TILE;
-        NSString *subtitle = made ? [NSString stringWithFormat:@"%@\n%@", role, made] : role;
-        row = [ExteriaSettingsRow rowWithTileImage:ExteriaShapedPicture(picture, person->lobes, person->depth, side) title:title subtitle:subtitle tap:tap];
+    ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaShapedPicture(picture, person->lobes, person->depth, LEAD_TILE)
+                                                                  appIcon:icon marks:ExteriaMarksOfId(person->userId)] autorelease];
+    [view addTarget:self action:@selector(creditTapped:) forControlEvents:UIControlEventTouchUpInside];
+    view.userId = person->userId;
+    return [ExteriaSettingsRow viewRowWithView:view height:^CGFloat(CGFloat width) { (void)width; return made ? 80 : 62; }];
+}
+
+- (void)creditTapped:(ExteriaCreditView *)view {
+    ExteriaPerson *person = [_people objectForKey:[NSNumber numberWithLongLong:view.userId]];
+    if (!person || !person.accessHash) {
+        ExteriaGiftAlert(nil, NSLocalizedString(@"about.person.unavailable", nil));
+        return;
     }
-    row.trailingImage = icon;
-    return row;
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaOpenTeamPersonNotification object:self
+                                                      userInfo:[NSDictionary dictionaryWithObject:person forKey:@"person"]];
 }
 
 - (void)rebuild {
@@ -325,13 +422,31 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     ExteriaSettingsRow *source = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolExternalLink tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"about.source", nil)
                                                           subtitle:[ExteriaSourceAddress substringFromIndex:[@"https://" length]] value:nil tap:^{ [(ExteriaAboutController *)weak.target open:ExteriaSourceAddress]; }];
 
+    ExteriaPillTabsView *tabs = [[[ExteriaPillTabsView alloc] initWithTitles:[NSArray arrayWithObjects:NSLocalizedString(@"about.developers", nil), NSLocalizedString(@"about.testers", nil), nil]] autorelease];
+    tabs.selectedIndex = _teamTab;
+    tabs.changeHandler = ^(NSUInteger index) {
+        ExteriaAboutController *me = weak.target;
+        if (!me) return;
+        me->_teamTab = index;
+        [me rebuildSections];
+        [me fetchPhotos];
+    };
     NSMutableArray *people = [NSMutableArray array];
-    for (size_t i = 0; i < sizeof(ExteriaCredits) / sizeof(ExteriaCredits[0]); ++i) [people addObject:[self personRow:&ExteriaCredits[i]]];
+    if (_teamTab == 0) {
+        for (size_t i = 1; i < sizeof(ExteriaCredits) / sizeof(ExteriaCredits[0]); ++i) [people addObject:[self personRow:&ExteriaCredits[i]]];
+    } else {
+        for (NSNumber *identifier in ExteriaOfficialTesterIds()) {
+            ExteriaCredit tester = {identifier.longLongValue, @"about.tester", 8, 0.12, nil, nil};
+            [people addObject:[self personRow:&tester]];
+        }
+    }
 
     self.sections = [NSArray arrayWithObjects:
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"about.categories", nil) footer:nil rows:categories],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"about.links", nil) footer:nil rows:[NSArray arrayWithObjects:channel, source, nil]],
-        [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"about.developers", nil) footer:nil rows:people], nil];
+        [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"about.team", nil) footer:nil rows:[NSArray arrayWithObject:[self personRow:&ExteriaCredits[0]]]],
+        [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:[ExteriaSettingsRow viewRowWithView:tabs height:^CGFloat(CGFloat width) { (void)width; return 40; }]]],
+        [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:people], nil];
 }
 
 @end

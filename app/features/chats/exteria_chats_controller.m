@@ -116,8 +116,6 @@ static CGFloat ExteriaChatsHeaderTop(void) {
         name:ExteriaDraftDidChangeNotification object:self.session.drafts];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(chatSettingsChanged)
         name:ExteriaChatSettingsDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(developersChanged)
-        name:ExteriaDevelopersDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(folderRulesChanged:)
         name:ExteriaChatFoldersDidChangeNotification object:session];
     return self;
@@ -171,13 +169,6 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     }];
 }
 
-/* the rows are laid out when they are built, so a new row style (one line of the preview or two) needs them built
-   again */
-/* the ids of the developers arrive after the first rows are drawn, and each row decides its hammer by them */
-- (void)developersChanged {
-    if (self.isViewLoaded) [self reloadTable];
-}
-
 /* the stories switch of the settings takes the strip away, or brings it back, without leaving the screen */
 - (void)syncStoriesWithSettings {
     if (ExteriaChatFlagGet(ExteriaChatFlagHideStories) && _stories) {
@@ -192,6 +183,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     }
 }
 
+/* the rows are laid out when they are built, so a new row style (one line of the preview or two) needs them built
+   again */
 - (void)chatSettingsChanged {
     [self syncStoriesWithSettings];
     if (!_folderId && !self.showsBack && _vpnHidden != ExteriaChatFlagGet(ExteriaChatFlagHideVpnButton)) [self syncVpnButtonWithSettings];
@@ -314,7 +307,6 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaTypingDidChangeNotification object:self.session.typing];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDraftDidChangeNotification object:self.session.drafts];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDevelopersDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatFoldersDidChangeNotification object:self.session];
     _search.delegate = nil;
     [_openCell release];

@@ -4,37 +4,20 @@
 
 /* the people who took part in the development of Exteria, the ones of the credits in About */
 
-extern NSString *const ExteriaDevelopersDidChangeNotification;
+#include "exteria_team.h"
+@class ExteriaPerson;
 
-/* the marks a person wears after the name, as bits: the hammer of everyone who took part, and the fox tail of the developer of Senko on top of it */
-enum {
-    ExteriaMarkDeveloper = 1,
-    ExteriaMarkSenko = 2,
-    /* the net of the people who tested Exteria */
-    ExteriaMarkTester = 4,
-    /* the crossed hammers of the lead developer, worn in the place of the plain hammer */
-    ExteriaMarkLead = 8,
-    ExteriaMarkCaution = 16,
-    ExteriaMarkPromotion = 32,
-    ExteriaMarkBugHunter = 64,
-    /* the open ring of the testers the lead developer names official; it replaces the net, and the bug hunter wears it beside the hunter's own badge */
-    ExteriaMarkOfficialTester = 128,
-    /* the shield of the official manager of the lead developer */
-    ExteriaMarkManager = 256
-};
-
-BOOL ExteriaIsDeveloperUsername(NSString *username);
 BOOL ExteriaIsDeveloperId(long long userId);
-/* the user id learned for a username of the credits, zero while it is not known */
-long long ExteriaDeveloperIdOfUsername(NSString *username);
 NSUInteger ExteriaMarksOfId(long long userId);
+NSArray *ExteriaOfficialTesterIds(void);
+NSString *ExteriaTeamUsername(long long userId);
+extern NSString *const ExteriaOpenTeamPersonNotification;
+/* resolves a known id with this account's access hash; the username hint is accepted only when it still names that id */
+void ExteriaLoadTeamPerson(ExteriaSession *session, long long userId, void (^completion)(ExteriaPerson *person, NSString *errorName));
 /* a chat row or a chat header: a private chat or a bot chat with one of them; zero when the person wears nothing */
 NSUInteger ExteriaDialogIsDeveloper(ExteriaDialog *dialog);
 NSUInteger ExteriaPersonIsDeveloper(ExteriaPerson *person);
 NSUInteger ExteriaMarkForDocument(long long document);
-
-/* looks the usernames up once, keeps the ids between runs, and asks again after a week; posts ExteriaDevelopersDidChangeNotification when a new id arrives */
-void ExteriaLearnDevelopers(ExteriaSession *session);
 
 /* the plate that says why a mark is there, over whatever screen is up */
 void ExteriaShowMarkNotice(NSString *name, NSUInteger mark);

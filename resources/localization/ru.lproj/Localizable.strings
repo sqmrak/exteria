@@ -774,6 +774,10 @@
 "about.links" = "Ссылки";
 "about.channel" = "Канал";
 "about.source" = "Исходный код";
+"about.person.unavailable" = "Не удалось загрузить профиль этого участника.";
+"about.team" = "Команда разработки Exteria";
+"about.testers" = "Официальные тестеры";
+"about.tester" = "Официальный тестер";
 "about.developers" = "Разработчики";
 "about.lead" = "Главный разработчик";
 "about.backend" = "Бэкенд";

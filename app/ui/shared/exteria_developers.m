@@ -8,6 +8,7 @@
 #import "exteria_dialog.h"
 #import "exteria_person.h"
 #import "exteria_session_bots.h"
+#import "exteria_session_profile.h"
 #import "exteria_custom_emoji.h"
 
 /* the class methods stand in for a target the plate's gestures and its timer can reach without holding anything */
@@ -16,110 +17,53 @@
 + (void)tapped:(UITapGestureRecognizer *)tap;
 @end
 
-NSString *const ExteriaDevelopersDidChangeNotification = @"ExteriaDevelopersDidChange";
+NSString *const ExteriaOpenTeamPersonNotification = @"ExteriaOpenTeamPerson";
 
-/* the usernames of the credits in About; a rename there is a rename here */
-static NSString *const ExteriaDeveloperNames[] = {
-    @"sqmrak", @"QWERTYU1OPZ", @"LimeDev", @"menstry", @"anazerka", @"loveiOS6", @"nestorvashenko", @"svcayon4ik", @"illyagif"
-};
-#define DEVELOPER_COUNT (sizeof(ExteriaDeveloperNames) / sizeof(ExteriaDeveloperNames[0]))
-/* testers the lead developer has not named official keep the net */
-static NSString *const ExteriaTesterNames[] = {@"Maks_097", @"QuaIcomm"};
-#define TESTER_COUNT (sizeof(ExteriaTesterNames) / sizeof(ExteriaTesterNames[0]))
-/* the official testers, developers among them; the open ring takes the place of the net */
-static NSString *const ExteriaOfficialTesterNames[] = {@"not_a_modder", @"fly1ngangel", @"LimeDev", @"loveiOS6", @"menstry", @"shizotoaster", @"KirillPro671488",
-                                                       @"CookieValerka", @"inraxx", @"anazerka", @"kfrom7", @"vladosik228", @"Lineysom", @"merwleem",
-                                                       @"xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", @"svcayon4ik", @"s3dativee", @"Vladus324"};
-#define OFFICIAL_COUNT (sizeof(ExteriaOfficialTesterNames) / sizeof(ExteriaOfficialTesterNames[0]))
-static NSString *const ExteriaCautionName = @"cmp_73";
-/* the official managers of @sqmrak */
-static NSString *const ExteriaManagerNames[] = {@"merwleem"};
-#define MANAGER_COUNT (sizeof(ExteriaManagerNames) / sizeof(ExteriaManagerNames[0]))
-static NSString *const ExteriaPromotionNames[] = {@"merwleem", @"Radickdz", @"Xmas_UnrealKot"};
-#define PROMOTION_COUNT (sizeof(ExteriaPromotionNames) / sizeof(ExteriaPromotionNames[0]))
+void ExteriaLoadTeamPerson(ExteriaSession *session, long long userId, void (^completion)(ExteriaPerson *, NSString *)) {
+    NSString *hint = ExteriaTeamUsername(userId);
+    if (!session || !hint || !completion) {
+        if (completion) completion(nil, @"USER_ID_INVALID");
+        return;
+    }
+    [session loadStoredPersonOfUserId:userId completion:^(ExteriaPerson *held) {
+        ExteriaDialog *dialog = held ? [ExteriaDialog dialogWithPerson:held] : nil;
+        if (dialog) {
+            [session loadFullUserOfDialog:dialog completion:^(ExteriaFullUser *full, NSString *error) {
+                if (full.person && full.person.userId == userId) completion(full.person, nil);
+                else {
+                    NSLog(@"exteria: team user %lld could not be refreshed: %@", userId, error ? error : @"unexpected user");
+                    completion(held, nil);
+                }
+            }];
+        } else {
+            [session resolveUsername:hint completion:^(ExteriaDialog *resolved, ExteriaPerson *person, NSString *error) {
+                (void)resolved;
+                if (person.userId == userId) completion(person, nil);
+                else completion(nil, error ? error : @"USER_ID_INVALID");
+            }];
+        }
+    }];
+}
 
-static NSString *const ExteriaDeveloperIdsKey = @"exteria.developers.ids";
-static NSString *const ExteriaDeveloperCheckedKey = @"exteria.developers.checked";
-#define RECHECK_SECONDS (7.0 * 24 * 3600)
-
-/* main thread only: user ids by lowercase username */
-static NSMutableDictionary *ExteriaDeveloperIds(void) {
-    static NSMutableDictionary *ids;
-    if (!ids) {
-        NSDictionary *stored = [[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaDeveloperIdsKey];
-        ids = [[NSMutableDictionary alloc] initWithDictionary:stored];
+BOOL ExteriaIsDeveloperId(long long userId) { return exteria_team_is_developer(userId) != 0; }
+NSUInteger ExteriaMarksOfId(long long userId) { return exteria_team_marks(userId); }
+NSString *ExteriaTeamUsername(long long userId) {
+    const exteria_team_member *member = exteria_team_member_for_id(userId);
+    return member ? [NSString stringWithUTF8String:member->username] : nil;
+}
+NSArray *ExteriaOfficialTesterIds(void) {
+    NSMutableArray *ids = [NSMutableArray array];
+    for (size_t i = 0; i < exteria_team_member_count(); ++i) {
+        const exteria_team_member *member = exteria_team_member_at(i);
+        if (member->official_list) [ids addObject:[NSNumber numberWithLongLong:member->id]];
     }
     return ids;
 }
-
-/* the person whose Senko this is and who leads Exteria: the one name that wears the fox tail and the crossed hammers */
-static NSString *const ExteriaSenkoDeveloper = @"sqmrak";
-static NSString *const ExteriaBugHunters[] = {@"not_a_modder", @"xaxaxaxaxxaxaxaxaxaxaxaxaxaxa"};
-#define BUG_HUNTER_COUNT (sizeof(ExteriaBugHunters) / sizeof(ExteriaBugHunters[0]))
-
-static BOOL ExteriaNameIn(NSString *username, NSString *const *names, NSUInteger count) {
-    if (!username.length) return NO;
-    for (NSUInteger i = 0; i < count; ++i) {
-        if ([names[i] caseInsensitiveCompare:username] == NSOrderedSame) return YES;
-    }
-    return NO;
-}
-
-static BOOL ExteriaIdIn(long long userId, NSString *const *names, NSUInteger count) {
-    if (userId <= 0) return NO;
-    NSDictionary *ids = ExteriaDeveloperIds();
-    for (NSUInteger i = 0; i < count; ++i) {
-        if ([[ids objectForKey:names[i].lowercaseString] longLongValue] == userId) return YES;
-    }
-    return NO;
-}
-
-BOOL ExteriaIsDeveloperUsername(NSString *username) {
-    return ExteriaNameIn(username, ExteriaDeveloperNames, DEVELOPER_COUNT);
-}
-
-long long ExteriaDeveloperIdOfUsername(NSString *username) {
-    return username.length ? [[ExteriaDeveloperIds() objectForKey:username.lowercaseString] longLongValue] : 0;
-}
-
-BOOL ExteriaIsDeveloperId(long long userId) {
-    return ExteriaIdIn(userId, ExteriaDeveloperNames, DEVELOPER_COUNT);
-}
-
-static NSUInteger ExteriaMarksOfUsername(NSString *username) {
-    NSUInteger marks = 0;
-    if (ExteriaIsDeveloperUsername(username)) marks |= ExteriaMarkDeveloper;
-    if ([ExteriaSenkoDeveloper caseInsensitiveCompare:username ? username : @""] == NSOrderedSame) marks = (marks & ~(NSUInteger)ExteriaMarkDeveloper) | ExteriaMarkSenko | ExteriaMarkLead;
-    if (ExteriaNameIn(username, ExteriaTesterNames, TESTER_COUNT)) marks |= ExteriaMarkTester;
-    if (ExteriaNameIn(username, ExteriaOfficialTesterNames, OFFICIAL_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkOfficialTester;
-    if (ExteriaNameIn(username, ExteriaBugHunters, BUG_HUNTER_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
-    if (ExteriaNameIn(username, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
-    if (ExteriaNameIn(username, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
-    if (ExteriaNameIn(username, ExteriaManagerNames, MANAGER_COUNT)) marks |= ExteriaMarkManager;
-    return marks;
-}
-
-NSUInteger ExteriaMarksOfId(long long userId) {
-    NSUInteger marks = 0;
-    if (ExteriaIsDeveloperId(userId)) marks |= ExteriaMarkDeveloper;
-    if (ExteriaIdIn(userId, &ExteriaSenkoDeveloper, 1)) marks = (marks & ~(NSUInteger)ExteriaMarkDeveloper) | ExteriaMarkSenko | ExteriaMarkLead;
-    if (ExteriaIdIn(userId, ExteriaTesterNames, TESTER_COUNT)) marks |= ExteriaMarkTester;
-    if (ExteriaIdIn(userId, ExteriaOfficialTesterNames, OFFICIAL_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkOfficialTester;
-    if (ExteriaIdIn(userId, ExteriaBugHunters, BUG_HUNTER_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
-    if (ExteriaIdIn(userId, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
-    if (ExteriaIdIn(userId, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
-    if (ExteriaIdIn(userId, ExteriaManagerNames, MANAGER_COUNT)) marks |= ExteriaMarkManager;
-    return marks;
-}
-
 NSUInteger ExteriaDialogIsDeveloper(ExteriaDialog *dialog) {
     return dialog && dialog.peerKind == 1 && !dialog.saved ? ExteriaMarksOfId(dialog.peerId) : 0;
 }
-
 NSUInteger ExteriaPersonIsDeveloper(ExteriaPerson *person) {
-    if (!person) return 0;
-    NSUInteger marks = ExteriaMarksOfUsername(person.username) | ExteriaMarksOfId(person.userId);
-    return marks & ExteriaMarkBugHunter ? marks & ~(NSUInteger)ExteriaMarkTester : marks;
+    return person ? ExteriaMarksOfId(person.userId) : 0;
 }
 
 NSUInteger ExteriaMarkForDocument(long long document) {
@@ -133,61 +77,6 @@ NSUInteger ExteriaMarkForDocument(long long document) {
     if (document == EXTERIA_OFFICIAL_TESTER_DOCUMENT) return ExteriaMarkOfficialTester;
     if (document == EXTERIA_CAUTION_DOCUMENT) return ExteriaMarkCaution;
     return 0;
-}
-
-/* every username that has to be resolved once, each name a single time whatever lists it is in: a repeated key would keep the count of known ids short
-   and the week-long cache would never hold */
-static NSArray *ExteriaLookupNames(void) {
-    static NSArray *names;
-    if (names) return names;
-    NSMutableArray *list = [NSMutableArray array];
-    NSMutableSet *seen = [NSMutableSet set];
-    void (^add)(NSString *const *, NSUInteger) = ^(NSString *const *source, NSUInteger count) {
-        for (NSUInteger i = 0; i < count; ++i) {
-            if ([seen containsObject:source[i].lowercaseString]) continue;
-            [seen addObject:source[i].lowercaseString];
-            [list addObject:source[i]];
-        }
-    };
-    add(ExteriaDeveloperNames, DEVELOPER_COUNT);
-    add(ExteriaTesterNames, TESTER_COUNT);
-    add(ExteriaOfficialTesterNames, OFFICIAL_COUNT);
-    add(&ExteriaCautionName, 1);
-    add(ExteriaPromotionNames, PROMOTION_COUNT);
-    add(ExteriaBugHunters, BUG_HUNTER_COUNT);
-    names = [list copy];
-    return names;
-}
-
-void ExteriaLearnDevelopers(ExteriaSession *session) {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSMutableDictionary *ids = ExteriaDeveloperIds();
-    NSDate *checked = [defaults objectForKey:ExteriaDeveloperCheckedKey];
-    if (!session) return;
-    BOOL fresh = checked && -[checked timeIntervalSinceNow] < RECHECK_SECONDS;
-    BOOL allKnown = YES;
-    for (NSString *name in ExteriaLookupNames()) {
-        if (![ids objectForKey:name.lowercaseString]) allKnown = NO;
-    }
-    if (fresh && allKnown) return;
-    /* the date moves first, so a screen that is opened again does not send the requests twice while they are on their way */
-    [defaults setObject:[NSDate date] forKey:ExteriaDeveloperCheckedKey];
-    for (NSString *name in ExteriaLookupNames()) {
-        /* a name that was resolved within the week is not asked again, so a name added to the lists costs one request */
-        if (fresh && [ids objectForKey:name.lowercaseString]) continue;
-        [session resolveUsername:name completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
-            (void)dialog;
-            if (!person || person.userId <= 0) {
-                NSLog(@"exteria: developer @%@ not resolved: %@", name, errorName ? errorName : @"no user");
-                return;
-            }
-            NSNumber *known = [ids objectForKey:name.lowercaseString];
-            if ([known longLongValue] == person.userId) return;
-            [ids setObject:[NSNumber numberWithLongLong:person.userId] forKey:name.lowercaseString];
-            [[NSUserDefaults standardUserDefaults] setObject:[NSDictionary dictionaryWithDictionary:ids] forKey:ExteriaDeveloperIdsKey];
-            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDevelopersDidChangeNotification object:nil];
-        }];
-    }
 }
 
 /* the plate is a view of the app, not a system alert: the name on it is drawn by the label that knows odd nicks and emoji, and it comes up at once */

@@ -769,6 +769,10 @@
 "about.links" = "Links";
 "about.channel" = "Channel";
 "about.source" = "Source code";
+"about.person.unavailable" = "Could not load this team member’s profile.";
+"about.team" = "Exteria development team";
+"about.testers" = "Official testers";
+"about.tester" = "Official tester";
 "about.developers" = "Developers";
 "about.lead" = "Lead developer";
 "about.backend" = "Backend";

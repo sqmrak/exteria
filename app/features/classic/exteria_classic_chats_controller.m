@@ -105,14 +105,7 @@
         name:ExteriaTypingDidChangeNotification object:_session.typing];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(draftChanged:)
         name:ExteriaDraftDidChangeNotification object:_session.drafts];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(developersChanged)
-        name:ExteriaDevelopersDidChangeNotification object:nil];
     return self;
-}
-
-/* the ids of the developers arrive after the first rows are drawn, and each row decides its hammer by them */
-- (void)developersChanged {
-    if (self.isViewLoaded) [self.tableView reloadData];
 }
 
 - (void)timesChanged {

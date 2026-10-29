@@ -962,7 +962,6 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }];
     }
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liteModeChanged) name:ExteriaLiteModeDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(developersChanged) name:ExteriaDevelopersDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(readOutboxChanged:) name:ExteriaReadOutboxDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(timesChanged) name:ExteriaTimeDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(uploadProgressed:) name:ExteriaUploadProgressNotification object:_session];
@@ -2921,10 +2920,6 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date) {
     }
 }
 
-- (void)developersChanged {
-    [self showTitleBadge];
-    if (_loadedFirst) [self rebuildItems];
-}
 
 - (void)showTitleBadge {
     long long badge = ExteriaDialogBadgeDocument(_dialog);
