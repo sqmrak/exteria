@@ -312,6 +312,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     NSInteger _animatedLast;
     ExteriaReactionPicker *_reactionPicker;
     int32_t _reactionMessageId;
+    /* the full list of reactions was opened from the menu of the message, which a tap outside the list brings back */
+    BOOL _reactionPickerFromMenu;
     NSUInteger _reactionPickerToken;
     NSMutableSet *_reactionSending;
     ExteriaVoiceRecorder *_voice;
@@ -3879,6 +3881,21 @@ static void ExteriaRedrawTree(UIView *view) {
     [_reactionPicker release];
     _reactionPicker = nil;
     _reactionMessageId = 0;
+    _reactionPickerFromMenu = NO;
+}
+
+/* a tap outside the full list: when the list came from the menu of a message, that menu comes back, with its bar of reactions, and not the bare chat */
+- (void)cancelReactionPicker {
+    BOOL back = _reactionPickerFromMenu;
+    int32_t messageId = _reactionMessageId;
+    [self closeReactionPicker];
+    if (!back) return;
+    for (NSUInteger i = 0; i < _items.count; ++i) {
+        if (((ExteriaChatItem *)[_items objectAtIndex:i]).message.messageId != messageId) continue;
+        UITableViewCell *cell = [_table cellForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:0]];
+        if ([cell isKindOfClass:[ExteriaMessageCell class]]) [self showMessageMenuForCell:(ExteriaMessageCell *)cell];
+        return;
+    }
 }
 
 - (void)showReactionError:(NSString *)error {
@@ -4030,7 +4047,7 @@ static void ExteriaRedrawTree(UIView *view) {
     _reactionPicker.anchorOutgoing = message.outgoing;
     [_reactionPicker attachSession:_session media:_media premium:_premiumKnown && _premium];
     ExteriaWeakReference *weak = _weak;
-    _reactionPicker.cancelHandler = ^{ [(ExteriaChatController *)weak.target closeReactionPicker]; };
+    _reactionPicker.cancelHandler = ^{ [(ExteriaChatController *)weak.target cancelReactionPicker]; };
     _reactionPicker.retryHandler = ^{ [(ExteriaChatController *)weak.target loadReactionChoices]; };
     _reactionPicker.pickHandler = ^(ExteriaReaction *reaction) {
         ExteriaChatController *chat = weak.target;
@@ -4491,7 +4508,9 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     menu.moreReactionsHandler = ^{
         ExteriaChatController *chat = weak.target;
         ExteriaMessage *current = chat ? [chat messageWithId:messageId] : nil;
-        if (current) [chat showReactionPickerForMessage:current];
+        if (!current) return;
+        [chat showReactionPickerForMessage:current];
+        if (chat->_reactionPicker) chat->_reactionPickerFromMenu = YES;
     };
     /* the pill: at once when the reactions are known, as they arrive otherwise */
     BOOL reactable = message.messageId > 0 && message.reactionsPossible && ![self reactionsHidden];
