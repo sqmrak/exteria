@@ -13,9 +13,11 @@
 #import "exteria_about_controller.h"
 #import "exteria_update_controller.h"
 #import "exteria_account_controller.h"
+#import "exteria_accounts.h"
 #import "exteria_data_settings_controller.h"
 #import "exteria_stickers_settings_controller.h"
 #import "exteria_passcode_settings_controller.h"
+#import "exteria_people_avatars.h"
 #import "exteria_passcode_store.h"
 #import "exteria_privacy_controller.h"
 #import "exteria_classic_devices_controller.h"
@@ -90,6 +92,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ExteriaWeakReference *_weak;
     ExteriaSettingsHeaderView *_header;
     ExteriaPerson *_person;
+    ExteriaPeopleAvatars *_faces;
     BOOL _uploading;
     BOOL _barFilled;
     BOOL _signingOut;
@@ -125,6 +128,8 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     [_media release];
     [_header release];
     [_person release];
+    [_faces invalidate];
+    [_faces release];
     [_more release];
     [_signOutHandler release];
     [super dealloc];
@@ -257,6 +262,30 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
                                        : (UIViewController *)[[[ExteriaDevicesController alloc] initWithSession:_session media:_media] autorelease]];
 }
 
+/* the accounts of this phone other than the one in use, as a section above the settings of Exteria; a phone with one account has none. an account that is not
+   connected has no photo here, so its round picture is its initials on its color */
+- (ExteriaSettingsSection *)otherAccountsSection {
+    NSString *active = ExteriaAccountActive();
+    NSMutableArray *rows = [NSMutableArray array];
+    for (NSString *name in ExteriaAccountNames()) {
+        if ([name isEqualToString:active]) continue;
+        NSDictionary *info = ExteriaAccountInfo(name);
+        NSString *title = [info objectForKey:@"title"];
+        if (!title.length) title = NSLocalizedString(@"account.title", nil);
+        NSString *username = [info objectForKey:@"username"];
+        if (!_faces) {
+            ExteriaWeakReference *weak = _weak;
+            _faces = [[ExteriaPeopleAvatars alloc] initWithCache:_avatars changed:^{ [(ExteriaSettingsController *)weak.target rebuildRows]; }];
+        }
+        UIImage *face = [_faces imageForKey:[@"account:" stringByAppendingString:name] initials:ExteriaInitialsOfName(title)
+                                       seed:(NSUInteger)([[info objectForKey:@"user"] longLongValue] % 1000003) deleted:NO photo:nil];
+        [rows addObject:[ExteriaSettingsRow rowWithTileImage:face title:title subtitle:username.length ? [@"@" stringByAppendingString:username] : nil tap:^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaAccountSwitchNotification object:nil userInfo:[NSDictionary dictionaryWithObject:name forKey:@"name"]];
+        }]];
+    }
+    return rows.count ? [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"account.accounts", nil) footer:nil rows:rows] : nil;
+}
+
 - (void)rebuildRows {
     ExteriaWeakReference *weak = _weak;
     /* the classic cell draws a tile at 29 points, the modern row at 36 */
@@ -330,8 +359,12 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     version = [version stringByAppendingString:@"\nuse senko by sqmrak btw"];
     ExteriaSettingsSection *list = [ExteriaSettingsSection sectionWithHeader:nil footer:version rows:[NSArray arrayWithObjects:account, chats, stickers, privacy, passcode, notifications, data, folders, devices, power, update, language, nil]];
     list.centerFooter = YES;
-    self.sections = [NSArray arrayWithObjects:
-        [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:look]], list, nil];
+    NSMutableArray *sections = [NSMutableArray array];
+    ExteriaSettingsSection *accounts = [self otherAccountsSection];
+    if (accounts) [sections addObject:accounts];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:look]]];
+    [sections addObject:list];
+    self.sections = sections;
 }
 
 #pragma mark scrolling
