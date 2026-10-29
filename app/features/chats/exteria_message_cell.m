@@ -2538,18 +2538,18 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         }];
         return;
     }
-    if (_item.content == ExteriaChatItemContentPicture &&
+    if (!_picture.hidden && _item.content == ExteriaChatItemContentPicture &&
         _item.message.media.kind == EXTERIA_PREVIEW_GIF &&
         CGRectContainsPoint(_picture.frame, [tap locationInView:self.contentView])) {
         [self tappedGif];
         return;
     }
-    if (_item.content == ExteriaChatItemContentPicture && [self uploading] && !_play.hidden &&
+    if (!_picture.hidden && _item.content == ExteriaChatItemContentPicture && [self uploading] && !_play.hidden &&
         CGRectContainsPoint(CGRectInset(_play.frame, -8, -8), [tap locationInView:self.contentView])) {
         [self cancelSending];
         return;
     }
-    if (_item.content == ExteriaChatItemContentPicture && exteria_media_opens_viewer(_item.message.media.kind) &&
+    if (!_picture.hidden && _item.content == ExteriaChatItemContentPicture && exteria_media_opens_viewer(_item.message.media.kind) &&
         CGRectContainsPoint(_picture.frame, [tap locationInView:self.contentView])) {
         if (![self tappedMediaButton]) [_delegate messageCellDidTapMedia:self];
         return;
@@ -2577,14 +2577,24 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         }
         return;
     }
-    CGPoint inBody = [tap locationInView:_body];
-    /* a bubble with its tail on the left is drawn that much to the right of its view's edge */
-    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
-    ExteriaMessage *message = _item.message;
     CGPoint inReply = _item.kind == ExteriaChatItemBubble ? inBody : [tap locationInView:self.contentView];
     CGRect replyFrame = _item.kind == ExteriaChatItemBubble ? _item.replyFrame : _replyPreview.frame;
     if (!CGRectIsEmpty(replyFrame) && CGRectContainsPoint(replyFrame, inReply)) {
         [_delegate messageCellDidTapReply:self];
+    CGPoint inBody = [tap locationInView:_body];
+    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
+    ExteriaMessage *message = _item.message;
+    NSString *url = _item.textLayout ? [_item.textLayout linkAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)] : nil;
+    if ([url isEqualToString:ExteriaSpoilerTarget]) {
+        message.spoilersRevealed = YES;
+        _item.textLayout.spoilersRevealed = YES;
+        [_body setNeedsDisplay];
+        return;
+    }
+    if (url) {
+        [_delegate messageCell:self didTapLink:url];
+        return;
+    }
         return;
     }
     /* the line "forwarded from" takes to the one who wrote it, or says that they hid their account */
@@ -2630,15 +2640,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         [_delegate messageCellDidTapAudio:self];
         return;
     }
-    NSString *url = _item.textLayout ? [_item.textLayout linkAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)] : nil;
-    if ([url isEqualToString:ExteriaSpoilerTarget]) {
-        message.spoilersRevealed = YES;
-        _item.textLayout.spoilersRevealed = YES;
-        [_body setNeedsDisplay];
-        return;
-    }
-    if (url) [_delegate messageCell:self didTapLink:url];
-    else if ([_delegate respondsToSelector:@selector(messageCellDidTapBody:)]) [_delegate messageCellDidTapBody:self];
+    if ([_delegate respondsToSelector:@selector(messageCellDidTapBody:)]) [_delegate messageCellDidTapBody:self];
 }
 
 @end
