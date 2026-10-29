@@ -63,7 +63,7 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 
 /* the height the bar wants for the text it holds, without the bottom safe area */
 /* the timer of the recording shown in place of the field while the button is held */
-/* the small "1" on the record button: the voice note or round video that comes next can be heard or seen once; kept until a recording goes out */
+/* the "1" in the recording strip: the voice note or round video can be heard or seen once; kept until a recording goes out */
 @property (nonatomic, readonly) BOOL oneTimeRecording;
 - (void)clearOneTimeRecording;
 - (void)setRecordingElapsed:(NSTimeInterval)elapsed;

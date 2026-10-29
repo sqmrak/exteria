@@ -210,11 +210,10 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _send.layer.cornerRadius = BUTTON / 2;
     }
     [_send addTarget:self action:@selector(sendTapped) forControlEvents:UIControlEventTouchUpInside];
-    /* the chip sits on the corner of the record button and is a control of its own, so a tap on it never starts the hold of the button */
     _onceChip = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     _onceChip.titleLabel.font = ExteriaFontBold(12);
     [_onceChip setTitle:@"1" forState:UIControlStateNormal];
-    _onceChip.layer.cornerRadius = 11;
+    _onceChip.layer.cornerRadius = 16;
     _onceChip.layer.borderWidth = 1.5;
     _onceChip.accessibilityLabel = NSLocalizedString(@"chat.record.once", nil);
     [_onceChip addTarget:self action:@selector(onceChipTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -225,7 +224,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _hold.allowableMovement = 1000;
     [_send addGestureRecognizer:_hold];
     [self addSubview:_send];
-    [self addSubview:_onceChip];
 
     _recording = [[UIView alloc] init];
     _recording.backgroundColor = _field.backgroundColor;
@@ -254,6 +252,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _cancelLocked.hidden = YES;
     [_cancelLocked addTarget:self action:@selector(cancelLockedTapped) forControlEvents:UIControlEventTouchUpInside];
     [_recording addSubview:_cancelLocked];
+    [_recording addSubview:_onceChip];
     [self addSubview:_recording];
 
     /* the lock rises above the button while it is held; a finger that reaches it closes it */
@@ -442,7 +441,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         [self setNeedsLayout];
     }
     _hold.enabled = empty && !_lockedRecording;
-    _onceChip.hidden = !empty || _lockedRecording || _holding || !_writable;
     BOOL plane = !empty || _lockedRecording;
     ExteriaSymbol symbol = plane ? ExteriaSymbolSendArrow : (_mode == ExteriaRecordRound ? ExteriaSymbolVideoCamera : ExteriaSymbolMicrophone);
     if (ExteriaThemeIsClassic()) {
@@ -650,6 +648,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _onceChip.backgroundColor = _oneTimeRecording ? accent : ExteriaColorField();
     _onceChip.layer.borderColor = (_oneTimeRecording ? accent : ExteriaColorSecondary()).CGColor;
     [_onceChip setTitleColor:_oneTimeRecording ? [UIColor whiteColor] : ExteriaColorSecondary() forState:UIControlStateNormal];
+    _onceChip.accessibilityTraits = UIAccessibilityTraitButton | (_oneTimeRecording ? UIAccessibilityTraitSelected : 0);
 }
 
 - (void)onceChipTapped {
@@ -698,7 +697,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 /* the field gives way to the timer strip, which slides in from the left, while the button swells past its size and settles */
 - (void)showRecordingAnimated {
-    _onceChip.hidden = YES;
     _recording.hidden = NO;
     _recording.alpha = 0;
     _recording.transform = CGAffineTransformMakeTranslation(-48, 0);
@@ -985,7 +983,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _send.transform = CGAffineTransformIdentity;
     _send.frame = CGRectMake(size.width - MARGIN - sendWidth, ExteriaInputVerticalMargin() + _fieldHeight - sendHeight, sendWidth, sendHeight);
     _send.transform = held;
-    _onceChip.frame = CGRectMake(CGRectGetMaxX(_send.frame) - 12, CGRectGetMinY(_send.frame) - 10, 22, 22);
     CGFloat pillWidth = _menuPill.hidden ? 0 : ceil([_menuTitle sizeWithFont:_menuPill.titleLabel.font].width) + 28;
     CGFloat senderRoom = _senderButton.hidden ? 0 : FIELD_MIN + MARGIN;
     CGFloat menuRoom = (pillWidth ? pillWidth + MARGIN : 0) + senderRoom;
@@ -997,8 +994,11 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _recording.layer.cornerRadius = _field.layer.cornerRadius;
     _dot.frame = CGRectMake(14, (_fieldHeight - 10) / 2, 10, 10);
     _timer.frame = CGRectMake(32, 0, 80, _fieldHeight);
-    _slide.frame = CGRectMake(112, 0, fieldWidth - 112 - BUTTON, _fieldHeight);
-    _cancelLocked.frame = CGRectMake(fieldWidth - 100 - 40, 0, 100, _fieldHeight);
+    CGFloat onceX = MAX(0, fieldWidth - 36);
+    _onceChip.frame = CGRectMake(onceX, (_fieldHeight - 32) / 2, 32, 32);
+    _slide.frame = CGRectMake(112, 0, MAX(0, onceX - 116), _fieldHeight);
+    CGFloat cancelX = MAX(112, onceX - 104);
+    _cancelLocked.frame = CGRectMake(cancelX, 0, MAX(0, onceX - cancelX - 4), _fieldHeight);
     _field.layer.cornerRadius = MIN(_fieldHeight / 2, FIELD_MIN / 2);
     /* the smiley stands at the left edge of the field and the clip at the right, with the text between them */
     _panelButton.frame = CGRectMake(2, _fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
