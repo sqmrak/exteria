@@ -108,6 +108,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
 /* a deletion or a new message of more rows than this is a reload of the chat, not an event worth an effect */
 #define DUST_ROWS_MAX 4
 #define ENTER_ROWS_MAX 3
+/* rows one change may tell the table about row by row; more than this is one reload */
+#define BULK_ROWS_MAX 40
 #define GROUP_GAP_SECONDS 300
 
 @interface ExteriaChatController (ReactionPolling)
@@ -3099,11 +3101,14 @@ static void ExteriaRedrawTree(UIView *view) {
        the sizes they start from are those of the screen before the rows change */
     BOOL slide = NO;
     NSMutableDictionary *slideFrom = nil;
+    /* ios 6 sorts the index paths of a batch of row updates and measures every row for each step, so hundreds of rows at once (a long list of pinned messages
+       that gets its reply previews) held the main thread until the watchdog ended the app; one reload goes through the rows once */
+    BOOL bulk = simple && removed + inserted + refresh.count > BULK_ROWS_MAX;
     [_items release];
     _items = [items retain];
     if (_greeting) [self.view setNeedsLayout];
 
-    if (!simple) {
+    if (!simple || bulk) {
         [_table reloadData];
     } else {
         if (removed || inserted) {
@@ -3168,7 +3173,7 @@ static void ExteriaRedrawTree(UIView *view) {
     if (!moving) _stickToBottom = follows;
     /* a list that follows its end goes there at once under the rows that slide, or the two movements would add up */
     /* a full reload has no anchor, and animating from its old offset would show a jump */
-    if (follows && newCount) [self scrollToBottomAnimated:!reactionsChanged && !slide && simple && oldCount > 0 && !(inserted && !prefix && suffix) && [self rowChangesMayAnimate]];
+    if (follows && newCount) [self scrollToBottomAnimated:!reactionsChanged && !slide && simple && !bulk && oldCount > 0 && !(inserted && !prefix && suffix) && [self rowChangesMayAnimate]];
     if (slide) {
         [_table layoutIfNeeded];
         for (NSIndexPath *path in [_table indexPathsForVisibleRows]) {
