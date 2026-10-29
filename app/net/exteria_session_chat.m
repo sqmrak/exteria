@@ -742,8 +742,35 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
 static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discussion);
 
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion {
+    [self loadHistoryOfDialog:dialog offsetId:beforeId addOffset:0 limit:limit completion:completion];
+}
+
+- (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)offsetId addOffset:(int32_t)addOffset limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion {
+    ExteriaHistoryCompletion final = [[completion copy] autorelease];
+    [self loadHistoryOfDialog:dialog offsetId:offsetId addOffset:addOffset limit:limit viaChannel:dialog.discussionViaChannel
+                   completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        /* the comments of a post are asked of its group with the group's copy of it; a server that answers MSG_ID_INVALID to that pair (seen for the discussion of
+           a channel the account is not in the group of) takes the post itself on its own channel, which is how the comments are read without joining */
+        if (!messages && !dialog.discussionViaChannel && dialog.discussion && dialog.discussionPost > 0 && [errorName isEqualToString:@"MSG_ID_INVALID"]) {
+            NSLog(@"exteria: thread %d of group %lld was refused, asking post %d of channel %lld", (int)dialog.topicId, dialog.peerId, (int)dialog.discussionPost, dialog.discussionChannel);
+            dialog.discussionViaChannel = YES;
+            [self loadHistoryOfDialog:dialog offsetId:offsetId addOffset:addOffset limit:limit viaChannel:YES completion:final];
+            return;
+        }
+        final(messages, people, errorName);
+    }];
+}
+
+- (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)beforeId addOffset:(int32_t)addOffset limit:(int32_t)limit viaChannel:(BOOL)viaChannel
+                 completion:(ExteriaHistoryCompletion)completion {
     ExteriaHistoryCompletion done = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    if (viaChannel && dialog.discussionPost > 0) {
+        peer.kind = 3;
+        peer.id = dialog.discussionChannel;
+        peer.access_hash = dialog.discussionChannelHash;
+        peer.topic_id = dialog.discussionPost;
+    }
     int32_t topic = dialog.topicId;
     BOOL discussion = dialog.discussion;
     ExteriaDialog *source = dialog.savedSource;

@@ -30,6 +30,10 @@
     BOOL _left;
     int32_t _topicId;
     BOOL _discussion;
+    long long _discussionChannel;
+    long long _discussionChannelHash;
+    int32_t _discussionPost;
+    BOOL _discussionViaChannel;
     long long _topicIconEmoji;
     int32_t _topicIconColor;
     BOOL _topicClosed;
@@ -81,6 +85,13 @@
 /* a topic of a forum, which reads, sends and marks read inside that thread alone; zero for a whole chat */
 @property (nonatomic, readonly) int32_t topicId;
 @property (nonatomic, assign) BOOL discussion;
+/* a discussion thread remembers the post it belongs to: the channel with the hash this account has for it, and the post's number there. the history of the thread
+   is read from the group with the group's copy of the post and, when the server refuses that pair as MSG_ID_INVALID, from the channel with the post itself */
+@property (nonatomic, assign) long long discussionChannel;
+@property (nonatomic, assign) long long discussionChannelHash;
+@property (nonatomic, assign) int32_t discussionPost;
+/* the group's pair was refused, so every later page asks the channel at once */
+@property (nonatomic, assign) BOOL discussionViaChannel;
 /* the custom emoji document that is the icon of the topic, zero for the plain hash drawn in topicIconColor (0xRRGGBB) */
 @property (nonatomic, readonly) long long topicIconEmoji;
 @property (nonatomic, readonly) int32_t topicIconColor;

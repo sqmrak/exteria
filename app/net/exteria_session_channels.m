@@ -171,6 +171,10 @@ static void ExteriaChannelWrite(ExteriaSession *session, exteria_status (^build)
             if (status == EXTERIA_OK) {
                 discussion = [[[ExteriaDialog alloc] initWithRow:&row] autorelease];
                 discussion.discussion = YES;
+                discussion.discussionChannel = (long long)peer.id;
+                discussion.discussionChannelHash = (long long)peer.access_hash;
+                discussion.discussionPost = postId;
+                NSLog(@"exteria: the comments of post %d of channel %lld are thread %d of group %lld", postId, (long long)peer.id, (int)row.topic_id, (long long)row.peer_id);
             } else {
                 NSLog(@"exteria: discussion of post %d rejected: %s", postId, exteria_status_name(status));
                 error = @"INTERNAL";
