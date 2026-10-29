@@ -689,6 +689,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 
     _input = [[ExteriaInputBar alloc] init];
     _input.session = _session;
+    _input.media = _media;
     _input.formatHost = root;
     _joinPending = _dialog.peerKind == 3 && _dialog.left && !_pinnedList;
     _input.actionWithInput = _joinPending && _dialog.kind == EXTERIA_DIALOG_GROUP;

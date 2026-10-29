@@ -3,7 +3,7 @@
 #import "exteria_avatar_view.h"
 #import "exteria_message.h"
 
-@class ExteriaInputBar, ExteriaSession, ExteriaInputFormat;
+@class ExteriaInputBar, ExteriaSession, ExteriaInputFormat, ExteriaMediaCache;
 
 /* what the round button records when the field is empty; a tap swaps one for the other, a hold records */
 typedef enum { ExteriaRecordVoice, ExteriaRecordRound } ExteriaRecordMode;
@@ -87,6 +87,7 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 - (NSArray *)sendEntities;
 /* the session that resolves a mention and translates, and the view the format sheets and the date picker show over (the screen's own view) */
 @property (nonatomic, assign) ExteriaSession *session;
+@property (nonatomic, retain) ExteriaMediaCache *media;
 @property (nonatomic, assign) UIView *formatHost;
 - (ExteriaInputFormat *)formatter;
 /* replaces a range of the text and puts the caret after the new text, the way typing would: the custom emoji after

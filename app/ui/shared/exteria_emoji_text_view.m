@@ -1,6 +1,8 @@
 #import "exteria_emoji_text_view.h"
 
 #import "exteria_emoji_store.h"
+#import "exteria_custom_emoji.h"
+#import "exteria_message.h"
 #include "exteria_text_class.h"
 #include <math.h>
 
@@ -16,6 +18,7 @@
     NSArray *_inputPositions;
     BOOL _offsetFailureLogged;
     UIColor *_emojiBackgroundColor;
+    NSArray *_customEmojiEntities;
     void (^_formatHandler)(void);
 }
 - (void)drawEmoji;
@@ -49,6 +52,8 @@
     [self addSubview:_emojiOverlay];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshEmoji)
         name:UITextViewTextDidChangeNotification object:self];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(customEmojiLoaded:)
+        name:ExteriaCustomEmojiDidLoadNotification object:nil];
     return self;
 }
 
@@ -61,8 +66,26 @@
     [_spans release];
     [_inputPositions release];
     [_emojiBackgroundColor release];
+    [_customEmojiEntities release];
     [_formatHandler release];
     [super dealloc];
+}
+
+- (NSArray *)customEmojiEntities { return _customEmojiEntities; }
+- (void)setCustomEmojiEntities:(NSArray *)entities {
+    NSArray *copy = [entities copy];
+    [_customEmojiEntities release];
+    _customEmojiEntities = copy;
+    [_emojiOverlay setNeedsDisplay];
+}
+
+- (void)customEmojiLoaded:(NSNotification *)notification {
+    for (ExteriaTextEntity *entity in _customEmojiEntities) {
+        if (entity.documentId == [notification.object longLongValue]) {
+            [_emojiOverlay setNeedsDisplay];
+            break;
+        }
+    }
 }
 
 - (BOOL)becomeFirstResponder {
@@ -196,7 +219,7 @@
 }
 
 - (void)drawEmoji {
-    if (!_emojiBackgroundColor || !_spans.length || ![self mapInputPositions]) return;
+    if (!_emojiBackgroundColor || (!_spans.length && !_customEmojiEntities.count) || ![self mapInputPositions]) return;
     const exteria_emoji_span *spans = _spans.bytes;
     const uint16_t *units = _units.bytes;
     size_t length = _units.length / sizeof(uint16_t);
@@ -233,6 +256,38 @@
                 UIRectFillUsingBlendMode(rect, kCGBlendModeNormal);
             }
             if (!part && image) {
+                CGFloat side = MIN(MIN(rect.size.width, rect.size.height), ceil(self.font.lineHeight));
+                [image drawInRect:CGRectMake(CGRectGetMidX(rect) - side / 2, CGRectGetMidY(rect) - side / 2, side, side)];
+            }
+        }
+    }
+    for (ExteriaTextEntity *entity in _customEmojiEntities) {
+        NSRange range = entity.range;
+        if (entity.style != ExteriaTextStyleCustomEmoji || !range.length || range.location >= length || range.length > length - range.location) continue;
+        UIImage *image = [ExteriaCustomEmoji imageForDocument:entity.documentId];
+        if (!image) continue;
+        CGRect rectangles[32];
+        size_t count = 0;
+        for (size_t at = range.location; at < NSMaxRange(range) && count < 32;) {
+            uint32_t point;
+            size_t used = exteria_utf16_next(units, length, at, &point);
+            if (!used || used > NSMaxRange(range) - at) break;
+            CGRect rect = [self emojiRectForRange:NSMakeRange(at, used)];
+            at += used;
+            if (!isfinite(rect.origin.x) || !isfinite(rect.origin.y) || !isfinite(rect.size.width) || !isfinite(rect.size.height) || CGRectIsEmpty(rect)) continue;
+            if (count && fabs(CGRectGetMidY(rectangles[count - 1]) - CGRectGetMidY(rect)) < 2) rectangles[count - 1] = CGRectUnion(rectangles[count - 1], rect);
+            else rectangles[count++] = rect;
+        }
+        for (size_t part = 0; part < count; ++part) {
+            CGRect rect = rectangles[part];
+            if (!CGRectIntersectsRect(_emojiOverlay.bounds, rect)) continue;
+            [_emojiBackgroundColor setFill];
+            UIRectFill(rect);
+            if (NSIntersectionRange(self.selectedRange, range).length) {
+                [[UIColor colorWithRed:0.3 green:0.6 blue:1 alpha:0.3] setFill];
+                UIRectFillUsingBlendMode(rect, kCGBlendModeNormal);
+            }
+            if (!part) {
                 CGFloat side = MIN(MIN(rect.size.width, rect.size.height), ceil(self.font.lineHeight));
                 [image drawInRect:CGRectMake(CGRectGetMidX(rect) - side / 2, CGRectGetMidY(rect) - side / 2, side, side)];
             }

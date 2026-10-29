@@ -5,6 +5,7 @@
 
 #import "exteria_chat_settings.h"
 #import "exteria_classic_chrome.h"
+#import "exteria_custom_emoji_loader.h"
 #import "exteria_emoji_text_view.h"
 #import "exteria_input_format.h"
 #import "exteria_weak_reference.h"
@@ -73,6 +74,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     NSString *_readOnlyNote;
     NSMutableArray *_custom;
     ExteriaInputFormat *_format;
+    ExteriaMediaCache *_media;
     ExteriaWeakReference *_weak;
     UIButton *_botButton;
     UIButton *_menuPill;
@@ -295,6 +297,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     [_weak release];
     _text.formatHandler = nil;
     [_format release];
+    [_media release];
     [_custom release];
     _text.delegate = nil;
     [_field release];
@@ -501,18 +504,21 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 - (void)insertCustomEmoji:(long long)documentId alt:(NSString *)alt {
     if (!documentId || !alt.length) return;
-    if (!_custom) _custom = [[NSMutableArray alloc] init];
     NSRange selection = _text.selectedRange;
-    [_text insertText:alt];
+    if (selection.location > _text.text.length || selection.length > _text.text.length - selection.location) return;
+    if (!_custom) _custom = [[NSMutableArray alloc] init];
+    [self replaceRange:selection withText:alt];
     ExteriaTextEntity *entity = [[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji range:NSMakeRange(selection.location, alt.length) url:nil];
     entity.documentId = documentId;
     [_custom addObject:entity];
     [entity release];
+    [self textViewDidChange:_text];
+    [self loadCustomEmojiPictures];
 }
 
 - (void)replaceRange:(NSRange)range withText:(NSString *)replacement {
     NSString *current = _text.text;
-    if (!replacement || NSMaxRange(range) > current.length) return;
+    if (!replacement || range.location > current.length || range.length > current.length - range.location) return;
     [self shiftCustomForRange:range replacementLength:replacement.length];
     [_format shiftForRange:range replacementLength:replacement.length];
     _text.text = [current stringByReplacingCharactersInRange:range withString:replacement];
@@ -521,13 +527,14 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 }
 
 - (void)insertEmoji:(NSString *)emoji {
-    [_text insertText:emoji];
-    [self textViewDidChange:_text];
+    if (emoji) [self replaceRange:_text.selectedRange withText:emoji];
 }
 
 - (void)deleteBackwardFromPicker {
-    [_text deleteBackward];
-    [self textViewDidChange:_text];
+    NSRange range = _text.selectedRange;
+    if (!range.length && range.location > 0 && range.location <= _text.text.length)
+        range = [_text.text rangeOfComposedCharacterSequenceAtIndex:range.location - 1];
+    if (range.length) [self replaceRange:range withText:@""];
 }
 
 - (ExteriaInputFormat *)formatter {
@@ -540,6 +547,25 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 - (void)setSession:(ExteriaSession *)session {
     _format.session = session;
+    [self loadCustomEmojiPictures];
+}
+
+- (ExteriaMediaCache *)media { return _media; }
+- (void)setMedia:(ExteriaMediaCache *)media {
+    if (_media == media) return;
+    [media retain];
+    [_media release];
+    _media = media;
+    [self loadCustomEmojiPictures];
+}
+
+- (void)loadCustomEmojiPictures {
+    if (!_format.session || !_media || !_custom.count) return;
+    NSMutableSet *documents = [NSMutableSet set];
+    for (ExteriaTextEntity *entity in _custom) {
+        if (entity.documentId > 0) [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
+    }
+    if (documents.count) [ExteriaCustomEmojiLoader loadDocuments:[documents allObjects] session:_format.session media:_media documents:nil picture:nil];
 }
 
 - (UIView *)formatHost {
@@ -586,7 +612,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     NSUInteger length = _text.text.length;
     NSMutableArray *styled = [NSMutableArray arrayWithCapacity:entities.count];
     for (ExteriaTextEntity *entity in entities) {
-        if (NSMaxRange(entity.range) > length) continue;
+        if (entity.range.location > length || entity.range.length > length - entity.range.location) continue;
         if (entity.style != ExteriaTextStyleCustomEmoji) {
             [styled addObject:entity];
         } else if (entity.documentId) {
@@ -595,6 +621,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         }
     }
     [_format restoreEntities:styled];
+    [self loadCustomEmojiPictures];
     _text.selectedRange = NSMakeRange(length, 0);
     [self textViewDidChange:_text];
 }
@@ -615,6 +642,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 - (void)textViewDidChange:(UITextView *)view {
     (void)view;
+    _text.customEmojiEntities = _custom;
     [self refreshControls];
     /* after the controls, since setting the text color there would take the styles off again */
     [_format refreshAppearance];
