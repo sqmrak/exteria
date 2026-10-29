@@ -12,6 +12,7 @@ trap 'rm -rf "${WORK}"' EXIT
 "${TC}/nm" -u "${WORK}/armv7" | awk '{print $NF}' | sort -u > "${WORK}/need"
 
 libs=("${SDK5}"/usr/lib/*.dylib "${SDK5}"/usr/lib/system/*.dylib)
+libs+=("${SDK5}/System/Library/Frameworks/Accelerate.framework/Frameworks/vImage.framework/vImage")
 for name in UIKit Foundation Security CoreGraphics QuartzCore CoreFoundation CoreText ImageIO AVFoundation CoreMedia CoreVideo CoreAudio AudioToolbox CoreLocation CoreMotion MobileCoreServices CFNetwork AssetsLibrary AddressBook AddressBookUI; do
     libs+=("${SDK5}/System/Library/Frameworks/${name}.framework/${name}")
 done
@@ -32,7 +33,7 @@ echo "armv7 imports: $(wc -l < "${WORK}/need") symbols, all present in ${SDK5##*
 # the arm64 slice is built against a newer sdk, which moves classes into frameworks that ios 10 and 11
 # do not have (AVAudioPlayer lives in AVFAudio there)
 "${TC}/lipo" -thin arm64 "${BIN}" -output "${WORK}/arm64"
-allowed=" AddressBook AddressBookUI AssetsLibrary AudioToolbox AVFoundation CFNetwork CoreAudio CoreFoundation CoreGraphics CoreLocation CoreMedia CoreMotion CoreText CoreVideo Foundation ImageIO MediaPlayer MobileCoreServices QuartzCore Security UIKit "
+allowed=" Accelerate AddressBook AddressBookUI AssetsLibrary AudioToolbox AVFoundation CFNetwork CoreAudio CoreFoundation CoreGraphics CoreLocation CoreMedia CoreMotion CoreText CoreVideo Foundation ImageIO MediaPlayer MobileCoreServices QuartzCore Security UIKit "
 bad=""
 while read -r path _; do
     case "${path}" in

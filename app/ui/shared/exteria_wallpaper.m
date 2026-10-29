@@ -5,6 +5,7 @@
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 #import "exteria_wave.h"
+#import <Accelerate/Accelerate.h>
 
 NSString *const ExteriaWallpaperDidChangeNotification = @"ExteriaWallpaperDidChange";
 
@@ -21,8 +22,8 @@ static NSString *const ExteriaWallpaperDimKey = @"exteria.wallpaper.dim";
 #define PHOTO_SIDE_MAX 1280.0
 /* the pattern is darkened or lightened up to this much at full intensity */
 #define PATTERN_ALPHA_MAX 0.55
-/* a blurred photo is drawn small and drawn back large, which smooths it without a blur filter the old systems lack */
-#define BLUR_DIVISOR 14.0
+/* blur a quarter-size image to keep the temporary buffers small on ios 5 */
+#define BLUR_DIVISOR 4.0
 #define DIM_ALPHA_MAX 0.8
 
 #pragma mark storage
@@ -280,11 +281,37 @@ static UIImage *ExteriaPhotoImage(ExteriaWallpaperSetting setting, CGSize size) 
     UIImage *source = photo;
     if (setting.blur) {
         CGSize small = CGSizeMake(MAX(8, floor(size.width / BLUR_DIVISOR)), MAX(8, floor(size.height / BLUR_DIVISOR)));
-        UIGraphicsBeginImageContextWithOptions(small, YES, 1);
-        CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationHigh);
-        [photo drawInRect:ExteriaFillRect(photo.size, small)];
-        source = UIGraphicsGetImageFromCurrentImageContext();
-        UIGraphicsEndImageContext();
+        size_t width = (size_t)small.width, height = (size_t)small.height, row = width * 4;
+        void *pixels = calloc(height, row), *scratch = calloc(height, row);
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+        CGContextRef bitmap = pixels && colorSpace ? CGBitmapContextCreate(pixels, width, height, 8, row, colorSpace, kCGImageAlphaPremultipliedLast) : NULL;
+        if (colorSpace) CGColorSpaceRelease(colorSpace);
+        if (bitmap && scratch) {
+            UIGraphicsPushContext(bitmap);
+            CGContextTranslateCTM(bitmap, 0, small.height);
+            CGContextScaleCTM(bitmap, 1, -1);
+            CGContextSetInterpolationQuality(bitmap, kCGInterpolationHigh);
+            [photo drawInRect:ExteriaFillRect(photo.size, small)];
+            UIGraphicsPopContext();
+            vImage_Buffer a = {pixels, height, width, row}, b = {scratch, height, width, row};
+            vImage_Error error = vImageBoxConvolve_ARGB8888(&a, &b, NULL, 0, 0, 9, 9, NULL, kvImageEdgeExtend);
+            if (error == kvImageNoError) error = vImageBoxConvolve_ARGB8888(&b, &a, NULL, 0, 0, 9, 9, NULL, kvImageEdgeExtend);
+            if (error == kvImageNoError) error = vImageBoxConvolve_ARGB8888(&a, &b, NULL, 0, 0, 9, 9, NULL, kvImageEdgeExtend);
+            if (error == kvImageNoError) {
+                NSData *copy = [NSData dataWithBytes:scratch length:row * height];
+                CGDataProviderRef provider = copy ? CGDataProviderCreateWithCFData((CFDataRef)copy) : NULL;
+                CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
+                CGImageRef blurred = provider && rgb ? CGImageCreate(width, height, 8, 32, row, rgb, (CGBitmapInfo)kCGImageAlphaPremultipliedLast,
+                                                                     provider, NULL, true, kCGRenderingIntentDefault) : NULL;
+                if (blurred) { source = [UIImage imageWithCGImage:blurred]; CGImageRelease(blurred); }
+                else NSLog(@"exteria: blurred wallpaper image could not be made");
+                if (provider) CGDataProviderRelease(provider);
+                if (rgb) CGColorSpaceRelease(rgb);
+            } else NSLog(@"exteria: wallpaper blur failed: %ld", (long)error);
+        } else NSLog(@"exteria: wallpaper blur buffers could not be allocated");
+        if (bitmap) CGContextRelease(bitmap);
+        free(pixels);
+        free(scratch);
     }
     UIGraphicsBeginImageContextWithOptions(size, YES, 0);
     CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationHigh);
@@ -353,6 +380,10 @@ static UIImage *ExteriaSizedWallpaper(ExteriaWallpaperSetting setting, CGSize si
     dispatch_once(&once, ^{
         cache = [[NSCache alloc] init];
         cache.countLimit = 4;
+        [[NSNotificationCenter defaultCenter] addObserverForName:ExteriaWallpaperDidChangeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            (void)note;
+            [cache removeAllObjects];
+        }];
     });
     NSString *key = [NSString stringWithFormat:@"%@|%.1fx%.1f", [[NSData dataWithBytes:&setting length:sizeof(setting)] description], (double)size.width, (double)size.height];
     UIImage *image = [cache objectForKey:key];
