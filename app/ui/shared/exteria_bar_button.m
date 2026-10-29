@@ -39,6 +39,8 @@
     _label = [[UILabel alloc] init];
     _label.backgroundColor = [UIColor clearColor];
     _label.userInteractionEnabled = NO;
+    _label.adjustsFontSizeToFitWidth = YES;
+    _label.minimumFontSize = 10;
     [self addSubview:_label];
     [self refreshLabel];
     return self;
@@ -82,6 +84,7 @@
     [_label sizeToFit];
     CGFloat inset = EXTERIA_BAR_PADDING + (_chevron ? EXTERIA_CHEVRON_WIDTH + EXTERIA_CHEVRON_GAP : 0);
     CGRect frame = _label.frame;
+    frame.size.width = MIN(frame.size.width, MAX(0, self.bounds.size.width - inset));
     /* the back button hugs the left edge and the forward one the right edge */
     frame.origin.x = _chevron ? inset : MAX(0, self.bounds.size.width - EXTERIA_BAR_PADDING - frame.size.width);
     frame.origin.y = (self.bounds.size.height - frame.size.height) / 2;
