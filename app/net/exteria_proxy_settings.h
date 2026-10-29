@@ -8,6 +8,10 @@ extern NSString *const ExteriaProxyDidChangeNotification;
 /* the selected proxy is stored in the keychain; reads are safe on the link workers */
 exteria_status ExteriaProxyRead(exteria_proxy *proxy, BOOL *enabled);
 exteria_status ExteriaProxyStoreLink(NSString *link);
+/* entries expose only the address and selection, never proxy credentials */
+exteria_status ExteriaProxyList(NSArray **entries);
+exteria_status ExteriaProxySelect(NSUInteger index);
+exteria_status ExteriaProxyRemove(NSUInteger index);
 exteria_status ExteriaProxySetEnabled(BOOL enabled);
 NSString *ExteriaProxyDisplay(void);
 exteria_status ExteriaProxyConnect(ExteriaShiro *shiro, exteria_mt_socket *socket, const char *host, uint16_t port,

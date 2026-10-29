@@ -45,7 +45,7 @@ the vpn of the app and of no other app. a wireguard tunnel to cloudflare warp th
 
 ## proxy
 
-add a `tg://proxy`, `tg://socks`, `t.me/proxy` or `t.me/socks` link on the welcome screen or in more settings. mtproto accepts plain, `dd` and `ee` secrets; socks5 accepts a username and password. the selected link is stored in the keychain. telegram message and file connections use the proxy, through shiro when it is enabled. calls and web pages use shiro or the direct route, not the proxy.
+add a `tg://proxy`, `tg://socks`, `t.me/proxy` or `t.me/socks` link on the welcome screen or in more settings. mtproto accepts plain, `dd` and `ee` secrets; socks5 accepts a username and password. up to 64 links and the selected one are stored in the keychain, or in the private `Application Support/Exteria/proxy-link` file when the jailbreak build has no keychain entitlement. an older single saved link stays available. telegram message and file connections use the proxy, through shiro when it is enabled. calls and web pages use shiro or the direct route, not the proxy.
 
 ## ipad
 

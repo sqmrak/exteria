@@ -1835,6 +1835,9 @@
 "proxy.savefailed" = "The proxy could not be saved in the keychain.";
 "proxy.add" = "Add proxy link";
 "proxy.current" = "Current proxy";
+"proxy.select" = "Use";
+"proxy.remove" = "Remove";
+"proxy.limit" = "You can save up to 64 proxies.";
 "proxy.link.hint" = "tg://proxy or tg://socks";
 "proxy.info" = "The proxy carries Telegram messages and files. Calls and web pages use the Shiro route or a direct connection.";
 "group.tab.voice" = "Voice";

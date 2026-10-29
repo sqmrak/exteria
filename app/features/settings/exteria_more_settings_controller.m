@@ -136,12 +136,33 @@ static NSString *ExteriaDeleteErrorText(NSString *errorName) {
         ExteriaPromptText(NSLocalizedString(@"proxy.add", nil), nil, nil, NSLocalizedString(@"proxy.link.hint", nil), ^(NSString *text) {
             if (!text.length) return;
             exteria_status status = ExteriaProxyStoreLink([text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]);
-            if (status != EXTERIA_OK) ExteriaGiftAlert(nil, NSLocalizedString(status == EXTERIA_E_STORAGE ? @"proxy.savefailed" : @"proxy.invalid", nil));
+            if (status != EXTERIA_OK) ExteriaGiftAlert(nil, NSLocalizedString(status == EXTERIA_E_LIMIT ? @"proxy.limit" : status == EXTERIA_E_STORAGE ? @"proxy.savefailed" : @"proxy.invalid", nil));
             [(ExteriaMoreSettingsController *)weak.target rebuild];
         });
     }];
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"proxy.title", nil) footer:NSLocalizedString(@"proxy.info", nil)
-        rows:[NSArray arrayWithObjects:proxyToggle, proxyAdd, nil]]];
+    NSMutableArray *proxyRows = [NSMutableArray arrayWithObject:proxyToggle];
+    NSArray *savedProxies = nil;
+    exteria_status listStatus = ExteriaProxyList(&savedProxies);
+    if (listStatus != EXTERIA_OK) {
+        NSLog(@"exteria: saved proxies unavailable: %s", exteria_status_name(listStatus));
+        [proxyRows addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"proxy.savefailed", nil) value:nil tap:nil]];
+    }
+    for (NSUInteger i = 0; i < savedProxies.count; ++i) {
+        NSDictionary *entry = [savedProxies objectAtIndex:i];
+        NSString *address = [entry objectForKey:@"address"];
+        BOOL selected = [[entry objectForKey:@"selected"] boolValue];
+        [proxyRows addObject:[ExteriaSettingsRow checkRowWithTitle:address subtitle:nil checked:selected tap:^{
+            ExteriaMoreSettingsController *page = weak.target;
+            if (!page) return;
+            ExteriaSettingsChoose(page, address, [NSArray arrayWithObjects:NSLocalizedString(@"proxy.select", nil), NSLocalizedString(@"proxy.remove", nil), nil], ^(NSUInteger action) {
+                exteria_status status = action == 0 ? ExteriaProxySelect(i) : ExteriaProxyRemove(i);
+                if (status != EXTERIA_OK) ExteriaGiftAlert(nil, NSLocalizedString(@"proxy.savefailed", nil));
+                [(ExteriaMoreSettingsController *)weak.target rebuild];
+            });
+        }]];
+    }
+    [proxyRows addObject:proxyAdd];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"proxy.title", nil) footer:NSLocalizedString(@"proxy.info", nil) rows:proxyRows]];
 
     ExteriaSettingsRow *ayu = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolEyeSlash tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"ayu.title", nil) subtitle:nil value:nil tap:^{
         ExteriaMoreSettingsController *me = weak.target;

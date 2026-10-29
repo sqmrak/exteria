@@ -1,12 +1,19 @@
 #import "exteria_proxy_settings.h"
 
 #import <Security/Security.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include "exteria_clock.h"
 #include "exteria_bytes.h"
 
 NSString *const ExteriaProxyDidChangeNotification = @"ExteriaProxyDidChange";
 static NSString *const ExteriaProxyEnabledKey = @"exteria.proxy.enabled";
 static NSString *const ExteriaProxyService = @"com.sqmrak.exteria.proxy";
+#define PROXY_LIST_MAX 64
+#define PROXY_DATA_MAX (256u * 1024u)
 
 static NSDictionary *ExteriaProxyQuery(void) {
     return [NSDictionary dictionaryWithObjectsAndKeys:(id)kSecClassGenericPassword, (id)kSecClass,
@@ -22,42 +29,130 @@ static exteria_status ExteriaProxyDecode(NSString *text, exteria_proxy *proxy) {
     return status;
 }
 
-/* where the link lives when the keychain refuses it: the folder of the accounts, which already holds the keys of the session. an install signed without
-   a keychain entitlement (a jailbreak ipa) gets an OSStatus error from every SecItem call, so the proxy could never be saved there */
 static NSString *ExteriaProxyFilePath(void) {
     NSArray *roots = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
     return [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"proxy-link"];
 }
 
-static exteria_status ExteriaProxyReadLocked(exteria_proxy *proxy) {
+/* the jailbreak build may lack a keychain entitlement; the private file keeps the same complete record */
+static exteria_status ExteriaProxyReadData(NSData **out, BOOL *fileBacked) {
+    *out = nil;
+    *fileBacked = NO;
+    NSString *path = ExteriaProxyFilePath();
+    NSError *error = nil;
+    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:&error];
+    if (attributes) {
+        if ([[attributes objectForKey:NSFileSize] unsignedLongLongValue] > PROXY_DATA_MAX) return EXTERIA_E_LIMIT;
+        NSData *data = [NSData dataWithContentsOfFile:path];
+        if (!data) return EXTERIA_E_STORAGE;
+        *out = data;
+        *fileBacked = YES;
+        return EXTERIA_OK;
+    }
+    if (error && !([error.domain isEqualToString:NSCocoaErrorDomain] && (error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError))) return EXTERIA_E_STORAGE;
     NSMutableDictionary *query = [NSMutableDictionary dictionaryWithDictionary:ExteriaProxyQuery()];
     [query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnData];
     CFTypeRef value = NULL;
     OSStatus result = SecItemCopyMatching((CFDictionaryRef)query, &value);
-    NSData *data = nil;
-    if (result == errSecSuccess) {
-        data = [NSData dataWithData:(NSData *)value];
-        CFRelease(value);
-    } else {
-        data = [NSData dataWithContentsOfFile:ExteriaProxyFilePath()];
-    }
-    if (!data) return result == errSecItemNotFound ? EXTERIA_E_NOTFOUND : EXTERIA_E_STORAGE;
-    NSString *text = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-    return ExteriaProxyDecode(text, proxy);
+    if (result == errSecItemNotFound) return EXTERIA_E_NOTFOUND;
+    if (result == -34018) return EXTERIA_E_UNSUPPORTED;
+    if (result != errSecSuccess) return EXTERIA_E_STORAGE;
+    NSData *data = [(NSData *)value autorelease];
+    if (data.length > PROXY_DATA_MAX) return EXTERIA_E_LIMIT;
+    *out = data;
+    return EXTERIA_OK;
 }
 
-/* the file holds the link only while the keychain will not; a link kept in the keychain removes it */
+static exteria_status ExteriaProxyLoad(NSMutableArray **links, NSUInteger *selected, BOOL *fileBacked) {
+    NSData *data = nil;
+    *links = nil;
+    *selected = 0;
+    exteria_status status = ExteriaProxyReadData(&data, fileBacked);
+    if (status != EXTERIA_OK) return status;
+    NSString *legacy = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    exteria_proxy proxy;
+    if (legacy && ExteriaProxyDecode(legacy, &proxy) == EXTERIA_OK) {
+        exteria_wipe(&proxy, sizeof(proxy));
+        *links = [NSMutableArray arrayWithObject:legacy];
+        return EXTERIA_OK;
+    }
+    exteria_wipe(&proxy, sizeof(proxy));
+    NSError *error = nil;
+    id record = [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:NULL error:&error];
+    if (![record isKindOfClass:[NSDictionary class]] || ![[record objectForKey:@"version"] isKindOfClass:[NSNumber class]] ||
+        [[record objectForKey:@"version"] integerValue] != 1 || ![[record objectForKey:@"links"] isKindOfClass:[NSArray class]] ||
+        ![[record objectForKey:@"selected"] isKindOfClass:[NSNumber class]]) return EXTERIA_E_MALFORMED;
+    NSArray *saved = [record objectForKey:@"links"];
+    long long index = [[record objectForKey:@"selected"] longLongValue];
+    if (saved.count > PROXY_LIST_MAX || index < 0 || (saved.count ? (unsigned long long)index >= saved.count : index != 0)) return EXTERIA_E_MALFORMED;
+    for (id text in saved) {
+        status = ExteriaProxyDecode(text, &proxy);
+        exteria_wipe(&proxy, sizeof(proxy));
+        if (status != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    }
+    *links = [NSMutableArray arrayWithArray:saved];
+    *selected = (NSUInteger)index;
+    return EXTERIA_OK;
+}
+
 static BOOL ExteriaProxyWriteFile(NSData *data) {
     NSString *path = ExteriaProxyFilePath();
-    NSDictionary *attributes = [NSDictionary dictionaryWithObject:[NSNumber numberWithInt:0600] forKey:NSFilePosixPermissions];
-    [[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:NULL];
     NSError *error = nil;
-    if (![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
-        NSLog(@"exteria: the proxy link could not be written: %@", error);
+    if (![[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:&error]) {
+        NSLog(@"exteria: proxy directory could not be created: %@", error);
         return NO;
     }
-    [[NSFileManager defaultManager] setAttributes:attributes ofItemAtPath:path error:NULL];
-    return YES;
+    char *temporary = strdup([[path stringByAppendingString:@".XXXXXX"] fileSystemRepresentation]);
+    if (!temporary) return NO;
+    int fd = mkstemp(temporary);
+    BOOL ok = fd >= 0;
+    const uint8_t *bytes = data.bytes;
+    size_t left = data.length;
+    while (ok && left) {
+        ssize_t written = write(fd, bytes, left);
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) { ok = NO; break; }
+        bytes += written;
+        left -= (size_t)written;
+    }
+    if (fd >= 0 && close(fd) != 0) ok = NO;
+    if (ok && rename(temporary, path.fileSystemRepresentation) != 0) ok = NO;
+    if (!ok) { NSLog(@"exteria: proxy file could not be written: %s", strerror(errno)); unlink(temporary); }
+    free(temporary);
+    return ok;
+}
+
+static exteria_status ExteriaProxySave(NSArray *links, NSUInteger selected, BOOL fileBacked) {
+    NSDictionary *record = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:1], @"version", links, @"links",
+                            [NSNumber numberWithUnsignedInteger:selected], @"selected", nil];
+    NSError *error = nil;
+    NSData *data = [NSPropertyListSerialization dataWithPropertyList:record format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
+    if (!data || data.length > PROXY_DATA_MAX) return EXTERIA_E_STORAGE;
+    if (fileBacked) return ExteriaProxyWriteFile(data) ? EXTERIA_OK : EXTERIA_E_STORAGE;
+    NSDictionary *query = ExteriaProxyQuery();
+    NSDictionary *update = [NSDictionary dictionaryWithObject:data forKey:(id)kSecValueData];
+    OSStatus result = SecItemUpdate((CFDictionaryRef)query, (CFDictionaryRef)update);
+    if (result == errSecItemNotFound) {
+        NSMutableDictionary *item = [NSMutableDictionary dictionaryWithDictionary:query];
+        [item addEntriesFromDictionary:update];
+        [item setObject:(id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly forKey:(id)kSecAttrAccessible];
+        result = SecItemAdd((CFDictionaryRef)item, NULL);
+        if (result == -34018 && ExteriaProxyWriteFile(data)) return EXTERIA_OK;
+    }
+    if (result != errSecSuccess) {
+        NSLog(@"exteria: proxy keychain write failed: %d", (int)result);
+        return EXTERIA_E_STORAGE;
+    }
+    return EXTERIA_OK;
+}
+
+static exteria_status ExteriaProxyReadLocked(exteria_proxy *proxy) {
+    NSMutableArray *links;
+    NSUInteger selected;
+    BOOL fileBacked;
+    exteria_status status = ExteriaProxyLoad(&links, &selected, &fileBacked);
+    if (status != EXTERIA_OK) return status;
+    return links.count ? ExteriaProxyDecode([links objectAtIndex:selected], proxy) : EXTERIA_E_NOTFOUND;
 }
 
 exteria_status ExteriaProxyRead(exteria_proxy *proxy, BOOL *enabled) {
@@ -74,30 +169,81 @@ exteria_status ExteriaProxyStoreLink(NSString *text) {
     exteria_status status = ExteriaProxyDecode(text, &proxy);
     exteria_wipe(&proxy, sizeof(proxy));
     if (status != EXTERIA_OK) return status;
-    NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
-    if (!data) return EXTERIA_E_ARG;
     @synchronized (ExteriaProxyService) {
-        NSDictionary *query = ExteriaProxyQuery();
-        NSDictionary *update = [NSDictionary dictionaryWithObject:data forKey:(id)kSecValueData];
-        OSStatus result = SecItemUpdate((CFDictionaryRef)query, (CFDictionaryRef)update);
-        if (result == errSecItemNotFound) {
-            NSMutableDictionary *item = [NSMutableDictionary dictionaryWithDictionary:query];
-            [item addEntriesFromDictionary:update];
-            [item setObject:(id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly forKey:(id)kSecAttrAccessible];
-            result = SecItemAdd((CFDictionaryRef)item, NULL);
+        NSMutableArray *links;
+        NSUInteger selected;
+        BOOL fileBacked;
+        status = ExteriaProxyLoad(&links, &selected, &fileBacked);
+        if (status == EXTERIA_E_NOTFOUND || status == EXTERIA_E_UNSUPPORTED) {
+            links = [NSMutableArray array];
+            selected = 0;
+            fileBacked = status == EXTERIA_E_UNSUPPORTED;
+        } else if (status != EXTERIA_OK) return status;
+        NSUInteger index = [links indexOfObject:text];
+        if (index == NSNotFound) {
+            if (links.count >= PROXY_LIST_MAX) return EXTERIA_E_LIMIT;
+            [links addObject:text];
+            index = links.count - 1;
         }
-        if (result == errSecSuccess) {
-            [[NSFileManager defaultManager] removeItemAtPath:ExteriaProxyFilePath() error:NULL];
-        } else {
-            NSLog(@"exteria: the keychain refused the proxy (OSStatus %d), it is kept in a file of the app", (int)result);
-            if (!ExteriaProxyWriteFile(data)) return EXTERIA_E_STORAGE;
-        }
+        status = ExteriaProxySave(links, index, fileBacked);
+        if (status != EXTERIA_OK) return status;
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:ExteriaProxyEnabledKey];
-        [[NSUserDefaults standardUserDefaults] synchronize];
+        if (![[NSUserDefaults standardUserDefaults] synchronize]) return EXTERIA_E_STORAGE;
     }
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaProxyDidChangeNotification object:nil];
     return EXTERIA_OK;
 }
+
+exteria_status ExteriaProxyList(NSArray **entries) {
+    if (!entries) return EXTERIA_E_ARG;
+    *entries = nil;
+    @synchronized (ExteriaProxyService) {
+        NSMutableArray *links;
+        NSUInteger selected;
+        BOOL fileBacked;
+        exteria_status status = ExteriaProxyLoad(&links, &selected, &fileBacked);
+        if (status == EXTERIA_E_NOTFOUND || status == EXTERIA_E_UNSUPPORTED) { *entries = [NSArray array]; return EXTERIA_OK; }
+        if (status != EXTERIA_OK) return status;
+        NSMutableArray *list = [NSMutableArray arrayWithCapacity:links.count];
+        for (NSUInteger i = 0; i < links.count; ++i) {
+            exteria_proxy proxy;
+            status = ExteriaProxyDecode([links objectAtIndex:i], &proxy);
+            if (status != EXTERIA_OK) { exteria_wipe(&proxy, sizeof(proxy)); return status; }
+            NSString *address = [NSString stringWithFormat:@"%s:%u (%@)", proxy.server, (unsigned)proxy.port, proxy.kind == EXTERIA_PROXY_MTPROTO ? @"MTProto" : @"SOCKS5"];
+            exteria_wipe(&proxy, sizeof(proxy));
+            [list addObject:[NSDictionary dictionaryWithObjectsAndKeys:address, @"address", [NSNumber numberWithBool:i == selected], @"selected", nil]];
+        }
+        *entries = list;
+        return EXTERIA_OK;
+    }
+}
+
+static exteria_status ExteriaProxyChange(NSUInteger index, BOOL remove) {
+    @synchronized (ExteriaProxyService) {
+        NSMutableArray *links;
+        NSUInteger selected;
+        BOOL fileBacked;
+        exteria_status status = ExteriaProxyLoad(&links, &selected, &fileBacked);
+        if (status != EXTERIA_OK) return status;
+        if (index >= links.count) return EXTERIA_E_ARG;
+        if (remove) {
+            [links removeObjectAtIndex:index];
+            if (index < selected) --selected;
+            else if (selected >= links.count) selected = links.count ? links.count - 1 : 0;
+        } else selected = index;
+        status = ExteriaProxySave(links, selected, fileBacked);
+        if (status != EXTERIA_OK) return status;
+        if (!remove || !links.count) {
+            [[NSUserDefaults standardUserDefaults] setBool:!remove forKey:ExteriaProxyEnabledKey];
+            if (![[NSUserDefaults standardUserDefaults] synchronize]) return EXTERIA_E_STORAGE;
+        }
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaProxyDidChangeNotification object:nil];
+    return EXTERIA_OK;
+}
+
+exteria_status ExteriaProxySelect(NSUInteger index) { return ExteriaProxyChange(index, NO); }
+exteria_status ExteriaProxyRemove(NSUInteger index) { return ExteriaProxyChange(index, YES); }
 
 exteria_status ExteriaProxySetEnabled(BOOL enabled) {
     @synchronized (ExteriaProxyService) {
@@ -108,7 +254,7 @@ exteria_status ExteriaProxySetEnabled(BOOL enabled) {
             if (status != EXTERIA_OK) return status;
         }
         [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:ExteriaProxyEnabledKey];
-        [[NSUserDefaults standardUserDefaults] synchronize];
+        if (![[NSUserDefaults standardUserDefaults] synchronize]) return EXTERIA_E_STORAGE;
     }
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaProxyDidChangeNotification object:nil];
     return EXTERIA_OK;
