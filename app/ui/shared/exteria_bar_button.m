@@ -17,6 +17,7 @@
     BOOL _dimmed;
     CGFloat _titleSize;
     UILabel *_label;
+    UIColor *_inkColor;
 }
 @end
 
@@ -49,6 +50,7 @@
 - (void)dealloc {
     [_title release];
     [_label release];
+    [_inkColor release];
     [super dealloc];
 }
 
@@ -59,7 +61,7 @@
 - (void)refreshLabel {
     _label.text = _title;
     _label.font = _bold ? ExteriaFontSemibold(_titleSize) : ExteriaFontRegular(_titleSize);
-    _label.textColor = ExteriaColorAccent();
+    _label.textColor = _inkColor ? _inkColor : ExteriaColorAccent();
     _label.alpha = _dimmed ? 0.4 : (self.highlighted ? 0.5 : 1.0);
     [self setNeedsLayout];
     [self setNeedsDisplay];
@@ -70,6 +72,14 @@
     [_title release];
     _title = [title copy];
     self.accessibilityLabel = _title;
+    [self refreshLabel];
+}
+
+- (UIColor *)inkColor { return _inkColor; }
+- (void)setInkColor:(UIColor *)color {
+    if (_inkColor == color) return;
+    [_inkColor release];
+    _inkColor = [color retain];
     [self refreshLabel];
 }
 
@@ -94,7 +104,7 @@
 - (void)drawRect:(CGRect)rect {
     (void)rect;
     if (!_chevron) return;
-    UIImage *arrow = ExteriaSymbolImage(ExteriaSymbolBack, EXTERIA_CHEVRON_SIDE, ExteriaColorAccent());
+    UIImage *arrow = ExteriaSymbolImage(ExteriaSymbolBack, EXTERIA_CHEVRON_SIDE, _inkColor ? _inkColor : ExteriaColorAccent());
     CGFloat margin = (EXTERIA_CHEVRON_SIDE - EXTERIA_CHEVRON_WIDTH) / 2;
     CGRect box = CGRectMake(EXTERIA_BAR_PADDING - margin, (self.bounds.size.height - EXTERIA_CHEVRON_SIDE) / 2, EXTERIA_CHEVRON_SIDE, EXTERIA_CHEVRON_SIDE);
     [arrow drawInRect:box blendMode:kCGBlendModeNormal alpha:_dimmed ? 0.4 : (self.highlighted ? 0.5 : 1.0)];

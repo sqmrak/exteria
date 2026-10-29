@@ -137,7 +137,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _headerLine.hidden = _clearBar || tinted;
     _titleLabel.alpha = tinted && !_barShaded ? 0 : 1;
     _titleLabel.textColor = tinted ? [UIColor whiteColor] : ExteriaColorTitle();
-    _backChip.alpha = tinted && _barShaded ? 0 : 1;
+    _back.inkColor = tinted ? [UIColor whiteColor] : nil;
 }
 
 - (void)setBarTint:(UIColor *)tint {
@@ -259,7 +259,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _headerLine.backgroundColor = ExteriaColorHairline();
     _headerLine.hidden = _clearBar;
     [_header addSubview:_headerLine];
-    /* the disc under the back button over a picture; a bar that takes a tint later needs it too, so it is always made and shown when it is wanted */
+    /* a clear bar over a picture gives the arrow a dark disc */
     _backChip = [[UIView alloc] init];
     _backChip.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
     _backChip.layer.cornerRadius = 18;
@@ -318,7 +318,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
         CGFloat left = column.origin.x, edge = CGRectGetMaxX(column);
         BOOL alone = ExteriaIsDetailRoot(self);
         _back.hidden = alone;
-        _backChip.hidden = alone || !(_clearBar || _barTint);
+        _backChip.hidden = alone || !_clearBar;
         _back.frame = CGRectMake(left, insets.top, 52, BAR_HEIGHT);
         /* the chevron is drawn 14 points in from the button's edge and about 5 wide, so the disc centers on it */
         _backChip.frame = CGRectMake(left + 1, insets.top + (BAR_HEIGHT - 36) / 2, 36, 36);

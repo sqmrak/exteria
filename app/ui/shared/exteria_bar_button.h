@@ -8,5 +8,6 @@
 @property (nonatomic, assign) BOOL bold;
 @property (nonatomic, assign) CGFloat titleSize;
 @property (nonatomic, assign) BOOL dimmed;
+@property (nonatomic, retain) UIColor *inkColor;
 
 @end
