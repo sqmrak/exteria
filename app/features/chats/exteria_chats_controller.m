@@ -401,7 +401,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     }
     if (!_folderId && !self.showsBack) {
         ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
-        _folders = [[ExteriaFolderTabs alloc] initWithSession:self.session changed:^{
+        _folders = [[ExteriaFolderTabs alloc] initWithSession:self.session media:_media changed:^{
             ExteriaChatsController *me = weak.target;
             if (!me || !me->_folders) return;
             [me closeOpenCell];

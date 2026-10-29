@@ -2,10 +2,15 @@
 #import "exteria_chat_settings.h"
 #import "exteria_filter_bar.h"
 #import "exteria_dialog_cell.h"
+#import "exteria_custom_emoji.h"
+#import "exteria_custom_emoji_loader.h"
+#import "exteria_message.h"
 #import "exteria_weak_reference.h"
 
 @interface ExteriaFolderTabs () <ExteriaFilterBarDelegate, UIGestureRecognizerDelegate> {
     ExteriaSession *_session;
+    ExteriaMediaCache *_media;
+    NSSet *_emojiDocuments;
     ExteriaFilterBar *_bar;
     NSArray *_folders;
     int32_t _selectedId;
@@ -18,14 +23,16 @@
 
 @implementation ExteriaFolderTabs
 @synthesize slideDirection = _slideDirection;
-- (id)initWithSession:(ExteriaSession *)session changed:(void (^)(void))changed {
+- (id)initWithSession:(ExteriaSession *)session media:(ExteriaMediaCache *)media changed:(void (^)(void))changed {
     self = [super initWithFrame:CGRectZero];
     if (!self)
         return nil;
     _session = [session retain];
+    _media = [media retain];
     _changed = [changed copy];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(rebuild) name:ExteriaChatFoldersDidChangeNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(emojiLoaded:) name:ExteriaCustomEmojiDidLoadNotification object:nil];
     [self rebuild];
     return self;
 }
@@ -37,6 +44,8 @@
     [_pagingRecognizers release];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_session release];
+    [_media release];
+    [_emojiDocuments release];
     [_folders release];
     [_bar release];
     [_changed release];
@@ -89,6 +98,17 @@
     [_bar removeFromSuperview];
     [_bar release];
     _bar = [[ExteriaFilterBar alloc] initWithTitles:titles];
+    NSMutableSet *documents = [NSMutableSet set];
+    for (NSUInteger i = 0; i < _folders.count; ++i) {
+        ExteriaChatFolder *folder = [_folders objectAtIndex:i];
+        [_bar setEntities:folder.titleEntities forIndex:(NSInteger)i];
+        for (ExteriaTextEntity *entity in folder.titleEntities)
+            [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
+    }
+    [_emojiDocuments release];
+    _emojiDocuments = [documents copy];
+    if (_media && documents.count)
+        [ExteriaCustomEmojiLoader loadDocuments:[documents allObjects] session:_session media:_media documents:nil picture:nil];
     _bar.delegate = self;
     _bar.selectedIndex = selected;
     _shownIndex = selected;
@@ -99,6 +119,9 @@
     [self setNeedsLayout];
     if (_changed)
         _changed();
+}
+- (void)emojiLoaded:(NSNotification *)notification {
+    if ([_emojiDocuments containsObject:notification.object]) [_bar redrawTitles];
 }
 - (void)layoutSubviews {
     [super layoutSubviews];

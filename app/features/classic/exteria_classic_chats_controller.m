@@ -221,7 +221,7 @@
     [self syncChromeWithSettings];
     if (!_folderId) {
         ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
-        _folders = [[ExteriaFolderTabs alloc] initWithSession:_session changed:^{
+        _folders = [[ExteriaFolderTabs alloc] initWithSession:_session media:_media changed:^{
             ExteriaClassicChatsController *me = weak.target;
             if (!me || !me->_folders) return;
             [me layoutHeader];

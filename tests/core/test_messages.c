@@ -249,6 +249,33 @@ static void test_custom_emoji_entity(void) {
     free(row);
 }
 
+static void test_folder_title_entities(void) {
+    exteria_tl_value *title = obj("textWithEntities"), *items[3];
+    exteria_entity entities[EXTERIA_MESSAGE_ENTITIES_MAX];
+    char urls[1] = {0};
+    uint8_t count = 0;
+    set_str(title, "text", "a\xF0\x9F\x98\x80 b");
+    items[0] = obj("messageEntityCustomEmoji");
+    set_i32(items[0], "offset", 1);
+    set_i32(items[0], "length", 2);
+    set_i64(items[0], "document_id", 5368324170671202286ll);
+    items[1] = obj("messageEntityCustomEmoji");
+    set_i32(items[1], "offset", -1);
+    set_i32(items[1], "length", 2);
+    set_i64(items[1], "document_id", 123);
+    items[2] = obj("messageEntityCustomEmoji");
+    set_i32(items[2], "offset", 4);
+    set_i32(items[2], "length", 1);
+    set_i64(items[2], "document_id", 0);
+    set(title, "entities", vec_of(items, 3));
+    exteria_entities_read(title, entities, EXTERIA_MESSAGE_ENTITIES_MAX, urls, sizeof(urls), &count);
+    CHECK_EQ_INT(count, 1);
+    CHECK_EQ_INT(entities[0].kind, EXTERIA_ENTITY_CUSTOM_EMOJI);
+    CHECK_EQ_INT(entities[0].offset, 1);
+    CHECK_EQ_INT(entities[0].length, 2);
+    CHECK(entities[0].document_id == 5368324170671202286ll);
+}
+
 static void test_formatting_entities(void) {
     exteria_message_row *row = calloc(1, sizeof(*row));
     exteria_tl_value *m = message(10, "hidden code quote name when"), *entities[7];
@@ -1842,6 +1869,7 @@ int main(void) {
     test_reply_boundaries();
     test_uploaded_media_reply();
     test_custom_emoji_entity();
+    test_folder_title_entities();
     test_sticker_set_reference();
     test_formatting_entities();
     test_bot_message();

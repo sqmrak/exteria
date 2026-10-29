@@ -16,6 +16,8 @@
 @property (nonatomic, assign) NSInteger selectedIndex;
 
 - (id)initWithTitles:(NSArray *)titles;
+- (void)setEntities:(NSArray *)entities forIndex:(NSInteger)index;
+- (void)redrawTitles;
 - (void)setCount:(NSInteger)count forIndex:(NSInteger)index;
 
 @end

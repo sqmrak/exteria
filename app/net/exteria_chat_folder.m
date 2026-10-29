@@ -1,4 +1,5 @@
 #import "exteria_chat_folder.h"
+#import "exteria_message.h"
 #include "exteria_tl_ids.h"
 
 static const char *const rule_names[] = {"contacts", "non_contacts", "groups", "broadcasts", "bots", "exclude_muted", "exclude_read", "exclude_archived"};
@@ -50,6 +51,15 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
 @implementation ExteriaChatFolder
 @synthesize folderId = _folderId, title = _title, flags = _flags, included = _included, excluded = _excluded, pinned = _pinned, shared = _shared,
             original = _original;
+@synthesize titleEntities = _titleEntities;
+
+- (void)setTitle:(NSString *)title {
+    if (_title == title || [_title isEqualToString:title]) return;
+    [_title release];
+    _title = [title copy];
+    [_titleEntities release];
+    _titleEntities = nil;
+}
 
 - (id)init {
     self = [super init];
@@ -62,6 +72,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
 }
 - (void)dealloc {
     [_title release];
+    [_titleEntities release];
     [_included release];
     [_excluded release];
     [_pinned release];
@@ -72,6 +83,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
     ExteriaChatFolder *copy = [[ExteriaChatFolder allocWithZone:zone] init];
     copy.folderId = _folderId;
     copy.title = _title;
+    copy->_titleEntities = [_titleEntities retain];
     copy.flags = _flags;
     copy.included = _included;
     copy.excluded = _excluded;
@@ -101,6 +113,15 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
         return nil;
     folder.folderId = identifier;
     folder.title = title;
+    exteria_entity entities[EXTERIA_MESSAGE_ENTITIES_MAX];
+    char urls[1] = {0};
+    uint8_t count = 0;
+    exteria_entities_read(exteria_tl_get(value, "title"), entities, EXTERIA_MESSAGE_ENTITIES_MAX, urls, sizeof(urls), &count);
+    NSArray *runs = ExteriaTextEntities(title, entities, count, urls);
+    NSMutableArray *custom = [NSMutableArray array];
+    for (ExteriaTextEntity *entity in runs)
+        if (entity.style == ExteriaTextStyleCustomEmoji && entity.documentId > 0) [custom addObject:entity];
+    folder->_titleEntities = [custom copy];
     folder.included = included;
     folder.excluded = excluded;
     folder.pinned = pinned;

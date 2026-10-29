@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_pill_label.h"
+#import "exteria_emoji_label.h"
 #import "exteria_theme.h"
 #import "exteria_animation.h"
 #import "exteria_classic_chrome.h"
@@ -13,7 +14,7 @@
 #define CHIP_BADGE_HEIGHT 20.0
 
 @interface ExteriaChip : UIControl {
-    UILabel *_title;
+    ExteriaEmojiLabel *_title;
     UILabel *_badge;
     BOOL _active;
     UIImageView *_plate;
@@ -22,6 +23,8 @@
 - (void)setActive:(BOOL)active;
 - (void)setCount:(NSInteger)count;
 - (CGFloat)fittingWidth;
+- (void)setEntities:(NSArray *)entities;
+- (void)redrawTitle;
 @end
 
 @implementation ExteriaChip
@@ -38,7 +41,7 @@
     self.isAccessibilityElement = YES;
     self.accessibilityLabel = title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
-    _title = [[UILabel alloc] init];
+    _title = [[ExteriaEmojiLabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
     _title.text = title;
     _title.font = ExteriaFontMedium(15);
@@ -91,18 +94,20 @@
 }
 
 - (CGFloat)fittingWidth {
-    [_title sizeToFit];
+    CGSize titleSize = [_title sizeThatFits:CGSizeMake(2048, CHIP_HEIGHT)];
     CGFloat badge = [self badgeWidth];
-    return CHIP_PADDING * 2 + _title.frame.size.width + (badge > 0 ? 6 + badge : 0);
+    return CHIP_PADDING * 2 + ceil(titleSize.width) + (badge > 0 ? 6 + badge : 0);
 }
+
+- (void)setEntities:(NSArray *)entities { _title.entities = entities; }
+- (void)redrawTitle { [_title setNeedsDisplay]; }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
     _plate.frame = self.bounds;
-    [_title sizeToFit];
+    CGSize titleSize = [_title sizeThatFits:CGSizeMake(2048, CHIP_HEIGHT)];
     CGFloat badge = [self badgeWidth];
-    _title.frame = CGRectMake(CHIP_PADDING, (CHIP_HEIGHT - _title.frame.size.height) / 2,
-                              _title.frame.size.width, _title.frame.size.height);
+    _title.frame = CGRectMake(CHIP_PADDING, (CHIP_HEIGHT - titleSize.height) / 2, ceil(titleSize.width), titleSize.height);
     _badge.frame = CGRectMake(CGRectGetMaxX(_title.frame) + 6, (CHIP_HEIGHT - CHIP_BADGE_HEIGHT) / 2, badge, CHIP_BADGE_HEIGHT);
 }
 
@@ -157,6 +162,16 @@
     if (index < 0 || index >= (NSInteger)[_chips count]) return;
     [[_chips objectAtIndex:index] setCount:count];
     [self setNeedsLayout];
+}
+
+- (void)setEntities:(NSArray *)entities forIndex:(NSInteger)index {
+    if (index < 0 || index >= (NSInteger)_chips.count) return;
+    [[_chips objectAtIndex:(NSUInteger)index] setEntities:entities];
+    [self setNeedsLayout];
+}
+
+- (void)redrawTitles {
+    for (ExteriaChip *chip in _chips) [chip redrawTitle];
 }
 
 - (void)chipTapped:(ExteriaChip *)chip {
