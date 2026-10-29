@@ -10,6 +10,10 @@
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
 #import "exteria_music_player.h"
+#import "exteria_dialog_picker_controller.h"
+#import "exteria_gift_screen.h"
+#import "exteria_session_actions.h"
+#import "exteria_session_channels.h"
 
 #define TABS_GAP 10.0
 #define PAGE 30
@@ -38,6 +42,8 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     BOOL _forUser;
     CGFloat _width;
     CGFloat _bodyHeight;
+    NSMutableSet *_selected;
+    BOOL _forwarding;
     id<ExteriaGroupTabsDelegate> _delegate;
 }
 @end
@@ -64,6 +70,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     _avatars = [avatars retain];
     _media = [media retain];
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
+    _selected = [[NSMutableSet alloc] init];
     for (int i = 0; i < ExteriaGroupTabCount; ++i) _items[i] = [[NSMutableArray alloc] init];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(forUser ? @"gifts.title" : @"group.tab.members", nil), NSLocalizedString(@"group.tab.media", nil),
                                                 NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil), nil];
@@ -100,6 +107,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     [_tabs release];
     [_body release];
     [_empty release];
+    [_selected release];
     for (int i = 0; i < ExteriaGroupTabCount; ++i) [_items[i] release];
     [super dealloc];
 }
@@ -118,6 +126,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
 
 - (void)chooseTab:(NSUInteger)index {
     if (index >= ExteriaGroupTabCount || index == _tab) return;
+    [_selected removeAllObjects];
     _tab = index;
     [self load];
     [self rebuild];
@@ -211,6 +220,19 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     UIControl *area = [[[UIControl alloc] initWithFrame:frame] autorelease];
     area.tag = (NSInteger)index;
     [area addTarget:self action:@selector(rowTapped:) forControlEvents:UIControlEventTouchUpInside];
+    if (_tab != ExteriaGroupTabMembers) {
+        [area addGestureRecognizer:[[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(rowHeld:)] autorelease]];
+        ExteriaMessage *message = [_items[_tab] objectAtIndex:index];
+        if ([_selected containsObject:[NSNumber numberWithInt:message.messageId]]) {
+            UIImageView *check = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolCheck, 16, [UIColor whiteColor])] autorelease];
+            check.backgroundColor = ExteriaColorAccent();
+            check.layer.cornerRadius = 12;
+            check.contentMode = UIViewContentModeCenter;
+            check.frame = CGRectMake(MAX(0, frame.size.width - 30), MAX(0, frame.size.height - 30), 24, 24);
+            check.userInteractionEnabled = NO;
+            [area addSubview:check];
+        }
+    }
     return area;
 }
 
@@ -227,7 +249,7 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     NSUInteger tab = _tab;
     NSArray *items = _items[tab];
     CGFloat width = _width;
-    CGFloat y = 0;
+    CGFloat y = _selected.count ? 48 : 0;
     if (_forUser && tab == ExteriaGroupTabMembers) {
         _body.hidden = YES;
         _bodyHeight = 0;
@@ -236,14 +258,15 @@ static NSString *ExteriaGroupDateText(int32_t date) {
         return;
     }
     _body.hidden = NO;
+    if (_selected.count) [self addSelectionBar:width];
     if (tab == ExteriaGroupTabMedia) {
         CGFloat side = floor((width - CELL_GAP * (COLUMNS - 1)) / COLUMNS);
         for (NSUInteger i = 0; i < items.count; ++i) {
             ExteriaMessage *message = [items objectAtIndex:i];
-            CGRect frame = CGRectMake((i % COLUMNS) * (side + CELL_GAP), (i / COLUMNS) * (side + CELL_GAP), side, side);
+            CGRect frame = CGRectMake((i % COLUMNS) * (side + CELL_GAP), y + (i / COLUMNS) * (side + CELL_GAP), side, side);
             [self addMediaTile:message frame:frame index:i];
         }
-        y = items.count ? ceil(items.count / (double)COLUMNS) * (side + CELL_GAP) - CELL_GAP : 0;
+        y += items.count ? ceil(items.count / (double)COLUMNS) * (side + CELL_GAP) - CELL_GAP : 0;
     } else {
         CGFloat row = [ExteriaPersonCell rowHeight];
         for (NSUInteger i = 0; i < items.count; ++i) {
@@ -358,10 +381,102 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     [_body addSubview:[self tapAreaAtIndex:index frame:frame]];
 }
 
+- (UIButton *)selectionButton:(ExteriaSymbol)symbol label:(NSString *)label action:(SEL)action frame:(CGRect)frame {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    button.frame = frame;
+    [button setImage:ExteriaSymbolImage(symbol, 22, ExteriaColorTitle()) forState:UIControlStateNormal];
+    button.accessibilityLabel = label;
+    [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    [_body addSubview:button];
+    return button;
+}
+
+- (void)addSelectionBar:(CGFloat)width {
+    [self selectionButton:ExteriaSymbolClose label:NSLocalizedString(@"chat.msg.cancel", nil) action:@selector(cancelSelection) frame:CGRectMake(4, 0, 44, 48)];
+    UILabel *count = [[[UILabel alloc] initWithFrame:CGRectMake(54, 0, 80, 48)] autorelease];
+    count.backgroundColor = [UIColor clearColor];
+    count.font = ExteriaFontSemibold(17);
+    count.textColor = ExteriaColorTitle();
+    count.text = [NSString stringWithFormat:@"%lu", (unsigned long)_selected.count];
+    [_body addSubview:count];
+    UIButton *view = [self selectionButton:ExteriaSymbolEye label:NSLocalizedString(@"chat.msg.details", nil) action:@selector(viewSelection) frame:CGRectMake(width - 96, 0, 44, 48)];
+    view.enabled = _selected.count == 1;
+    view.alpha = view.enabled ? 1 : 0.35;
+    [self selectionButton:ExteriaSymbolForward label:NSLocalizedString(@"chat.msg.forward", nil) action:@selector(forwardSelection) frame:CGRectMake(width - 48, 0, 44, 48)];
+}
+
+- (void)cancelSelection {
+    [_selected removeAllObjects];
+    [self rebuild];
+}
+
+- (void)toggleSelection:(ExteriaMessage *)message {
+    if (message.messageId <= 0) return;
+    NSNumber *key = [NSNumber numberWithInt:message.messageId];
+    if ([_selected containsObject:key]) [_selected removeObject:key];
+    else if (_selected.count < EXTERIA_MESSAGES_MAX) [_selected addObject:key];
+    else { ExteriaGiftAlert(nil, NSLocalizedString(@"chat.select.limit", nil)); return; }
+    [self rebuild];
+}
+
+- (void)rowHeld:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan || _tab == ExteriaGroupTabMembers) return;
+    NSUInteger index = (NSUInteger)gesture.view.tag;
+    if (index < _items[_tab].count) [self toggleSelection:[_items[_tab] objectAtIndex:index]];
+}
+
+- (void)viewSelection {
+    if (_selected.count != 1) return;
+    NSNumber *key = [_selected anyObject];
+    for (ExteriaMessage *message in _items[_tab]) {
+        if (message.messageId != key.intValue) continue;
+        [self cancelSelection];
+        [_delegate groupTabs:self didOpenMessage:message];
+        return;
+    }
+}
+
+- (void)forwardSelection {
+    if (!_selected.count || _forwarding) return;
+    UIResponder *responder = self;
+    while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
+    UIViewController *host = (UIViewController *)responder;
+    if (!host.navigationController) { NSLog(@"exteria: no navigation controller for forwarding shared messages"); return; }
+    NSArray *ids = [[_selected allObjects] sortedArrayUsingSelector:@selector(compare:)];
+    ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
+    picker.screenTitle = NSLocalizedString(@"chat.msg.forward.to", nil);
+    picker.forwarding = YES;
+    picker.filter = ^BOOL(ExteriaDialog *dialog) { return !dialog.folder && !dialog.community && (dialog.kind != EXTERIA_DIALOG_CHANNEL || dialog.canPost); };
+    ExteriaWeakReference *weak = _weak;
+    picker.pickHandler = ^(NSArray *dialogs) {
+        ExteriaGroupTabsView *view = weak.target;
+        ExteriaDialog *target = [dialogs lastObject];
+        if (!view || !target || view->_forwarding) return;
+        view->_forwarding = YES;
+        [view->_session forwardMessageIds:ids fromDialog:view->_dialog toDialog:target hideAuthor:NO completion:^(NSString *errorName) {
+            ExteriaGroupTabsView *owner = weak.target;
+            if (owner) owner->_forwarding = NO;
+            if (errorName) {
+                NSLog(@"exteria: forwarding shared messages failed: %@", errorName);
+                ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+                return;
+            }
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+            if (owner) [owner cancelSelection];
+            ExteriaGiftAlert(nil, NSLocalizedString(@"chat.msg.forwarded", nil));
+        }];
+    };
+    [host.navigationController pushViewController:picker animated:YES];
+}
+
 - (void)rowTapped:(UIControl *)area {
     NSArray *items = _items[_tab];
     if ((NSUInteger)area.tag >= items.count) return;
     id item = [items objectAtIndex:(NSUInteger)area.tag];
+    if (_selected.count && _tab != ExteriaGroupTabMembers) {
+        [self toggleSelection:item];
+        return;
+    }
     if (_tab == ExteriaGroupTabAudio) {
         NSMutableArray *queue = [NSMutableArray array];
         for (ExteriaMessage *message in items) if (message.media.file) [queue addObject:message.media];
