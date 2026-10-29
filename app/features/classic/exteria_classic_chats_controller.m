@@ -330,13 +330,13 @@
     CGFloat width = self.tableView.bounds.size.width;
     CGFloat promptHeight = [_prompt heightForWidth:width];
     CGFloat search = _search.hidden ? 0 : 44;
-    CGFloat height = search + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 8 : 0);
+    CGFloat height = search + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 16 : 0);
     _folders.frame = CGRectMake(0, search, width, _folders.height);
     [_stories layoutInWidth:width];
     CGRect strip = _stories.view.frame;
     strip.origin = CGPointMake(0, search + _folders.height);
     _stories.view.frame = strip;
-    if (promptHeight > 0) [_prompt layoutInWidth:width atY:search + _folders.height + _stories.height];
+    if (promptHeight > 0) [_prompt layoutInWidth:width atY:search + _folders.height + _stories.height + 8];
     if (_header.frame.size.height == height && _header.frame.size.width == width) return;
     CGRect frame = _header.frame;
     frame.size = CGSizeMake(width, height);
