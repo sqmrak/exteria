@@ -81,7 +81,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _status.textColor = ExteriaColorSecondary();
     _status.font = ExteriaFontMedium(14);
     _status.textAlignment = ExteriaTextAlignmentCenter;
-    _status.numberOfLines = 2;
+    _status.numberOfLines = 3;
     [_card addSubview:_status];
     _wave = [[ExteriaWaveProgress alloc] init];
     _wave.userInteractionEnabled = NO;
@@ -126,11 +126,11 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     case EXTERIA_E_SECURITY: key = @"release.fail.security"; break;
     case EXTERIA_E_STORAGE: key = @"release.fail.storage"; break;
     case EXTERIA_E_NOTFOUND: key = @"release.fail.missing"; break;
-    case EXTERIA_E_STATE: key = @"release.fail.readonly"; break;
+    case EXTERIA_E_STATE: key = [ExteriaUpdater canInstallInPlace] ? @"release.fail.install" : @"release.fail.readonly"; break;
     case EXTERIA_E_MALFORMED: case EXTERIA_E_UNSUPPORTED: case EXTERIA_E_LIMIT: key = @"release.fail.format"; break;
     default: key = @"release.fail.network"; break;
     }
-    return [NSString stringWithFormat:@"%@\n(%s)", NSLocalizedString(key, nil), exteria_status_name(status)];
+    return NSLocalizedString(key, nil);
 }
 - (void)showMode:(NoticeMode)mode failure:(exteria_status)failure {
     _mode = mode;
@@ -179,8 +179,8 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _title.frame = CGRectMake(16, y, inner, 48);
     y += 52;
     CGFloat bottom = height - 108;
-    _notes.frame = CGRectMake(16, y, inner, MAX(0, bottom - y - (_status.hidden || _mode == NoticeWorking ? 0 : 36)));
-    _status.frame = CGRectMake(16, _mode == NoticeWorking ? y + 12 : bottom - 36, inner, _mode == NoticeWorking ? 40 : 34);
+    _notes.frame = CGRectMake(16, y, inner, MAX(0, bottom - y - (_status.hidden || _mode == NoticeWorking ? 0 : 52)));
+    _status.frame = CGRectMake(16, _mode == NoticeWorking ? y + 12 : bottom - 52, inner, _mode == NoticeWorking ? 40 : 50);
     _wave.frame = CGRectMake(16 - ExteriaWaveProgressInset, _mode == NoticeWorking ? y + 56 : 0, inner + 2 * ExteriaWaveProgressInset, ExteriaWaveProgressHeight);
     _primary.frame = CGRectMake(16, height - 104, inner, 44);
     _secondary.frame = CGRectMake(16, height - 56, inner, 40);

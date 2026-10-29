@@ -203,7 +203,6 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
             _state = status == EXTERIA_OK ? ExteriaUpdaterDone : cancelled ? ExteriaUpdaterCancelled : ExteriaUpdaterFailed;
             _failure = status;
             if (status == EXTERIA_OK) _fraction = 1;
-            _installing = NO;
             [UIApplication sharedApplication].idleTimerDisabled = NO;
             if (_background != UIBackgroundTaskInvalid) [[UIApplication sharedApplication] endBackgroundTask:_background];
             _background = UIBackgroundTaskInvalid;
@@ -277,7 +276,10 @@ static void refresh_home_screen(void) {
     exteria_status status;
     exteria_digest *digest;
     NSString *plistExecutable = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"];
-    if (!roots) return EXTERIA_E_STATE;
+    if (!roots) {
+        NSLog(@"exteria: update trust roots are missing");
+        return EXTERIA_E_SECURITY;
+    }
     if (!_ipaURL.length || !_digestURL.length || !plistExecutable.length) return EXTERIA_E_ARG;
     if (![ExteriaUpdater canInstallInPlace]) return EXTERIA_E_STATE;
     if (_expected > IPA_LIMIT) return EXTERIA_E_LIMIT;
