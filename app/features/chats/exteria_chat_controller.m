@@ -1392,6 +1392,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 - (void)flashRowOfMessage:(int32_t)messageId {
+    [_table layoutIfNeeded];
     for (ExteriaMessageCell *cell in _table.visibleCells) {
         if ([cell isKindOfClass:[ExteriaMessageCell class]] && cell.item.message.messageId == messageId) {
             [cell flashHighlight];
@@ -2097,6 +2098,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 - (void)applicationBecameActive {
+    if (_visible) [self rebuildItems];
     [self flushLiveMessages];
     [self refreshAnimations];
     if (_visible) {
@@ -2330,8 +2332,9 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     if (!kept.count || _loadedFirst || _server.count) return;
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:kept];
-    _table.hidden = NO;
     [self rebuildItems];
+    if (_stickToBottom && _startMessageId <= 0) [self scrollToBottomAnimated:NO];
+    _table.hidden = NO;
     /* a network failure can arrive before the cached page */
     [self showStatus:nil retry:NO];
 }
@@ -2349,7 +2352,6 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         return;
     }
     _loadedFirst = YES;
-    _table.hidden = NO;
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
     _canLoadMore = messages.count >= HISTORY_PAGE;
@@ -2357,6 +2359,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [self rebuildItems];
     /* the list that followed its end already stands on it; this makes sure of the position once the real sizes are in, before anything may animate */
     if (_stickToBottom && _startMessageId <= 0) [self scrollToBottomAnimated:NO];
+    _table.hidden = NO;
     _opening = NO;
     if (_startMessageId > 0) {
         /* a bookmark opened this chat: it goes to its message, loading older pages when that one is not in the newest */
