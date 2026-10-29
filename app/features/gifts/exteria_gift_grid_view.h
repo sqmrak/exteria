@@ -17,6 +17,7 @@
     uint32_t _backdropEdge;
     BOOL _dimmed;
     BOOL _card;
+    BOOL _story;
     BOOL _unique;
     BOOL _pinned;
     BOOL _hiddenMark;
@@ -52,6 +53,7 @@
 @property (nonatomic, assign) BOOL dimmed;
 /* a gift on a profile: a square card with the picture large and the marks in the corners, and no text under it */
 @property (nonatomic, assign) BOOL card;
+@property (nonatomic, assign) BOOL story;
 /* a unique gift keeps the pin at the left and shows its number on a ribbon in the right corner */
 @property (nonatomic, assign) BOOL unique;
 @property (nonatomic, assign) BOOL pinned;

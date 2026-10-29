@@ -55,6 +55,7 @@ ExteriaGiftTileInfo *ExteriaTileForCatalogGift(ExteriaStarGift *gift) {
 
 ExteriaGiftTileInfo *ExteriaTileForStory(ExteriaStory *story) {
     ExteriaGiftTileInfo *tile = [[[ExteriaGiftTileInfo alloc] init] autorelease];
+    tile.story = YES;
     ExteriaMedia *media = story.media;
     /* a photo is its own picture; a video shows its thumbnail, because the file itself is not a picture */
     tile.pictureFile = media.kind == EXTERIA_PREVIEW_VIDEO ? media.previewFile : media.file;

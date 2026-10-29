@@ -38,6 +38,7 @@
 @synthesize backdropEdge = _backdropEdge;
 @synthesize dimmed = _dimmed;
 @synthesize card = _card;
+@synthesize story = _story;
 @synthesize unique = _unique;
 @synthesize pinned = _pinned;
 @synthesize hiddenMark = _hiddenMark;
@@ -84,6 +85,7 @@
     UIImageView *_veilEye;
     BOOL _card;
     BOOL _pinLeft;
+    BOOL _story;
     NSUInteger _token;
 }
 - (void)configureWithInfo:(ExteriaGiftTileInfo *)info media:(ExteriaMediaCache *)media avatars:(ExteriaAvatarCache *)avatars;
@@ -165,6 +167,7 @@
 
 - (CGRect)pictureFrame {
     CGSize size = self.bounds.size;
+    if (_story) return self.bounds;
     if (_card) {
         CGFloat side = floor(size.width * CARD_PICTURE);
         return CGRectMake((size.width - side) / 2, (size.height - side) / 2, side, side);
@@ -185,6 +188,14 @@
     _badge.frame = CGRectMake(4, 3, size.width - 10, 16);
     _title.frame = CGRectMake(6, size.height - 24, size.width - 12, 18);
     _price.frame = _title.frame;
+    if (_story) {
+        CGFloat captionWidth = MIN(size.width - 10, ceil([_caption sizeThatFits:CGSizeMake(size.width - 10, 18)].width) + 6);
+        CGFloat titleLimit = size.width - (_badge.text.length ? 30 : 10);
+        CGFloat titleWidth = MIN(titleLimit, ceil([_title sizeThatFits:CGSizeMake(titleLimit, 18)].width) + 6);
+        _caption.frame = CGRectMake(5, size.height - 23, captionWidth, 18);
+        _title.frame = CGRectMake(5, 5, titleWidth, 18);
+        _badge.frame = CGRectMake(5, 5, size.width - 10, 18);
+    }
     if (!_card) return;
     CGFloat disc = floor(size.width * CORNER_MARK), inset = floor(size.width * CORNER_INSET);
     CGRect left = CGRectMake(inset, inset, disc, disc);
@@ -205,6 +216,8 @@
     ++_token;
     NSUInteger token = _token;
     _card = info.card;
+    _story = info.story;
+    _picture.contentMode = _story ? UIViewContentModeScaleAspectFill : UIViewContentModeScaleAspectFit;
     BOOL plain = !info.hasBackdrop;
     self.backgroundColor = plain ? ExteriaColorCard() : ExteriaGiftRgb(info.backdropEdge);
     _backdrop.hidden = plain;
@@ -224,13 +237,17 @@
         }
     }
     _title.text = info.starsAmount > 0 ? nil : info.title;
-    _title.textColor = plain ? ExteriaColorTitle() : [UIColor whiteColor];
+    _title.textColor = _story ? [UIColor whiteColor] : (plain ? ExteriaColorTitle() : [UIColor whiteColor]);
+    _title.textAlignment = _story ? ExteriaTextAlignmentLeft : ExteriaTextAlignmentCenter;
+    _title.backgroundColor = _story ? [UIColor colorWithWhite:0 alpha:0.45] : [UIColor clearColor];
     _price.image = info.starsAmount > 0 ? ExteriaStarsImage(nil, info.starsAmount, _title.font, _title.textColor) : nil;
     _caption.text = info.caption;
-    _caption.textColor = plain ? ExteriaColorSecondary() : [UIColor colorWithWhite:1 alpha:0.8];
+    _caption.textColor = _story ? [UIColor whiteColor] : (plain ? ExteriaColorSecondary() : [UIColor colorWithWhite:1 alpha:0.8]);
+    _caption.textAlignment = _story ? ExteriaTextAlignmentLeft : ExteriaTextAlignmentCenter;
+    _caption.backgroundColor = _story ? [UIColor colorWithWhite:0 alpha:0.45] : [UIColor clearColor];
     _badge.text = info.badge;
-    _badge.textColor = plain ? ExteriaColorSecondary() : [UIColor whiteColor];
-    _caption.hidden = info.badge.length > 0 || _card;
+    _badge.textColor = _story ? [UIColor whiteColor] : (plain ? ExteriaColorSecondary() : [UIColor whiteColor]);
+    _caption.hidden = (!_story && info.badge.length > 0) || _card || !info.caption.length;
     _title.hidden = _card;
     _price.hidden = _card;
     _badge.hidden = _card;
@@ -248,7 +265,8 @@
     }
     ExteriaMedia *sticker = info.sticker;
     if (!sticker && !info.pictureFile) return;
-    CGFloat pixels = [self pictureFrame].size.width * ExteriaScreenScale();
+    CGRect pictureFrame = [self pictureFrame];
+    CGFloat pixels = MAX(pictureFrame.size.width, pictureFrame.size.height) * ExteriaScreenScale();
     BOOL still = sticker.stickerFormat == EXTERIA_STICKER_STATIC || info.pictureFile != nil;
     ExteriaRemoteFile *file = info.pictureFile ? info.pictureFile : (still ? sticker.file : sticker.previewFile);
     if (file) {
@@ -446,8 +464,9 @@
     if (changed) [_table reloadData];
 }
 
-/* profile cards are square; the catalog and story tiles carry a line of text under the picture */
+/* profile cards are square, stories follow the portrait proportions of the media grid */
 - (CGFloat)tileHeight {
+    if (_tiles.count && ((ExteriaGiftTileInfo *)[_tiles objectAtIndex:0]).story) return floor(_tileWidth * 1.25);
     if (_tiles.count && ((ExteriaGiftTileInfo *)[_tiles objectAtIndex:0]).card) return _tileWidth;
     return PICTURE + 44;
 }
