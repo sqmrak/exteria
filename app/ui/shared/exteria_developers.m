@@ -32,6 +32,9 @@ static NSString *const ExteriaOfficialTesterNames[] = {@"not_a_modder", @"fly1ng
                                                        @"xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", @"svcayon4ik", @"s3dativee", @"Vladus324"};
 #define OFFICIAL_COUNT (sizeof(ExteriaOfficialTesterNames) / sizeof(ExteriaOfficialTesterNames[0]))
 static NSString *const ExteriaCautionName = @"cmp_73";
+/* the official managers of @sqmrak */
+static NSString *const ExteriaManagerNames[] = {@"merwleem"};
+#define MANAGER_COUNT (sizeof(ExteriaManagerNames) / sizeof(ExteriaManagerNames[0]))
 static NSString *const ExteriaPromotionNames[] = {@"merwleem", @"Radickdz", @"Xmas_UnrealKot"};
 #define PROMOTION_COUNT (sizeof(ExteriaPromotionNames) / sizeof(ExteriaPromotionNames[0]))
 
@@ -92,6 +95,7 @@ static NSUInteger ExteriaMarksOfUsername(NSString *username) {
     if (ExteriaNameIn(username, ExteriaBugHunters, BUG_HUNTER_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
     if (ExteriaNameIn(username, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
     if (ExteriaNameIn(username, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
+    if (ExteriaNameIn(username, ExteriaManagerNames, MANAGER_COUNT)) marks |= ExteriaMarkManager;
     return marks;
 }
 
@@ -104,6 +108,7 @@ NSUInteger ExteriaMarksOfId(long long userId) {
     if (ExteriaIdIn(userId, ExteriaBugHunters, BUG_HUNTER_COUNT)) marks = (marks & ~(NSUInteger)ExteriaMarkTester) | ExteriaMarkBugHunter;
     if (ExteriaIdIn(userId, &ExteriaCautionName, 1)) marks |= ExteriaMarkCaution;
     if (ExteriaIdIn(userId, ExteriaPromotionNames, PROMOTION_COUNT)) marks |= ExteriaMarkPromotion;
+    if (ExteriaIdIn(userId, ExteriaManagerNames, MANAGER_COUNT)) marks |= ExteriaMarkManager;
     return marks;
 }
 
@@ -118,6 +123,7 @@ NSUInteger ExteriaPersonIsDeveloper(ExteriaPerson *person) {
 }
 
 NSUInteger ExteriaMarkForDocument(long long document) {
+    if (document == EXTERIA_MANAGER_DOCUMENT) return ExteriaMarkManager;
     if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaMarkPromotion;
     if (document == EXTERIA_BUG_HUNTER_DOCUMENT) return ExteriaMarkBugHunter;
     if (document == EXTERIA_DEVELOPER_DOCUMENT) return ExteriaMarkDeveloper;
@@ -229,7 +235,7 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     plate.layer.shadowOpacity = 0.28f;
     plate.layer.shadowRadius = 14;
     plate.layer.shadowOffset = CGSizeMake(0, 4);
-    UIImage *badge = mark == ExteriaMarkOfficialTester ? [ExteriaCustomEmoji imageForDocument:EXTERIA_OFFICIAL_TESTER_DOCUMENT] : mark == ExteriaMarkBugHunter ? [ExteriaCustomEmoji imageForDocument:EXTERIA_BUG_HUNTER_DOCUMENT] : mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] : mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
+    UIImage *badge = mark == ExteriaMarkManager ? [ExteriaCustomEmoji imageForDocument:EXTERIA_MANAGER_DOCUMENT] : mark == ExteriaMarkOfficialTester ? [ExteriaCustomEmoji imageForDocument:EXTERIA_OFFICIAL_TESTER_DOCUMENT] : mark == ExteriaMarkBugHunter ? [ExteriaCustomEmoji imageForDocument:EXTERIA_BUG_HUNTER_DOCUMENT] : mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] : mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
         [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:mark == ExteriaMarkTester ? @"badge_tester" : (mark == ExteriaMarkSenko ? @"badge_senko" : (mark == ExteriaMarkLead ? @"badge_lead" : @"badge_developer")) ofType:@"png"]];
     UIImageView *hammer = [[[UIImageView alloc] initWithImage:badge] autorelease];
     hammer.contentMode = UIViewContentModeScaleAspectFit;
@@ -247,7 +253,7 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     what.textColor = ExteriaColorSecondary();
     what.numberOfLines = 0;
     what.lineBreakMode = UILineBreakModeWordWrap;
-    what.text = NSLocalizedString(mark == ExteriaMarkOfficialTester ? @"developer.official_tester" : mark == ExteriaMarkBugHunter ? @"developer.bug_hunter.notice" : (mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice"))))), nil);
+    what.text = NSLocalizedString(mark == ExteriaMarkManager ? @"developer.manager" : mark == ExteriaMarkOfficialTester ? @"developer.official_tester" : mark == ExteriaMarkBugHunter ? @"developer.bug_hunter.notice" : (mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice"))))), nil);
     CGFloat textHeight = MAX(34, ceil([what sizeThatFits:CGSizeMake(textWidth, CGFLOAT_MAX)].height));
     CGFloat height = MAX(84, 41 + textHeight + 9);
     what.frame = CGRectMake(textX, 41, textWidth, textHeight);

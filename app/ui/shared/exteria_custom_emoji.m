@@ -14,7 +14,7 @@ static NSCache *ExteriaCustomPictures(void) {
     dispatch_once(&once, ^{
         cache = [[NSCache alloc] init];
         cache.countLimit = PICTURE_COUNT_MAX;
-        cache.totalCostLimit = 8 * 1024 * 1024;
+        cache.totalCostLimit = 16 * 1024 * 1024;
     });
     return cache;
 }
@@ -118,7 +118,7 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
 + (UIImage *)imageForDocument:(long long)document {
     if (document == EXTERIA_TELEGRAM_VERIFIED_DOCUMENT) return ExteriaTelegramVerifiedImage();
     if (document == EXTERIA_PREMIUM_STAR_DOCUMENT) return ExteriaPremiumStarImage();
-    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion, *bugHunter, *officialTester;
+    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion, *bugHunter, *officialTester, *manager;
     if (document == EXTERIA_BUG_HUNTER_DOCUMENT) {
         if (!bugHunter) {
             NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_bug_hunter" ofType:@"png"];
@@ -128,6 +128,7 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
         return bugHunter;
     }
     if (document == EXTERIA_OFFICIAL_TESTER_DOCUMENT) return ExteriaBundledBadge(@"badge_official_tester", &officialTester);
+    if (document == EXTERIA_MANAGER_DOCUMENT) return ExteriaBundledBadge(@"badge_manager", &manager);
     if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaBundledBadge(@"badge_promotion", &promotion);
     if (document == EXTERIA_CAUTION_DOCUMENT) {
         if (!caution) {
@@ -170,7 +171,9 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
 }
 
 + (CGFloat)pictureSide {
-    return 50.0 * ExteriaScreenScale();
+    /* ExteriaFitEmojiImage trims the empty margin and enlarges what is left, up to a third, and a topic icon is drawn 48 points wide: the extra decoded
+       pixels are what that enlargement and the row use */
+    return 64.0 * ExteriaScreenScale();
 }
 
 @end

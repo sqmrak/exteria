@@ -20,6 +20,8 @@ extern NSString *const ExteriaCustomEmojiDidLoadNotification;
 #define EXTERIA_BUG_HUNTER_DOCUMENT (-8LL)
 #define EXTERIA_TELEGRAM_VERIFIED_DOCUMENT (-9LL)
 #define EXTERIA_OFFICIAL_TESTER_DOCUMENT (-10LL)
+/* the shield of the official manager of @sqmrak */
+#define EXTERIA_MANAGER_DOCUMENT (-11LL)
 #define EXTERIA_CAUTION_BADGE_RATIO 2.7
 
 @interface ExteriaCustomEmoji : NSObject

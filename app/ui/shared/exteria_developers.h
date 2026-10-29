@@ -18,7 +18,9 @@ enum {
     ExteriaMarkPromotion = 32,
     ExteriaMarkBugHunter = 64,
     /* the open ring of the testers the lead developer names official; it replaces the net, and the bug hunter wears it beside the hunter's own badge */
-    ExteriaMarkOfficialTester = 128
+    ExteriaMarkOfficialTester = 128,
+    /* the shield of the official manager of the lead developer */
+    ExteriaMarkManager = 256
 };
 
 BOOL ExteriaIsDeveloperUsername(NSString *username);
