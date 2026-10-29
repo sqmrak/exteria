@@ -100,7 +100,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 - (void)toggleTapped { [[ExteriaMusicPlayer sharedPlayer] togglePause]; }
 - (void)nextTapped { [[ExteriaMusicPlayer sharedPlayer] next]; }
 - (void)closeTapped { [[ExteriaMusicPlayer sharedPlayer] stop]; }
-- (void)openPlayer { if (ExteriaThemeIsClassic()) [ExteriaMusicSheet present]; }
+- (void)openPlayer { [ExteriaMusicSheet present]; }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
