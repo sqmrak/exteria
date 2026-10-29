@@ -95,5 +95,7 @@
 - (void)setTiles:(NSArray *)tiles;
 /* room below the last row, for what floats over the list */
 @property (nonatomic, assign) CGFloat bottomInset;
+/* room above the first row, for a bar that floats over the list while the head runs up under it; the list stays at its top when the inset changes there */
+@property (nonatomic, assign) CGFloat topInset;
 
 @end

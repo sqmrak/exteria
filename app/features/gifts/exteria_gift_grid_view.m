@@ -327,6 +327,7 @@
     CGFloat _margin;
     UIView *_headerView;
     CGFloat _bottomInset;
+    CGFloat _topInset;
 }
 @end
 
@@ -336,6 +337,7 @@
 @synthesize avatars = _avatars;
 @synthesize headerView = _headerView;
 @synthesize bottomInset = _bottomInset;
+@synthesize topInset = _topInset;
 
 - (id)initWithMedia:(ExteriaMediaCache *)media {
     self = [super initWithFrame:CGRectZero];
@@ -390,6 +392,19 @@
     insets.bottom = bottom;
     _table.contentInset = insets;
     _table.scrollIndicatorInsets = insets;
+}
+
+- (void)setTopInset:(CGFloat)inset {
+    if (fabs(inset - _topInset) < 0.5) return;
+    UIEdgeInsets insets = _table.contentInset;
+    BOOL atTop = _table.contentOffset.y <= -insets.top + 0.5;
+    _topInset = inset;
+    insets.top = inset;
+    _table.contentInset = insets;
+    UIEdgeInsets indicator = _table.scrollIndicatorInsets;
+    indicator.top = inset;
+    _table.scrollIndicatorInsets = indicator;
+    if (atTop) _table.contentOffset = CGPointMake(_table.contentOffset.x, -inset);
 }
 
 - (void)setBottomInset:(CGFloat)inset {

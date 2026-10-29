@@ -55,6 +55,8 @@
 #define ACTION_HEIGHT 66.0
 #define GAP 14.0
 
+#define BAR_SHADE_AFTER 24.0
+
 @interface ExteriaUserProfileController () <ExteriaGiftGridDelegate, ExteriaGroupTabsDelegate, ExteriaGiftFolderBarDelegate, UIGestureRecognizerDelegate> {
     ExteriaGiftFolderBar *_folderBar;
     ExteriaDialog *_dialog;
@@ -267,6 +269,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 }
 
 - (void)refreshStatus {
+    if (self.isViewLoaded) [self.view setNeedsLayout];
     if (_dialog.kind == EXTERIA_DIALOG_BOT) {
         [_status setStatus:NSLocalizedString(@"profile.bot", nil) kind:ExteriaStatusPlain];
         return;
@@ -505,6 +508,12 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     }];
 }
 
+/* the color the bar fills with once the content has scrolled under it: the edge of the ground, darker */
+static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
+    const CGFloat keep = 0.5;
+    return [UIColor colorWithRed:((rgb >> 16) & 0xff) / 255.0 * keep green:((rgb >> 8) & 0xff) / 255.0 * keep blue:(rgb & 0xff) / 255.0 * keep alpha:1];
+}
+
 /* the blend behind the photo, the text over it, the action cards as veils with the same ink, and the emoji that tiles the ground */
 - (void)showBackdropCenter:(uint32_t)center edge:(uint32_t)edge pattern:(uint32_t)pattern text:(uint32_t)text document:(long long)document {
     if (!_backdrop) {
@@ -515,6 +524,8 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     _backdrop.edgeColor = ExteriaColorOfRGB(edge);
     _backdrop.patternColor = ExteriaColorOfRGB(pattern);
     _backdrop.photoRadius = AVATAR / 2;
+    /* the bar over the ground is clear, which makes it the ground's continuation, and darkens with the scroll */
+    self.barTint = ExteriaDarkenedBackdrop(edge);
     UIColor *ink = ExteriaColorOfRGB(text);
     _name.textColor = ink;
     _status.plainColor = [ink colorWithAlphaComponent:0.78f];
@@ -702,9 +713,19 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 }
 
 - (void)layoutBody:(CGRect)body {
-    _grid.frame = body;
+    /* the list runs under the bar when the head has a ground of its own, which then shows through the clear bar; the bar's height is the list's top inset */
+    BOOL underBar = _backdrop && !ExteriaThemeIsClassic();
+    _grid.frame = underBar ? CGRectMake(body.origin.x, 0, body.size.width, CGRectGetMaxY(body)) : body;
+    _grid.topInset = underBar ? body.origin.y : 0;
     _toast.frame = CGRectMake(CGRectGetMidX(body) - 80, body.origin.y + 12, 160, 28);
     [self layoutHead];
+}
+
+/* the bar fills once the head has moved a little under it, and clears again at the top */
+- (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
+    (void)grid;
+    if (!_backdrop || ExteriaThemeIsClassic()) return;
+    [self setBarShaded:offset > -_grid.topInset + BAR_SHADE_AFTER animated:YES];
 }
 
 #pragma mark actions

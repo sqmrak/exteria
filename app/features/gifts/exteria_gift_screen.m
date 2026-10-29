@@ -86,6 +86,8 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     void (^_actionHandler)(void);
     BOOL _clearBar;
     UIView *_backChip;
+    UIColor *_barTint;
+    BOOL _barShaded;
 }
 @end
 
@@ -96,6 +98,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
 @synthesize media = _media;
 @synthesize screenTitle = _screenTitle;
 @synthesize clearBar = _clearBar;
+@synthesize barTint = _barTint;
 
 - (id)initWithSession:(ExteriaSession *)session avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media {
     self = [super init];
@@ -117,11 +120,47 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     [_headerLine release];
     [_back release];
     [_backChip release];
+    [_barTint release];
     [_titleLabel release];
     [_action release];
     [_actionIcon release];
     [_actionLabel release];
     [super dealloc];
+}
+
+/* the look of the bar for the tint and the shade it is in; set inside an animation block it moves there */
+- (void)refreshBarLook {
+    if (!_header) return;
+    BOOL tinted = _barTint != nil;
+    UIColor *plain = _clearBar ? [UIColor clearColor] : ExteriaColorBar();
+    _header.backgroundColor = tinted ? (_barShaded ? _barTint : [UIColor clearColor]) : plain;
+    _headerLine.hidden = _clearBar || tinted;
+    _titleLabel.alpha = tinted && !_barShaded ? 0 : 1;
+    _titleLabel.textColor = tinted ? [UIColor whiteColor] : ExteriaColorTitle();
+    _backChip.alpha = tinted && _barShaded ? 0 : 1;
+}
+
+- (void)setBarTint:(UIColor *)tint {
+    if (tint == _barTint || (tint && [tint isEqual:_barTint])) return;
+    [_barTint release];
+    _barTint = [tint retain];
+    if (ExteriaThemeIsClassic()) return;
+    [self refreshBarLook];
+    [self refreshActionIcon];
+    if (self.isViewLoaded) [self.view setNeedsLayout];
+}
+
+- (void)setBarShaded:(BOOL)shaded animated:(BOOL)animated {
+    if (shaded == _barShaded) return;
+    _barShaded = shaded;
+    if (ExteriaThemeIsClassic() || !_barTint) return;
+    [self refreshActionIcon];
+    if (!animated || ExteriaReduceMotionEnabled()) {
+        [self refreshBarLook];
+        return;
+    }
+    [UIView animateWithDuration:0.42 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
+                     animations:^{ [self refreshBarLook]; } completion:nil];
 }
 
 - (void)setScreenTitle:(NSString *)title {
@@ -147,6 +186,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     }
     _action.title = title ? title : @"";
     _action.hidden = title == nil;
+    if (self.isViewLoaded) [self.view setNeedsLayout];
 }
 
 - (void)setActionSymbol:(ExteriaSymbol)symbol label:(NSString *)label handler:(void (^)(void))handler {
@@ -182,7 +222,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
         [_actionIcon addTarget:self action:@selector(actionTapped) forControlEvents:UIControlEventTouchUpInside];
         [_header addSubview:_actionIcon];
     }
-    [_actionIcon setImage:ExteriaSymbolImage(_actionSymbol, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
+    [_actionIcon setImage:ExteriaSymbolImage(_actionSymbol, 24, _barTint && !_barShaded ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
     _actionIcon.accessibilityLabel = _actionLabel;
     [self.view setNeedsLayout];
 }
@@ -219,13 +259,12 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _headerLine.backgroundColor = ExteriaColorHairline();
     _headerLine.hidden = _clearBar;
     [_header addSubview:_headerLine];
-    if (_clearBar) {
-        _backChip = [[UIView alloc] init];
-        _backChip.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
-        _backChip.layer.cornerRadius = 18;
-        _backChip.userInteractionEnabled = NO;
-        [_header addSubview:_backChip];
-    }
+    /* the disc under the back button over a picture; a bar that takes a tint later needs it too, so it is always made and shown when it is wanted */
+    _backChip = [[UIView alloc] init];
+    _backChip.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
+    _backChip.layer.cornerRadius = 18;
+    _backChip.userInteractionEnabled = NO;
+    [_header addSubview:_backChip];
     _back = [[ExteriaBarButton alloc] init];
     _back.chevron = YES;
     _back.title = @"";
@@ -240,6 +279,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _titleLabel.text = _screenTitle;
     _titleLabel.hidden = _clearBar;
     [_header addSubview:_titleLabel];
+    [self refreshBarLook];
     _action = [[ExteriaBarButton alloc] init];
     _action.bold = YES;
     _action.title = _actionTitle ? _actionTitle : @"";
@@ -278,12 +318,14 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
         CGFloat left = column.origin.x, edge = CGRectGetMaxX(column);
         BOOL alone = ExteriaIsDetailRoot(self);
         _back.hidden = alone;
-        _backChip.hidden = alone;
+        _backChip.hidden = alone || !(_clearBar || _barTint);
         _back.frame = CGRectMake(left, insets.top, 52, BAR_HEIGHT);
         /* the chevron is drawn 14 points in from the button's edge and about 5 wide, so the disc centers on it */
         _backChip.frame = CGRectMake(left + 1, insets.top + (BAR_HEIGHT - 36) / 2, 36, 36);
-        _titleLabel.frame = CGRectMake(left + 64, insets.top, column.size.width - 128, BAR_HEIGHT);
-        _action.frame = CGRectMake(edge - 110, insets.top, 104, BAR_HEIGHT);
+        CGFloat actionWidth = _action.hidden ? 0 : MIN(column.size.width * 0.42, ceil([_action.title sizeWithFont:ExteriaFontSemibold(17)].width) + 28);
+        CGFloat side = MAX(64, actionWidth + 6);
+        _titleLabel.frame = CGRectMake(left + side, insets.top, MAX(0, column.size.width - 2 * side), BAR_HEIGHT);
+        _action.frame = CGRectMake(edge - actionWidth, insets.top, actionWidth, BAR_HEIGHT);
         _actionIcon.frame = CGRectMake(edge - 56, insets.top, 52, BAR_HEIGHT);
     }
     [self layoutBody:[self bodyFrame]];

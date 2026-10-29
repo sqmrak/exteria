@@ -33,6 +33,10 @@ void ExteriaGiftAlert(NSString *title, NSString *message);
 /* in the modern style the bar is see-through, with no title and no line, and the back button sits on a dark disc,
    for a screen whose picture runs to the top edge; set it before the view loads */
 @property (nonatomic, assign) BOOL clearBar;
+/* the bar of a screen whose head has a colored ground of its own that runs up under the bar: the bar is clear over that ground, as its continuation, and
+   fills with this color, a darker one, once the content has scrolled under it, with the title coming in. nil is the ordinary bar. the modern style only */
+@property (nonatomic, retain) UIColor *barTint;
+- (void)setBarShaded:(BOOL)shaded animated:(BOOL)animated;
 
 /* the action at the right end of the bar; a nil title removes it */
 - (void)setActionTitle:(NSString *)title handler:(void (^)(void))handler;
