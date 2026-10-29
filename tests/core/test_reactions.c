@@ -54,6 +54,57 @@ static exteria_tl_value *peer(const char *type, const char *field, int64_t id) {
     return v;
 }
 
+static void test_reaction_people(void) {
+    exteria_peer_ref chat = {3, 12, 34, 0, 0};
+    exteria_tl_value *request = NULL, *decoded = NULL, *answer = obj("messages.messageReactionsList"), *vec = exteria_tl_new_vec(&arena, 2);
+    exteria_tl_value *a = obj("messagePeerReaction"), *b = obj("messagePeerReaction");
+    exteria_reaction_person rows[2];
+    exteria_writer writer;
+    size_t count = 99;
+    char next[EXTERIA_REACTION_OFFSET_MAX];
+    int32_t value = 0;
+    CHECK_EQ_INT(exteria_reaction_people_request(&arena, &chat, 5, NULL, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_messages_getMessageReactionsList);
+    CHECK(!exteria_tl_has(request, "offset"));
+    CHECK_EQ_INT(exteria_reaction_people_request(&arena, &chat, 5, "cursor", &request), EXTERIA_OK);
+    exteria_writer_init(&writer, 4096);
+    CHECK_EQ_INT(exteria_tl_encode(request, &writer, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_decode_all(&arena, NULL, EXTERIA_TL_REF_ANY, writer.data, writer.len, &decoded), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_i32(decoded, "id", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 5);
+    CHECK(exteria_tl_has(decoded, "offset"));
+    exteria_writer_free(&writer);
+    CHECK_EQ_INT(exteria_reaction_people_request(&arena, &chat, 0, NULL, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    set(a, "peer_id", peer("peerUser", "user_id", 10));
+    i32(a, "date", 12345);
+    set(a, "reaction", emoji("👍"));
+    set(b, "peer_id", peer("peerChannel", "channel_id", 20));
+    i32(b, "date", 0);
+    set(b, "reaction", obj("reactionPaid"));
+    CHECK_EQ_INT(exteria_tl_vec_set(vec, 0, a), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(vec, 1, b), EXTERIA_OK);
+    set(answer, "reactions", vec);
+    str(answer, "next_offset", "next");
+    CHECK_EQ_INT(exteria_reaction_people_parse(answer, rows, 2, &count, next, sizeof(next)), EXTERIA_OK);
+    CHECK_EQ_INT(count, 2);
+    CHECK_EQ_INT(rows[0].peer_kind, 1);
+    CHECK_EQ_INT(rows[0].peer_id, 10);
+    CHECK_EQ_INT(rows[0].date, 12345);
+    CHECK(!strcmp(rows[0].reaction.emoji, "👍"));
+    CHECK_EQ_INT(rows[1].peer_kind, 3);
+    CHECK_EQ_INT(rows[1].date, 0);
+    CHECK_EQ_INT(rows[1].reaction.kind, EXTERIA_REACTION_PAID);
+    CHECK(!strcmp(next, "next"));
+    CHECK_EQ_INT(exteria_reaction_people_parse(answer, rows, 1, &count, next, sizeof(next)), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(count, 0);
+    i32(b, "date", -1);
+    CHECK_EQ_INT(exteria_reaction_people_parse(answer, rows, 2, &count, next, sizeof(next)), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(count, 0);
+    CHECK_EQ_INT(next[0], 0);
+    CHECK_EQ_INT(exteria_reaction_people_parse(obj("boolTrue"), rows, 2, &count, next, sizeof(next)), EXTERIA_E_MALFORMED);
+}
+
 static void test_parse(void) {
     exteria_reactions rows;
     exteria_message_row *message_row = calloc(1, sizeof(*message_row));
@@ -499,6 +550,7 @@ static void test_faces(void) {
 int main(void) {
     exteria_arena_init(&arena, 16u * 1024u * 1024u);
     test_parse();
+    test_reaction_people();
     test_reactors();
     test_faces();
     test_requests();

@@ -68,6 +68,60 @@ int exteria_reaction_equal(const exteria_reaction *a, const exteria_reaction *b)
     return a->kind == EXTERIA_REACTION_PAID;
 }
 
+exteria_status exteria_reaction_people_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t message_id,
+                                               const char *offset, exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !peer || !out || message_id <= 0 || (offset && strlen(offset) >= EXTERIA_REACTION_OFFSET_MAX)) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.getMessageReactionsList");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "id", message_id);
+    if (status == EXTERIA_OK && offset && offset[0]) status = exteria_tl_set_str(arena, request, "offset", offset);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "limit", EXTERIA_REACTION_PEOPLE_PAGE);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_reaction_people_parse(const exteria_tl_value *answer, exteria_reaction_person *rows, size_t capacity,
+                                             size_t *count, char *next, size_t next_capacity) {
+    const exteria_tl_value *items;
+    const uint8_t *offset;
+    size_t length;
+    if (count) *count = 0;
+    if (next && next_capacity) next[0] = 0;
+    if (!rows || !capacity || !count || !next || !next_capacity) return EXTERIA_E_ARG;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_messageReactionsList) || exteria_tl_get_vec(answer, "reactions", &items) != EXTERIA_OK)
+        return EXTERIA_E_MALFORMED;
+    if (items->u.vec.count > capacity || items->u.vec.count > EXTERIA_REACTION_PEOPLE_PAGE) return EXTERIA_E_LIMIT;
+    if (exteria_tl_has(answer, "next_offset")) {
+        if (exteria_tl_get_bytes(answer, "next_offset", &offset, &length) != EXTERIA_OK || !offset || !length || length >= next_capacity ||
+            length >= EXTERIA_REACTION_OFFSET_MAX || memchr(offset, 0, length) || !valid_utf8(offset, length)) return EXTERIA_E_MALFORMED;
+        memcpy(next, offset, length);
+        next[length] = 0;
+    }
+    for (uint32_t i = 0; i < items->u.vec.count; ++i) {
+        const exteria_tl_value *item = items->u.vec.items[i];
+        exteria_peer peer;
+        exteria_reaction_person row;
+        memset(&row, 0, sizeof(row));
+        if (!exteria_tl_is(item, EXTERIA_TL_ID_messagePeerReaction) || exteria_peer_from_tl(exteria_tl_get(item, "peer_id"), &peer) != EXTERIA_OK ||
+            peer.id <= 0 || exteria_tl_get_i32(item, "date", &row.date) != EXTERIA_OK || row.date < 0 ||
+            read_reaction(exteria_tl_get(item, "reaction"), &row.reaction) != EXTERIA_OK) {
+            next[0] = 0;
+            return EXTERIA_E_MALFORMED;
+        }
+        row.peer_kind = peer.kind;
+        row.peer_id = peer.id;
+        rows[i] = row;
+    }
+    *count = items->u.vec.count;
+    return EXTERIA_OK;
+}
+
 /* the users in recent_reactions go to the reaction they chose, at most EXTERIA_REACTORS_MAX each and once each; an
    entry of a peer that is not a user, one whose reaction the message does not count, and a malformed one are left
    out */

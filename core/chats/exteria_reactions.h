@@ -6,6 +6,8 @@
 #define EXTERIA_REACTIONS_MAX 64
 #define EXTERIA_REACTION_EMOJI_MAX 32
 #define EXTERIA_REACTION_CATALOG_MAX 128
+#define EXTERIA_REACTION_PEOPLE_PAGE 50
+#define EXTERIA_REACTION_OFFSET_MAX 256
 /* the people a chip names with their pictures instead of a number: a message with this few reactions is small enough for the
    server's recent list to hold every reactor */
 #define EXTERIA_REACTORS_MAX 3
@@ -49,6 +51,18 @@ typedef enum exteria_faces {
 exteria_faces exteria_reaction_faces(const exteria_reactions *all, size_t index, int private_chat);
 
 struct exteria_peer_ref;
+
+typedef struct exteria_reaction_person {
+    int32_t peer_kind;
+    int64_t peer_id;
+    int32_t date;
+    exteria_reaction reaction;
+} exteria_reaction_person;
+
+exteria_status exteria_reaction_people_request(exteria_arena *arena, const struct exteria_peer_ref *peer, int32_t message_id,
+                                               const char *offset, exteria_tl_value **out);
+exteria_status exteria_reaction_people_parse(const exteria_tl_value *answer, exteria_reaction_person *rows, size_t capacity,
+                                             size_t *count, char *next, size_t next_capacity);
 
 /* absent reactions are an empty set, malformed or oversized sets leave out empty */
 exteria_status exteria_reactions_read(const exteria_tl_value *value, exteria_reactions *out);

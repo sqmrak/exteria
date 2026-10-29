@@ -2055,3 +2055,12 @@
 "chat.sharing.request.out.enable" = "You requested to allow copying and forwarding";
 "chat.sharing.changed.out.disable" = "You disabled copying and forwarding";
 "chat.sharing.changed.out.enable" = "You allowed copying and forwarding";
+
+"chat.reactors.title" = "Who reacted";
+"chat.reactors.loading" = "Loading…";
+"chat.reactors.retry" = "Retry";
+"chat.reactors.empty" = "No reactions yet";
+"chat.reactors.time.unknown" = "Reaction time unavailable";
+"chat.reactors.error" = "Could not load reactions: %@";
+"chat.reactors.badpage" = "Invalid reactions page";
+"chat.reactors.limit" = "Showing the first 500 reactions.";

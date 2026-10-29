@@ -61,6 +61,7 @@
 #import "exteria_popup_menu.h"
 #import "exteria_session_profile.h"
 #import "exteria_reaction_picker.h"
+#import "exteria_reaction_people_controller.h"
 #import "exteria_round_recorder.h"
 #import "exteria_voice_recorder.h"
 #import "exteria_person.h"
@@ -4030,6 +4031,7 @@ static const ExteriaMessageActionRow ExteriaMessageActionRows[] = {
     {EXTERIA_ACTION_REMIND, ExteriaSymbolClock, @"chat.msg.remind", NO},
     {EXTERIA_ACTION_SELECT, ExteriaSymbolCheck, @"chat.msg.select", NO},
     {EXTERIA_ACTION_EDIT_HISTORY, ExteriaSymbolClock, @"chat.msg.edithistory", NO},
+    {EXTERIA_ACTION_REACTORS, ExteriaSymbolHeartOutline, @"chat.reactors.title", NO},
     {EXTERIA_ACTION_DETAILS, ExteriaSymbolInfo, @"chat.msg.details", NO},
     {EXTERIA_ACTION_REPORT, ExteriaSymbolReport, @"chat.msg.report", YES},
 };
@@ -4114,6 +4116,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     if (message.edited && !message.deletedLocally && ExteriaChatFlagGet(ExteriaChatFlagAyuSaveEdits)) mask |= EXTERIA_ACTION_EDIT_HISTORY;
     /* what was deleted is only read: it cannot be answered, changed, pinned or sent on, since the server no longer has it */
     if (message.deletedLocally) mask &= EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE | EXTERIA_ACTION_SELECT;
+    else if (message.messageId > 0 && message.reactions.count) mask |= EXTERIA_ACTION_REACTORS;
     /* a one-time file must not be kept, sent on or sent again by this client */
     if (ExteriaMessageIsViewOnce(message)) mask &= ~(uint32_t)(EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_SAVE | EXTERIA_ACTION_GALLERY |
                                                               EXTERIA_ACTION_COPY_PHOTO | EXTERIA_ACTION_REPEAT | EXTERIA_ACTION_BOOKMARK | EXTERIA_ACTION_UNBOOKMARK);
@@ -4296,6 +4299,11 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     case EXTERIA_ACTION_PIN: [self pinMessage:message unpin:NO]; break;
     case EXTERIA_ACTION_UNPIN: [self pinMessage:message unpin:YES]; break;
     case EXTERIA_ACTION_DETAILS: [self showDetailsOfMessage:message]; break;
+    case EXTERIA_ACTION_REACTORS: {
+        ExteriaReactionPeopleController *page = [[[ExteriaReactionPeopleController alloc] initWithSession:_session dialog:_dialog messageId:message.messageId] autorelease];
+        [self.navigationController pushViewController:page animated:YES];
+        break;
+    }
     case EXTERIA_ACTION_EDIT_HISTORY: [self showEditHistoryOfMessage:message]; break;
     case EXTERIA_ACTION_DELETE:
         _deleteId = message.messageId;

@@ -2060,3 +2060,12 @@
 "chat.sharing.request.out.enable" = "Вы предложили разрешить копирование и пересылку";
 "chat.sharing.changed.out.disable" = "Вы запретили копирование и пересылку";
 "chat.sharing.changed.out.enable" = "Вы разрешили копирование и пересылку";
+
+"chat.reactors.title" = "Кто отреагировал";
+"chat.reactors.loading" = "Загрузка…";
+"chat.reactors.retry" = "Повторить";
+"chat.reactors.empty" = "Реакций пока нет";
+"chat.reactors.time.unknown" = "Время реакции недоступно";
+"chat.reactors.error" = "Не удалось загрузить реакции: %@";
+"chat.reactors.badpage" = "Некорректная страница реакций";
+"chat.reactors.limit" = "Показаны первые 500 реакций.";
