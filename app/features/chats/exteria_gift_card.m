@@ -72,7 +72,7 @@ static NSString *ExteriaGiftNumberRibbon(int32_t number) {
         y += 4;
         card->_note = [[ExteriaTextLayout layoutForText:note entities:nil font:ExteriaFontRegular(13) color:white linkColor:white width:inner
                                                 maxLines:4 flush:0.5] retain];
-        card->_noteOrigin = CGPointMake(floor((width - card->_note.size.width) / 2), y);
+        card->_noteOrigin = CGPointMake(floor((width - inner) / 2), y);
         y += ceil(card->_note.size.height) + 3;
     } else if (gift.unique && gift.model.length) {
         NSMutableArray *names = [NSMutableArray array], *values = [NSMutableArray array];
@@ -216,6 +216,7 @@ static UIImage *ExteriaGiftParticleImage(void) {
 @interface ExteriaGiftCardView () {
     ExteriaGiftCardLayout *_layout;
     ExteriaGiftBackdropView *_backdrop;
+    ExteriaGiftRibbonView *_ribbonView;
     UIImageView *_poster;
     ExteriaLottieView *_lottie;
     ExteriaGiftCardTextView *_text;
@@ -237,6 +238,9 @@ static UIImage *ExteriaGiftParticleImage(void) {
     _poster = [[UIImageView alloc] init];
     _poster.contentMode = UIViewContentModeScaleAspectFit;
     [self addSubview:_poster];
+    _ribbonView = [[ExteriaGiftRibbonView alloc] init];
+    _ribbonView.hidden = YES;
+    [self addSubview:_ribbonView];
     _text = [[ExteriaGiftCardTextView alloc] init];
     [self addSubview:_text];
     return self;
@@ -245,6 +249,7 @@ static UIImage *ExteriaGiftParticleImage(void) {
 - (void)dealloc {
     [self discard];
     [_backdrop release];
+    [_ribbonView release];
     [_poster release];
     [_text release];
     [super dealloc];
@@ -281,11 +286,14 @@ static UIImage *ExteriaGiftParticleImage(void) {
     _backdrop.frame = all;
     _backdrop.hidden = !themed;
     _backdrop.symbol = nil;
+    _ribbonView.frame = all;
+    _ribbonView.edgeColor = gift.backdropEdge;
+    _ribbonView.text = themed ? ExteriaGiftNumberRibbon(gift.number) : nil;
+    _ribbonView.hidden = !themed || gift.number <= 0;
     if (themed) {
         _backdrop.centerColor = gift.backdropCenter;
         _backdrop.edgeColor = gift.backdropEdge;
         _backdrop.patternColor = gift.backdropPattern;
-        _backdrop.ribbon = ExteriaGiftNumberRibbon(gift.number);
         _backdrop.focus = CGPointMake(0.5, CGRectGetMidY(layout.stickerFrame) / all.size.height);
         if (gift.patternSticker) {
             ExteriaGiftLoadPatternSymbol(media, gift.patternSticker, gift.backdropPattern, ^(UIImage *symbol) {

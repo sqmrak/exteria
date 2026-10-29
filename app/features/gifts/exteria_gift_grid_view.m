@@ -75,6 +75,7 @@
     UILabel *_caption;
     UILabel *_badge;
     ExteriaGiftBackdropView *_backdrop;
+    ExteriaGiftRibbonView *_ribbonView;
     ExteriaAvatarView *_sender;
     UIImageView *_spy;
     UIView *_pinDisc;
@@ -101,6 +102,9 @@
     _picture = [[UIImageView alloc] init];
     _picture.contentMode = UIViewContentModeScaleAspectFit;
     [self addSubview:_picture];
+    _ribbonView = [[ExteriaGiftRibbonView alloc] init];
+    _ribbonView.hidden = YES;
+    [self addSubview:_ribbonView];
     _title = [[UILabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
     _title.textAlignment = ExteriaTextAlignmentCenter;
@@ -149,6 +153,7 @@
     [_caption release];
     [_badge release];
     [_backdrop release];
+    [_ribbonView release];
     [_sender release];
     [_spy release];
     [_pinDisc release];
@@ -172,6 +177,7 @@
     [super layoutSubviews];
     CGSize size = self.bounds.size;
     _backdrop.frame = self.bounds;
+    _ribbonView.frame = self.bounds;
     CGRect picture = [self pictureFrame];
     _picture.frame = picture;
     _poster.frame = picture;
@@ -203,12 +209,14 @@
     self.backgroundColor = plain ? ExteriaColorCard() : ExteriaGiftRgb(info.backdropEdge);
     _backdrop.hidden = plain;
     _backdrop.symbol = nil;
+    _ribbonView.hidden = plain || !info.ribbon.length;
+    _ribbonView.text = plain ? nil : info.ribbon;
+    _ribbonView.edgeColor = info.backdropEdge;
     _backdrop.expressive = info.expressive;
     if (!plain) {
         _backdrop.centerColor = info.backdropCenter;
         _backdrop.edgeColor = info.backdropEdge;
         _backdrop.patternColor = info.patternColor;
-        _backdrop.ribbon = info.ribbon;
         if (info.patternSticker) {
             ExteriaGiftLoadPatternSymbol(media, info.patternSticker, info.patternColor, ^(UIImage *symbol) {
                 if (token == _token) _backdrop.symbol = symbol;

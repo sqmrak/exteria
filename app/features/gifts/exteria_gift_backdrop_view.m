@@ -76,7 +76,6 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
     uint32_t _patternColor;
     UIImage *_symbol;
     BOOL _expressive;
-    NSString *_ribbon;
     CGPoint _focus;
 }
 @end
@@ -88,7 +87,6 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
 @synthesize patternColor = _patternColor;
 @synthesize symbol = _symbol;
 @synthesize expressive = _expressive;
-@synthesize ribbon = _ribbon;
 @synthesize focus = _focus;
 
 - (id)initWithFrame:(CGRect)frame {
@@ -104,7 +102,6 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
 
 - (void)dealloc {
     [_symbol release];
-    [_ribbon release];
     [super dealloc];
 }
 
@@ -118,13 +115,6 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
     if (symbol == _symbol) return;
     [_symbol release];
     _symbol = [symbol retain];
-    [self setNeedsDisplay];
-}
-
-- (void)setRibbon:(NSString *)ribbon {
-    if (ribbon == _ribbon || [ribbon isEqualToString:_ribbon]) return;
-    [_ribbon release];
-    _ribbon = [ribbon copy];
     [self setNeedsDisplay];
 }
 
@@ -152,7 +142,6 @@ static void ExteriaBlend(uint32_t from, uint32_t to, CGFloat amount, CGFloat out
     CGColorSpaceRelease(space);
     if (_expressive) [self drawShapesAround:center size:size];
     else if (_symbol) [self drawPatternAround:center size:size];
-    if (_ribbon.length) [self drawRibbon:size];
 }
 
 - (void)drawPatternAround:(CGPoint)center size:(CGSize)size {
@@ -244,8 +233,48 @@ static UIBezierPath *ExteriaExpressiveShape(ExpressiveShape kind, CGPoint center
     }
 }
 
+@end
+
+@interface ExteriaGiftRibbonView () {
+    uint32_t _edgeColor;
+    NSString *_text;
+}
+@end
+
+@implementation ExteriaGiftRibbonView
+
+@synthesize edgeColor = _edgeColor;
+@synthesize text = _text;
+
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    self.opaque = NO;
+    self.backgroundColor = [UIColor clearColor];
+    self.contentMode = UIViewContentModeRedraw;
+    self.userInteractionEnabled = NO;
+    return self;
+}
+
+- (void)dealloc {
+    [_text release];
+    [super dealloc];
+}
+
+- (void)setEdgeColor:(uint32_t)color { _edgeColor = color; [self setNeedsDisplay]; }
+
+- (void)setText:(NSString *)text {
+    if (text == _text || [text isEqualToString:_text]) return;
+    [_text release];
+    _text = [text copy];
+    [self setNeedsDisplay];
+}
+
 /* a band across the top right corner, darker than the backdrop, with the line set along it */
-- (void)drawRibbon:(CGSize)size {
+- (void)drawRect:(CGRect)rect {
+    (void)rect;
+    if (!_text.length) return;
+    CGSize size = self.bounds.size;
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGFloat w = size.width, reach = w * 0.64, thick = w * 0.27;
     CGFloat c0 = w - reach, c1 = c0 + thick;
@@ -265,8 +294,9 @@ static UIBezierPath *ExteriaExpressiveShape(ExpressiveShape kind, CGPoint center
     UIFont *font = ExteriaFontBold(MAX(11, w * 0.1));
     [[UIColor whiteColor] setFill];
     CGFloat height = font.lineHeight;
-    ExteriaDrawStringIn(_ribbon, font, CGRectMake(-w * 0.4, -height / 2, w * 0.8, height), ExteriaStringTailTruncate, ExteriaTextAlignmentCenter);
+    ExteriaDrawStringIn(_text, font, CGRectMake(-w * 0.4, -height / 2, w * 0.8, height), ExteriaStringTailTruncate, ExteriaTextAlignmentCenter);
     CGContextRestoreGState(context);
 }
+
 
 @end
