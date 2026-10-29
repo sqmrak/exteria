@@ -105,6 +105,14 @@
     _status.frame = CGRectMake(32, 130, size.width - 64, 60);
 }
 
+/* the list does not give way past its top: the search field stays where it rests, and the table's empty background never shows above it. ios 7 and later
+   put the bars into the inset of the table, so the resting offset is the one under the adjusted inset, where it exists */
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    CGFloat top = scrollView.contentInset.top;
+    if ([scrollView respondsToSelector:NSSelectorFromString(@"adjustedContentInset")]) top = [[scrollView valueForKey:@"adjustedContentInset"] UIEdgeInsetsValue].top;
+    if (scrollView.contentOffset.y < -top) scrollView.contentOffset = CGPointMake(scrollView.contentOffset.x, -top);
+}
+
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation {
     return ExteriaAllowsOrientation(orientation);
 }

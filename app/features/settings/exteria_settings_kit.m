@@ -252,6 +252,7 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind) {
 @synthesize picture = _picture;
 @synthesize tileImage = _tileImage;
 @synthesize trailingImage = _trailingImage;
+@synthesize trailingImageUnclipped = _trailingImageUnclipped;
 @synthesize customView = _customView;
 @synthesize customHeight = _customHeight;
 @synthesize bold = _bold;
@@ -558,6 +559,17 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     *top = (place == ExteriaRowPlaceOnly || place == ExteriaRowPlaceFirst) ? CARD_RADIUS : INNER_RADIUS;
     *bottom = (place == ExteriaRowPlaceOnly || place == ExteriaRowPlaceLast) ? CARD_RADIUS : INNER_RADIUS;
 }
+
+@interface ExteriaClassicSettingsTable : UITableView
+@end
+
+@implementation ExteriaClassicSettingsTable
+- (void)setContentSize:(CGSize)size {
+    /* a wide table header can make grouped settings scroll sideways after an ipad resize */
+    if (self.bounds.size.width > 0 && size.width > self.bounds.size.width) size.width = self.bounds.size.width;
+    [super setContentSize:size];
+}
+@end
 
 /* the cell of a row that holds a view of its own (a preview, a list of cards) */
 @interface ExteriaSettingsViewCell : UITableViewCell {
@@ -938,6 +950,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     }
     _tile.hidden = _tile.image == nil;
     _trailing.image = row.trailingImage;
+    _trailing.layer.masksToBounds = !row.trailingImageUnclipped;
     _trailing.hidden = row.trailingImage == nil;
     CGFloat dim = row.disabled ? 0.5 : 1;
     _tile.alpha = _title.alpha = _subtitle.alpha = _switch.alpha = dim;
@@ -1447,8 +1460,11 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     UIView *root = [[[UIView alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
     root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.view = root;
-    _table = [[UITableView alloc] initWithFrame:root.bounds style:UITableViewStyleGrouped];
+    _table = [[ExteriaClassicSettingsTable alloc] initWithFrame:root.bounds style:UITableViewStyleGrouped];
     _table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    _table.alwaysBounceHorizontal = NO;
+    _table.directionalLockEnabled = YES;
+    _table.showsHorizontalScrollIndicator = NO;
     _table.delegate = self;
     _table.dataSource = self;
     ExteriaClassicStyleTable(_table);
@@ -1623,7 +1639,17 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    if (_classic) return;
+    if (_classic) {
+        UIView *header = _table.tableHeaderView;
+        CGFloat width = _table.bounds.size.width;
+        if (header && width > 0 && header.frame.size.width != width) {
+            CGRect frame = header.frame;
+            frame.size.width = width;
+            header.frame = frame;
+            _table.tableHeaderView = header;
+        }
+        return;
+    }
     CGSize size = self.view.bounds.size;
     UIEdgeInsets insets = ExteriaLayoutInsets(self);
     CGFloat top = insets.top;
@@ -1918,8 +1944,17 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
     /* a slider rides in the cell, so its cells are not shared with the others */
     BOOL subtitle = row.subtitle.length > 0;
     UITableViewCellStyle style = subtitle ? UITableViewCellStyleSubtitle : UITableViewCellStyleValue1;
-    Class cellClass = row.hasSlider ? [ExteriaClassicSliderCell class] : [UITableViewCell class];
-    UITableViewCell *cell = [[[cellClass alloc] initWithStyle:style reuseIdentifier:nil] autorelease];
+    NSString *identifier = row.hasSlider ? nil : (subtitle ? @"settings.classic.subtitle" : @"settings.classic.value");
+    UITableViewCell *cell = identifier ? [_table dequeueReusableCellWithIdentifier:identifier] : nil;
+    if (!cell) {
+        Class cellClass = row.hasSlider ? [ExteriaClassicSliderCell class] : [UITableViewCell class];
+        cell = [[[cellClass alloc] initWithStyle:style reuseIdentifier:identifier] autorelease];
+    }
+    cell.accessoryView = nil;
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    cell.imageView.image = nil;
+    cell.textLabel.textColor = ExteriaThemeIsDark() ? ExteriaColorTitle() : [UIColor blackColor];
+    cell.detailTextLabel.textColor = ExteriaThemeIsDark() ? ExteriaColorSecondary() : (subtitle ? [UIColor grayColor] : [UIColor colorWithRed:0.22f green:0.33f blue:0.53f alpha:1]);
     ExteriaClassicStyleCell(cell);
     ExteriaClassicSelectionView *selection = [[[ExteriaClassicSelectionView alloc] initWithFrame:CGRectZero] autorelease];
     NSUInteger count = [[[[self shownSections] objectAtIndex:(NSUInteger)indexPath.section] rows] count];
@@ -1951,7 +1986,7 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
     if (row.trailingImage && !row.hasSwitch && !row.value.length) {
         UIImageView *mark = [[[UIImageView alloc] initWithImage:row.trailingImage] autorelease];
         mark.frame = CGRectMake(0, 0, 29, 29);
-        mark.layer.masksToBounds = YES;
+        mark.layer.masksToBounds = !row.trailingImageUnclipped;
         mark.layer.cornerRadius = 29 * 0.225;
         cell.accessoryView = mark;
     }

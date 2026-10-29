@@ -26,6 +26,26 @@ static UIColor *ExteriaClassicBarColor(void) {
     return ExteriaThemeTinted([UIColor colorWithRed:0.60 green:0.44 blue:0.78 alpha:1]);
 }
 
+static UIImage *ExteriaClassicBarImage(void) {
+    UIColor *base = ExteriaClassicBarColor();
+    UIColor *top = ExteriaMixedColor(base, [UIColor whiteColor], 0.15);
+    UIColor *bottom = ExteriaMixedColor(base, [UIColor blackColor], 0.12);
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(2, 44), NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    NSArray *colors = [NSArray arrayWithObjects:(id)top.CGColor, (id)base.CGColor, (id)bottom.CGColor, nil];
+    CGFloat stops[] = {0, 0.48, 1};
+    CGGradientRef gradient = CGGradientCreateWithColors(space, (CFArrayRef)colors, stops);
+    CGContextDrawLinearGradient(context, gradient, CGPointMake(0, 0), CGPointMake(0, 44), 0);
+    [[UIColor colorWithWhite:1 alpha:0.13] setFill];
+    UIRectFill(CGRectMake(0, 0, 2, 1.0 / ExteriaScreenScale()));
+    CGGradientRelease(gradient);
+    CGColorSpaceRelease(space);
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
 /* ios 15 draws a bar that has nothing scrolled under it from scrollEdgeAppearance, which is clear by default and ignores barTintColor: the classic bar came out
    white with white buttons and title. the appearance classes are looked up by name, so the slices linked against old sdks never see them */
 static void ExteriaClassicApplyBarAppearance(UIView *bar) {
@@ -36,6 +56,7 @@ static void ExteriaClassicApplyBarAppearance(UIView *bar) {
     id appearance = [[[kind alloc] init] autorelease];
     [appearance performSelector:opaque];
     [appearance setValue:ExteriaClassicBarColor() forKey:@"backgroundColor"];
+    if (navigation && [appearance respondsToSelector:NSSelectorFromString(@"setBackgroundImage:")]) [appearance setValue:ExteriaClassicBarImage() forKey:@"backgroundImage"];
     if (navigation) {
         [appearance setValue:[NSDictionary dictionaryWithObject:[UIColor whiteColor] forKey:NSForegroundColorAttributeName] forKey:@"titleTextAttributes"];
     }
@@ -60,6 +81,7 @@ static void ExteriaClassicTintBar(id bar) {
 void ExteriaClassicStyleNavigationBar(UINavigationBar *bar) {
     bar.barStyle = ExteriaClassicIsFlatSystem() ? UIBarStyleBlack : (ExteriaThemeIsDark() ? UIBarStyleBlack : UIBarStyleDefault);
     ExteriaClassicTintBar(bar);
+    if (ExteriaClassicIsFlatSystem()) [bar setBackgroundImage:ExteriaClassicBarImage() forBarMetrics:UIBarMetricsDefault];
 }
 
 void ExteriaClassicStyleToolbar(UIToolbar *bar) {

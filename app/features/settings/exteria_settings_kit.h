@@ -47,6 +47,7 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
     UIImage *_picture;
     UIImage *_tileImage;
     UIImage *_trailingImage;
+    BOOL _trailingImageUnclipped;
     BOOL _bold;
     BOOL _destructive;
     BOOL _hasSwitch;
@@ -112,6 +113,7 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
 @property (nonatomic, readonly, retain) UIImage *tileImage;
 /* a small picture at the right end of the row, such as the icon of an app; set after the row is made */
 @property (nonatomic, retain) UIImage *trailingImage;
+@property (nonatomic, assign) BOOL trailingImageUnclipped;
 @property (nonatomic, readonly) BOOL bold;
 @property (nonatomic, readonly) BOOL destructive;
 @property (nonatomic, readonly) BOOL hasSwitch;
