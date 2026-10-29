@@ -8,6 +8,7 @@
 
 /* the gifts, in the order of their numbers */
 typedef struct {
+    int64_t owner;
     int32_t number;
     int64_t giftId;
     const char *title;
@@ -16,16 +17,20 @@ typedef struct {
     const char *backdrop;
     uint32_t center, edge, text, pattern;
     int32_t date;
+    const char *note;
+    const char *image;
 } ExteriaCustomGiftSpec;
 
 static const ExteriaCustomGiftSpec ExteriaCustomGiftSpecs[] = {
     /* #001: a plush Senko from the lead developer, on warm amber */
-    {1, -1, "Senko", "Plush Senko", "Soft Shapes", "Amber Glow", 0xFFB74D, 0xE65100, 0xFFE9C7, 0xFFFFFF, 1793222400}
+    {EXTERIA_TEAM_LEAD_ID, 1, -1, "Senko", "Plush Senko", "Soft Shapes", "Amber Glow", 0xFFB74D, 0xE65100, 0xFFE9C7, 0xFFFFFF, 1793222400, "чееее ахахахахах", "gift_custom_senko"},
+    /* #002: the doge meme from the lead developer, on the beige of the picture */
+    {EXTERIA_TEAM_LEAD_ID, 2, -2, "eblan", "Doge", "Soft Shapes", "Beige", 0xC6AA6B, 0x7E5641, 0xFFF3D6, 0xFFFFFF, 1793222400, "еблан", "gift_custom_eblan"},
+    /* #003: a plush Pusheen from the lead developer to merwleem, on warm taupe */
+    {INT64_C(7118797604), 3, -3, "Pusheen", "Plush Pusheen", "Soft Shapes", "Taupe", 0xC9B3A1, 0x7A5C4A, 0xFFF1E4, 0xFFFFFF, 1793222400, "pusheen :3", "gift_custom_pusheen"}
 };
 #define CUSTOM_GIFT_COUNT (sizeof(ExteriaCustomGiftSpecs) / sizeof(ExteriaCustomGiftSpecs[0]))
 static NSString *const ExteriaCustomGiftSenderUsername = @"sqmrak";
-static NSString *const ExteriaCustomGiftNote = @"чееее ахахахахах";
-static NSString *const ExteriaCustomGiftImage = @"gift_custom_senko";
 
 NSString *ExteriaCustomGiftNumberText(int32_t number) {
     return [NSString stringWithFormat:@"#%03d", (int)number];
@@ -37,9 +42,14 @@ static NSMutableArray *ExteriaCustomGiftWaiting;
 /* a failed ask is not repeated by every page: the gift then names him without a picture */
 static BOOL ExteriaCustomGiftAsked;
 
-static BOOL ExteriaCustomGiftApplies(ExteriaDialog *owner) {
+static BOOL ExteriaCustomGiftOwns(const ExteriaCustomGiftSpec *spec, ExteriaDialog *owner) {
     /* the profile of the account itself is asked through its saved messages, which carry its own user id */
-    return owner && owner.peerKind == 1 && ExteriaIsDeveloperId(owner.peerId);
+    return owner && owner.peerKind == 1 && owner.peerId == spec->owner;
+}
+
+static BOOL ExteriaCustomGiftApplies(ExteriaDialog *owner) {
+    for (size_t i = 0; i < CUSTOM_GIFT_COUNT; ++i) if (ExteriaCustomGiftOwns(&ExteriaCustomGiftSpecs[i], owner)) return YES;
+    return NO;
 }
 
 BOOL ExteriaCustomGiftNeedsSender(ExteriaDialog *owner) {
@@ -70,6 +80,7 @@ NSArray *ExteriaCustomGiftsForDialog(ExteriaDialog *owner) {
     NSMutableArray *gifts = [NSMutableArray arrayWithCapacity:CUSTOM_GIFT_COUNT];
     for (size_t i = 0; i < CUSTOM_GIFT_COUNT; ++i) {
         const ExteriaCustomGiftSpec *spec = &ExteriaCustomGiftSpecs[i];
+        if (!ExteriaCustomGiftOwns(spec, owner)) continue;
         exteria_saved_gift row;
         memset(&row, 0, sizeof(row));
         row.gift.id = spec->giftId;
@@ -88,12 +99,12 @@ NSArray *ExteriaCustomGiftsForDialog(ExteriaDialog *owner) {
         /* the sender stays the same account when its username changes */
         row.from_id = EXTERIA_TEAM_LEAD_ID;
         snprintf(row.from_name, sizeof(row.from_name), "%s", ExteriaCustomGiftSenderUsername.UTF8String);
-        snprintf(row.note, sizeof(row.note), "%s", ExteriaCustomGiftNote.UTF8String);
+        snprintf(row.note, sizeof(row.note), "%s", spec->note);
         row.date = spec->date;
         /* they stand first on the profile, as pinned gifts do, and wear the pin */
         row.pinned = 1;
         ExteriaSavedGift *gift = [ExteriaSavedGift savedGiftWithRow:&row];
-        gift.customImageName = ExteriaCustomGiftImage;
+        gift.customImageName = [NSString stringWithUTF8String:spec->image];
         [gift setSenderPerson:ExteriaCustomGiftSender];
         [gifts addObject:gift];
     }
