@@ -55,6 +55,19 @@ typedef enum {
 /* the next of the three speeds after the current one */
 - (void)cycleSpeed;
 
+/* the order the songs of a queue go in and what happens at the end of one, as the player of exteraless has them; they apply to songs, a queue of voice notes always goes
+   one after the other. both are kept between runs */
+typedef enum {
+    ExteriaMusicRepeatOff,      /* the queue ends after its last song */
+    ExteriaMusicRepeatList,     /* after the last song the first one comes again */
+    ExteriaMusicRepeatSong      /* the song that ends plays again */
+} ExteriaMusicRepeat;
+@property (nonatomic, readonly) BOOL shuffle;
+@property (nonatomic, readonly) ExteriaMusicRepeat repeatMode;
+- (void)toggleShuffle;
+/* off, the list, the song, and off again */
+- (void)cycleRepeat;
+
 /* starts track, and queue (which should contain it) is what next and previous walk through; a queue without the
    track plays it alone */
 - (void)playTrack:(ExteriaMedia *)track queue:(NSArray *)queue media:(ExteriaMediaCache *)media;

@@ -452,6 +452,12 @@
 "music.stop" = "Stop";
 "music.speed" = "Playback speed";
 "music.next" = "Next";
+"music.shuffle" = "Shuffle";
+"music.repeat" = "Repeat";
+"music.on" = "On";
+"music.off" = "Off";
+"music.repeat.list" = "Repeat list";
+"music.repeat.song" = "Repeat song";
 "music.previous" = "Previous";
 "music.add" = "Add to profile";
 "music.added" = "Added to your profile";

@@ -33,6 +33,8 @@ NSString *const ExteriaMusicPlayerDidTickNotification = @"ExteriaMusicPlayerDidT
 
 #define TICK_SECONDS 0.5
 #define SPEED_KEY @"exteria.music.speed"
+#define SHUFFLE_KEY @"exteria.music.shuffle"
+#define REPEAT_KEY @"exteria.music.repeat"
 #define COVER_SIDE 300
 /* an item that has not said ready or failed after this many ticks is given up on, so a stuck decoder does not spin forever */
 #define READY_TICKS 30
@@ -92,6 +94,11 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     BOOL _watchingProximity;
     UIImage *_cover;
     float _speed;
+    BOOL _shuffle;
+    ExteriaMusicRepeat _repeat;
+    /* the order the queue is walked in while shuffled: the indexes of the queue, made again when the queue or the shuffle changes or the list comes round */
+    NSArray *_order;
+    NSArray *_orderQueue;
 }
 @end
 
@@ -104,6 +111,8 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 @synthesize media = _media;
 @synthesize cover = _cover;
 @synthesize speed = _speed;
+@synthesize shuffle = _shuffle;
+@synthesize repeatMode = _repeat;
 
 + (ExteriaMusicPlayer *)sharedPlayer {
     static ExteriaMusicPlayer *player;
@@ -117,6 +126,9 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     if (!self) return nil;
     float saved = [[NSUserDefaults standardUserDefaults] floatForKey:SPEED_KEY];
     _speed = saved >= 1.9f ? 2.0f : (saved >= 1.4f ? 1.5f : 1.0f);
+    _shuffle = [[NSUserDefaults standardUserDefaults] boolForKey:SHUFFLE_KEY];
+    NSInteger repeat = [[NSUserDefaults standardUserDefaults] integerForKey:REPEAT_KEY];
+    _repeat = repeat == ExteriaMusicRepeatList || repeat == ExteriaMusicRepeatSong ? (ExteriaMusicRepeat)repeat : ExteriaMusicRepeatOff;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(enteredBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
     return self;
 }
@@ -124,6 +136,62 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 /* the speed rides on the player's rate, which a play call resets on some systems, so it is set after every play */
 - (void)applyRate {
     if (_player && _state == ExteriaMusicStatePlaying) _player.rate = _speed;
+}
+
+- (void)toggleShuffle {
+    _shuffle = !_shuffle;
+    [[NSUserDefaults standardUserDefaults] setBool:_shuffle forKey:SHUFFLE_KEY];
+    [self changed];
+}
+
+- (void)cycleRepeat {
+    _repeat = _repeat == ExteriaMusicRepeatOff ? ExteriaMusicRepeatList : (_repeat == ExteriaMusicRepeatList ? ExteriaMusicRepeatSong : ExteriaMusicRepeatOff);
+    [[NSUserDefaults standardUserDefaults] setInteger:_repeat forKey:REPEAT_KEY];
+    [self changed];
+}
+
+/* the modes are for songs; a chain of voice notes of a chat goes one after the other whatever they are set to */
+- (BOOL)modesApply {
+    return _track.kind != EXTERIA_PREVIEW_VOICE && _queue.count > 1;
+}
+
+/* the walk through the queue while shuffled: a permutation that keeps the song that plays where it is in it, made again when the queue changes */
+- (NSArray *)playOrder:(BOOL)fresh {
+    if (!fresh && _order && _orderQueue == _queue && _order.count == _queue.count) return _order;
+    NSUInteger count = _queue.count;
+    NSMutableArray *order = [NSMutableArray arrayWithCapacity:count];
+    for (NSUInteger i = 0; i < count; ++i) [order addObject:[NSNumber numberWithUnsignedInteger:i]];
+    for (NSUInteger i = count; i > 1; --i) [order exchangeObjectAtIndex:i - 1 withObjectAtIndex:arc4random_uniform((uint32_t)i)];
+    /* the song that plays leads the walk, so the next one is a new one */
+    NSUInteger at = [order indexOfObject:[NSNumber numberWithUnsignedInteger:_index]];
+    if (at != NSNotFound && at != 0) [order exchangeObjectAtIndex:0 withObjectAtIndex:at];
+    [_order release];
+    _order = [order retain];
+    [_orderQueue release];
+    _orderQueue = [_queue retain];
+    return _order;
+}
+
+/* the queue index step songs from the current one, NSNotFound past an end the repeat mode does not carry over */
+- (NSUInteger)indexStepping:(NSInteger)step wrap:(BOOL)wrap {
+    NSInteger count = (NSInteger)_queue.count;
+    if (!count) return NSNotFound;
+    if (![self modesApply] || !_shuffle) {
+        NSInteger target = (NSInteger)_index + step;
+        if (target >= 0 && target < count) return (NSUInteger)target;
+        return wrap && _repeat == ExteriaMusicRepeatList && [self modesApply] ? (NSUInteger)((target + count) % count) : NSNotFound;
+    }
+    NSArray *order = [self playOrder:NO];
+    NSInteger at = (NSInteger)[order indexOfObject:[NSNumber numberWithUnsignedInteger:_index]];
+    NSInteger target = at + step;
+    if (target < 0) return NSNotFound;
+    if (target >= count) {
+        if (!wrap || _repeat != ExteriaMusicRepeatList) return NSNotFound;
+        /* the list comes round: a new walk, which starts with the song that just ended and so goes on from it */
+        order = [self playOrder:YES];
+        target = 1;
+    }
+    return [[order objectAtIndex:(NSUInteger)target] unsignedIntegerValue];
 }
 
 - (void)cycleSpeed {
@@ -509,8 +577,22 @@ static BOOL ExteriaIsFlac(NSString *path) {
     (void)note;
     /* a voice message that ends leaves the next one of the chat unplayed, if the person asked for that */
     BOOL voice = _track.kind == EXTERIA_PREVIEW_VOICE;
-    if (_index + 1 < _queue.count && !(voice && ExteriaChatFlagGet(ExteriaChatFlagNoAutoNextVoice))) [self next];
-    else [self stop];
+    if (voice) {
+        if (_index + 1 < _queue.count && !ExteriaChatFlagGet(ExteriaChatFlagNoAutoNextVoice)) [self next];
+        else [self stop];
+        return;
+    }
+    if (_repeat == ExteriaMusicRepeatSong) {
+        [self startCurrent];
+        return;
+    }
+    NSUInteger target = [self indexStepping:1 wrap:YES];
+    if (target == NSNotFound) {
+        [self stop];
+        return;
+    }
+    _index = target;
+    [self startCurrent];
 }
 
 - (void)startCurrent {
@@ -630,18 +712,20 @@ static BOOL ExteriaIsFlac(NSString *path) {
 }
 
 - (void)next {
-    if (_index + 1 >= _queue.count) return;
-    ++_index;
+    NSUInteger target = [self indexStepping:1 wrap:YES];
+    if (target == NSNotFound) return;
+    _index = target;
     [self startCurrent];
 }
 
 - (void)previous {
     if (!_queue.count) return;
-    if (self.position > RESTART_AFTER || _index == 0) {
+    NSUInteger target = [self indexStepping:-1 wrap:NO];
+    if (self.position > RESTART_AFTER || target == NSNotFound) {
         [self seekToFraction:0];
         return;
     }
-    --_index;
+    _index = target;
     [self startCurrent];
 }
 
@@ -667,6 +751,10 @@ static BOOL ExteriaIsFlac(NSString *path) {
 
 - (void)stop {
     ++_token;
+    [_order release];
+    _order = nil;
+    [_orderQueue release];
+    _orderQueue = nil;
     [self releasePlayer];
     [_media cancelPathRequest:_pathRequest];
     _pathRequest = 0;

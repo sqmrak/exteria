@@ -453,6 +453,12 @@
 "music.stop" = "Остановить";
 "music.speed" = "Скорость воспроизведения";
 "music.next" = "Следующая";
+"music.shuffle" = "Перемешать";
+"music.repeat" = "Повтор";
+"music.on" = "Вкл";
+"music.off" = "Выкл";
+"music.repeat.list" = "Повтор списка";
+"music.repeat.song" = "Повтор песни";
 "music.previous" = "Предыдущая";
 "music.add" = "Добавить в профиль";
 "music.added" = "Добавлено в ваш профиль";

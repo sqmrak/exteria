@@ -108,6 +108,59 @@
     ExteriaMusicSheet *sheet = [[[self alloc] initWithFrame:host.bounds] autorelease];
     [host addSubview:sheet];
 }
+/* the glyphs of the two modes are drawn here because the symbol set has no arrows that loop or cross; the song mode of the loop carries a 1 */
+static void SheetArrow(CGContextRef context, CGPoint from, CGPoint to, CGFloat head) {
+    CGContextMoveToPoint(context, from.x, from.y);
+    CGContextAddLineToPoint(context, to.x, to.y);
+    CGContextStrokePath(context);
+    CGContextMoveToPoint(context, to.x - head, to.y - head);
+    CGContextAddLineToPoint(context, to.x, to.y);
+    CGContextAddLineToPoint(context, to.x - head, to.y + head);
+    CGContextStrokePath(context);
+}
+static UIImage *SheetModeImage(BOOL shuffle, BOOL song, UIColor *color) {
+    CGFloat side = 24;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextSetStrokeColorWithColor(context, color.CGColor);
+    CGContextSetFillColorWithColor(context, color.CGColor);
+    CGContextSetLineWidth(context, 2);
+    CGContextSetLineCap(context, kCGLineCapRound);
+    CGContextSetLineJoin(context, kCGLineJoinRound);
+    if (shuffle) {
+        CGContextMoveToPoint(context, 3, 7);
+        CGContextAddCurveToPoint(context, 11, 7, 11, 17, 19, 17);
+        CGContextStrokePath(context);
+        SheetArrow(context, CGPointMake(18, 17), CGPointMake(21, 17), 3);
+        CGContextMoveToPoint(context, 3, 17);
+        CGContextAddCurveToPoint(context, 11, 17, 11, 7, 19, 7);
+        CGContextStrokePath(context);
+        SheetArrow(context, CGPointMake(18, 7), CGPointMake(21, 7), 3);
+    } else {
+        CGContextMoveToPoint(context, 4, 11);
+        CGContextAddLineToPoint(context, 4, 9);
+        CGContextAddQuadCurveToPoint(context, 4, 6, 7, 6);
+        CGContextAddLineToPoint(context, 19, 6);
+        CGContextStrokePath(context);
+        SheetArrow(context, CGPointMake(17, 6), CGPointMake(20, 6), 3);
+        CGContextMoveToPoint(context, 20, 13);
+        CGContextAddLineToPoint(context, 20, 15);
+        CGContextAddQuadCurveToPoint(context, 20, 18, 17, 18);
+        CGContextAddLineToPoint(context, 5, 18);
+        CGContextStrokePath(context);
+        SheetArrow(context, CGPointMake(7, 18), CGPointMake(4, 18), -3);
+        if (song) {
+            CGContextSetLineWidth(context, 1.6);
+            CGContextMoveToPoint(context, 10.5, 10.5);
+            CGContextAddLineToPoint(context, 12.5, 9.5);
+            CGContextAddLineToPoint(context, 12.5, 14.5);
+            CGContextStrokePath(context);
+        }
+    }
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
 static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSString *label) {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setImage:ExteriaSymbolImage(symbol, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
@@ -159,6 +212,10 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     [_panel addSubview:_toggle];
     UIButton *next = SheetButton(ExteriaSymbolNext, self, @selector(next), @"music.next");
     next.tag = 2; [_panel addSubview:next];
+    UIButton *shuffle = SheetButton(ExteriaSymbolPlay, self, @selector(shuffle), @"music.shuffle");
+    shuffle.tag = 4; [_panel addSubview:shuffle];
+    UIButton *repeat = SheetButton(ExteriaSymbolPlay, self, @selector(repeat), @"music.repeat");
+    repeat.tag = 5; [_panel addSubview:repeat];
     UIButton *close = SheetButton(ExteriaSymbolClose, self, @selector(dismiss), @"notice.cancel");
     close.tag = 3; [_panel addSubview:close];
     _table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
@@ -196,6 +253,8 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     _toggle.frame = CGRectMake(center - 24, 126, 48, 48);
     [_panel viewWithTag:1].frame = CGRectMake(center - 94, 126, 48, 48);
     [_panel viewWithTag:2].frame = CGRectMake(center + 46, 126, 48, 48);
+    [_panel viewWithTag:4].frame = CGRectMake(center - 150, 126, 48, 48);
+    [_panel viewWithTag:5].frame = CGRectMake(center + 102, 126, 48, 48);
     _table.frame = CGRectMake(0, HEADER_HEIGHT, width, MAX(0, height - HEADER_HEIGHT));
     _table.contentInset = UIEdgeInsetsMake(0, 0, ExteriaSafeInsets(self).bottom, 0);
 }
@@ -213,6 +272,12 @@ static NSString *SheetTime(NSTimeInterval value) {
     BOOL playing = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading;
     [_toggle setImage:ExteriaSymbolImage(playing ? ExteriaSymbolPause : ExteriaSymbolPlay, 28, ExteriaColorTitle()) forState:UIControlStateNormal];
     _toggle.accessibilityLabel = NSLocalizedString(playing ? @"music.pause" : @"music.play", nil);
+    UIButton *shuffle = (UIButton *)[_panel viewWithTag:4];
+    [shuffle setImage:SheetModeImage(YES, NO, player.shuffle ? ExteriaColorAccent() : ExteriaColorTitle()) forState:UIControlStateNormal];
+    shuffle.accessibilityValue = NSLocalizedString(player.shuffle ? @"music.on" : @"music.off", nil);
+    UIButton *repeat = (UIButton *)[_panel viewWithTag:5];
+    [repeat setImage:SheetModeImage(NO, player.repeatMode == ExteriaMusicRepeatSong, player.repeatMode == ExteriaMusicRepeatOff ? ExteriaColorTitle() : ExteriaColorAccent()) forState:UIControlStateNormal];
+    repeat.accessibilityValue = NSLocalizedString(player.repeatMode == ExteriaMusicRepeatSong ? @"music.repeat.song" : (player.repeatMode == ExteriaMusicRepeatList ? @"music.repeat.list" : @"music.off"), nil);
     _slider.enabled = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStatePaused;
     if (_shownQueue != player.queue || _shownTrack != player.track || _shownState != player.state) {
         [_shownQueue release]; _shownQueue = [player.queue retain];
@@ -222,6 +287,8 @@ static NSString *SheetTime(NSTimeInterval value) {
     }
     [self tick:nil];
 }
+- (void)shuffle { [[ExteriaMusicPlayer sharedPlayer] toggleShuffle]; }
+- (void)repeat { [[ExteriaMusicPlayer sharedPlayer] cycleRepeat]; }
 - (void)changed:(NSNotification *)note { (void)note; [self refresh]; }
 - (void)tick:(NSNotification *)note {
     (void)note;
