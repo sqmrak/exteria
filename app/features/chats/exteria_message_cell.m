@@ -37,9 +37,12 @@ static CGFloat ExteriaBubbleRadius(void) {
 #define PAD_X_POLL 11.0
 #define META_HEIGHT_POLL 14.0
 /* how far a swipe to reply pulls the row before it counts, and how far the row can be pulled at most */
-#define SWIPE_TRIGGER 64.0
-#define SWIPE_MAX 92.0
+/* the reply swipe of exteraless: the row follows the finger up to 80 points, the disc shows from 20, its ring fills until 50, where the answer is armed */
+#define SWIPE_TRIGGER 50.0
+#define SWIPE_MAX 80.0
+#define SWIPE_SHOW 20.0
 #define SWIPE_DISC 32.0
+#define SWIPE_BACK_SECONDS 0.18
 /* how far the rows of others step right to leave room for the selection circle, and the circle's side */
 #define SELECT_SHIFT 32.0
 #define SELECT_MARK 24.0
@@ -849,7 +852,11 @@ static float ExteriaSpoilerRandom(void) {
     UIPanGestureRecognizer *_swipe;
     UIPanGestureRecognizer *_seekPan;
     UIView *_swipeDisc;
-    BOOL _swipeCrossed;
+    CAShapeLayer *_swipeRing;
+    CALayer *_swipeFill;
+    BOOL _swipeShown;
+    BOOL _swipeArmed;
+    CGFloat _swipePull;
     UIControl *_selectCover;
     UIView *_selectMark;
     UIImageView *_selectCheck;
@@ -984,16 +991,32 @@ static float ExteriaSpoilerRandom(void) {
     _doubleTap.enabled = NO;
     [self.contentView addGestureRecognizer:_doubleTap];
     [tap requireGestureRecognizerToFail:_doubleTap];
-    /* the disc appears on the right as the row is pulled left */
+    /* the disc comes in from the right edge as the row is pulled left: a ring that fills with the pull, and a solid fill when the answer is armed */
     _swipeDisc = [[UIView alloc] initWithFrame:CGRectMake(0, 0, SWIPE_DISC, SWIPE_DISC)];
     _swipeDisc.backgroundColor = [UIColor colorWithWhite:0 alpha:0.3];
     _swipeDisc.layer.cornerRadius = SWIPE_DISC / 2;
     _swipeDisc.userInteractionEnabled = NO;
     _swipeDisc.alpha = 0;
+    _swipeFill = [[CALayer layer] retain];
+    _swipeFill.frame = _swipeDisc.bounds;
+    _swipeFill.cornerRadius = SWIPE_DISC / 2;
+    _swipeFill.backgroundColor = ExteriaColorAccent().CGColor;
+    _swipeFill.opacity = 0;
+    [_swipeDisc.layer addSublayer:_swipeFill];
+    _swipeRing = [[CAShapeLayer layer] retain];
+    _swipeRing.frame = _swipeDisc.bounds;
+    _swipeRing.path = [UIBezierPath bezierPathWithArcCenter:CGPointMake(SWIPE_DISC / 2, SWIPE_DISC / 2) radius:SWIPE_DISC / 2 - 2 startAngle:-(CGFloat)M_PI_2
+                                                    endAngle:(CGFloat)(3 * M_PI_2) clockwise:YES].CGPath;
+    _swipeRing.fillColor = NULL;
+    _swipeRing.strokeColor = [UIColor colorWithWhite:1 alpha:0.9].CGColor;
+    _swipeRing.lineWidth = 2;
+    _swipeRing.lineCap = kCALineCapRound;
+    _swipeRing.strokeEnd = 0;
+    [_swipeDisc.layer addSublayer:_swipeRing];
     UIImageView *arrow = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolReply, 18, [UIColor whiteColor])] autorelease];
     arrow.center = CGPointMake(SWIPE_DISC / 2, SWIPE_DISC / 2);
     [_swipeDisc addSubview:arrow];
-    [self insertSubview:_swipeDisc belowSubview:self.contentView];
+    [self addSubview:_swipeDisc];
     /* while messages are picked a clear cover takes every touch of the row, so no link, button or player under it answers */
     _selectCover = [[UIControl alloc] init];
     _selectCover.hidden = YES;
@@ -1048,6 +1071,8 @@ static ExteriaMessageCell *sPlayingRound = nil;
     _seekPan.delegate = nil;
     [_seekPan release];
     [_swipeDisc release];
+    [_swipeRing release];
+    [_swipeFill release];
     [_flash release];
     [_selectCover release];
     [_selectMark release];
@@ -2366,9 +2391,35 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 - (void)resetSwipe {
     [self.contentView.layer removeAllAnimations];
     [_swipeDisc.layer removeAllAnimations];
-    _swipeCrossed = NO;
+    [_swipeFill removeAllAnimations];
+    [self clearSwipeState];
     self.contentView.transform = [self restingTransform];
     _swipeDisc.alpha = 0;
+}
+
+- (void)clearSwipeState {
+    _swipeShown = NO;
+    _swipeArmed = NO;
+    _swipePull = 0;
+    [self clearSwipeVisuals];
+}
+
+/* the ring and the fill go back to empty without animating, for the next pull */
+- (void)clearSwipeVisuals {
+    [_swipeFill removeAllAnimations];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _swipeRing.strokeEnd = 0;
+    _swipeFill.opacity = 0;
+    [CATransaction commit];
+}
+
+/* the tick the answer gives when it becomes armed; the generator is found at run time, since it came with ios 10 */
+static void ExteriaSwipeTick(void) {
+    Class generator = NSClassFromString(@"UIImpactFeedbackGenerator");
+    if (!generator) return;
+    id feedback = [[[generator alloc] init] autorelease];
+    if ([feedback respondsToSelector:@selector(impactOccurred)]) [feedback performSelector:@selector(impactOccurred)];
 }
 
 /* a message that has a number on the server can be picked; a date, a service line and a message still on its way cannot */
@@ -2409,52 +2460,82 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     else apply();
 }
 
+/* the disc stands on the right edge of the screen and moves in with the row, at half the pace for our own messages, whose bubble is already near the edge */
+- (CGPoint)swipeDiscCenterForPull:(CGFloat)pull {
+    CGFloat factor = _item.message.outgoing ? 0.5f : 1;
+    return CGPointMake(self.bounds.size.width - pull * factor, CGRectGetMidY(_item.bubbleFrame));
+}
+
+/* the ring grows over the 30 points after the disc shows, and the fill swells in when the answer is armed or leaves when the finger comes back under the line */
+- (void)updateSwipeForPull:(CGFloat)pull {
+    BOOL shown = pull >= SWIPE_SHOW;
+    if (shown != _swipeShown) {
+        _swipeShown = shown;
+        if (shown) {
+            _swipeDisc.transform = CGAffineTransformMakeScale(0.3f, 0.3f);
+            ExteriaAnimateView(_swipeDisc, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+        } else {
+            ExteriaAnimateView(_swipeDisc, CGAffineTransformMakeScale(0.3f, 0.3f), 0, EXTERIA_MOTION_EXIT, nil);
+        }
+    }
+    BOOL armed = pull >= SWIPE_TRIGGER;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _swipeRing.strokeEnd = armed ? 1 : MAX(0, MIN(1, (pull - SWIPE_SHOW) / (SWIPE_TRIGGER - SWIPE_SHOW)));
+    [CATransaction commit];
+    if (armed == _swipeArmed) return;
+    _swipeArmed = armed;
+    if (armed) ExteriaSwipeTick();
+    CFTimeInterval duration = ExteriaReduceMotionEnabled() ? 0 : 0.28;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _swipeFill.opacity = armed ? 1 : 0;
+    [CATransaction commit];
+    CAKeyframeAnimation *swell = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+    swell.values = armed ? [NSArray arrayWithObjects:[NSNumber numberWithFloat:0.3f], [NSNumber numberWithFloat:1.12f], [NSNumber numberWithFloat:1], nil]
+                         : [NSArray arrayWithObjects:[NSNumber numberWithFloat:1], [NSNumber numberWithFloat:0.3f], nil];
+    swell.keyTimes = armed ? [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.6f], [NSNumber numberWithFloat:1], nil]
+                           : [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:1], nil];
+    swell.duration = duration;
+    swell.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+    if (duration > 0) [_swipeFill addAnimation:swell forKey:@"exteria.swipe.fill"];
+}
+
 - (void)swiped:(UIPanGestureRecognizer *)pan {
     switch (pan.state) {
     case UIGestureRecognizerStateBegan:
     case UIGestureRecognizerStateChanged: {
-        CGFloat pull = (CGFloat)exteria_motion_reply_swipe_pull([pan translationInView:self].x);
-        /* past the trigger the row gives less for every point, so it is clear the answer is armed */
-        CGFloat shown = pull <= SWIPE_TRIGGER ? pull : SWIPE_TRIGGER + (pull - SWIPE_TRIGGER) * 0.3;
-        shown = MIN(shown, SWIPE_MAX);
-        self.contentView.transform = CGAffineTransformMakeTranslation(-shown, 0);
-        CGFloat progress = MIN(1, shown / SWIPE_TRIGGER);
-        CGFloat gap = 10;
-        CGRect bubble = _item.bubbleFrame;
-        CGFloat x = CGRectGetMaxX(bubble) - shown + gap + SWIPE_DISC / 2;
-        x = MAX(SWIPE_DISC / 2, MIN(self.bounds.size.width - SWIPE_DISC / 2, x));
-        _swipeDisc.center = CGPointMake(x, CGRectGetMidY(bubble));
-        CGFloat scale = 0.6 + 0.4 * progress;
-        CGFloat room = self.bounds.size.width - CGRectGetMaxX(bubble) + shown;
-        _swipeDisc.alpha = room >= gap + SWIPE_DISC ? progress : 0;
-        CGFloat flip = 1;
-        BOOL crossed = pull >= SWIPE_TRIGGER;
-        if (crossed != _swipeCrossed) {
-            /* the disc swells as the answer becomes armed, and settles when it is let go, the way the reply icon of the original client pops */
-            [UIView animateWithDuration:0.14 delay:0 options:UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionCurveEaseOut animations:^{
-                _swipeDisc.transform = CGAffineTransformMakeScale(flip * (crossed ? scale * 1.18 : scale), crossed ? scale * 1.18 : scale);
-            } completion:nil];
-        } else if (!crossed) {
-            _swipeDisc.transform = CGAffineTransformMakeScale(flip * scale, scale);
-        }
-        _swipeCrossed = crossed;
+        /* the row follows the finger in both directions: the way back gives the pull back, and the disc leaves with it */
+        CGFloat pull = MIN(SWIPE_MAX, (CGFloat)exteria_motion_reply_swipe_pull([pan translationInView:self].x));
+        _swipePull = pull;
+        self.contentView.transform = CGAffineTransformMakeTranslation(-pull, 0);
+        _swipeDisc.center = [self swipeDiscCenterForPull:pull];
+        [self updateSwipeForPull:pull];
         break;
     }
-    case UIGestureRecognizerStateEnded: {
-        BOOL answer = _swipeCrossed;
-        _swipeCrossed = NO;
-        /* the row springs back, through the helper that has the spring on every system the app runs on */
-        ExteriaAnimateView(self.contentView, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
-        [UIView animateWithDuration:0.2 animations:^{ _swipeDisc.alpha = 0; }];
+    case UIGestureRecognizerStateEnded:
+    case UIGestureRecognizerStateCancelled:
+    case UIGestureRecognizerStateFailed: {
+        BOOL answer = pan.state == UIGestureRecognizerStateEnded && _swipePull >= SWIPE_TRIGGER;
+        _swipeShown = NO;
+        _swipeArmed = NO;
+        _swipePull = 0;
+        /* the row and the disc go back together, slowing down toward the end, as the 180 ms return of exteraless; the ring and the fill empty once it is gone, unless
+           a new pull has begun by then */
+        CGPoint home = [self swipeDiscCenterForPull:0];
+        [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : SWIPE_BACK_SECONDS delay:0
+                            options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+            self.contentView.transform = [self restingTransform];
+            _swipeDisc.center = home;
+            _swipeDisc.alpha = 0;
+        } completion:^(BOOL finished) {
+            (void)finished;
+            if (!_swipeShown) [self clearSwipeVisuals];
+        }];
         if (answer) [_delegate messageCellDidSwipeReply:self];
         break;
     }
     default:
-        _swipeCrossed = NO;
-        [UIView animateWithDuration:0.2 animations:^{
-            self.contentView.transform = CGAffineTransformIdentity;
-            _swipeDisc.alpha = 0;
-        }];
         break;
     }
 }
@@ -2504,6 +2585,20 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     }
     if (!_reactions.hidden && CGRectContainsPoint(_reactions.frame, point)) return;
     if (_markupView && !_markupView.hidden && CGRectContainsPoint(_markupView.frame, point)) return;
+    CGPoint inBody = [tap locationInView:_body];
+    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
+    ExteriaMessage *message = _item.message;
+    NSString *url = _item.textLayout ? [_item.textLayout linkAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)] : nil;
+    if ([url isEqualToString:ExteriaSpoilerTarget]) {
+        message.spoilersRevealed = YES;
+        _item.textLayout.spoilersRevealed = YES;
+        [_body setNeedsDisplay];
+        return;
+    }
+    if (url) {
+        [_delegate messageCell:self didTapLink:url];
+        return;
+    }
     if (_item.albumFrames.count) {
         CGPoint inBubble = [tap locationInView:self.contentView];
         inBubble.x -= _item.bubbleFrame.origin.x;
@@ -2581,20 +2676,6 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     CGRect replyFrame = _item.kind == ExteriaChatItemBubble ? _item.replyFrame : _replyPreview.frame;
     if (!CGRectIsEmpty(replyFrame) && CGRectContainsPoint(replyFrame, inReply)) {
         [_delegate messageCellDidTapReply:self];
-    CGPoint inBody = [tap locationInView:_body];
-    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
-    ExteriaMessage *message = _item.message;
-    NSString *url = _item.textLayout ? [_item.textLayout linkAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)] : nil;
-    if ([url isEqualToString:ExteriaSpoilerTarget]) {
-        message.spoilersRevealed = YES;
-        _item.textLayout.spoilersRevealed = YES;
-        [_body setNeedsDisplay];
-        return;
-    }
-    if (url) {
-        [_delegate messageCell:self didTapLink:url];
-        return;
-    }
         return;
     }
     /* the line "forwarded from" takes to the one who wrote it, or says that they hid their account */
