@@ -12,6 +12,9 @@ typedef void (^ExteriaCallbackCompletion)(ExteriaCallbackAnswer *answer, NSStrin
 
 /* the user, bot, group or channel behind @name (without the @) */
 - (void)resolveUsername:(NSString *)name completion:(ExteriaResolveCompletion)completion;
+/* the person this account already has under the user id, with the photo the chats gave it, nil when it has none; the completion runs on the main thread. the id is
+   what stays when a username changes */
+- (void)loadStoredPersonOfUserId:(long long)userId completion:(void (^)(ExteriaPerson *person))completion;
 /* an invite link to a private group or channel (the hash of t.me/+hash): what it leads to without joining, and the join itself.
    member is set when the account is in the chat already, and then the chat opens as it is */
 typedef void (^ExteriaInviteCheckCompletion)(ExteriaDialog *member, NSString *title, NSString *about, NSInteger participants, BOOL broadcast, BOOL requestNeeded, NSString *errorName);

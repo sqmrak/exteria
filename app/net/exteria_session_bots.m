@@ -56,6 +56,14 @@ static NSString *ExteriaParseFailure(const char *method, exteria_status status) 
     [username release];
 }
 
+- (void)loadStoredPersonOfUserId:(long long)userId completion:(void (^)(ExteriaPerson *))completion {
+    void (^done)(ExteriaPerson *) = [completion copy];
+    [self post:^{
+        ExteriaPerson *held = userId > 0 ? [self storedPersonWithKey:(int64_t)userId] : nil;
+        [self deliverMain:^{ done(held); [done release]; }];
+    }];
+}
+
 - (void)checkInviteHash:(NSString *)hash completion:(ExteriaInviteCheckCompletion)completion {
     ExteriaInviteCheckCompletion done = [completion copy];
     NSString *value = [hash copy];

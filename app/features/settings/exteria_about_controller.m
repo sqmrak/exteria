@@ -6,6 +6,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_chat_extras_controller.h"
+#import "exteria_developers.h"
 #import "exteria_person.h"
 #import "exteria_session_bots.h"
 #import "exteria_settings_pages.h"
@@ -24,7 +25,6 @@ static NSString *const ExteriaSourceAddress = @"https://github.com/sqmrak/exteri
 
 typedef struct {
     NSString *name;
-    NSString *picture;
     NSString *role;
     /* the outline of the picture: a circle pressed in by lobes dents of the given depth, as the shapes of the material 3 expressive set are */
     int lobes;
@@ -35,15 +35,15 @@ typedef struct {
 } ExteriaCredit;
 
 static const ExteriaCredit ExteriaCredits[] = {
-    {@"sqmrak", @"credit_sqmrak", @"about.lead", 9, 0.10, @"Senko", @"app_senko"},
-    {@"QWERTYU1OPZ", @"credit_qwertyu1opz", @"about.backend", 4, 0.14, @"LegacyGram", @"app_legacygram"},
-    {@"LimeDev", @"credit_limedev", @"about.frontend", 8, 0.16, @"MintAI", @"app_mintai"},
-    {@"menstry", @"credit_menstry", @"about.backend", 12, 0.08, @"TeleGloss", @"app_telegloss"},
-    {@"anazerka", @"credit_anazerka", @"about.backend", 5, 0.12, @"Twelve", @"app_twelve"},
-    {@"loveiOS6", @"credit_loveios6", @"about.frontend", 6, 0.14, @"iChatter", @"app_ichatter"},
-    {@"nestorvashenko", @"credit_nestorvashenko", @"about.frontend", 7, 0.12, @"iKlassika", @"app_iklassika"},
-    {@"svcayon4ik", @"credit_svcayon4ik", @"about.backend", 10, 0.10, @"FlowGram", @"app_flowgram"},
-    {@"illyagif", @"credit_illyagif", @"about.backend", 3, 0.12, @"OneGram", @"app_onegram"},
+    {@"sqmrak", @"about.lead", 9, 0.10, @"Senko", @"app_senko"},
+    {@"QWERTYU1OPZ", @"about.backend", 4, 0.14, @"LegacyGram", @"app_legacygram"},
+    {@"LimeDev", @"about.frontend", 8, 0.16, @"MintAI", @"app_mintai"},
+    {@"menstry", @"about.backend", 12, 0.08, @"TeleGloss", @"app_telegloss"},
+    {@"anazerka", @"about.backend", 5, 0.12, @"Twelve", @"app_twelve"},
+    {@"loveiOS6", @"about.frontend", 6, 0.14, @"iChatter", @"app_ichatter"},
+    {@"nestorvashenko", @"about.frontend", 7, 0.12, @"iKlassika", @"app_iklassika"},
+    {@"svcayon4ik", @"about.backend", 10, 0.10, @"FlowGram", @"app_flowgram"},
+    {@"illyagif", @"about.backend", 3, 0.12, @"OneGram", @"app_onegram"},
 };
 
 /* the slice the running code was built for, which is what the version line shows */
@@ -83,6 +83,24 @@ static UIImage *ExteriaBundledPicture(NSString *name) {
     NSString *path = [[NSBundle mainBundle] pathForResource:name ofType:@"png"];
     UIImage *image = path ? [UIImage imageWithContentsOfFile:path] : nil;
     if (!image) NSLog(@"exteria: about picture %@ is missing from the bundle", name);
+    return image;
+}
+
+/* the picture a person stands behind until the server's one arrives: a colored square with the first letter of the name, drawn here, since no picture of a person
+   is kept in the app */
+static UIImage *ExteriaInitialPicture(NSString *name, CGFloat side) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), YES, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGFloat hue = (CGFloat)(name.hash % 360) / 360;
+    [[UIColor colorWithHue:hue saturation:0.45 brightness:0.78 alpha:1] setFill];
+    CGContextFillRect(context, CGRectMake(0, 0, side, side));
+    NSString *letter = name.length ? [[name substringToIndex:1] uppercaseString] : @"?";
+    UIFont *font = ExteriaFontBold(side * 0.5);
+    [[UIColor whiteColor] set];
+    CGSize size = ExteriaStringSize(letter, font);
+    ExteriaDrawStringIn(letter, font, CGRectMake(0, (side - size.height) / 2, side, size.height), ExteriaStringTailTruncate, ExteriaTextAlignmentCenter);
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
     return image;
 }
 
@@ -137,28 +155,44 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     [self fetchPhotos];
 }
 
-/* the photo a person has now, by the @name; a name the server does not answer for, or one without a photo, keeps
-   the bundled picture */
+/* the photo a person has now. the user id the credits learned names the person first, as it stays when a username changes: the account's own copy of that user
+   gives the photo. a person it has not seen, or one without a photo there, is asked for by the @name, which also gives the access hash a photo needs */
 - (void)fetchPhotos {
     if (_fetched) return;
     _fetched = YES;
     for (size_t i = 0; i < sizeof(ExteriaCredits) / sizeof(ExteriaCredits[0]); ++i) {
         NSString *name = ExteriaCredits[i].name;
         ExteriaWeakReference *weak = _weak;
-        [_session resolveUsername:name completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
-            (void)dialog;
+        void (^show)(ExteriaPerson *) = ^(ExteriaPerson *person) {
             ExteriaAboutController *me = weak.target;
-            if (!me || !person.photo) {
-                if (me && errorName) NSLog(@"exteria: no photo for @%@: %@", name, errorName);
-                return;
-            }
+            if (!me || !person.photo) return;
             [me->_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) {
                 ExteriaAboutController *again = weak.target;
                 if (!again || !image) return;
                 [again->_fresh setObject:image forKey:name];
                 [again rebuildSections];
             }];
-        }];
+        };
+        void (^byName)(void) = [^{
+            [_session resolveUsername:name completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
+                (void)dialog;
+                if (!person.photo) {
+                    if (errorName) NSLog(@"exteria: no photo for @%@: %@", name, errorName);
+                    return;
+                }
+                show(person);
+            }];
+        } copy];
+        long long userId = ExteriaDeveloperIdOfUsername(name);
+        if (userId > 0) {
+            [_session loadStoredPersonOfUserId:userId completion:^(ExteriaPerson *held) {
+                if (held.photo) show(held);
+                else byName();
+            }];
+        } else {
+            byName();
+        }
+        [byName release];
     }
 }
 
@@ -244,7 +278,7 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     NSString *role = NSLocalizedString(person->role, nil);
     /* the app they made is named under the role and shown by its icon at the right end of the row */
     NSString *made = person->app ? [NSString stringWithFormat:NSLocalizedString(@"about.made", nil), person->app] : nil;
-    UIImage *picture = [_fresh objectForKey:person->name] ?: ExteriaBundledPicture(person->picture);
+    UIImage *picture = [_fresh objectForKey:person->name] ?: ExteriaInitialPicture(person->name, 2 * LEAD_TILE);
     UIImage *icon = person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
     void (^tap)(void) = ^{ [(ExteriaAboutController *)weak.target open:address]; };
     BOOL lead = person == &ExteriaCredits[0];
