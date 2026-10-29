@@ -5,7 +5,7 @@
 
 #include "exteria_motion.h"
 
-/* a finger that starts further in than this belongs to the screen, whose rows and sliders have their own swipes */
+/* a finger that starts inside this width always pulls the screen back; further in, only where nothing under it takes a rightward drag itself */
 #define EDGE_WIDTH 24.0
 #define PARALLAX 0.3
 
@@ -75,10 +75,26 @@
     return velocity.x > 0 && fabs(velocity.x) > fabs(velocity.y);
 }
 
-/* the place of the touch is judged where it lands, since by the first movement the finger has left the edge */
+/* whether the view takes a rightward drag for itself: a slider, a swipe to the right (emoji pages, photo paging), or a horizontal scroll view that is not at its left end */
+static BOOL ExteriaViewTakesRightwardDrag(UIView *view) {
+    if ([view isKindOfClass:[UISlider class]]) return YES;
+    for (UIGestureRecognizer *recognizer in view.gestureRecognizers) {
+        if (!recognizer.enabled || ![recognizer isKindOfClass:[UISwipeGestureRecognizer class]]) continue;
+        if (((UISwipeGestureRecognizer *)recognizer).direction & UISwipeGestureRecognizerDirectionRight) return YES;
+    }
+    if (![view isKindOfClass:[UIScrollView class]]) return NO;
+    UIScrollView *scroll = (UIScrollView *)view;
+    return scroll.scrollEnabled && scroll.contentSize.width > scroll.bounds.size.width + 1 && scroll.contentOffset.x > -scroll.contentInset.left + 1;
+}
+
+/* the place of the touch is judged where it lands, since by the first movement the finger has left it */
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
     (void)gesture;
-    return [touch locationInView:_navigation.view].x < EDGE_WIDTH;
+    if ([touch locationInView:_navigation.view].x < EDGE_WIDTH) return YES;
+    for (UIView *view = touch.view; view && view != _navigation.view; view = view.superview) {
+        if (ExteriaViewTakesRightwardDrag(view)) return NO;
+    }
+    return YES;
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
