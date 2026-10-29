@@ -121,6 +121,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 - (NSString *)failureText:(exteria_status)status {
     NSString *key;
     switch (status) {
+    case EXTERIA_E_IO: key = _updater.installing ? @"release.fail.install" : @"release.fail.network"; break;
     /* the chain, the host name or the digest did not check out */
     case EXTERIA_E_SECURITY: key = @"release.fail.security"; break;
     case EXTERIA_E_STORAGE: key = @"release.fail.storage"; break;
@@ -299,6 +300,41 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 }
 - (void)start {
     [self retain];
+    ExteriaFetchLatestRelease(^(NSDictionary *release, NSString *error) {
+        if (error) NSLog(@"exteria: release check failed: %@", error);
+        NSString *tag = [release objectForKey:@"tag"];
+        int newer = 0;
+        NSString *installed = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+        exteria_status status = tag ? exteria_release_compare(tag.UTF8String, installed.UTF8String, &newer) : EXTERIA_E_STATE;
+        if (tag && status != EXTERIA_OK) NSLog(@"exteria: release version rejected: %s", exteria_status_name(status));
+        if (status == EXTERIA_OK && newer) {
+            _tag = [tag copy];
+            _notes = [[release objectForKey:@"notes"] copy];
+            _ipaURL = [[release objectForKey:@"ipa"] copy];
+            _digestURL = [[release objectForKey:@"digest"] copy];
+            _size = [[release objectForKey:@"size"] unsignedLongLongValue];
+            [self showIfReady];
+        }
+        [self release];
+    });
+}
+@end
+
+/* what the update page shows for a check that failed: the cause in words, with the status name after it for a bug report */
+static NSString *ExteriaReleaseFailureText(exteria_status status) {
+    NSString *key;
+    switch (status) {
+    case EXTERIA_E_IO: case EXTERIA_E_TIMEOUT: key = @"update.page.error.network"; break;
+    /* the chain or the host name did not check out */
+    case EXTERIA_E_SECURITY: key = @"update.page.error.security"; break;
+    case EXTERIA_E_MALFORMED: case EXTERIA_E_UNSUPPORTED: case EXTERIA_E_LIMIT: key = @"update.page.error.format"; break;
+    default: return [NSString stringWithUTF8String:exteria_status_name(status)];
+    }
+    return [NSString stringWithFormat:@"%@ (%s)", NSLocalizedString(key, nil), exteria_status_name(status)];
+}
+
+void ExteriaFetchLatestRelease(void (^completion)(NSDictionary *, NSString *)) {
+    void (^done)(NSDictionary *, NSString *) = [completion copy];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         NSData *roots = [ExteriaUpdater trustedRoots];
@@ -306,7 +342,6 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         exteria_https_request request;
         exteria_https_response response;
         exteria_release release;
-        int newer = 0;
         memset(&request, 0, sizeof(request));
         memset(&response, 0, sizeof(response));
         request.host = "api.github.com";
@@ -319,34 +354,36 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         request.max_response = RELEASE_RESPONSE_LIMIT;
         request.connect_socket = ExteriaShiroNetworkConnectSocket;
         exteria_status status = roots.length ? exteria_https_get(&request, &response) : EXTERIA_E_STATE;
-        NSString *installed = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-        if (status == EXTERIA_OK && response.status == 200)
+        NSString *error = nil;
+        /* api.github.com answers 403 or 429 once an address has used its 60 requests an hour, and the tunnel of shiro puts many phones behind one address.
+           the release page of the web site has no such limit and names the tag in its redirect; that one answer is read and nothing is retried. a connection
+           to the api host that fails or times out takes the same way, since github.com can be reachable when it is not */
+        if ((status == EXTERIA_OK && (response.status == 403 || response.status == 429)) || status == EXTERIA_E_IO || status == EXTERIA_E_TIMEOUT) {
+            static const char *const web_headers[] = {"User-Agent: Exteria", "Accept-Encoding: identity", NULL};
+            NSLog(@"exteria: release api failed (%s, HTTP %d), reading the release page", exteria_status_name(status), response.status);
+            exteria_https_response_free(&response);
+            memset(&response, 0, sizeof(response));
+            request.host = "github.com";
+            request.path = "/sqmrak/exteria/releases/latest";
+            request.headers = web_headers;
+            status = exteria_https_get(&request, &response);
+            if (status == EXTERIA_OK && response.status >= 300 && response.status < 400) status = exteria_release_from_redirect(response.headers, &release);
+            else if (status == EXTERIA_OK) error = [NSString stringWithFormat:@"HTTP %d", response.status];
+        } else if (status == EXTERIA_OK && response.status != 200)
+            error = [NSString stringWithFormat:@"HTTP %d", response.status];
+        else if (status == EXTERIA_OK)
             status = exteria_release_parse((const char *)response.body, response.body_len, &release);
-        else if (status == EXTERIA_OK) NSLog(@"exteria: release check returned HTTP %d", response.status);
-        if (status == EXTERIA_OK && response.status == 200)
-            status = exteria_release_compare(release.tag, installed.UTF8String, &newer);
-        NSString *tag = status == EXTERIA_OK && newer ? [NSString stringWithUTF8String:release.tag] : nil;
-        NSString *notes = tag ? [NSString stringWithUTF8String:release.body] : nil;
-        NSString *ipaURL = tag && release.ipa_url[0] ? [NSString stringWithUTF8String:release.ipa_url] : nil;
-        NSString *digestURL = tag && release.sha_url[0] ? [NSString stringWithUTF8String:release.sha_url] : nil;
-        uint64_t size = tag ? release.ipa_size : 0;
-        if (status != EXTERIA_OK) NSLog(@"exteria: release check failed: %s", exteria_status_name(status));
+        if (status != EXTERIA_OK && !error) error = ExteriaReleaseFailureText(status);
+        NSDictionary *info = nil;
+        if (!error) info = [NSDictionary dictionaryWithObjectsAndKeys:
+            [NSString stringWithUTF8String:release.tag], @"tag", [NSString stringWithUTF8String:release.body], @"notes",
+            [NSString stringWithUTF8String:release.ipa_url], @"ipa", [NSString stringWithUTF8String:release.sha_url], @"digest",
+            [NSNumber numberWithUnsignedLongLong:release.ipa_size], @"size", nil];
         exteria_https_response_free(&response);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (tag.length) {
-                _tag = [tag copy];
-                _notes = [notes copy];
-                _ipaURL = [ipaURL copy];
-                _digestURL = [digestURL copy];
-                _size = size;
-                [self showIfReady];
-            }
-            [self release];
-        });
+        dispatch_async(dispatch_get_main_queue(), ^{ if (done) done(info, error); [done release]; });
         [pool drain];
     });
 }
-@end
 
 void ExteriaReleaseCheckStart(UIWindow *window) {
     static ExteriaReleaseCheck *check;

@@ -31,6 +31,10 @@ exteria_status exteria_release_url_split(const char *url, char *host, size_t hos
 exteria_status exteria_release_parse_sha256(const char *text, size_t length, uint8_t out[32]);
 
 exteria_status exteria_release_parse(const char *json, size_t length, exteria_release *out);
+/* the release named by the answer of https://github.com/sqmrak/exteria/releases/latest, a redirect to .../releases/tag/<tag> (headers is the header block of
+   that answer). only the tag is known then: the notes stay empty, the size is 0 and the asset urls are the project's download path for that tag.
+   EXTERIA_E_MALFORMED for a missing or foreign location or a tag with characters outside letters, digits and ._-+ */
+exteria_status exteria_release_from_redirect(const char *headers, exteria_release *out);
 exteria_status exteria_release_compare(const char *remote, const char *installed, int *newer);
 
 #endif

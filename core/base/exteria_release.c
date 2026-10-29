@@ -142,6 +142,51 @@ exteria_status exteria_release_parse_sha256(const char *text, size_t length, uin
     return EXTERIA_OK;
 }
 
+static int header_name_is(const char *line, const char *name) {
+    size_t i;
+    for (i = 0; name[i]; ++i) {
+        char c = line[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        if (c != name[i]) return 0;
+    }
+    return 1;
+}
+
+exteria_status exteria_release_from_redirect(const char *headers, exteria_release *out) {
+    static const char tag_path[] = "https://github.com/sqmrak/exteria/releases/tag/";
+    const char *line, *value, *end;
+    size_t tag_len, i;
+    if (out) memset(out, 0, sizeof(*out));
+    if (!headers || !out) return EXTERIA_E_ARG;
+    for (line = headers; *line; line = strchr(line, '\n') ? strchr(line, '\n') + 1 : line + strlen(line)) {
+        if (header_name_is(line, "location:")) break;
+    }
+    if (!*line) return EXTERIA_E_MALFORMED;
+    value = line + strlen("location:");
+    while (*value == ' ' || *value == '\t') ++value;
+    if (strncmp(value, tag_path, sizeof(tag_path) - 1)) return EXTERIA_E_MALFORMED;
+    value += sizeof(tag_path) - 1;
+    for (end = value; *end && *end != '\r' && *end != '\n'; ++end);
+    tag_len = (size_t)(end - value);
+    if (!tag_len || tag_len >= sizeof(out->tag)) return EXTERIA_E_MALFORMED;
+    for (i = 0; i < tag_len; ++i) {
+        char c = value[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.' || c == '-' || c == '_' || c == '+')) return EXTERIA_E_MALFORMED;
+    }
+    memcpy(out->tag, value, tag_len);
+    out->tag[tag_len] = 0;
+    {
+        const char *version = out->tag[0] == 'v' || out->tag[0] == 'V' ? out->tag + 1 : out->tag;
+        int n = snprintf(out->ipa_url, sizeof(out->ipa_url), "%s%s/Exteria-v%s.ipa", EXTERIA_RELEASE_DOWNLOAD_PREFIX, out->tag, version);
+        if (n < 0 || (size_t)n >= sizeof(out->ipa_url) ||
+            snprintf(out->sha_url, sizeof(out->sha_url), "%s.sha256", out->ipa_url) >= (int)sizeof(out->sha_url)) {
+            memset(out, 0, sizeof(*out));
+            return EXTERIA_E_LIMIT;
+        }
+    }
+    return EXTERIA_OK;
+}
+
 exteria_status exteria_release_parse(const char *json, size_t length, exteria_release *out) {
     exteria_json_doc *doc = NULL;
     const exteria_json *root, *node;

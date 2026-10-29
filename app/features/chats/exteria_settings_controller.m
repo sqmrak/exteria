@@ -11,6 +11,7 @@
 #import "exteria_chat_settings.h"
 #import "exteria_chat_settings_controller.h"
 #import "exteria_about_controller.h"
+#import "exteria_update_controller.h"
 #import "exteria_account_controller.h"
 #import "exteria_data_settings_controller.h"
 #import "exteria_stickers_settings_controller.h"
@@ -317,6 +318,8 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ExteriaSettingsRow *language = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolSettingsLanguage tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"language.title", nil)
                                                             subtitle:nil value:ExteriaNativeLanguageName(ExteriaInterfaceLanguageVariant())
                                                                  tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaLanguageSettingsController alloc] init] autorelease]]; }];
+    ExteriaSettingsRow *update = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolArrowDown tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"update.page.title", nil)
+                                                         subtitle:nil value:nil tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; }];
     NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
 #if defined(__arm64__)
     NSString *architecture = @"arm64";
@@ -325,7 +328,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 #endif
     NSString *version = [NSString stringWithFormat:NSLocalizedString(@"settings.version.line", nil), [info objectForKey:@"CFBundleShortVersionString"], architecture];
     version = [version stringByAppendingString:@"\nuse senko by sqmrak btw"];
-    ExteriaSettingsSection *list = [ExteriaSettingsSection sectionWithHeader:nil footer:version rows:[NSArray arrayWithObjects:account, chats, stickers, privacy, passcode, notifications, data, folders, devices, power, language, nil]];
+    ExteriaSettingsSection *list = [ExteriaSettingsSection sectionWithHeader:nil footer:version rows:[NSArray arrayWithObjects:account, chats, stickers, privacy, passcode, notifications, data, folders, devices, power, update, language, nil]];
     list.centerFooter = YES;
     self.sections = [NSArray arrayWithObjects:
         [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:look]], list, nil];
@@ -455,6 +458,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ENTRY(NSLocalizedString(@"settings.power", nil), nil, ExteriaSymbolSettingsPower, ExteriaSettingsToneOrangeDeep, openPower);
     NSString *lite[] = {@"lite.battery.title", @"lite.options", @"lite.stickers", @"lite.emoji", @"lite.background", @"lite.calls", @"lite.smooth", @"lite.class"};
     for (size_t i = 0; i < sizeof(lite) / sizeof(lite[0]); ++i) ENTRY(NSLocalizedString(lite[i], nil), [NSArray arrayWithObject:power], ExteriaSymbolSettingsPower, ExteriaSettingsToneOrangeDeep, openPower);
+    ENTRY(NSLocalizedString(@"update.page.title", nil), nil, ExteriaSymbolArrowDown, blue, ^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; });
     ENTRY(language, nil, ExteriaSymbolSettingsLanguage, ExteriaSettingsTonePurple, openLanguage);
     ENTRY(translator, [NSArray arrayWithObject:language], ExteriaSymbolTranslate, ExteriaSettingsTonePurple, openTranslator);
     NSArray *translatorPath = [NSArray arrayWithObjects:language, translator, nil];

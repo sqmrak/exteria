@@ -31,7 +31,9 @@ typedef struct fetch_state {
     exteria_digest *digest;
     uint64_t received;
     void *owner;
-    void (*note)(void *owner, uint64_t received);
+    void (*note)(void *owner, uint64_t received, uint64_t total);
+    /* the length the server announced for the body being read; a release found through the web page has no size in its record */
+    const uint64_t *length;
     volatile int *cancelled;
 } fetch_state;
 
@@ -52,13 +54,15 @@ static exteria_status fetch_take(void *ctx, const uint8_t *data, size_t len) {
     while (len > 0) {
         ssize_t put = write(state->fd, data, len);
         if (put < 0 && errno == EINTR) continue;
-        /* a full data partition is told apart from a broken one so the notice can say so */
-        if (put <= 0) return errno == ENOSPC ? EXTERIA_E_STORAGE : EXTERIA_E_IO;
+        if (put <= 0) {
+            NSLog(@"exteria: update temporary file write failed: %s", put < 0 ? strerror(errno) : "zero bytes written");
+            return EXTERIA_E_STORAGE;
+        }
         data += put;
         len -= (size_t)put;
         state->received += (uint64_t)put;
     }
-    if (state->note) state->note(state->owner, state->received);
+    if (state->note) state->note(state->owner, state->received, state->length ? *state->length : 0);
     return EXTERIA_OK;
 }
 
@@ -86,9 +90,14 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
         request.max_response = max_body;
         request.is_cancelled = fetch_cancelled;
         request.cancel_ctx = state;
+        memset(&head, 0, sizeof(head));
+        state->length = &head.content_length;
         request.connect_socket = ExteriaShiroNetworkConnectSocket;
         status = exteria_https_get_stream(&request, &head, fetch_take, state);
-        if (status != EXTERIA_OK) return status;
+        if (status != EXTERIA_OK) {
+            NSLog(@"exteria: update request to %s failed: %s, received %llu bytes", host, exteria_status_name(status), (unsigned long long)state->received);
+            return status;
+        }
         if (head.status == 200) return EXTERIA_OK;
         if ((head.status == 301 || head.status == 302 || head.status == 303 || head.status == 307 || head.status == 308) && head.location[0]) {
             if (strlen(head.location) >= sizeof(current)) return EXTERIA_E_LIMIT;
@@ -114,7 +123,7 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     volatile int _cancelled;
     UIBackgroundTaskIdentifier _background;
 }
-- (void)setDownloaded:(uint64_t)received;
+- (void)setDownloaded:(uint64_t)received total:(uint64_t)total;
 - (void)setInstallFraction:(float)fraction;
 - (BOOL)isCancelled;
 - (exteria_status)runWithIpaPath:(NSString *)ipaPath;
@@ -204,19 +213,20 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     });
 }
 
-static void note_download(void *owner, uint64_t received) {
+static void note_download(void *owner, uint64_t received, uint64_t total) {
     ExteriaUpdater *updater = (ExteriaUpdater *)owner;
     static CFAbsoluteTime last;
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
     /* the main thread is told about a tenth of a second of data at a time, not about every read */
     if (now - last < 0.1 && received != updater.expected) return;
     last = now;
-    [updater setDownloaded:received];
+    [updater setDownloaded:received total:total];
 }
 
-- (void)setDownloaded:(uint64_t)received {
+- (void)setDownloaded:(uint64_t)received total:(uint64_t)total {
     [self changeOnMain:^{
         _downloaded = received;
+        if (!_expected && total <= IPA_LIMIT) _expected = total;
         _fraction = _expected ? MIN(1.0f, (float)((double)received / (double)_expected)) * DOWNLOAD_SHARE : 0;
     }];
 }
@@ -278,14 +288,23 @@ static void refresh_home_screen(void) {
     state.text_cap = sizeof(text);
     state.cancelled = &_cancelled;
     status = fetch(_digestURL, roots, DIGEST_TIMEOUT_MS, DIGEST_FILE_LIMIT, &state);
-    if (status != EXTERIA_OK) return status;
+    if (status != EXTERIA_OK) {
+        NSLog(@"exteria: update checksum download failed: %s", exteria_status_name(status));
+        return status;
+    }
     status = exteria_release_parse_sha256(text, state.text_len, wanted);
     if (status != EXTERIA_OK) return status;
 
-    unlink(path);
+    if (unlink(path) != 0 && errno != ENOENT) {
+        NSLog(@"exteria: update temporary file removal failed: %s", strerror(errno));
+        return EXTERIA_E_STORAGE;
+    }
     memset(&state, 0, sizeof(state));
     state.fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
-    if (state.fd < 0) return EXTERIA_E_IO;
+    if (state.fd < 0) {
+        NSLog(@"exteria: update temporary file creation failed: %s", strerror(errno));
+        return EXTERIA_E_STORAGE;
+    }
     digest = exteria_digest_new(1);
     if (!digest) {
         close(state.fd);
@@ -297,13 +316,19 @@ static void refresh_home_screen(void) {
     state.note = note_download;
     state.cancelled = &_cancelled;
     status = fetch(_ipaURL, roots, UPDATE_TIMEOUT_MS, IPA_LIMIT, &state);
-    if (close(state.fd) != 0 && status == EXTERIA_OK) status = EXTERIA_E_IO;
+    if (close(state.fd) != 0 && status == EXTERIA_OK) {
+        NSLog(@"exteria: update temporary file close failed: %s", strerror(errno));
+        status = EXTERIA_E_STORAGE;
+    }
+    if (status != EXTERIA_OK) NSLog(@"exteria: update ipa download failed: %s", exteria_status_name(status));
     if (status == EXTERIA_OK) status = exteria_digest_finish(digest, got, sizeof(got));
     exteria_digest_free(digest);
     if (status == EXTERIA_OK && memcmp(got, wanted, sizeof(got)) != 0) status = EXTERIA_E_SECURITY;
     if (status == EXTERIA_OK) {
-        [self setDownloaded:state.received];
+        [self setDownloaded:state.received total:0];
+        [self setInstallFraction:DOWNLOAD_SHARE];
         status = exteria_update_apply(path, [[NSBundle mainBundle] bundlePath].fileSystemRepresentation, APP_FOLDER, plistExecutable.UTF8String, install_progress, self);
+        if (status != EXTERIA_OK) NSLog(@"exteria: update installation failed: %s", exteria_status_name(status));
         if (status == EXTERIA_OK) refresh_home_screen();
     }
     unlink(path);

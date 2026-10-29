@@ -136,7 +136,8 @@
 "release.fail.title" = "The update did not finish";
 "release.fail.network" = "The download failed. Check the connection and try again.";
 "release.fail.security" = "The download could not be verified, so nothing was installed.";
-"release.fail.storage" = "There is not enough free space for the update.";
+"release.fail.storage" = "Could not write the update files. Check free space and permissions.";
+"release.fail.install" = "Could not install the update. Check free space and permissions.";
 "release.fail.missing" = "The release files were not found on GitHub.";
 "release.fail.readonly" = "The app folder is not writable, so the update has to be installed by hand.";
 "release.fail.format" = "The update file is damaged or not what the app expects. Nothing was changed.";
@@ -1989,6 +1990,17 @@
 "rating.users" = "Gifts and posts from users: 20% of the Stars spent on gifts or posts from users and channels are added.";
 "rating.refunds" = "Refunds and conversions: 10 times the refunded Stars and 85% of purchased gifts converted to Stars are deducted.";
 "rating.ok" = "Understood";
+
+"update.page.title" = "Update";
+"update.page.installed" = "Installed";
+"update.page.latest" = "Latest";
+"update.page.checking" = "Checking…";
+"update.page.check" = "Check for updates";
+"update.page.current" = "You have the latest version.";
+"update.page.error" = "Could not check for updates: %@";
+"update.page.error.network" = "no connection to GitHub. check the internet or the VPN.";
+"update.page.error.security" = "the connection to GitHub failed the certificate check.";
+"update.page.error.format" = "GitHub gave an answer that could not be read.";
 
 "group.title" = "Voice chat";
 "group.you" = "%@ (you)";

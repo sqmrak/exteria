@@ -3,6 +3,8 @@
 
 static void versions(void) {
     static const struct { const char *remote, *installed; int newer; } cases[] = {
+        {"v1.3.0-stable", "1.2.0-stable", 1},
+        {"v1.3.0-stable", "1.3.0-stable", 0},
         {"v1.1.0", "1.0.0-stable", 1},
         {"v1.0.0-stable", "1.0.0-stable", 0},
         {"1.0.0-stable", "1.0.0-canary", 1},
@@ -158,11 +160,37 @@ static void digests(void) {
     CHECK_EQ_INT(exteria_release_parse_sha256(hex, 64, NULL), EXTERIA_E_ARG);
 }
 
+static void redirects(void) {
+    exteria_release release;
+    char long_tag[200];
+    CHECK_EQ_INT(exteria_release_from_redirect("HTTP/2 302\r\nLocation: https://github.com/sqmrak/exteria/releases/tag/v1.2.0-stable\r\nx: y\r\n", &release), EXTERIA_OK);
+    CHECK(!strcmp(release.tag, "v1.2.0-stable"));
+    CHECK(!strcmp(release.ipa_url, "https://github.com/sqmrak/exteria/releases/download/v1.2.0-stable/Exteria-v1.2.0-stable.ipa"));
+    CHECK(!strcmp(release.sha_url, "https://github.com/sqmrak/exteria/releases/download/v1.2.0-stable/Exteria-v1.2.0-stable.ipa.sha256"));
+    CHECK_EQ_INT(release.ipa_size, 0);
+    CHECK_EQ_INT(release.body[0], 0);
+    /* header names come in any case, and the last line has no line end */
+    CHECK_EQ_INT(exteria_release_from_redirect("location: https://github.com/sqmrak/exteria/releases/tag/1.3.0", &release), EXTERIA_OK);
+    CHECK(!strcmp(release.ipa_url, "https://github.com/sqmrak/exteria/releases/download/1.3.0/Exteria-v1.3.0.ipa"));
+    CHECK_EQ_INT(exteria_release_from_redirect("content-type: text/html\r\n", &release), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(release.tag[0], 0);
+    CHECK_EQ_INT(exteria_release_from_redirect("Location: https://evil.example/sqmrak/exteria/releases/tag/v1\r\n", &release), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_release_from_redirect("Location: https://github.com/sqmrak/exteria/releases/tag/\r\n", &release), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_release_from_redirect("Location: https://github.com/sqmrak/exteria/releases/tag/v1/../x\r\n", &release), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_release_from_redirect("Location: https://github.com/sqmrak/exteria/releases/tag/v1%2f\r\n", &release), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_release_from_redirect(NULL, &release), EXTERIA_E_ARG);
+    memset(long_tag, 'a', sizeof(long_tag));
+    memcpy(long_tag, "Location: https://github.com/sqmrak/exteria/releases/tag/", 58);
+    long_tag[sizeof(long_tag) - 1] = 0;
+    CHECK_EQ_INT(exteria_release_from_redirect(long_tag, &release), EXTERIA_E_MALFORMED);
+}
+
 int main(void) {
     digests();
     urls();
     versions();
     releases();
     assets();
+    redirects();
     return test_finish("test_release");
 }
