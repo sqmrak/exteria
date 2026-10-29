@@ -22,17 +22,42 @@ static exteria_status ExteriaProxyDecode(NSString *text, exteria_proxy *proxy) {
     return status;
 }
 
+/* where the link lives when the keychain refuses it: the folder of the accounts, which already holds the keys of the session. an install signed without
+   a keychain entitlement (a jailbreak ipa) gets an OSStatus error from every SecItem call, so the proxy could never be saved there */
+static NSString *ExteriaProxyFilePath(void) {
+    NSArray *roots = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
+    return [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"proxy-link"];
+}
+
 static exteria_status ExteriaProxyReadLocked(exteria_proxy *proxy) {
     NSMutableDictionary *query = [NSMutableDictionary dictionaryWithDictionary:ExteriaProxyQuery()];
     [query setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnData];
     CFTypeRef value = NULL;
     OSStatus result = SecItemCopyMatching((CFDictionaryRef)query, &value);
-    if (result != errSecSuccess) return result == errSecItemNotFound ? EXTERIA_E_NOTFOUND : EXTERIA_E_STORAGE;
-    NSData *data = (NSData *)value;
+    NSData *data = nil;
+    if (result == errSecSuccess) {
+        data = [NSData dataWithData:(NSData *)value];
+        CFRelease(value);
+    } else {
+        data = [NSData dataWithContentsOfFile:ExteriaProxyFilePath()];
+    }
+    if (!data) return result == errSecItemNotFound ? EXTERIA_E_NOTFOUND : EXTERIA_E_STORAGE;
     NSString *text = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-    exteria_status status = ExteriaProxyDecode(text, proxy);
-    CFRelease(value);
-    return status;
+    return ExteriaProxyDecode(text, proxy);
+}
+
+/* the file holds the link only while the keychain will not; a link kept in the keychain removes it */
+static BOOL ExteriaProxyWriteFile(NSData *data) {
+    NSString *path = ExteriaProxyFilePath();
+    NSDictionary *attributes = [NSDictionary dictionaryWithObject:[NSNumber numberWithInt:0600] forKey:NSFilePosixPermissions];
+    [[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:NULL];
+    NSError *error = nil;
+    if (![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        NSLog(@"exteria: the proxy link could not be written: %@", error);
+        return NO;
+    }
+    [[NSFileManager defaultManager] setAttributes:attributes ofItemAtPath:path error:NULL];
+    return YES;
 }
 
 exteria_status ExteriaProxyRead(exteria_proxy *proxy, BOOL *enabled) {
@@ -61,7 +86,12 @@ exteria_status ExteriaProxyStoreLink(NSString *text) {
             [item setObject:(id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly forKey:(id)kSecAttrAccessible];
             result = SecItemAdd((CFDictionaryRef)item, NULL);
         }
-        if (result != errSecSuccess) return EXTERIA_E_STORAGE;
+        if (result == errSecSuccess) {
+            [[NSFileManager defaultManager] removeItemAtPath:ExteriaProxyFilePath() error:NULL];
+        } else {
+            NSLog(@"exteria: the keychain refused the proxy (OSStatus %d), it is kept in a file of the app", (int)result);
+            if (!ExteriaProxyWriteFile(data)) return EXTERIA_E_STORAGE;
+        }
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:ExteriaProxyEnabledKey];
         [[NSUserDefaults standardUserDefaults] synchronize];
     }
