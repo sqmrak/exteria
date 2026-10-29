@@ -2,6 +2,7 @@
 
 #import "exteria_shiro_network.h"
 #include "exteria_https.h"
+#include "exteria_article.h"
 
 #define TIMEOUT_MS 25000
 #define REDIRECTS_MAX 4
@@ -146,8 +147,22 @@ static NSString *ExteriaTunnelPath(NSURL *url) {
             status = exteria_https_get(&request, &response);
         }
         NSDictionary *reply = status == EXTERIA_OK ? ExteriaTunnelHeaders(response.headers) : nil;
-        NSData *body = status == EXTERIA_OK ? [NSData dataWithBytes:response.body length:response.body_len] : nil;
+        NSData *body = nil;
         int code = response.status;
+        NSString *contentType = [[reply objectForKey:@"content-type"] lowercaseString];
+        NSString *encoding = [[reply objectForKey:@"content-encoding"] lowercaseString];
+        if (status == EXTERIA_OK && encoding.length && ![encoding isEqualToString:@"identity"]) {
+            status = EXTERIA_E_UNSUPPORTED;
+        } else if (status == EXTERIA_OK && code >= 200 && code < 300 && [contentType hasPrefix:@"text/html"]) {
+            /* Telegraph's Quill editor empties the article before rebuilding it; old WebKit can stop in between */
+            NSMutableData *readable = [NSMutableData dataWithLength:response.body_len];
+            size_t length = 0;
+            status = exteria_article_readonly(response.body, response.body_len, readable.mutableBytes, readable.length, &length);
+            if (status == EXTERIA_OK) {
+                [readable setLength:length];
+                body = readable;
+            }
+        } else if (status == EXTERIA_OK) body = [NSData dataWithBytes:response.body length:response.body_len];
         exteria_https_response_free(&response);
         NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:status], @"status", [NSNumber numberWithInt:code], @"code",
                                 reply ? reply : [NSDictionary dictionary], @"headers", body ? body : [NSData data], @"body", url, @"url",
