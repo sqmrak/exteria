@@ -3313,7 +3313,7 @@ static void ExteriaRedrawTree(UIView *view) {
     NSUInteger removed = oldCount - prefix - suffix;
     NSUInteger inserted = newCount - prefix - suffix;
     BOOL simple = removed == 0 || inserted == 0;
-    NSMutableArray *refresh = [NSMutableArray array];
+    NSMutableArray *refresh = [NSMutableArray array], *inPlace = [NSMutableArray array];
     BOOL reactionsChanged = NO;
     if (simple) {
         for (NSUInteger i = 0; i < prefix + suffix; ++i) {
@@ -3322,8 +3322,13 @@ static void ExteriaRedrawTree(UIView *view) {
             ExteriaChatItem *before = [oldItems objectAtIndex:oldIndex];
             ExteriaChatItem *after = [items objectAtIndex:newIndex];
             if (![after displaysSameAs:before]) {
-                [refresh addObject:[NSIndexPath indexPathForRow:(NSInteger)newIndex inSection:0]];
-                if (!removed && !inserted && [after hasDifferentReactionsFrom:before]) reactionsChanged = YES;
+                NSIndexPath *path = [NSIndexPath indexPathForRow:(NSInteger)newIndex inSection:0];
+                BOOL onlyReactions = !removed && !inserted && [after hasDifferentReactionsFrom:before];
+                if (onlyReactions) reactionsChanged = YES;
+                /* a reloaded row may come back as another cell, which has not seen the chips that were there and so can neither grow the new one nor shrink the old one;
+                   the cell that is on screen is configured again where it stands, and the table measures the rows again under it */
+                if (onlyReactions && [_table cellForRowAtIndexPath:path]) [inPlace addObject:path];
+                else [refresh addObject:path];
             }
         }
     }
@@ -3384,6 +3389,11 @@ static void ExteriaRedrawTree(UIView *view) {
         }
         if (refresh.count) {
             [_table reloadRowsAtIndexPaths:refresh withRowAnimation:UITableViewRowAnimationNone];
+        }
+        if (inPlace.count) {
+            for (NSIndexPath *path in inPlace) [self configureMessageCell:(ExteriaMessageCell *)[_table cellForRowAtIndexPath:path] forRow:(NSUInteger)path.row];
+            [_table beginUpdates];
+            [_table endUpdates];
         }
     }
     for (ExteriaChatItem *item in items) [item markDisplayed];
@@ -3528,15 +3538,19 @@ static void ExteriaRedrawTree(UIView *view) {
         cell = [[[ExteriaMessageCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier] autorelease];
         cell.delegate = self;
     }
-    ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)indexPath.row];
+    [self configureMessageCell:cell forRow:(NSUInteger)indexPath.row];
+    return cell;
+}
+
+- (void)configureMessageCell:(ExteriaMessageCell *)cell forRow:(NSUInteger)row {
+    ExteriaChatItem *item = [_items objectAtIndex:row];
     /* a cell that is reused while its row was coming in must not carry the entrance to the next row */
     ExteriaCancelEnter(cell);
-    [item layoutForWidth:tableView.bounds.size.width];
+    [item layoutForWidth:_table.bounds.size.width];
     cell.activationDeferred = _interacting;
     cell.stickerLibrary = _stickers;
     [cell configureWithItem:item media:_media avatars:_avatars];
     [cell setSelecting:_selecting selected:[_selectedIds containsObject:[NSNumber numberWithInt:item.message.messageId]] animated:NO];
-    return cell;
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {

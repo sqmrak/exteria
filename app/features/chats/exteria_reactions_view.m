@@ -182,6 +182,8 @@ static BOOL ExteriaReactionStill(void) {
         (void)finished;
         [button removeFromSuperview];
         if (_ghosts) --_ghosts;
+        /* an empty view that kept its old frame while the last chip shrank must not catch touches meant for the bubble */
+        if (!_ghosts && !_buttons.count) self.hidden = YES;
     }];
 }
 
