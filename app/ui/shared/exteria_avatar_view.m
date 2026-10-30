@@ -62,7 +62,9 @@
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    _label.frame = self.bounds;
+    /* the text layout uses at least 20 points, so center that width on small avatars */
+    CGFloat labelWidth = MAX(20, self.bounds.size.width);
+    _label.frame = CGRectMake((self.bounds.size.width - labelWidth) / 2, 0, labelWidth, self.bounds.size.height);
     UIFont *font = ExteriaFontSemibold(MIN(self.bounds.size.width, self.bounds.size.height) * 0.38);
     if (font != _label.font) _label.font = font;
     _label.hidden = _showsSymbol || _image != nil;
