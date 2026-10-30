@@ -402,7 +402,7 @@
 "profile.archive.empty" = "Your expired stories are kept here";
 "profile.photo.uploading" = "Uploading the photo";
 "profile.photo.failed" = "The photo was not set";
-"profile.edit.title" = "Edit profile";
+"profile.edit.title" = "Edit";
 "profile.edit.save" = "Save";
 "profile.edit.first" = "First name";
 "profile.edit.last" = "Last name";

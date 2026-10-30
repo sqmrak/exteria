@@ -403,7 +403,7 @@
 "profile.archive.empty" = "здесь хранятся ваши истёкшие истории :D";
 "profile.photo.uploading" = "загружаем фото";
 "profile.photo.failed" = "фото не установлено";
-"profile.edit.title" = "изменить профиль";
+"profile.edit.title" = "изменить";
 "profile.edit.save" = "сохранить";
 "profile.edit.first" = "имя";
 "profile.edit.last" = "фамилия";

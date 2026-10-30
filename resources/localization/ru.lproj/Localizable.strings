@@ -402,7 +402,7 @@
 "profile.archive.empty" = "Здесь хранятся ваши истёкшие истории";
 "profile.photo.uploading" = "Загружаем фото";
 "profile.photo.failed" = "Фото не установлено";
-"profile.edit.title" = "Изменить профиль";
+"profile.edit.title" = "Изменить";
 "profile.edit.save" = "Сохранить";
 "profile.edit.first" = "Имя";
 "profile.edit.last" = "Фамилия";
