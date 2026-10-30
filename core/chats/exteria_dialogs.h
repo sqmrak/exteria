@@ -42,6 +42,7 @@ typedef enum exteria_preview_kind {
 
 /* one chat list row; text is UTF-8 cut at a character boundary with line breaks turned into spaces */
 typedef struct exteria_dialog_row {
+    uint8_t noforwards;
     int32_t peer_kind;      /* 1 user, 2 chat, 3 channel, as exteria_peer */
     int64_t peer_id;
     exteria_dialog_kind kind;
@@ -91,6 +92,8 @@ typedef struct exteria_dialog_row {
     exteria_media_ref thumb;
     uint8_t service;        /* for a service message: exteria_service_kind + 1, with its text and number below */
     int32_t service_value;
+    uint8_t service_actor_is_target;
+    char service_target[EXTERIA_DIALOG_SENDER_MAX];
     exteria_presence presence;  /* of the other side of a user chat, unknown for the rest */
     int32_t seen;
     exteria_photo_ref photo;

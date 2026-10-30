@@ -162,6 +162,7 @@ static void fill_chat(exteria_dialog_row *row, const exteria_tl_value *chats) {
     const exteria_tl_value *chat = find_entity(chats, row->peer_id);
     row->kind = row->peer_kind == 3 ? EXTERIA_DIALOG_CHANNEL : EXTERIA_DIALOG_GROUP;
     if (!chat) return;
+    row->noforwards = exteria_tl_has(chat, "noforwards") ? 1 : 0;
     copy_text(row->title, sizeof(row->title), chat, "title");
     if (exteria_tl_get_i32(chat, "participants_count", &row->participants_count) != EXTERIA_OK || row->participants_count < 0) row->participants_count = 0;
     if (row->peer_kind == 3 && exteria_tl_has(chat, "megagroup")) row->kind = EXTERIA_DIALOG_GROUP;
@@ -212,8 +213,14 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
         row->sender_is_self = row->outgoing;
     }
     if (exteria_tl_is(m, EXTERIA_TL_ID_messageService)) {
+        int64_t target = 0;
         row->preview = EXTERIA_PREVIEW_SERVICE;
-        row->service = exteria_service_summary(exteria_tl_get(m, "action"), row->text, sizeof(row->text), &row->service_value, NULL);
+        row->service = exteria_service_summary(exteria_tl_get(m, "action"), row->text, sizeof(row->text), &row->service_value, &target);
+        row->service_actor_is_target = target > 0 && exteria_peer_from_tl(from, &sender) == EXTERIA_OK && sender.kind == 1 && sender.id == target;
+        if (target > 0) {
+            const exteria_tl_value *user = find_entity(users, target);
+            if (user) user_title(row->service_target, sizeof(row->service_target), user);
+        }
         return;
     }
     copy_text(row->text, sizeof(row->text), m, "message");
@@ -563,6 +570,8 @@ exteria_status exteria_community_previews_apply(const exteria_tl_value *answer, 
             row->thumb = source->thumb;
             row->service = source->service;
             row->service_value = source->service_value;
+            row->service_actor_is_target = source->service_actor_is_target;
+            memcpy(row->service_target, source->service_target, sizeof(row->service_target));
             row->outgoing = source->outgoing;
             row->forwarded = source->forwarded;
             row->read = source->read;

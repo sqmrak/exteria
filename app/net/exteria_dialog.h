@@ -19,6 +19,7 @@
     BOOL _pinned;
     BOOL _muted;
     BOOL _canPost;
+    BOOL _noForwards;
     BOOL _outgoing;
     BOOL _forwarded;
     BOOL _read;
@@ -68,6 +69,7 @@
 /* the preview names who wrote the last message: the person it was, with the initials and the photo for a small picture in front of the line */
 @property (nonatomic, readonly) BOOL showsSender;
 @property (nonatomic, readonly) long long senderId;
+@property (nonatomic, readonly) BOOL noForwards;
 @property (nonatomic, readonly, copy) NSString *senderInitials;
 @property (nonatomic, readonly, retain) ExteriaPhoto *senderPhoto;
 @property (nonatomic, readonly) int32_t peerKind;

@@ -43,6 +43,7 @@
 @synthesize pinned = _pinned;
 @synthesize muted = _muted;
 @synthesize canPost = _canPost;
+@synthesize noForwards = _noForwards;
 @synthesize outgoing = _outgoing;
 @synthesize forwarded = _forwarded;
 @synthesize read = _read;
@@ -119,6 +120,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _pinned = row->pinned;
     _muted = row->muted;
     _canPost = row->can_post;
+    _noForwards = row->noforwards != 0;
     _outgoing = row->outgoing;
     _forwarded = row->forwarded;
     _read = row->read;
@@ -146,7 +148,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
         if (row->sender[0]) who = ExteriaUtf8(row->sender);
         else if (row->sender_is_self) who = NSLocalizedString(@"media.you", nil);
         else if (row->kind == EXTERIA_DIALOG_USER || row->kind == EXTERIA_DIALOG_BOT || row->kind == EXTERIA_DIALOG_CHANNEL) who = ExteriaUtf8(row->title);
-        body = ExteriaServiceLine((exteria_service_kind)(row->service - 1), who, nil, ExteriaUtf8(row->text), row->service_value, NO);
+        body = ExteriaServiceLine((exteria_service_kind)(row->service - 1), who, ExteriaUtf8(row->service_target), ExteriaUtf8(row->text), row->service_value, row->service_actor_is_target);
     }
     /* our own last message stands without a name before it; the name of another sender is kept in a group */
     if (row->preview != EXTERIA_PREVIEW_NONE && row->preview != EXTERIA_PREVIEW_SERVICE && row->sender[0] &&

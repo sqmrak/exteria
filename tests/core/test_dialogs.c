@@ -8,6 +8,23 @@
 
 static exteria_arena arena;
 
+static void test_noforwards_peer(void) {
+    exteria_dialog_row row;
+    exteria_tl_value *chat = exteria_tl_new_obj(&arena, "chat");
+    exteria_tl_value *list = exteria_tl_new_vec(&arena, 1);
+    CHECK(chat && list);
+    CHECK_EQ_INT(exteria_tl_set_i64(&arena, chat, "id", 42), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_str(&arena, chat, "title", "group"), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(list, 0, chat), EXTERIA_OK);
+    memset(&row, 0, sizeof(row));
+    row.peer_kind = 2; row.peer_id = 42;
+    exteria_dialog_peer_read(&row, NULL, list, SELF);
+    CHECK_EQ_INT(row.noforwards, 0);
+    CHECK_EQ_INT(exteria_tl_set_flag(chat, "noforwards"), EXTERIA_OK);
+    exteria_dialog_peer_read(&row, NULL, list, SELF);
+    CHECK_EQ_INT(row.noforwards, 1);
+}
+
 static exteria_tl_value *obj(const char *name) {
     exteria_tl_value *v = exteria_tl_new_obj(&arena, name);
     CHECK(v != NULL);
@@ -218,6 +235,35 @@ static void test_group_channel_and_sender(void) {
     /* nobody posts in a channel by default, and a group is not a channel */
     CHECK_EQ_INT(rows[1].can_post, 0);
     CHECK_EQ_INT(rows[2].can_post, 0);
+}
+
+static void test_service_member_preview(void) {
+    exteria_dialog_row rows[2];
+    size_t count = 0;
+    exteria_tl_value *d[] = {dialog(peer("peerChat", "chat_id", 11), 1, 0)};
+    exteria_tl_value *m[] = {obj("messageService")};
+    exteria_tl_value *c[] = {obj("chat")};
+    exteria_tl_value *u[] = {user(6, "Bob", NULL), user(7, "Ann", NULL)};
+    exteria_tl_value *action = obj("messageActionChatAddUser");
+    exteria_tl_value *users = exteria_tl_new_vec(&arena, 1);
+    CHECK(users != NULL);
+    CHECK_EQ_INT(exteria_tl_vec_set(users, 0, exteria_tl_new_i64(&arena, 6)), EXTERIA_OK);
+    set(action, "users", users);
+    set_i32(m[0], "id", 1);
+    set_i32(m[0], "date", 10);
+    set(m[0], "peer_id", peer("peerChat", "chat_id", 11));
+    set(m[0], "from_id", peer("peerUser", "user_id", 6));
+    set(m[0], "action", action);
+    set_i64(c[0], "id", 11);
+    set_str(c[0], "title", "Friends");
+    exteria_tl_value *a = answer("messages.dialogs", d, 1, m, 1, c, 1, u, 2);
+    CHECK_EQ_INT(exteria_dialogs_parse(a, SELF, 0, rows, 2, &count), EXTERIA_OK);
+    CHECK_EQ_INT(rows[0].service_actor_is_target, 1);
+    CHECK(strcmp(rows[0].service_target, "Bob") == 0);
+    set(m[0], "from_id", peer("peerUser", "user_id", 7));
+    CHECK_EQ_INT(exteria_dialogs_parse(a, SELF, 0, rows, 2, &count), EXTERIA_OK);
+    CHECK_EQ_INT(rows[0].service_actor_is_target, 0);
+    CHECK(strcmp(rows[0].service_target, "Bob") == 0);
 }
 
 static void test_channel_posting_rights(void) {
@@ -1122,6 +1168,7 @@ static void test_saved_dialogs(void) {
 
 int main(void) {
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
+    test_noforwards_peer();
     test_archive_shortcut();
     test_archive_summary();
     test_user_and_saved();
@@ -1130,6 +1177,7 @@ int main(void) {
     test_search_parse();
     test_found_parse();
     test_group_channel_and_sender();
+    test_service_member_preview();
     test_channel_posting_rights();
     test_media_kinds();
     test_thumbs();
