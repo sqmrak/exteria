@@ -34,4 +34,9 @@ int exteria_folder_scans_dialogs(uint32_t flags, int archived);
 /* SIZE_MAX means that this chat is not pinned in the folder */
 size_t exteria_folder_pin_index(const exteria_folder_rules *rules, const exteria_dialog_row *dialog);
 
+/* preserve an emoji outside an edit, moving its UTF-16 offset when the edit comes first */
+int exteria_folder_shift_emoji(size_t *offset, size_t length, size_t start, size_t removed, size_t inserted);
+exteria_status exteria_folder_title_build(exteria_arena *arena, const char *text, const exteria_send_entity *entities,
+                                          size_t count, exteria_tl_value **out);
+
 #endif

@@ -1,7 +1,52 @@
 #include "exteria_folders.h"
 #include "test_util.h"
+#include "exteria_tl_ids.h"
+
+static void title_roundtrip(void) {
+    exteria_arena arena;
+    exteria_writer writer;
+    exteria_tl_value *title = NULL, *decoded = NULL;
+    exteria_send_entity sent[2];
+    exteria_entity read[2];
+    uint8_t count = 0;
+    char urls[1] = {0};
+    memset(sent, 0, sizeof(sent));
+    exteria_arena_init(&arena, 1u << 20);
+    sent[0].kind = sent[1].kind = EXTERIA_ENTITY_CUSTOM_EMOJI;
+    sent[0].offset = 1; sent[0].length = 2; sent[0].id = 123456789;
+    sent[1].offset = 4; sent[1].length = 2; sent[1].id = 987654321;
+    CHECK_EQ_INT(exteria_folder_title_build(&arena, "A\xF0\x9F\x98\x80Z\xF0\x9F\x98\x80", sent, 2, &title), EXTERIA_OK);
+    exteria_writer_init(&writer, 4096);
+    CHECK_EQ_INT(exteria_tl_encode(title, &writer, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_decode_all(&arena, NULL, EXTERIA_TL_REF_ANY, writer.data, writer.len, &decoded), EXTERIA_OK);
+    CHECK(exteria_tl_is(decoded, EXTERIA_TL_ID_textWithEntities));
+    exteria_entities_read(decoded, read, 2, urls, sizeof(urls), &count);
+    CHECK_EQ_INT(count, 2);
+    CHECK_EQ_INT(read[0].offset, 1); CHECK_EQ_INT(read[0].length, 2); CHECK(read[0].document_id == 123456789);
+    CHECK_EQ_INT(read[1].offset, 4); CHECK_EQ_INT(read[1].length, 2); CHECK(read[1].document_id == 987654321);
+    sent[1].offset = 5;
+    CHECK_EQ_INT(exteria_folder_title_build(&arena, "A\xF0\x9F\x98\x80Z\xF0\x9F\x98\x80", sent, 2, &title), EXTERIA_E_ARG);
+    sent[1].id = 0;
+    CHECK_EQ_INT(exteria_folder_title_build(&arena, "x", sent, 2, &title), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_folder_title_build(&arena, "plain", NULL, 0, &title), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get(title, "entities")->u.vec.count, 0);
+    exteria_writer_free(&writer);
+    exteria_arena_free(&arena);
+}
 
 int main(void) {
+    title_roundtrip();
+    size_t offset = 2;
+    CHECK(exteria_folder_shift_emoji(&offset, 2, 0, 0, 3));
+    CHECK_EQ_INT(offset, 5);
+    CHECK(exteria_folder_shift_emoji(&offset, 2, 7, 0, 1));
+    CHECK_EQ_INT(offset, 5);
+    CHECK(!exteria_folder_shift_emoji(&offset, 2, 6, 0, 1));
+    CHECK(!exteria_folder_shift_emoji(&offset, 2, 4, 2, 0));
+    CHECK(exteria_folder_shift_emoji(&offset, 2, 0, 2, 0));
+    CHECK_EQ_INT(offset, 3);
+    CHECK(!exteria_folder_shift_emoji(NULL, 2, 0, 0, 0));
+    CHECK(!exteria_folder_shift_emoji(&offset, 0, 0, 0, 0));
     exteria_folder_rules rules;
     exteria_dialog_row dialog;
     exteria_peer_ref peers[2];

@@ -59,6 +59,14 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
     _title = [title copy];
     [_titleEntities release];
     _titleEntities = nil;
+    _titleEntitiesChanged = YES;
+}
+
+- (void)setTitleEntities:(NSArray *)entities {
+    NSArray *copy = [entities copy];
+    [_titleEntities release];
+    _titleEntities = copy;
+    _titleEntitiesChanged = YES;
 }
 
 - (id)init {
@@ -84,6 +92,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
     copy.folderId = _folderId;
     copy.title = _title;
     copy->_titleEntities = [_titleEntities retain];
+    copy->_titleEntitiesChanged = _titleEntitiesChanged;
     copy.flags = _flags;
     copy.included = _included;
     copy.excluded = _excluded;
@@ -122,6 +131,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
     for (ExteriaTextEntity *entity in runs)
         if (entity.style == ExteriaTextStyleCustomEmoji && entity.documentId > 0) [custom addObject:entity];
     folder->_titleEntities = [custom copy];
+    folder->_titleEntitiesChanged = NO;
     folder.included = included;
     folder.excluded = excluded;
     folder.pinned = pinned;
@@ -165,8 +175,8 @@ static exteria_status build_peers(exteria_arena *arena, exteria_tl_value *filter
     if (_folderId < 2 || !_title.length || _title.length > 12 || (_flags & ~255u))
         return EXTERIA_E_ARG;
     exteria_tl_value *filter = exteria_tl_new_obj(arena, _shared ? "dialogFilterChatlist" : "dialogFilter");
-    exteria_tl_value *title = exteria_tl_new_obj(arena, "textWithEntities");
-    if (!filter || !title)
+    exteria_tl_value *title = NULL;
+    if (!filter)
         return EXTERIA_E_NOMEM;
     exteria_status status = exteria_tl_set_i32(arena, filter, "id", _folderId);
     exteria_tl_value *original = NULL;
@@ -176,7 +186,7 @@ static exteria_status build_peers(exteria_arena *arena, exteria_tl_value *filter
         if (status != EXTERIA_OK)
             return status;
     }
-    /* names with custom emoji and the color survive an edit of the rules */
+    /* server fields outside the editor survive an edit of the rules */
     if (original) {
         const char *fields[] = {"emoticon", "color", "title_noanimate", "has_my_invites"};
         for (NSUInteger i = 0; i < 4; ++i) {
@@ -184,15 +194,34 @@ static exteria_status build_peers(exteria_arena *arena, exteria_tl_value *filter
             if (field && status == EXTERIA_OK)
                 status = exteria_tl_set(filter, fields[i], field);
         }
-        if ([_title isEqualToString:folder_string(exteria_tl_get(original, "title"), "text", 512)])
+        if (!_titleEntitiesChanged && [_title isEqualToString:folder_string(exteria_tl_get(original, "title"), "text", 512)])
             title = (exteria_tl_value *)exteria_tl_get(original, "title");
     }
-    if (!original || title != exteria_tl_get(original, "title")) {
+    if (!title) {
+        if (_titleEntities.count > EXTERIA_MESSAGE_ENTITIES_MAX) return EXTERIA_E_ARG;
+        exteria_send_entity entities[EXTERIA_MESSAGE_ENTITIES_MAX];
+        memset(entities, 0, sizeof(entities));
+        NSUInteger index = 0;
+        NSArray *ordered = [_titleEntities sortedArrayUsingComparator:^NSComparisonResult(ExteriaTextEntity *a, ExteriaTextEntity *b) {
+            if (a.range.location < b.range.location) return NSOrderedAscending;
+            if (a.range.location > b.range.location) return NSOrderedDescending;
+            return NSOrderedSame;
+        }];
+        NSUInteger previousEnd = 0;
+        for (ExteriaTextEntity *entity in ordered) {
+            NSRange range = entity.range;
+            if (entity.style != ExteriaTextStyleCustomEmoji || entity.documentId <= 0 ||
+                !range.length || range.location < previousEnd || range.location > _title.length || range.length > _title.length - range.location)
+                return EXTERIA_E_ARG;
+            previousEnd = NSMaxRange(range);
+            entities[index].kind = EXTERIA_ENTITY_CUSTOM_EMOJI;
+            entities[index].offset = (int32_t)range.location;
+            entities[index].length = (int32_t)range.length;
+            entities[index].id = entity.documentId;
+            ++index;
+        }
         if (status == EXTERIA_OK)
-            status = exteria_tl_set_str(arena, title, "text", _title.UTF8String);
-        exteria_tl_value *empty = exteria_tl_new_vec(arena, 0);
-        if (status == EXTERIA_OK)
-            status = empty ? exteria_tl_set(title, "entities", empty) : EXTERIA_E_NOMEM;
+            status = exteria_folder_title_build(arena, _title.UTF8String, entities, index, &title);
     }
     if (status == EXTERIA_OK)
         status = exteria_tl_set(filter, "title", title);

@@ -2,8 +2,12 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
+#import "exteria_custom_emoji_loader.h"
+#import "exteria_custom_emoji_picker.h"
+#import "exteria_emoji_text_view.h"
 #import "exteria_gift_screen.h"
 #import "exteria_lottie_view.h"
+#import "exteria_message.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_sheet.h"
@@ -38,6 +42,141 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     peer.self = dialog.saved;
     return peer;
 }
+
+@interface ExteriaFolderNameController : UIViewController <UITextViewDelegate, ExteriaCustomEmojiPickerDelegate> {
+    ExteriaSession *_session;
+    ExteriaMediaCache *_media;
+    ExteriaEmojiTextView *_text;
+    ExteriaCustomEmojiPicker *_picker;
+    UIButton *_emojiButton;
+    NSMutableArray *_entities;
+    NSString *_initialTitle;
+    BOOL _changed;
+    void (^_done)(NSString *, NSArray *, BOOL);
+}
+- (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder done:(void (^)(NSString *, NSArray *, BOOL))done;
+@end
+
+@implementation ExteriaFolderNameController
+- (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder done:(void (^)(NSString *, NSArray *, BOOL))done {
+    self = [super init];
+    if (self) {
+        _session = [session retain];
+        _initialTitle = [folder.title copy];
+        _entities = [[NSMutableArray alloc] initWithArray:folder.titleEntities ? folder.titleEntities : [NSArray array]];
+        _done = [done copy];
+        if ([self respondsToSelector:NSSelectorFromString(@"setEdgesForExtendedLayout:")])
+            [self setValue:[NSNumber numberWithUnsignedInteger:0] forKey:@"edgesForExtendedLayout"];
+        self.title = NSLocalizedString(@"folders.name", nil);
+    }
+    return self;
+}
+- (void)dealloc {
+    _text.delegate = nil;
+    _picker.delegate = nil;
+    [_session release];
+    [_media release];
+    [_text release];
+    [_picker release];
+    [_emojiButton release];
+    [_entities release];
+    [_initialTitle release];
+    [_done release];
+    [super dealloc];
+}
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = ExteriaColorScreen();
+    self.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"folders.save", nil)
+        style:UIBarButtonItemStyleDone target:self action:@selector(done)] autorelease];
+    NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+    _media = [[ExteriaMediaCache alloc] initWithSession:_session directory:[[caches stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"media"]];
+    _text = [[ExteriaEmojiTextView alloc] initWithFrame:CGRectZero];
+    _text.backgroundColor = ExteriaColorField();
+    _text.emojiBackgroundColor = ExteriaColorField();
+    _text.textColor = ExteriaColorTitle();
+    _text.font = ExteriaFontRegular(18);
+    _text.delegate = self;
+    _text.text = _initialTitle;
+    _text.customEmojiEntities = _entities;
+    [self.view addSubview:_text];
+    _emojiButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    [_emojiButton setTitle:NSLocalizedString(@"folders.emoji", nil) forState:UIControlStateNormal];
+    [_emojiButton setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
+    [_emojiButton addTarget:self action:@selector(showEmoji) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:_emojiButton];
+    _picker = [[ExteriaCustomEmojiPicker alloc] initWithSession:_session media:_media];
+    _picker.delegate = self;
+    [self.view addSubview:_picker];
+    [_picker prepare];
+    NSMutableArray *documents = [NSMutableArray array];
+    for (ExteriaTextEntity *entity in _entities) [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
+    if (documents.count) [ExteriaCustomEmojiLoader loadDocuments:documents session:_session media:_media documents:nil picture:nil];
+}
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGFloat width = self.view.bounds.size.width, height = self.view.bounds.size.height;
+    _text.frame = CGRectMake(12, 12, MAX(0, width - 24), 54);
+    _emojiButton.frame = CGRectMake(12, 70, MAX(0, width - 24), 40);
+    _picker.frame = CGRectMake(0, 112, width, MAX(0, height - 112));
+}
+- (void)showEmoji {
+    [_text resignFirstResponder];
+    [_picker prepare];
+}
+- (void)shiftForRange:(NSRange)range replacementLength:(NSUInteger)length {
+    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:_entities.count];
+    for (ExteriaTextEntity *entity in _entities) {
+        size_t offset = entity.range.location;
+        if (!exteria_folder_shift_emoji(&offset, entity.range.length, range.location, range.length, length)) continue;
+        ExteriaTextEntity *moved = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
+            range:NSMakeRange(offset, entity.range.length) url:nil] autorelease];
+        moved.documentId = entity.documentId;
+        [kept addObject:moved];
+    }
+    [_entities setArray:kept];
+}
+- (BOOL)textView:(UITextView *)view shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)replacement {
+    if (range.location > view.text.length || range.length > view.text.length - range.location) return NO;
+    [self shiftForRange:range replacementLength:replacement.length];
+    _changed = YES;
+    return YES;
+}
+- (void)textViewDidChange:(UITextView *)view {
+    (void)view;
+    _text.customEmojiEntities = _entities;
+}
+- (void)customEmojiPicker:(ExteriaCustomEmojiPicker *)picker didPickEmoji:(ExteriaCustomEmojiDocument *)emoji {
+    (void)picker;
+    NSRange range = _text.selectedRange;
+    NSString *text = _text.text;
+    if (emoji.documentId <= 0 || !emoji.alt.length || range.location > text.length || range.length > text.length - range.location) return;
+    [self shiftForRange:range replacementLength:emoji.alt.length];
+    _text.text = [text stringByReplacingCharactersInRange:range withString:emoji.alt];
+    ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
+        range:NSMakeRange(range.location, emoji.alt.length) url:nil] autorelease];
+    entity.documentId = emoji.documentId;
+    [_entities addObject:entity];
+    _text.customEmojiEntities = _entities;
+    _text.selectedRange = NSMakeRange(range.location + emoji.alt.length, 0);
+    _changed = YES;
+}
+- (void)done {
+    NSString *text = _text.text;
+    NSCharacterSet *spaces = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger start = 0, end = text.length;
+    while (start < end && [spaces characterIsMember:[text characterAtIndex:start]]) ++start;
+    while (end > start && [spaces characterIsMember:[text characterAtIndex:end - 1]]) --end;
+    if (end == start || end - start > 12) {
+        ExteriaShowNotice(nil, NSLocalizedString(@"folders.name.info", nil));
+        return;
+    }
+    if (end < text.length) [self shiftForRange:NSMakeRange(end, text.length - end) replacementLength:0];
+    if (start) [self shiftForRange:NSMakeRange(0, start) replacementLength:0];
+    if (_done) _done([text substringWithRange:NSMakeRange(start, end - start)], _entities, _changed || start || end != text.length);
+    [self.navigationController popViewControllerAnimated:YES];
+}
+@end
 
 @interface ExteriaFolderPeersController : ExteriaSettingsPageController {
     ExteriaChatFolder *_folder;
@@ -220,19 +359,18 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     if (_saving)
         return;
     ExteriaWeakReference *weak = _weak;
-    ExteriaPromptText(NSLocalizedString(@"folders.name", nil), NSLocalizedString(@"folders.name.info", nil), _folder.title, nil, ^(NSString *text) {
+    ExteriaFolderNameController *page = [[[ExteriaFolderNameController alloc] initWithSession:_session folder:_folder done:^(NSString *name, NSArray *entities, BOOL changed) {
         ExteriaFolderEditController *me = weak.target;
-        NSString *name = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (!me)
             return;
-        if (!name.length || name.length > 12) {
-            ExteriaShowNotice(nil, NSLocalizedString(@"folders.name.info", nil));
-            return;
+        if (changed) {
+            me->_folder.title = name;
+            me->_folder.titleEntities = entities;
         }
-        me->_folder.title = name;
         me.pageTitle = name;
         [me rebuild];
-    });
+    }] autorelease];
+    [self.navigationController pushViewController:page animated:YES];
 }
 - (void)pick:(NSInteger)kind {
     if (_saving)

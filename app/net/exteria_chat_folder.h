@@ -6,6 +6,7 @@
     int32_t _folderId;
     NSString *_title;
     NSArray *_titleEntities;
+    BOOL _titleEntitiesChanged;
     uint32_t _flags;
     NSData *_included;
     NSData *_excluded;
@@ -15,7 +16,7 @@
 }
 @property(nonatomic, assign) int32_t folderId;
 @property(nonatomic, copy) NSString *title;
-@property(nonatomic, readonly, retain) NSArray *titleEntities;
+@property(nonatomic, copy) NSArray *titleEntities;
 @property(nonatomic, assign) uint32_t flags;
 @property(nonatomic, copy) NSData *included;
 @property(nonatomic, copy) NSData *excluded;

@@ -1,5 +1,36 @@
 #include "exteria_folders.h"
 
+exteria_status exteria_folder_title_build(exteria_arena *arena, const char *text, const exteria_send_entity *entities,
+                                          size_t count, exteria_tl_value **out) {
+    exteria_tl_value *title, *list = NULL;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !text || !out || (count && !entities) || count > EXTERIA_MESSAGE_ENTITIES_MAX) return EXTERIA_E_ARG;
+    for (size_t i = 0; i < count; ++i)
+        if (entities[i].kind != EXTERIA_ENTITY_CUSTOM_EMOJI || entities[i].id <= 0) return EXTERIA_E_ARG;
+    status = exteria_send_entities_build(arena, text, entities, count, &list);
+    if (status != EXTERIA_OK) return status;
+    title = exteria_tl_new_obj(arena, "textWithEntities");
+    if (!list) list = exteria_tl_new_vec(arena, 0);
+    if (!title || !list) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_str(arena, title, "text", text);
+    if (status == EXTERIA_OK) status = exteria_tl_set(title, "entities", list);
+    if (status == EXTERIA_OK) *out = title;
+    return status;
+}
+
+int exteria_folder_shift_emoji(size_t *offset, size_t length, size_t start, size_t removed, size_t inserted) {
+    if (!offset || !length || length > SIZE_MAX - *offset || removed > SIZE_MAX - start) return 0;
+    if (*offset + length <= start) return 1;
+    if (*offset >= start + removed) {
+        size_t base = *offset - removed;
+        if (inserted > SIZE_MAX - base) return 0;
+        *offset = base + inserted;
+        return 1;
+    }
+    return 0;
+}
+
 int exteria_folder_scans_dialogs(uint32_t flags, int archived) {
     uint32_t categories = EXTERIA_FOLDER_CONTACTS | EXTERIA_FOLDER_NON_CONTACTS | EXTERIA_FOLDER_GROUPS | EXTERIA_FOLDER_CHANNELS | EXTERIA_FOLDER_BOTS;
     return (flags & categories) != 0 && (!archived || !(flags & EXTERIA_FOLDER_SKIP_ARCHIVED));
