@@ -516,6 +516,11 @@
 "bots.pick.title" = "Choose a chat";
 "bots.pick.done" = "Send";
 "bots.inline.empty" = "No results";
+"bots.inline.cannot_send" = "Finish editing and make sure you can send messages in this chat.";
+"bots.inline.location.ask" = "%@ asks for a location to answer inline queries. Choose a location to send to the bot?";
+"bots.inline.location.choose" = "Choose location";
+"bots.inline.location.needed" = "This bot needs a location to show results.";
+"bots.inline.webapp.unsupported" = "Telegram mini apps are not supported yet.";
 "bots.inline.photo" = "Photo";
 "bots.inline.gif" = "Animation";
 "bots.inline.sticker" = "Sticker";
@@ -1051,6 +1056,7 @@
 "chatset.mentioncomma" = "Comma after a mention";
 "chatset.mentioncomma.info" = "\"@name, \" when the name starts the message";
 "chat.sendas" = "Send as";
+"chat.sendas.premium" = "Telegram Premium is required to send messages as this identity.";
 "chat.sendas.info" = "Choose who messages in this chat come from";
 "chat.sendas.account" = "Myself";
 "chatset.hidesendas" = "Hide the sender picture";
@@ -1490,6 +1496,7 @@
 "folders.delete" = "Delete folder";
 "folders.delete.info" = "Delete this folder? Your chats will remain.";
 "folders.name" = "Folder name";
+"folders.emoji" = "Choose emoji";
 "folders.name.info" = "Between 1 and 12 characters";
 "folders.sync.info" = "Folders sync with your Telegram account.";
 "folders.contacts" = "Contacts";
@@ -1741,9 +1748,10 @@
 "ayu.title" = "AyuMoments";
 "ayu.info" = "Ghost mode, filters and keeping what is deleted work while they are on, with no screen open.";
 "ayu.ghost" = "Ghost mode";
-"ayu.ghost.info" = "Messages and stories stay read only for you.";
+"ayu.ghost.info" = "Choose which activity to hide. Each option works independently.";
 "ayu.ghost.noread" = "Do not mark as read";
-"ayu.ghost.noread.info" = "A chat is read on the screen, and the other side does not see that you read it.";
+"ayu.ghost.noread.info" = "Viewing a chat leaves its messages unread here and on Telegram. You can still mark a chat read yourself.";
+"ayu.ghost.once" = "Turn off ‘Do not mark as read’ to open a one-time message. Opening it tells Telegram it was seen.";
 "ayu.ghost.nostories" = "Do not mark stories as seen";
 "ayu.ghost.nostories.info" = "The author does not see you among the viewers.";
 "ayu.ghost.offline" = "Always offline";
@@ -1803,6 +1811,10 @@
 "developer.notice" = "Took part in the development of Exteria";
 "developer.someone" = "This person";
 "chatset.quickreaction" = "Quick reaction";
+"chatset.quickreaction.info" = "Double-tap a message to send your chosen reaction.";
+"chatset.quickreaction.preview.in" = "hey, I found another bug in Exteria";
+"chatset.quickreaction.preview.quote" = "hey, did something happen?";
+"chatset.quickreaction.preview.out" = "Doing well!";
 "chatset.premium.header" = "Premium elements";
 "chatset.premium.status" = "Emoji statuses in messages";
 "chatset.premium.replyemoji" = "Custom emoji in replies";
@@ -2065,6 +2077,8 @@
 "chat.service.sharing.request.disable" = "%@ requested to disable copying and forwarding";
 "chat.service.sharing.request.enable" = "%@ requested to allow copying and forwarding";
 "chat.service.sharing.still.disabled" = "Copying and forwarding remain disabled";
+"chat.copy.restricted" = "Copying is restricted in this chat";
+"chat.copy.unavailable" = "Could not check whether copying is allowed";
 "chat.service.sharing.still.enabled" = "Copying and forwarding remain allowed";
 "chat.service.sharing.disabled" = "%@ disabled copying and forwarding";
 "chat.service.sharing.enabled" = "%@ allowed copying and forwarding";

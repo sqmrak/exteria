@@ -518,6 +518,11 @@
 "bots.pick.title" = "выберите чат";
 "bots.pick.done" = "отправить";
 "bots.inline.empty" = "ничего не найдено";
+"bots.inline.cannot_send" = "заверши редактирование и убедись, что можешь отправлять сообщения в этом чате";
+"bots.inline.location.ask" = "%@ запрашивает местоположение для инлайн-поиска. выбрать точку и передать её боту?";
+"bots.inline.location.choose" = "выбрать местоположение";
+"bots.inline.location.needed" = "для поиска этому боту нужно местоположение";
+"bots.inline.webapp.unsupported" = "мини-приложения telegram пока не поддерживаются";
 "bots.inline.photo" = "фото";
 "bots.inline.gif" = "анимация";
 "bots.inline.sticker" = "стикер";
@@ -1057,6 +1062,7 @@
 "chatset.mentioncomma" = "запятая после упоминания";
 "chatset.mentioncomma.info" = "«@имя, » когда имя стоит в начале сообщения";
 "chat.sendas" = "отправлять от имени";
+"chat.sendas.premium" = "чтобы писать от этого имени, нужен telegram premium";
 "chat.sendas.info" = "выберите, от чьего имени уходят сообщения в этом чате :P";
 "chat.sendas.account" = "меня";
 "chatset.hidesendas" = "скрыть картинку отправителя";
@@ -1496,6 +1502,7 @@
 "folders.delete" = "удалить папку";
 "folders.delete.info" = "удалить эту папку? сами чаты останутся.";
 "folders.name" = "название папки";
+"folders.emoji" = "выбрать эмодзи";
 "folders.name.info" = "от 1 до 12 символов";
 "folders.sync.info" = "папки синхронизируются с вашим аккаунтом telegram.";
 "folders.contacts" = "контакты";
@@ -1747,9 +1754,10 @@
 "ayu.title" = "ayumoments";
 "ayu.info" = "режим призрака, фильтры и сохранение удалённого работают, пока включены, и без открытого экрана.";
 "ayu.ghost" = "режим призрака";
-"ayu.ghost.info" = "сообщения и истории остаются прочитанными только у вас :3";
+"ayu.ghost.info" = "выбери, какую активность скрывать. настройки работают независимо";
 "ayu.ghost.noread" = "не отмечать прочитанным";
-"ayu.ghost.noread.info" = "чат читается на экране, а собеседник не видит, что вы прочитали.";
+"ayu.ghost.noread.info" = "при просмотре сообщения остаются непрочитанными здесь и в telegram. вручную отметить чат прочитанным можно";
+"ayu.ghost.once" = "чтобы открыть одноразовое сообщение, выключи «не отмечать прочитанным». при открытии telegram узнает о просмотре";
 "ayu.ghost.nostories" = "не отмечать истории просмотренными";
 "ayu.ghost.nostories.info" = "автор не увидит вас среди смотревших.";
 "ayu.ghost.offline" = "всегда не в сети";
@@ -1809,6 +1817,10 @@
 "developer.notice" = "участвовал в разработке exteria";
 "developer.someone" = "этот человек";
 "chatset.quickreaction" = "быстрая реакция";
+"chatset.quickreaction.info" = "дважды нажми на сообщение, чтобы отправить выбранную реакцию";
+"chatset.quickreaction.preview.in" = "слушай, я в экстерии ещё баг нашёл";
+"chatset.quickreaction.preview.quote" = "дарова, что-то случилось?";
+"chatset.quickreaction.preview.out" = "всё хорошо!";
 "chatset.premium.header" = "элементы premium";
 "chatset.premium.status" = "эмодзи-статусы в сообщениях";
 "chatset.premium.replyemoji" = "кастомные эмодзи в ответах";
@@ -2071,6 +2083,8 @@
 "chat.service.sharing.request.disable" = "%@ предлагает запретить копирование и пересылку";
 "chat.service.sharing.request.enable" = "%@ предлагает разрешить копирование и пересылку";
 "chat.service.sharing.still.disabled" = "Копирование и пересылка по-прежнему запрещены";
+"chat.copy.restricted" = "копирование в этом чате запрещено";
+"chat.copy.unavailable" = "не удалось проверить, разрешено ли копирование";
 "chat.service.sharing.still.enabled" = "Копирование и пересылка по-прежнему разрешены";
 "chat.service.sharing.disabled" = "%@ запретил(а) копирование и пересылку";
 "chat.service.sharing.enabled" = "%@ разрешил(а) копирование и пересылку";
