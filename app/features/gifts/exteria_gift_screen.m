@@ -87,6 +87,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     BOOL _clearBar;
     UIColor *_barTint;
     BOOL _barShaded;
+    BOOL _symbolAction;
 }
 @end
 
@@ -178,6 +179,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _actionTitle = copiedTitle;
     [_actionHandler release];
     _actionHandler = copiedHandler;
+    _symbolAction = NO;
     if (ExteriaThemeIsClassic()) {
         self.navigationItem.rightBarButtonItem = title ? [[[UIBarButtonItem alloc] initWithTitle:title style:UIBarButtonItemStyleBordered
                                                                                           target:self action:@selector(actionTapped)] autorelease] : nil;
@@ -185,6 +187,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     }
     _action.title = title ? title : @"";
     _action.hidden = title == nil;
+    [self refreshActionIcon];
     if (self.isViewLoaded) [self.view setNeedsLayout];
 }
 
@@ -193,6 +196,9 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     NSString *copiedLabel = [label copy];
     [_actionHandler release];
     _actionHandler = copiedHandler;
+    _symbolAction = handler != nil;
+    [_actionTitle release]; _actionTitle = nil;
+    _action.hidden = YES;
     [_actionLabel release];
     _actionLabel = copiedLabel;
     _actionSymbol = symbol;
@@ -209,7 +215,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
 /* the bar is built in loadView, so a symbol set before it waits there */
 - (void)refreshActionIcon {
     if (!_header) return;
-    if (!_actionHandler) {
+    if (!_symbolAction || !_actionHandler) {
         [_actionIcon removeFromSuperview];
         [_actionIcon release];
         _actionIcon = nil;
@@ -313,8 +319,14 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
         _back.hidden = alone;
         _back.frame = CGRectMake(left, insets.top, 52, BAR_HEIGHT);
         CGFloat actionWidth = _action.hidden ? 0 : MIN(column.size.width * 0.42, ceil([_action.title sizeWithFont:ExteriaFontSemibold(17)].width) + 28);
-        CGFloat side = MAX(64, actionWidth + 6);
-        _titleLabel.frame = CGRectMake(left + side, insets.top, MAX(0, column.size.width - 2 * side), BAR_HEIGHT);
+        CGFloat rightSpace = MAX(_actionIcon ? 56 : 0, actionWidth) + 8;
+        CGFloat leftSpace = alone ? 8 : 56;
+        CGFloat side = MAX(leftSpace, rightSpace);
+        CGFloat centeredWidth = MAX(0, column.size.width - 2 * side);
+        CGFloat titleWidth = ceil([_screenTitle sizeWithFont:ExteriaFontSemibold(17)].width);
+        CGFloat titleLeft = left + (titleWidth <= centeredWidth ? side : leftSpace);
+        CGFloat titleRight = edge - (titleWidth <= centeredWidth ? side : rightSpace);
+        _titleLabel.frame = CGRectMake(titleLeft, insets.top, MAX(0, titleRight - titleLeft), BAR_HEIGHT);
         _action.frame = CGRectMake(edge - actionWidth, insets.top, actionWidth, BAR_HEIGHT);
         _actionIcon.frame = CGRectMake(edge - 56, insets.top, 52, BAR_HEIGHT);
     }
