@@ -12,6 +12,9 @@ UIImage *ExteriaEmojiImage(size_t entry);
    picture cannot be filled in later */
 UIImage *ExteriaEmojiImageNow(size_t entry);
 
+/* a system emoji rendered at chat size, or nil when this ios cannot draw the complete sequence */
+void ExteriaLargeEmojiImage(size_t entry, void (^completion)(UIImage *image));
+
 /* how many times a picture was asked for and not yet in memory; a view reads it before and after drawing, and when
    it changed calls ExteriaEmojiRedrawWhenLoaded */
 NSUInteger ExteriaEmojiMissCount(void);

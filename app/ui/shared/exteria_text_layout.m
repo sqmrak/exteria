@@ -16,6 +16,7 @@ static NSString *const ExteriaStrikeAttribute = @"ExteriaStrike";
 static NSString *const ExteriaQuoteAttribute = @"ExteriaQuote";
 static NSString *const ExteriaSpoilerAttribute = @"ExteriaSpoiler";
 static NSString *const ExteriaMonoAttribute = @"ExteriaMono";
+static NSString *const ExteriaMonoEntityAttribute = @"ExteriaMonoEntity";
 NSString *const ExteriaSpoilerTarget = @"exteria-spoiler:";
 
 /* a quote is set in from the left edge by its bar, which is drawn in that room */
@@ -101,6 +102,7 @@ static NSMutableAttributedString *ExteriaStyledString(NSString *text, NSArray *e
         case ExteriaTextStylePre:
             [string addAttribute:(id)kCTFontAttributeName value:(id)code range:range];
             [string addAttribute:ExteriaMonoAttribute value:[NSNumber numberWithBool:YES] range:range];
+            [string addAttribute:ExteriaMonoEntityAttribute value:entity range:range];
             break;
         case ExteriaTextStyleUnderline: {
             int single = kCTUnderlineStyleSingle;
@@ -453,6 +455,18 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
         if (index == kCFNotFound || (NSUInteger)index >= _string.length) return nil;
         if (_hasSpoilers && !_spoilersRevealed && [_string attribute:ExteriaSpoilerAttribute atIndex:(NSUInteger)index effectiveRange:NULL]) return ExteriaSpoilerTarget;
         return [_string attribute:ExteriaLinkAttribute atIndex:(NSUInteger)index effectiveRange:NULL];
+    }
+    return nil;
+}
+
+- (ExteriaTextEntity *)codeAtPoint:(CGPoint)point {
+    for (NSUInteger i = 0; i < _lineCount; ++i) {
+        if (point.y < _origins[i].y - _ascents[i] - 2 || point.y > _origins[i].y + _descents[i] + 2) continue;
+        CGFloat width = CTLineGetTypographicBounds(_lines[i], NULL, NULL, NULL);
+        if (point.x < _origins[i].x || point.x > _origins[i].x + width) return nil;
+        CFIndex index = CTLineGetStringIndexForPosition(_lines[i], CGPointMake(point.x - _origins[i].x, 0));
+        if (index == kCFNotFound || (NSUInteger)index >= _string.length) return nil;
+        return [_string attribute:ExteriaMonoEntityAttribute atIndex:(NSUInteger)index effectiveRange:NULL];
     }
     return nil;
 }

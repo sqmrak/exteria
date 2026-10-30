@@ -1,6 +1,7 @@
 #import "exteria_emoji_store.h"
 
 #import "exteria_image_decoder.h"
+#import <CoreText/CoreText.h>
 
 #define PACK_NAME @"emoji"
 #define PACK_EXTENSION @"pack"
@@ -150,6 +151,99 @@ NSString *ExteriaEmojiString(size_t entry) {
     uint16_t units[32];
     size_t count = exteria_emoji_encode(entry, units, 32);
     return count ? [NSString stringWithCharacters:units length:count] : @"";
+}
+
+static UIImage *ExteriaRenderSystemEmoji(NSString *text, size_t side, BOOL *supportedOut) {
+    *supportedOut = NO;
+    CTFontRef font = CTFontCreateWithName(CFSTR("AppleColorEmoji"), (CGFloat)side * 0.8, NULL);
+    if (!font) return nil;
+    NSDictionary *attributes = [NSDictionary dictionaryWithObject:(id)font forKey:(id)kCTFontAttributeName];
+    NSAttributedString *string = [[[NSAttributedString alloc] initWithString:text attributes:attributes] autorelease];
+    CTLineRef line = CTLineCreateWithAttributedString((CFAttributedStringRef)string);
+    CFRelease(font);
+    if (!line) return nil;
+    CFArrayRef runs = CTLineGetGlyphRuns(line);
+    BOOL supported = CTLineGetGlyphCount(line) == 1 && CFArrayGetCount(runs) == 1;
+    if (supported) {
+        CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, 0);
+        CTFontRef used = (CTFontRef)CFDictionaryGetValue(CTRunGetAttributes(run), kCTFontAttributeName);
+        CFStringRef name = used ? CTFontCopyPostScriptName(used) : NULL;
+        supported = name && CFStringCompare(name, CFSTR("AppleColorEmoji"), 0) == kCFCompareEqualTo;
+        if (name) CFRelease(name);
+    }
+    *supportedOut = supported;
+    CGColorSpaceRef colors = supported ? CGColorSpaceCreateDeviceRGB() : NULL;
+    CGContextRef context = colors ? CGBitmapContextCreate(NULL, side, side, 8, side * 4, colors,
+                                                           kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big) : NULL;
+    if (colors) CGColorSpaceRelease(colors);
+    UIImage *image = nil;
+    if (context) {
+        CGRect bounds = CTLineGetImageBounds(line, context);
+        if (!CGRectIsEmpty(bounds) && isfinite(bounds.origin.x) && isfinite(bounds.origin.y) &&
+            isfinite(bounds.size.width) && isfinite(bounds.size.height)) {
+            CGFloat scale = MIN((CGFloat)side * 0.93 / bounds.size.width, (CGFloat)side * 0.93 / bounds.size.height);
+            CGContextScaleCTM(context, scale, scale);
+            CGContextSetTextPosition(context, ((CGFloat)side / scale - bounds.size.width) / 2 - bounds.origin.x,
+                                     ((CGFloat)side / scale - bounds.size.height) / 2 - bounds.origin.y);
+            CTLineDraw(line, context);
+            CGImageRef bitmap = CGBitmapContextCreateImage(context);
+            if (bitmap) {
+                image = [UIImage imageWithCGImage:bitmap];
+                CGImageRelease(bitmap);
+            }
+        }
+        CGContextRelease(context);
+    }
+    CFRelease(line);
+    return image;
+}
+
+void ExteriaLargeEmojiImage(size_t entry, void (^completion)(UIImage *)) {
+    if (!completion) return;
+    NSString *emoji = ExteriaEmojiString(entry);
+    if (!emoji.length) { completion(nil); return; }
+    static NSCache *cache;
+    static NSMutableDictionary *pending;
+    static NSMutableSet *unsupported;
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 32;
+        cache.totalCostLimit = 12 * 1024 * 1024;
+        pending = [[NSMutableDictionary alloc] init];
+        unsupported = [[NSMutableSet alloc] init];
+        queue = dispatch_queue_create("exteria.emoji.large", DISPATCH_QUEUE_SERIAL);
+    });
+    NSNumber *key = [NSNumber numberWithUnsignedLong:(unsigned long)entry];
+    UIImage *cached = [cache objectForKey:key];
+    if (cached || [unsupported containsObject:key]) { completion(cached); return; }
+    NSMutableArray *waiters = [pending objectForKey:key];
+    if (waiters) {
+        if (waiters.count < 16) [waiters addObject:[[completion copy] autorelease]];
+        else completion(nil);
+        return;
+    }
+    if (pending.count >= 64) { completion(nil); return; }
+    waiters = [NSMutableArray arrayWithObject:[[completion copy] autorelease]];
+    [pending setObject:waiters forKey:key];
+    CGFloat screenScale = [[UIScreen mainScreen] scale];
+    size_t side = (size_t)ceil(150 * MAX(1, MIN(3, screenScale)));
+    dispatch_async(queue, ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        BOOL supported = NO;
+        UIImage *image = [ExteriaRenderSystemEmoji(emoji, side, &supported) retain];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (image) [cache setObject:image forKey:key cost:side * side * 4];
+            else if (!supported) [unsupported addObject:key];
+            else NSLog(@"exteria: could not render system emoji %@", key);
+            NSArray *callbacks = [[[pending objectForKey:key] copy] autorelease];
+            [pending removeObjectForKey:key];
+            for (void (^callback)(UIImage *) in callbacks) callback(image);
+            [image release];
+        });
+        [pool drain];
+    });
 }
 
 void ExteriaDrawEmoji(size_t entry, CGRect rect) {

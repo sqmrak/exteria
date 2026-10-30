@@ -58,6 +58,8 @@ extern NSString *const ExteriaSpoilerTarget;
 - (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)document;
 /* the address of the link under point (relative to the text box), nil when there is none */
 - (NSString *)linkAtPoint:(CGPoint)point;
+/* the original code or pre entity under the point, even when an emoji changed layout offsets */
+- (ExteriaTextEntity *)codeAtPoint:(CGPoint)point;
 - (long long)customEmojiAtPoint:(CGPoint)point;
 /* where the first custom emoji of this document stands in the layout, in its coordinates; CGRectNull when the text has none */
 - (CGRect)rectOfCustomEmoji:(long long)document;
