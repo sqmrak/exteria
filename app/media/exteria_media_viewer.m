@@ -21,6 +21,7 @@
 #import "exteria_time.h"
 #import "exteria_symbol.h"
 #import "exteria_weak_reference.h"
+#include "exteria_media_drag.h"
 
 #define EXTERIA_VIEWER_PHOTO_SIDE_MAX 2048.0
 
@@ -52,6 +53,8 @@ static char ExteriaMediaPlayerStatusContext;
     UIView *_page;
     UIImageView *_pageTransition;
     BOOL _paging;
+    UIPanGestureRecognizer *_pagePan;
+    UIPanGestureRecognizer *_dismissPan;
     UIScrollView *_zoom;
     UIImageView *_image;
     ExteriaMediaVideoView *_video;
@@ -216,6 +219,7 @@ static char ExteriaMediaPlayerStatusContext;
 - (void)loadView {
     self.view = [[[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds] autorelease];
     self.view.backgroundColor = [UIColor blackColor];
+    self.view.opaque = NO;
     _page = [[UIView alloc] initWithFrame:self.view.bounds];
     [self.view addSubview:_page];
     _zoom = [[UIScrollView alloc] init];
@@ -301,10 +305,6 @@ static char ExteriaMediaPlayerStatusContext;
     doubleTap.numberOfTapsRequired = 2; doubleTap.delegate = self; [self.view addGestureRecognizer:doubleTap];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped:)] autorelease];
     tap.delegate = self; [tap requireGestureRecognizerToFail:doubleTap]; [self.view addGestureRecognizer:tap];
-    for (NSNumber *direction in [NSArray arrayWithObjects:@(UISwipeGestureRecognizerDirectionDown), nil]) {
-        UISwipeGestureRecognizer *swipe = [[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swiped:)] autorelease];
-        swipe.direction = direction.unsignedIntegerValue; swipe.delegate = self; [self.view addGestureRecognizer:swipe];
-    }
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(backgrounded:) name:UIApplicationWillResignActiveNotification object:nil];
     /* the value of MPMusicPlayerControllerVolumeDidChangeNotification, spelled out so this file does not need MediaPlayer */
@@ -314,9 +314,14 @@ static char ExteriaMediaPlayerStatusContext;
     page.delegate = self;
     page.maximumNumberOfTouches = 1;
     [self.view addGestureRecognizer:page];
-    for (UIGestureRecognizer *gesture in self.view.gestureRecognizers) {
-        if ([gesture isKindOfClass:[UISwipeGestureRecognizer class]]) [gesture requireGestureRecognizerToFail:page];
-    }
+    _pagePan = page;
+    UIPanGestureRecognizer *dismiss = [[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragMedia:)] autorelease];
+    dismiss.delegate = self;
+    dismiss.maximumNumberOfTouches = 1;
+    [self.view addGestureRecognizer:dismiss];
+    _dismissPan = dismiss;
+    [page requireGestureRecognizerToFail:dismiss];
+    [_zoom.panGestureRecognizer requireGestureRecognizerToFail:dismiss];
     [self loadCurrent];
 }
 
@@ -653,13 +658,17 @@ static NSString *ExteriaVideoTime(double seconds) {
     return YES;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    if (gesture == _dismissPan || other == _dismissPan) return NO;
     return _zoom.zoomScale <= 1.001 && ([gesture isKindOfClass:[UISwipeGestureRecognizer class]] || [other isKindOfClass:[UISwipeGestureRecognizer class]] || gesture.view == self.view || other.view == self.view);
 }
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture {
-    if (_paging) return NO;
-    if ([gesture isKindOfClass:[UIPanGestureRecognizer class]] && gesture.view == self.view) {
+    if (_paging || _closed || _burning) return NO;
+    if (gesture == _pagePan || gesture == _dismissPan) {
         CGPoint speed = [(UIPanGestureRecognizer *)gesture velocityInView:self.view];
-        return _messages.count > 1 && _zoom.zoomScale <= 1.001 && !_captionInput.isFirstResponder && fabs(speed.x) > fabs(speed.y);
+        if (_zoom.zoomScale > 1.001 || _captionInput.isFirstResponder) return NO;
+        exteria_media_drag_direction direction = exteria_media_drag_direction_for(speed.x, speed.y);
+        if (gesture == _dismissPan) return direction == EXTERIA_MEDIA_DRAG_VERTICAL;
+        return _messages.count > 1 && direction == EXTERIA_MEDIA_DRAG_HORIZONTAL;
     }
     return ![gesture isKindOfClass:[UISwipeGestureRecognizer class]] || (_zoom.zoomScale <= 1.001 && !_captionInput.isFirstResponder);
 }
@@ -691,18 +700,43 @@ static NSString *ExteriaVideoTime(double seconds) {
     }
     [self toggleChrome];
 }
-- (void)swiped:(UISwipeGestureRecognizer *)swipe {
-    if (swipe.direction == UISwipeGestureRecognizerDirectionDown) [self close];
-    else if (swipe.direction == UISwipeGestureRecognizerDirectionLeft) [self next];
-    else [self previous];
-}
 - (void)cancelPaging {
+    if (_paging) self.view.alpha = 1;
     [_page.layer removeAllAnimations];
     _page.transform = CGAffineTransformIdentity;
     [_pageTransition removeFromSuperview];
     [_pageTransition release];
     _pageTransition = nil;
     _paging = NO;
+    self.view.backgroundColor = [UIColor blackColor];
+    _top.alpha = _bottom.alpha = 1;
+}
+
+- (void)dragMedia:(UIPanGestureRecognizer *)pan {
+    if (_closed || _paging || _burning) return;
+    CGFloat distance = [pan translationInView:self.view].y;
+    CGFloat height = self.view.bounds.size.height;
+    if (pan.state == UIGestureRecognizerStateBegan || pan.state == UIGestureRecognizerStateChanged) {
+        CGFloat progress = (CGFloat)exteria_media_drag_progress(distance, height);
+        _page.transform = CGAffineTransformMakeTranslation(0, distance);
+        self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:1 - progress * 0.7];
+        _top.alpha = _bottom.alpha = 1 - progress;
+    } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled || pan.state == UIGestureRecognizerStateFailed) {
+        BOOL close = exteria_media_drag_should_close(distance, height, pan.state == UIGestureRecognizerStateEnded);
+        if (close && _oneTime && _opened) { [self close]; return; }
+        _paging = YES;
+        CGFloat target = close ? (distance < 0 ? -height : height) : 0;
+        [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
+            _page.transform = CGAffineTransformMakeTranslation(0, target);
+            self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:close ? 0 : 1];
+            _top.alpha = _bottom.alpha = close ? 0 : 1;
+            if (close) self.view.alpha = 0;
+        } completion:^(BOOL finished) {
+            if (!finished || !_paging || _closed) return;
+            _paging = NO;
+            if (close) [self close];
+        }];
+    }
 }
 
 - (void)pageToIndex:(NSInteger)index {
