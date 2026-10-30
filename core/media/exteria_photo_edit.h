@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "exteria_status.h"
 
-#define EXTERIA_PHOTO_SIDE_MAX 1280
+#define EXTERIA_PHOTO_SIDE_MAX 2560
 #define EXTERIA_PHOTO_TOOLS 10
 
 typedef enum {

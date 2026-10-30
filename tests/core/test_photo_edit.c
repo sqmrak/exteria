@@ -15,7 +15,10 @@ int main(void) {
         CHECK_EQ_INT(crop.width, 0);
     }
     CHECK_EQ_INT(exteria_photo_crop_pixels(0, 10, 0, 0, 1, 1, &crop), EXTERIA_E_ARG);
-    CHECK_EQ_INT(exteria_photo_crop_pixels(1281, 10, 0, 0, 1, 1, &crop), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_photo_crop_pixels(2560, 1920, 0.25, 0.25, 0.5, 0.5, &crop), EXTERIA_OK);
+    CHECK_EQ_INT(crop.x, 640); CHECK_EQ_INT(crop.y, 480);
+    CHECK_EQ_INT(crop.width, 1280); CHECK_EQ_INT(crop.height, 960);
+    CHECK_EQ_INT(exteria_photo_crop_pixels(2561, 10, 0, 0, 1, 1, &crop), EXTERIA_E_ARG);
     uint8_t pixels[48], before[48];
     for (size_t i = 0; i < sizeof(pixels); ++i) pixels[i] = (uint8_t)(i * 5);
     memcpy(before, pixels, sizeof(pixels));

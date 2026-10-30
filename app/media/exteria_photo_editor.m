@@ -10,6 +10,7 @@
 
 #define EDIT_OPERATIONS_MAX 32
 #define EDIT_POINTS_MAX 4096
+#define EDIT_PREVIEW_SIDE_MAX 1280
 
 static NSString *const ExteriaPhotoToolNames[EXTERIA_PHOTO_TOOLS] = {
     @"media.exposure", @"media.contrast", @"media.saturation", @"media.warmth", @"media.fade",
@@ -173,7 +174,6 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
 - (void)drawRect:(CGRect)rect {
     CGRect imageRect = self.imageRect;
     if (CGRectIsEmpty(imageRect)) return;
-    [_image drawInRect:imageRect];
     CGContextRef context = UIGraphicsGetCurrentContext();
     if (_stroke) {
         CGContextSaveGState(context);
@@ -218,6 +218,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     ExteriaWeakReference *_weak;
     void (^_completion)(UIImage *);
     dispatch_queue_t _work;
+    UIImageView *_photo;
     ExteriaPhotoCanvas *_canvas;
     UIView *_top;
     UIScrollView *_tools;
@@ -243,6 +244,10 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     NSInteger _alertText;
     BOOL _movingText;
     CGRect _cropStart;
+    CGRect _cropAnimationFrom;
+    CGRect _cropAnimationTo;
+    CADisplayLink *_cropAnimation;
+    CFTimeInterval _cropAnimationStarted;
     CGPoint _panStart;
     CGPoint _textPoint;
     CGPoint _moveOriginal;
@@ -272,9 +277,10 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     return self;
 }
 - (void)dealloc {
+    [_cropAnimation invalidate]; [_cropAnimation release];
     [_weak clear]; [_source release]; [_completion release]; [_operations release]; [_modeSnapshot release]; [_weak release];
     dispatch_release(_work);
-    [_canvas release]; [_top release]; [_tools release]; [_options release];
+    [_photo release]; [_canvas release]; [_top release]; [_tools release]; [_options release];
     [_done release]; [_cancel release]; [_apply release]; [_back release]; [_undo release]; [_arrowButton release];
     [_value release]; [_slider release]; [_choices release]; [_spinner release]; [_points release]; [_color release];
     [super dealloc];
@@ -290,7 +296,8 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
 }
 - (void)loadView {
     self.view = [[[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds] autorelease]; self.view.backgroundColor = [UIColor blackColor];
-    _canvas = [[ExteriaPhotoCanvas alloc] init]; _canvas.backgroundColor = [UIColor blackColor];
+    _photo = [[UIImageView alloc] init]; _photo.image = _source; [self.view addSubview:_photo];
+    _canvas = [[ExteriaPhotoCanvas alloc] init]; _canvas.backgroundColor = [UIColor clearColor]; _canvas.opaque = NO;
     _canvas.image = _source; [self.view addSubview:_canvas];
     UIPanGestureRecognizer *pan = [[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panned:)] autorelease];
     pan.maximumNumberOfTouches = 1; pan.delegate = self; [_canvas addGestureRecognizer:pan];
@@ -340,6 +347,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    [self stopCropAnimation];
     [[UIApplication sharedApplication] setStatusBarHidden:_statusHidden withAnimation:UIStatusBarAnimationNone];
 }
 - (BOOL)prefersStatusBarHidden { return YES; }
@@ -350,6 +358,12 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
 - (NSUInteger)supportedInterfaceOrientations
 #endif
 { return UIInterfaceOrientationMaskAll; }
+- (void)layoutPhoto {
+    CGRect rect = _canvas.imageRect;
+    rect.origin.x += _canvas.frame.origin.x;
+    rect.origin.y += _canvas.frame.origin.y;
+    _photo.frame = rect;
+}
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     CGFloat width = self.view.bounds.size.width, height = self.view.bounds.size.height;
@@ -363,6 +377,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     _tools.frame = CGRectMake(left, height - bottom - 52, inner, 52);
     _options.frame = CGRectMake(0, height - bottom - options, width, options);
     _canvas.frame = CGRectMake(0, top + 48, width, MAX(1, height - top - 48 - bottom - (_mode ? options : 52)));
+    [self layoutPhoto];
     _back.frame = CGRectMake(left + 4, options - 44, 90, 44); _apply.frame = CGRectMake(width - right - 104, options - 44, 100, 44);
     _choices.frame = CGRectMake(left, 0, inner, 50);
     _value.frame = CGRectMake(left + 100, options - 42, MAX(0, inner - 204), 40);
@@ -375,6 +390,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     [alert show]; [alert release];
 }
 - (void)refreshMode {
+    [self stopCropAnimation];
     _tools.hidden = _mode != 0; _options.hidden = _mode == 0;
     _done.enabled = !_mode && !_exporting; _undo.enabled = _operations.count > 0 && !_exporting;
     _canvas.cropping = _mode == 1; _slider.hidden = _mode != 2 && _mode != 3;
@@ -435,6 +451,20 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     else if (_operations.count && (!_mode || _operations.count > _modeStart)) [_operations removeLastObject];
     [self requestRender];
 }
+- (void)stopCropAnimation {
+    [_cropAnimation invalidate]; [_cropAnimation release]; _cropAnimation = nil;
+}
+- (void)cropAnimationTick:(CADisplayLink *)link {
+    CGFloat t = MIN(1, MAX(0, (link.timestamp - _cropAnimationStarted) / 0.3));
+    CGFloat progress = (1 - cos(M_PI * t)) / 2;
+    CGRect from = _cropAnimationFrom, to = _cropAnimationTo;
+    _canvas.crop = CGRectMake(from.origin.x + (to.origin.x - from.origin.x) * progress,
+                              from.origin.y + (to.origin.y - from.origin.y) * progress,
+                              from.size.width + (to.size.width - from.size.width) * progress,
+                              from.size.height + (to.size.height - from.size.height) * progress);
+    [_canvas setNeedsDisplay];
+    if (t >= 1) [self stopCropAnimation];
+}
 - (void)aspect:(UIButton *)button {
     const double ratios[] = {0, 1, 4.0/3, 3.0/4, 16.0/9, 9.0/16};
     if (button.tag < 0 || button.tag > 5 || !_canvas.image) return;
@@ -445,7 +475,15 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
         else { rect.size.height = imageRatio / ratio; rect.origin.y = (1 - rect.size.height) / 2; }
     }
     _cropRatio = ratio > 0 ? rect.size.width / rect.size.height : 0;
-    _canvas.crop = rect; [_canvas setNeedsDisplay];
+    [self stopCropAnimation];
+    if (ExteriaReduceMotionEnabled() || ![UIView areAnimationsEnabled] || !_canvas.window) {
+        _canvas.crop = rect; [_canvas setNeedsDisplay];
+    } else {
+        _cropAnimationFrom = _canvas.crop; _cropAnimationTo = rect;
+        _cropAnimationStarted = CACurrentMediaTime();
+        _cropAnimation = [[CADisplayLink displayLinkWithTarget:self selector:@selector(cropAnimationTick:)] retain];
+        [_cropAnimation addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    }
 }
 - (void)adjustTool:(UIButton *)button { [self selectAdjustment:button.tag]; }
 - (void)selectAdjustment:(NSInteger)tool {
@@ -469,6 +507,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     return [NSDictionary dictionaryWithObjectsAndKeys:@"adjust", @"kind", [NSData dataWithBytes:&_adjustments length:sizeof(_adjustments)], @"settings", nil];
 }
 - (void)applyMode {
+    if (_cropAnimation) { _canvas.crop = _cropAnimationTo; [self stopCropAnimation]; }
     if (_mode == 1) [self append:[NSDictionary dictionaryWithObjectsAndKeys:@"crop", @"kind", [NSValue valueWithCGRect:_canvas.crop], @"rect", nil]];
     else if (_mode == 2) [self append:[self adjustmentOperation]];
     _mode = 0; _selectedText = -1; _canvas.selection = CGRectZero; _canvas.stroke = nil;
@@ -506,6 +545,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     if (pan.state == UIGestureRecognizerStateBegan) {
         _panStart = point;
         if (_mode == 1) {
+            [self stopCropAnimation];
             _cropStart = _canvas.crop; _cropCorner = -1;
             CGFloat distance = CGFLOAT_MAX;
             for (NSInteger corner = 0; corner < 4; ++corner) {
@@ -652,14 +692,14 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     NSArray *snapshot = [operations copy]; UIImage *source = [_source retain]; ExteriaWeakReference *weak = _weak;
     dispatch_async(_work, ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-        UIImage *image = [ExteriaPhotoRender(source, snapshot, EXTERIA_PHOTO_SIDE_MAX) retain];
+        UIImage *image = [ExteriaPhotoRender(source, snapshot, EDIT_PREVIEW_SIDE_MAX) retain];
         [source release]; [snapshot release];
         dispatch_async(dispatch_get_main_queue(), ^{
             ExteriaPhotoEditor *me = weak.target;
             if (me && !me->_closed) {
                 me->_rendering = NO;
                 if (me->_generation == generation) {
-                    if (image) { me->_canvas.image = image; me->_canvas.stroke = nil; if (me->_selectedText >= 0) [me selectText:me->_selectedText]; [me->_canvas setNeedsDisplay]; }
+                    if (image) { me->_canvas.image = image; me->_photo.image = image; [me layoutPhoto]; me->_canvas.stroke = nil; if (me->_selectedText >= 0) [me selectText:me->_selectedText]; [me->_canvas setNeedsDisplay]; }
                     else [me notice:@"media.edit.failed"];
                 }
                 me->_undo.enabled = me->_operations.count > 0;
