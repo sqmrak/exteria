@@ -143,7 +143,7 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     self.layer.cornerRadius = 12;
     self.isAccessibilityElement = YES;
     self.accessibilityTraits = UIAccessibilityTraitButton;
-    self.accessibilityLabel = [NSString stringWithFormat:@"@%@, %@", name, role];
+    self.accessibilityLabel = role.length ? [NSString stringWithFormat:@"@%@, %@", name, role] : [@"@" stringByAppendingString:name];
     _picture = [[UIImageView alloc] initWithImage:picture];
     _picture.contentMode = UIViewContentModeScaleAspectFit;
     [self addSubview:_picture];
@@ -198,7 +198,7 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     CGFloat left = 12 + LEAD_TILE + 10;
     CGFloat titleWidth = MAX(0, right - left - badges - 4);
     CGFloat measured = ceil(ExteriaStringSize(_name.text, _name.font).width);
-    _name.frame = CGRectMake(left, _made.text.length ? 9 : 11, MIN(titleWidth, measured), 22);
+    _name.frame = CGRectMake(left, _role.text.length ? (_made.text.length ? 9 : 11) : (height - 22) / 2, MIN(titleWidth, measured), 22);
     CGFloat x = CGRectGetMaxX(_name.frame) + 4;
     for (UIImageView *badge in _marks) {
         badge.frame = CGRectMake(x, _name.frame.origin.y + 2, 18, 18);
@@ -372,10 +372,11 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     NSNumber *identifier = [NSNumber numberWithLongLong:person->userId];
     ExteriaPerson *known = [_people objectForKey:identifier];
     NSString *name = known.username.length ? known.username : ExteriaTeamUsername(person->userId);
-    NSString *role = NSLocalizedString(person->role, nil);
-    NSString *made = person->app ? [NSString stringWithFormat:NSLocalizedString(@"about.made", nil), person->app] : nil;
+    NSString *role = person->role ? NSLocalizedString(person->role, nil) : nil;
+    BOOL lead = person == &ExteriaCredits[0];
+    NSString *made = lead && person->app ? [NSString stringWithFormat:NSLocalizedString(@"about.made", nil), person->app] : nil;
     UIImage *picture = [_fresh objectForKey:identifier] ?: ExteriaInitialPicture(name, 2 * LEAD_TILE);
-    UIImage *icon = person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
+    UIImage *icon = lead && person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
     ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaShapedPicture(picture, person->lobes, person->depth, LEAD_TILE)
                                                                   appIcon:icon marks:ExteriaMarksOfId(person->userId)] autorelease];
     [view addTarget:self action:@selector(creditTapped:) forControlEvents:UIControlEventTouchUpInside];
@@ -436,7 +437,7 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
         for (size_t i = 1; i < sizeof(ExteriaCredits) / sizeof(ExteriaCredits[0]); ++i) [people addObject:[self personRow:&ExteriaCredits[i]]];
     } else {
         for (NSNumber *identifier in ExteriaOfficialTesterIds()) {
-            ExteriaCredit tester = {identifier.longLongValue, @"about.tester", 8, 0.12, nil, nil};
+            ExteriaCredit tester = {identifier.longLongValue, nil, 8, 0.12, nil, nil};
             [people addObject:[self personRow:&tester]];
         }
     }
