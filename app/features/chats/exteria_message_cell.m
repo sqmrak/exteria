@@ -4,6 +4,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_alert.h"
 #import "exteria_avatar_view.h"
 #import "exteria_developers.h"
 #import "exteria_emoji_store.h"
@@ -25,6 +26,7 @@
 #import "exteria_chat_settings.h"
 #import "exteria_theme.h"
 #import "exteria_burn_effect.h"
+#include "exteria_message_actions.h"
 
 #define JOIN_RADIUS 5.0
 /* the corner of a modern bubble, which the person sets in the chat settings; the corner that tucks in against a neighbour is never larger than it */
@@ -36,10 +38,7 @@ static CGFloat ExteriaBubbleRadius(void) {
 #define CLASSIC_TAIL 6.0
 #define PAD_X_POLL 11.0
 #define META_HEIGHT_POLL 14.0
-/* how far a swipe to reply pulls the row before it counts, and how far the row can be pulled at most */
-/* the reply swipe of exteraless: the row follows the finger up to 80 points, the disc shows from 20, its ring fills until 50, where the answer is armed */
 #define SWIPE_TRIGGER 50.0
-#define SWIPE_MAX 80.0
 #define SWIPE_SHOW 20.0
 #define SWIPE_DISC 32.0
 #define SWIPE_BACK_SECONDS 0.18
@@ -857,6 +856,7 @@ static float ExteriaSpoilerRandom(void) {
     BOOL _swipeShown;
     BOOL _swipeArmed;
     CGFloat _swipePull;
+    NSUInteger _swipeGeneration;
     UIControl *_selectCover;
     UIView *_selectMark;
     UIImageView *_selectCheck;
@@ -924,10 +924,12 @@ static float ExteriaSpoilerRandom(void) {
     UIButton *_sharingDecline;
     ExteriaWeakReference *_weak;
     BOOL _activationDeferred;
+    UIPanGestureRecognizer *_pausedTablePan;
     /* the sticker file that arrived while activation was deferred */
     NSData *_pendingLottie;
     NSString *_pendingLottieKey;
 }
+- (void)resumeReplyTable;
 @end
 
 @implementation ExteriaMessageCell
@@ -1034,6 +1036,7 @@ static float ExteriaSpoilerRandom(void) {
     [self addSubview:_selectMark];
     _swipe = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(swiped:)];
     _swipe.delegate = self;
+    _swipe.maximumNumberOfTouches = 1;
     [self.contentView addGestureRecognizer:_swipe];
     _seekPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(seekDragged:)];
     _seekPan.delegate = self;
@@ -1066,6 +1069,7 @@ static ExteriaMessageCell *sPlayingRound = nil;
 - (void)dealloc {
     [_weak clear];
     [self stopGif];
+    [self resumeReplyTable];
     _swipe.delegate = nil;
     [_swipe release];
     _seekPan.delegate = nil;
@@ -1643,6 +1647,12 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _picture.frame = CGRectOffset(item.pictureFrame, bubble.origin.x, bubble.origin.y);
         _picture.backgroundColor = [UIColor clearColor];
         _picture.image = ExteriaEmojiImageNow(item.singleEmoji);
+        NSUInteger token = _token;
+        ExteriaWeakReference *weak = _weak;
+        ExteriaLargeEmojiImage(item.singleEmoji, ^(UIImage *image) {
+            ExteriaMessageCell *cell = weak.target;
+            if (cell && token == cell->_token && image) cell->_picture.image = image;
+        });
         if ([self playsOnItsOwn]) [self loadEmojiAnimation];
         pictureOnly = YES;
     } else if (item.kind == ExteriaChatItemSticker) {
@@ -1911,6 +1921,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
             cell->_body.fileProgressText = nil;
             [cell->_body setNeedsDisplay];
             [[cell loadAction] setIcon:ExteriaMediaIconDownload animated:YES];
+            if (cell->_loadAsked && cell.window) ExteriaShowNotice(nil, NSLocalizedString(@"media.failed", nil));
             return;
         }
         [cell->_loadedPath release];
@@ -1997,7 +2008,6 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         [_play setIcon:ExteriaMediaIconDownload animated:YES];
         return YES;
     }
-    if (_loadFailed) return NO;
     [self startMediaLoad:YES];
     return !_loadFailed;
 }
@@ -2141,6 +2151,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
             [self cancelMediaTransfer];
             [_play setIcon:ExteriaMediaIconDownload animated:YES];
         } else {
+            _loadAsked = YES;
             _playWhenLoaded = YES;
         }
         return;
@@ -2244,6 +2255,12 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 - (void)tappedGif {
     if (_gifPlayer) return;
     if (_loadRequest) {
+        if (!_loadAsked) {
+            _loadAsked = YES;
+            _gifPlayRequested = YES;
+            [self setAnimating:YES];
+            return;
+        }
         _gifPlayRequested = NO;
         [self cancelMediaTransfer];
         [_play setIcon:ExteriaMediaIconDownload animated:YES];
@@ -2336,6 +2353,24 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     return _swipe.state == UIGestureRecognizerStateBegan || _swipe.state == UIGestureRecognizerStateChanged;
 }
 
+- (UITableView *)replyTable {
+    for (UIView *view = self.superview; view; view = view.superview)
+        if ([view isKindOfClass:[UITableView class]]) return (UITableView *)view;
+    return nil;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    UITableView *table = [self replyTable];
+    return table && ((gesture == _swipe && other == table.panGestureRecognizer) || (other == _swipe && gesture == table.panGestureRecognizer));
+}
+
+- (void)resumeReplyTable {
+    if (!_pausedTablePan) return;
+    _pausedTablePan.enabled = YES;
+    [_pausedTablePan release];
+    _pausedTablePan = nil;
+}
+
 /* every message is answered by a leftward swipe; vertical movement stays with the table */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer {
     if (recognizer == _seekPan) {
@@ -2359,7 +2394,9 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     }
     if (recognizer != _swipe) return YES;
     if (_selecting || !_item.message || _item.kind == ExteriaChatItemPill || ![_delegate messageCellCanSwipeReply:self]) return NO;
+    UITableView *table = [self replyTable];
     CGPoint velocity = [_swipe velocityInView:self];
+    if (table.decelerating || (table.dragging && fabs(velocity.y) * 3 >= fabs(velocity.x))) return NO;
     return exteria_motion_reply_swipe_begins(velocity.x, velocity.y);
 }
 
@@ -2389,11 +2426,14 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 }
 
 - (void)resetSwipe {
+    ++_swipeGeneration;
+    [self resumeReplyTable];
     [self.contentView.layer removeAllAnimations];
     [_swipeDisc.layer removeAllAnimations];
     [_swipeFill removeAllAnimations];
     [self clearSwipeState];
     self.contentView.transform = [self restingTransform];
+    self.contentView.layer.sublayerTransform = CATransform3DIdentity;
     _swipeDisc.alpha = 0;
 }
 
@@ -2460,10 +2500,10 @@ static void ExteriaSwipeTick(void) {
     else apply();
 }
 
-/* the disc stands on the right edge of the screen and moves in with the row, at half the pace for our own messages, whose bubble is already near the edge */
 - (CGPoint)swipeDiscCenterForPull:(CGFloat)pull {
-    CGFloat factor = _item.message.outgoing ? 0.5f : 1;
-    return CGPointMake(self.bounds.size.width - pull * factor, CGRectGetMidY(_item.bubbleFrame));
+    (void)pull;
+    CGFloat right = CGRectGetMaxX(_item.bubbleFrame);
+    return CGPointMake(MIN(self.bounds.size.width - SWIPE_DISC / 2, right + SWIPE_DISC / 2 + 6), CGRectGetMidY(_item.bubbleFrame));
 }
 
 /* the ring grows over the 30 points after the disc shows, and the fill swells in when the answer is armed or leaves when the finger comes back under the line */
@@ -2505,10 +2545,22 @@ static void ExteriaSwipeTick(void) {
     switch (pan.state) {
     case UIGestureRecognizerStateBegan:
     case UIGestureRecognizerStateChanged: {
+        if (pan.state == UIGestureRecognizerStateBegan) {
+            ++_swipeGeneration;
+            [self.contentView.layer removeAnimationForKey:@"exteria.swipe.return"];
+            UIPanGestureRecognizer *tablePan = [self replyTable].panGestureRecognizer;
+            if (tablePan.enabled) {
+                _pausedTablePan = [tablePan retain];
+                tablePan.enabled = NO;
+            }
+        }
         /* the row follows the finger in both directions: the way back gives the pull back, and the disc leaves with it */
-        CGFloat pull = MIN(SWIPE_MAX, (CGFloat)exteria_motion_reply_swipe_pull([pan translationInView:self].x));
+        CGFloat pull = (CGFloat)exteria_motion_reply_swipe_pull([pan translationInView:self].x);
         _swipePull = pull;
-        self.contentView.transform = CGAffineTransformMakeTranslation(-pull, 0);
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        self.contentView.layer.sublayerTransform = CATransform3DMakeTranslation(-pull, 0, 0);
+        [CATransaction commit];
         _swipeDisc.center = [self swipeDiscCenterForPull:pull];
         [self updateSwipeForPull:pull];
         break;
@@ -2516,23 +2568,45 @@ static void ExteriaSwipeTick(void) {
     case UIGestureRecognizerStateEnded:
     case UIGestureRecognizerStateCancelled:
     case UIGestureRecognizerStateFailed: {
+        [self resumeReplyTable];
         BOOL answer = pan.state == UIGestureRecognizerStateEnded && _swipePull >= SWIPE_TRIGGER;
+        CGFloat duration = ExteriaReduceMotionEnabled() ? 0 : MIN(0.32, MAX(SWIPE_BACK_SECONDS, _swipePull / 500.0));
         _swipeShown = NO;
         _swipeArmed = NO;
         _swipePull = 0;
         /* the row and the disc go back together, slowing down toward the end, as the 180 ms return of exteraless; the ring and the fill empty once it is gone, unless
            a new pull has begun by then */
         CGPoint home = [self swipeDiscCenterForPull:0];
-        [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : SWIPE_BACK_SECONDS delay:0
+        NSUInteger generation = _swipeGeneration;
+        CABasicAnimation *returnMessage = [CABasicAnimation animationWithKeyPath:@"sublayerTransform"];
+        returnMessage.fromValue = [NSValue valueWithCATransform3D:self.contentView.layer.sublayerTransform];
+        returnMessage.toValue = [NSValue valueWithCATransform3D:CATransform3DIdentity];
+        returnMessage.duration = duration;
+        returnMessage.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        self.contentView.layer.sublayerTransform = CATransform3DIdentity;
+        [CATransaction commit];
+        if (returnMessage.duration > 0) [self.contentView.layer addAnimation:returnMessage forKey:@"exteria.swipe.return"];
+        CALayer *visibleDisc = [_swipeDisc.layer presentationLayer];
+        CGFloat visibleAlpha = visibleDisc ? visibleDisc.opacity : _swipeDisc.alpha;
+        CATransform3D visibleTransform = visibleDisc ? visibleDisc.transform : _swipeDisc.layer.transform;
+        [_swipeDisc.layer removeAnimationForKey:@"exteria.motion"];
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        _swipeDisc.layer.transform = visibleTransform;
+        _swipeDisc.alpha = visibleAlpha;
+        [CATransaction commit];
+        [UIView animateWithDuration:duration delay:0
                             options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
-            self.contentView.transform = [self restingTransform];
             _swipeDisc.center = home;
             _swipeDisc.alpha = 0;
         } completion:^(BOOL finished) {
-            (void)finished;
-            if (!_swipeShown) [self clearSwipeVisuals];
+            if (generation == _swipeGeneration && !_swipeShown) {
+                [self clearSwipeVisuals];
+                if (finished && answer) [_delegate messageCellDidSwipeReply:self];
+            }
         }];
-        if (answer) [_delegate messageCellDidSwipeReply:self];
         break;
     }
     default:
@@ -2598,6 +2672,27 @@ static void ExteriaSwipeTick(void) {
     if (url) {
         [_delegate messageCell:self didTapLink:url];
         return;
+    }
+    if (!_selecting && [_delegate respondsToSelector:@selector(messageCell:didTapCode:)]) {
+        ExteriaTextEntity *code = [_item.textLayout codeAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)];
+        if (code) {
+            exteria_entity spoilers[EXTERIA_MESSAGE_ENTITIES_MAX];
+            size_t count = 0;
+            memset(spoilers, 0, sizeof(spoilers));
+            for (ExteriaTextEntity *entity in message.entities) {
+                if (entity.style != ExteriaTextStyleSpoiler) continue;
+                if (count == EXTERIA_MESSAGE_ENTITIES_MAX || entity.range.location > INT32_MAX || entity.range.length > INT32_MAX) return;
+                spoilers[count].kind = EXTERIA_ENTITY_SPOILER;
+                spoilers[count].offset = (int32_t)entity.range.location;
+                spoilers[count++].length = (int32_t)entity.range.length;
+            }
+            if (!message.spoilersRevealed && exteria_code_has_hidden_spoiler(code.range.location, code.range.length, spoilers, count)) {
+                message.spoilersRevealed = YES;
+                _item.textLayout.spoilersRevealed = YES;
+                [_body setNeedsDisplay];
+            } else [_delegate messageCell:self didTapCode:code];
+            return;
+        }
     }
     if (_item.albumFrames.count) {
         CGPoint inBubble = [tap locationInView:self.contentView];

@@ -47,6 +47,7 @@
 - (BOOL)messageCellCanSwipeReply:(ExteriaMessageCell *)cell;
 - (void)messageCellDidSwipeReply:(ExteriaMessageCell *)cell;
 @optional
+- (void)messageCell:(ExteriaMessageCell *)cell didTapCode:(ExteriaTextEntity *)entity;
 - (void)messageCellDidRevealSpoiler:(ExteriaMessageCell *)cell;
 /* a tap on a sticker that belongs to a pack: the screen shows the pack */
 - (void)messageCellDidTapSticker:(ExteriaMessageCell *)cell;
