@@ -195,6 +195,7 @@ typedef enum {
     NSArray *_commenters;
     long long _randomId;
     BOOL _outgoing;
+    BOOL _noForwards;
     BOOL _unreadMention;
     BOOL _spoilersRevealed;
     BOOL _viewOnceOpened;
@@ -248,6 +249,7 @@ typedef enum {
 /* zero while sending */
 @property (nonatomic, assign) int32_t messageId;
 @property (nonatomic, readonly) int32_t date;
+@property (nonatomic, readonly) BOOL noForwards;
 @property (nonatomic, readonly) int32_t replyTo;
 @property (nonatomic, readonly) int32_t replyPeerKind;
 @property (nonatomic, readonly) long long replyPeerId;

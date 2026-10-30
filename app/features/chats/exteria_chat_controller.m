@@ -32,6 +32,7 @@
 #import "exteria_session_actions.h"
 #import "exteria_settings_kit.h"
 #import "exteria_session_sendas.h"
+#import "exteria_send_as_menu.h"
 #import "exteria_sticker_maker.h"
 #import "exteria_sheet.h"
 #import "exteria_selection_bar.h"
@@ -208,6 +209,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     ExteriaWeakReference *_weak;
 
     UIImageView *_wallpaper;
+    NSUInteger _codeCopyToken;
     ExteriaMiniPlayer *_miniPlayer;
     ExteriaFallingView *_snow;
     ExteriaFallingView *_foxes;
@@ -243,7 +245,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _loadingReplies;
     BOOL _openingComments;
     NSUInteger _replyGeneration;
-    int32_t _oldestId;
+    int32_t _historyOldestId;
     /* the ids the store page held the last time it arrived, so what it stops holding can be told from what it never held */
     NSMutableSet *_storeIds;
     NSMutableSet *_confirmingGone;
@@ -349,6 +351,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     UIButton *_reactionJump;
     UILabel *_reactionBadge;
     NSMutableArray *_unreadReactionIds;
+    NSUInteger _ghostReactionIndex;
     ExteriaNextChatHint *_nextHint;
     ExteriaDialog *_nextDialog;
     BOOL _toEndShown;
@@ -401,6 +404,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     /* the identities the account may write as in this supergroup, once the server listed more than itself */
     NSArray *_sendAsOptions;
     BOOL _sendAsRequested;
+    BOOL _sendAsChanging;
     /* the identity the person picked on this screen, which outranks what the full channel said before the pick (that answer does not change) */
     ExteriaSendAsOption *_sendAsPicked;
     NSMutableDictionary *_transcripts;
@@ -409,6 +413,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     /* the full users they came back as; a later history answer carries the min object again and must not take their photo away */
     NSMutableDictionary *_reactorPeople;
 }
+- (BOOL)codeCopyMessage:(int32_t)messageId stillMatches:(NSString *)source range:(NSRange)range style:(ExteriaTextStyle)style;
 @end
 
 @implementation ExteriaChatController
@@ -1021,6 +1026,9 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 - (CGFloat)botsKeyboardMaxHeight { return [self panelHeight]; }
 - (void)botsSetDraft:(NSString *)text { [self applyDraft:text]; }
 - (void)botsSendText:(NSString *)text replyTo:(int32_t)replyTo { [self sendText:text entities:nil replyTo:replyTo]; }
+- (int32_t)botsInlineReplyId { return _replyToId; }
+- (void)botsInlineDidSendReply:(int32_t)replyId { if (replyId && _replyToId == replyId) [self cancelCompose]; }
+- (BOOL)botsCanSendInline { return !_editingId && _input.writable; }
 
 - (void)botsRelayout {
     if (!self.isViewLoaded) return;
@@ -1212,42 +1220,59 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [self.view setNeedsLayout];
 }
 
+- (void)selectSendAsOption:(ExteriaSendAsOption *)option {
+    if (_sendAsChanging) return;
+    _sendAsChanging = YES;
+    ExteriaWeakReference *weak = _weak;
+    ExteriaSendAsOption *before = [_sendAsPicked retain];
+    [_sendAsPicked release]; _sendAsPicked = [option retain];
+    [_session chooseSendAsIdentity:option.identity ofDialog:_dialog completion:^(NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (chat) {
+            chat->_sendAsChanging = NO;
+            if (errorName) {
+                NSLog(@"exteria: the identity to write as was refused: %@", errorName);
+                NSString *message = [errorName isEqualToString:@"SEND_AS_PEER_INVALID"] && option.premiumRequired && chat->_premiumKnown && !chat->_premium
+                    ? NSLocalizedString(@"chat.sendas.premium", nil) : ExteriaGiftErrorText(errorName);
+                ExteriaGiftAlert(nil, message);
+                [chat->_sendAsPicked release]; chat->_sendAsPicked = [before retain];
+            }
+            [chat refreshSendAs];
+        }
+        [before release];
+    }];
+    [self refreshSendAs];
+}
+
 - (void)inputBarDidTapSender:(ExteriaInputBar *)bar {
     (void)bar;
-    if (_sendAsOptions.count < 2) return;
+    if (_sendAsOptions.count < 2 || _sendAsChanging) return;
     [self dismissInput];
-    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:_sendAsOptions.count];
-    for (ExteriaSendAsOption *option in _sendAsOptions) {
-        NSString *title = option.isAccount ? NSLocalizedString(@"chat.sendas.account", nil) : option.identity.title;
-        [titles addObject:option.premiumRequired ? [NSString stringWithFormat:@"%@ (Premium)", title] : title];
-    }
     ExteriaWeakReference *weak = _weak;
     void (^pick)(NSUInteger) = ^(NSUInteger index) {
         ExteriaChatController *chat = weak.target;
         if (!chat || index >= chat->_sendAsOptions.count) return;
         ExteriaSendAsOption *option = [chat->_sendAsOptions objectAtIndex:index];
-        ExteriaSendAsOption *before = [chat->_sendAsPicked retain];
-        [chat->_sendAsPicked release];
-        chat->_sendAsPicked = [option retain];
-        [chat->_session chooseSendAsIdentity:option.identity ofDialog:chat->_dialog completion:^(NSString *errorName) {
+        if (!option.premiumRequired) { [chat selectSendAsOption:option]; return; }
+        [chat whenPremiumKnown:^(BOOL premium) {
             ExteriaChatController *again = weak.target;
-            if (!again) {
-                [before release];
-                return;
-            }
-            if (errorName) {
-                NSLog(@"exteria: the identity to write as was refused: %@", errorName);
-                ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
-                [again->_sendAsPicked release];
-                again->_sendAsPicked = [before retain];
-            }
-            [before release];
-            [again refreshSendAs];
+            if (!again) return;
+            if (!again->_premiumKnown) { ExteriaGiftAlert(nil, NSLocalizedString(@"error.offline", nil)); return; }
+            if (!premium) { ExteriaGiftAlert(nil, NSLocalizedString(@"chat.sendas.premium", nil)); return; }
+            [again selectSendAsOption:option];
         }];
-        [chat refreshSendAs];
     };
-    [ExteriaSheet presentInView:self.view title:NSLocalizedString(@"chat.sendas", nil) message:NSLocalizedString(@"chat.sendas.info", nil) options:titles destructive:nil
-                    cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:pick];
+    if (ExteriaThemeIsClassic()) {
+        NSMutableArray *titles = [NSMutableArray arrayWithCapacity:_sendAsOptions.count];
+        for (ExteriaSendAsOption *option in _sendAsOptions) [titles addObject:option.isAccount ? NSLocalizedString(@"chat.sendas.account", nil) : option.identity.title];
+        [ExteriaSheet presentInView:self.view title:NSLocalizedString(@"chat.sendas", nil) message:NSLocalizedString(@"chat.sendas.info", nil) options:titles destructive:nil
+                        cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:pick];
+    } else {
+        NSUInteger selected = [_sendAsOptions indexOfObjectIdenticalTo:[self currentSendAsOption]];
+        CGRect anchor = [_input.senderAvatar convertRect:_input.senderAvatar.bounds toView:self.view];
+        ExteriaSendAsMenu *menu = [[[ExteriaSendAsMenu alloc] initWithOptions:_sendAsOptions selected:selected avatars:_avatars handler:pick] autorelease];
+        [menu showInView:self.view anchor:anchor];
+    }
 }
 
 /* the way in stands where the field would be while the account is outside the channel */
@@ -1503,7 +1528,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if ([_server objectForKey:[NSNumber numberWithInt:_scrollTarget]]) return;
     /* a message outside what is loaded is opened as the official clients do: the stretch of history around it is fetched and shown, instead of paging through
        everything between it and the newest message, which never got to an old message of a busy group */
-    BOOL outside = (_oldestId && _scrollTarget < _oldestId) || (_window && _scrollTarget > [self newestLoadedId]);
+    BOOL outside = (_historyOldestId && _scrollTarget < _historyOldestId) || (_window && _scrollTarget > [self newestLoadedId]);
     if (outside && !_pinnedList && !_loadingOlder) {
         [self openWindowAround:_scrollTarget];
         return;
@@ -1516,7 +1541,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _loadingWindow = YES;
     NSUInteger token = ++_windowToken;
     ExteriaWeakReference *weak = _weak;
-    [_session loadHistoryOfDialog:_dialog offsetId:target + 1 addOffset:-(HISTORY_PAGE / 2) limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+    [_session loadHistoryOfDialog:_dialog offsetId:target + 1 addOffset:-(HISTORY_PAGE / 2) limit:HISTORY_PAGE pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
         if (!chat || token != chat->_windowToken) return;
         chat->_loadingWindow = NO;
@@ -1528,16 +1553,16 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             ExteriaShowNotice(nil, NSLocalizedString(@"chat.reply.unavailable", nil));
             return;
         }
-        [chat enterWindowWithMessages:messages people:people];
+        [chat enterWindowWithMessages:messages people:people page:page];
         [chat scrollToTargetOrLoadMore];
     }];
 }
 
 /* the stretch replaces what the list held; older pages and newer pages are fetched from its two ends as the person scrolls */
-- (void)enterWindowWithMessages:(NSArray *)messages people:(NSDictionary *)people {
+- (void)enterWindowWithMessages:(NSArray *)messages people:(NSDictionary *)people page:(exteria_history_page)page {
     [self stopFollowingBottom];
     [_server removeAllObjects];
-    _oldestId = 0;
+    _historyOldestId = page.oldest_id;
     _window = YES;
     _canLoadNewer = YES;
     _loadingNewer = NO;
@@ -1546,7 +1571,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _stickToBottom = NO;
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
-    _canLoadMore = _oldestId > 1;
+    _canLoadMore = _historyOldestId > 1;
     _rebuildNow = YES;
     [self rebuildItems];
     _rebuildNow = NO;
@@ -1596,7 +1621,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _canLoadNewer = NO;
     _scrollTarget = 0;
     [_server removeAllObjects];
-    _oldestId = 0;
+    _historyOldestId = 0;
     _canLoadMore = NO;
     _loadedFirst = NO;
     _stickToBottom = YES;
@@ -1940,7 +1965,19 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     void (^send)(void) = ^{
         ExteriaChatController *chat = weak.target;
         if (!chat) return;
-        NSString *wanted = ExteriaBareEmoji(ExteriaChatQuickReaction());
+        NSString *selected = ExteriaChatQuickReaction();
+        long long document = exteria_quick_reaction_document(selected.UTF8String);
+        if (document && chat->_premiumKnown && chat->_premium) {
+            exteria_reaction row;
+            memset(&row, 0, sizeof(row));
+            row.kind = EXTERIA_REACTION_CUSTOM;
+            row.document_id = document;
+            NSString *alt = ExteriaChatQuickReactionDisplay();
+            [ExteriaReaction rememberCustomTexts:[NSDictionary dictionaryWithObject:alt forKey:[NSNumber numberWithLongLong:document]]];
+            [chat chooseReaction:[ExteriaReaction reactionWithRow:&row] messageId:messageId];
+            return;
+        }
+        NSString *wanted = ExteriaBareEmoji(selected);
         ExteriaReaction *first = nil;
         for (ExteriaReaction *choice in chat->_menuReactions) {
             if (choice.row.kind != EXTERIA_REACTION_EMOJI) continue;
@@ -2009,7 +2046,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [_replyCache removeAllObjects];
     ++_replyGeneration;
     _loadingReplies = NO;
-    _oldestId = 0;
+    _historyOldestId = 0;
     _canLoadMore = NO;
     [self rebuildItems];
     [self showEmptyState];
@@ -2270,6 +2307,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    ++_codeCopyToken;
     _visible = NO;
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];
     [self stopFollowingBottom];
@@ -2550,7 +2588,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     if (_openUnread && !_pinnedList && _startMessageId <= 0) {
         _opening = YES;
         int32_t anchor = _unreadAnchor;
-        [_session loadHistoryOfDialog:_dialog offsetId:anchor + 1 addOffset:-(HISTORY_PAGE / 2) limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        [_session loadHistoryOfDialog:_dialog offsetId:anchor + 1 addOffset:-(HISTORY_PAGE / 2) limit:HISTORY_PAGE pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
             ExteriaChatController *chat = weak.target;
             if (!chat) return;
             chat->_loading = NO;
@@ -2566,7 +2604,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
             }
             chat->_openUnread = NO;
             chat->_loadedFirst = YES;
-            [chat enterWindowWithMessages:messages people:people];
+            [chat enterWindowWithMessages:messages people:people page:page];
             [chat->_table layoutIfNeeded];
             for (NSUInteger i = 0; i < chat->_items.count; ++i) {
                 ExteriaChatItem *item = [chat->_items objectAtIndex:i];
@@ -2594,10 +2632,10 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         ExteriaChatController *chat = weak.target;
         if (chat) [chat showKeptMessages:kept people:people];
     }];
-    [_session loadHistoryOfDialog:_dialog beforeId:0 limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+    [_session loadHistoryOfDialog:_dialog offsetId:0 addOffset:0 limit:HISTORY_PAGE pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
         if (!chat) return;
-        [chat didLoadNewest:messages people:people error:errorName];
+        [chat didLoadNewest:messages people:people page:page error:errorName];
     }];
 }
 
@@ -2625,7 +2663,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         if (![_server objectForKey:[NSNumber numberWithInt:root.messageId]]) [self mergeMessages:[NSArray arrayWithObject:root]];
 }
 
-- (void)didLoadNewest:(NSArray *)messages people:(NSDictionary *)people error:(NSString *)errorName {
+- (void)didLoadNewest:(NSArray *)messages people:(NSDictionary *)people page:(exteria_history_page)page error:(NSString *)errorName {
     _loading = NO;
     if (!messages && _server.count) {
         NSLog(@"exteria: chat %lld stays on the kept page, refresh failed: %@", _dialog.peerId, errorName);
@@ -2638,9 +2676,17 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         return;
     }
     _loadedFirst = YES;
+    int more = 0;
+    if (exteria_history_cursor_advance(0, &page, HISTORY_PAGE, &_historyOldestId, &more) != EXTERIA_OK)
+        NSLog(@"exteria: invalid newest history page for chat %lld", _dialog.peerId);
+    if (page.oldest_id > 0) {
+        for (NSNumber *key in [_server allKeys]) {
+            if (key.intValue < page.oldest_id) [_server removeObjectForKey:key];
+        }
+    }
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
-    _canLoadMore = messages.count >= HISTORY_PAGE;
+    _canLoadMore = more;
     [self mergeDiscussionMessagesAtHistoryEnd];
     if (!_server.count) [self showEmptyState];
     [self rebuildItems];
@@ -2672,19 +2718,20 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 
 - (void)loadOlder {
     /* the offset a list passes through while it settles on the newest message would ask for older rows, which then move it again */
-    if (_loadingOlder || _olderDeferred || !_canLoadMore || !_loadedFirst || _opening || _oldestId <= 1) return;
+    if (_loadingOlder || _olderDeferred || !_canLoadMore || !_loadedFirst || _opening || _historyOldestId <= 1) return;
     _loadingOlder = YES;
     NSUInteger token = _windowToken;
     ExteriaWeakReference *weak = _weak;
-    [_session loadHistoryOfDialog:_dialog beforeId:_oldestId limit:HISTORY_PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+    int32_t before = _historyOldestId;
+    [_session loadHistoryOfDialog:_dialog offsetId:before addOffset:0 limit:HISTORY_PAGE pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
         /* a page asked for before the list moved to another stretch of history belongs to the old one */
         if (!chat || token != chat->_windowToken) return;
-        [chat didLoadOlder:messages people:people error:errorName];
+        [chat didLoadOlder:messages people:people page:page before:before error:errorName];
     }];
 }
 
-- (void)didLoadOlder:(NSArray *)messages people:(NSDictionary *)people error:(NSString *)errorName {
+- (void)didLoadOlder:(NSArray *)messages people:(NSDictionary *)people page:(exteria_history_page)page before:(int32_t)before error:(NSString *)errorName {
     _loadingOlder = NO;
     if (!messages) {
         /* the list stays as it is and the next scroll to the top asks again */
@@ -2693,7 +2740,10 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     }
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
-    _canLoadMore = messages.count >= HISTORY_PAGE;
+    int more = 0;
+    if (exteria_history_cursor_advance(before, &page, HISTORY_PAGE, &_historyOldestId, &more) != EXTERIA_OK)
+        NSLog(@"exteria: history of chat %lld did not advance before %d", _dialog.peerId, (int)before);
+    _canLoadMore = more;
     [self mergeDiscussionMessagesAtHistoryEnd];
     /* putting rows above the ones in view moves the offset, and moving the offset ends the momentum of a swipe */
     if (_table.dragging || _table.decelerating) {
@@ -2723,6 +2773,12 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
             [self scheduleLiveMessages];
         }
         return;
+    }
+    if (_canLoadMore && _historyOldestId > 0) {
+        NSMutableArray *contiguous = [NSMutableArray array];
+        for (ExteriaMessage *message in page) if (message.messageId >= _historyOldestId) [contiguous addObject:message];
+        page = contiguous;
+        if (!page.count) return;
     }
     int32_t lowest = INT32_MAX;
     NSMutableSet *present = [NSMutableSet set];
@@ -2854,7 +2910,6 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         if (_dialog.saved) [message placeInSavedMessagesOfUser:_dialog.peerId];
         if (_dialog.savedSource && ![self message:message isFromSavedSource:_dialog.savedSource]) continue;
         [_server setObject:message forKey:[NSNumber numberWithInt:message.messageId]];
-        _oldestId = _oldestId ? MIN(_oldestId, message.messageId) : message.messageId;
     }
     /* a message sent from here is replaced by the server's copy of it as soon as that arrives */
     for (ExteriaMessage *local in [[_local copy] autorelease]) {
@@ -3807,6 +3862,7 @@ static void ExteriaRedrawTree(UIView *view) {
         for (ExteriaMessage *message in messages) if (message.messageId > 0) [ids addObject:[NSNumber numberWithInt:message.messageId]];
         [chat->_unreadReactionIds release];
         chat->_unreadReactionIds = ids;
+        chat->_ghostReactionIndex = 0;
         [chat refreshReactionJump];
     }];
 }
@@ -3814,6 +3870,11 @@ static void ExteriaRedrawTree(UIView *view) {
 /* the oldest unseen reaction first, which reads forward; the last one seen tells the server that all of them were */
 - (void)reactionJumpTapped {
     if (!_unreadReactionIds.count) return;
+    if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) {
+        NSUInteger index = _unreadReactionIds.count - 1 - (_ghostReactionIndex++ % _unreadReactionIds.count);
+        [self jumpToMessageId:[[_unreadReactionIds objectAtIndex:index] intValue]];
+        return;
+    }
     int32_t messageId = [[_unreadReactionIds lastObject] intValue];
     [_unreadReactionIds removeLastObject];
     if (!_unreadReactionIds.count) [_session markReactionsReadOfDialog:_dialog];
@@ -6151,6 +6212,10 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 /* a tap on the card of a one-time file: it opens in a viewer of its own, the server hears that it was opened when the picture is on the screen, and the card burns when the viewer is closed */
 - (void)messageCellDidTapViewOnce:(ExteriaMessageCell *)cell {
     ExteriaMessage *message = cell.item.message;
+    if (!message.outgoing && !exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_ONCE)) {
+        ExteriaShowNotice(nil, NSLocalizedString(@"ayu.ghost.once", nil));
+        return;
+    }
     if (!ExteriaMessageIsViewOnce(message)) return;
     /* the note that plays now pauses and resumes on a tap, even after the server has marked it opened */
     if (message.media.kind == EXTERIA_PREVIEW_VOICE && _onceVoice && message.messageId == _onceVoiceId && [[ExteriaMusicPlayer sharedPlayer] isCurrentTrack:_onceVoice]) {
@@ -6390,6 +6455,73 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 - (BOOL)isHiddenLink:(NSString *)url inMessage:(ExteriaMessage *)message {
     for (ExteriaTextEntity *entity in message.entities) if ([entity.url isEqualToString:url]) return YES;
     return NO;
+}
+
+- (void)messageCell:(ExteriaMessageCell *)cell didTapCode:(ExteriaTextEntity *)entity {
+    NSUInteger token = ++_codeCopyToken;
+    ExteriaMessage *message = cell.item.message;
+    NSRange range = entity.range;
+    if ((entity.style != ExteriaTextStyleCode && entity.style != ExteriaTextStylePre) || !range.length ||
+        range.location > message.text.length || range.length > message.text.length - range.location) return;
+    if (message.noForwards || _dialog.noForwards || _channelFull.dialog.noForwards) {
+        [self toast:NSLocalizedString(@"chat.copy.restricted", nil)];
+        return;
+    }
+    NSString *code = [message.text substringWithRange:range];
+    NSString *source = message.text;
+    int32_t messageId = message.messageId;
+    if (_dialog.peerKind == 1 && !_dialog.saved) {
+        ExteriaWeakReference *weak = _weak;
+        [_session loadFullUserOfDialog:_dialog completion:^(ExteriaFullUser *user, NSString *errorName) {
+            ExteriaChatController *chat = weak.target;
+            if (!chat || token != chat->_codeCopyToken) return;
+            if (!user) {
+                ExteriaShowNotice(nil, [chat failureTextForError:errorName]);
+            } else if (user.sharingRestricted) {
+                [chat toast:NSLocalizedString(@"chat.copy.restricted", nil)];
+            } else if ([chat codeCopyMessage:messageId stillMatches:source range:range style:entity.style]) {
+                [UIPasteboard generalPasteboard].string = code;
+                [chat toast:NSLocalizedString(@"profile.copied", nil)];
+            }
+        }];
+    } else if (_dialog.peerKind == 3 && (!_channelFull || !_channelFull.membershipKnown)) {
+        ExteriaWeakReference *weak = _weak;
+        [_session loadFullChannelOfDialog:_dialog completion:^(ExteriaFullChannel *channel, NSString *errorName) {
+            ExteriaChatController *chat = weak.target;
+            if (!chat || token != chat->_codeCopyToken) return;
+            if (!channel) {
+                ExteriaShowNotice(nil, [chat failureTextForError:errorName]);
+            } else if (!channel.membershipKnown) {
+                ExteriaShowNotice(nil, NSLocalizedString(@"chat.copy.unavailable", nil));
+            } else if (channel.dialog.noForwards) {
+                [chat toast:NSLocalizedString(@"chat.copy.restricted", nil)];
+            } else if ([chat codeCopyMessage:messageId stillMatches:source range:range style:entity.style]) {
+                [UIPasteboard generalPasteboard].string = code;
+                [chat toast:NSLocalizedString(@"profile.copied", nil)];
+            }
+        }];
+    } else {
+        [UIPasteboard generalPasteboard].string = code;
+        [self toast:NSLocalizedString(@"profile.copied", nil)];
+    }
+}
+
+- (BOOL)codeCopyMessage:(int32_t)messageId stillMatches:(NSString *)source range:(NSRange)range style:(ExteriaTextStyle)style {
+    ExteriaMessage *current = [self messageWithId:messageId];
+    if (!current || current.noForwards || _dialog.noForwards || _channelFull.dialog.noForwards || ![current.text isEqualToString:source]) return NO;
+    BOOL found = NO;
+    exteria_entity spoilers[EXTERIA_MESSAGE_ENTITIES_MAX];
+    size_t count = 0;
+    memset(spoilers, 0, sizeof(spoilers));
+    for (ExteriaTextEntity *entity in current.entities) {
+        if (entity.style == style && NSEqualRanges(entity.range, range)) found = YES;
+        if (entity.style != ExteriaTextStyleSpoiler) continue;
+        if (count == EXTERIA_MESSAGE_ENTITIES_MAX || entity.range.location > INT32_MAX || entity.range.length > INT32_MAX) return NO;
+        spoilers[count].kind = EXTERIA_ENTITY_SPOILER;
+        spoilers[count].offset = (int32_t)entity.range.location;
+        spoilers[count++].length = (int32_t)entity.range.length;
+    }
+    return found && (current.spoilersRevealed || !exteria_code_has_hidden_spoiler(range.location, range.length, spoilers, count));
 }
 
 - (void)messageCell:(ExteriaMessageCell *)cell didTapLink:(NSString *)url {

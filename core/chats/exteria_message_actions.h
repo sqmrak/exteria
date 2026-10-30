@@ -15,6 +15,16 @@ exteria_status exteria_sharing_period_parse(const exteria_tl_value *answer, int3
 /* the server's expired bit wins; the deadline is inclusive as in Telegram */
 int exteria_sharing_expired(int server_expired, int32_t date, int32_t period, int64_t now);
 
+/* a covered part of a code span must be revealed before the whole span can be copied */
+int exteria_code_has_hidden_spoiler(size_t offset, size_t length, const exteria_entity *entities, size_t count);
+
+typedef enum exteria_read_action {
+    EXTERIA_READ_AUTOMATIC,
+    EXTERIA_READ_EXPLICIT,
+    EXTERIA_READ_ONCE
+} exteria_read_action;
+int exteria_read_action_allowed(int ghost, exteria_read_action action);
+
 /* what a long press on a message can offer; the rules below pick the ones that can work */
 typedef enum exteria_message_action {
     EXTERIA_ACTION_REACT = 1 << 0,

@@ -627,6 +627,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     out->has_reactions = exteria_tl_has(m, "reactions") ? 1 : 0;
     out->reactions_possible = !service || exteria_tl_has(m, "reactions_are_possible");
     out->out = exteria_tl_has(m, "out") ? 1 : 0;
+    out->noforwards = exteria_tl_has(m, "noforwards") ? 1 : 0;
     out->unread_mention = exteria_tl_has(m, "mentioned") && exteria_tl_has(m, "media_unread") ? 1 : 0;
     out->post = exteria_tl_has(m, "post") ? 1 : 0;
     if (exteria_peer_from_tl(exteria_tl_get(m, "from_id"), &from) == EXTERIA_OK) {
@@ -713,6 +714,40 @@ exteria_status exteria_messages_parse(const exteria_tl_value *answer, exteria_me
         if (exteria_message_read(messages->u.vec.items[i], &rows[n]) == EXTERIA_OK) ++n;
     }
     *count = n;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_history_page_read(const exteria_tl_value *answer, exteria_history_page *page) {
+    const exteria_tl_value *messages;
+    if (!page) return EXTERIA_E_ARG;
+    memset(page, 0, sizeof(*page));
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_messages) && !exteria_tl_is(answer, EXTERIA_TL_ID_messages_messagesSlice) &&
+        !exteria_tl_is(answer, EXTERIA_TL_ID_messages_channelMessages)) return EXTERIA_E_MALFORMED;
+    if (exteria_tl_get_vec(answer, "messages", &messages) != EXTERIA_OK || messages->u.vec.count > EXTERIA_MESSAGES_MAX) return EXTERIA_E_MALFORMED;
+    for (uint32_t i = 0; i < messages->u.vec.count; ++i) {
+        const exteria_tl_value *message = messages->u.vec.items[i];
+        int32_t id = 0;
+        if ((!exteria_tl_is(message, EXTERIA_TL_ID_message) && !exteria_tl_is(message, EXTERIA_TL_ID_messageService) &&
+             !exteria_tl_is(message, EXTERIA_TL_ID_messageEmpty)) || exteria_tl_get_i32(message, "id", &id) != EXTERIA_OK || id <= 0) {
+            memset(page, 0, sizeof(*page));
+            return EXTERIA_E_MALFORMED;
+        }
+        if (!page->oldest_id || id < page->oldest_id) page->oldest_id = id;
+        if (id > page->newest_id) page->newest_id = id;
+    }
+    page->count = messages->u.vec.count;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_history_cursor_advance(int32_t previous, const exteria_history_page *page, uint32_t limit, int32_t *cursor, int *more) {
+    if (!cursor || !more) return EXTERIA_E_ARG;
+    *cursor = previous;
+    *more = 0;
+    if (!page || !limit || previous < 0 || page->count > limit || (page->count && page->oldest_id <= 0)) return EXTERIA_E_MALFORMED;
+    if (!page->count) return EXTERIA_OK;
+    if (previous > 0 && page->oldest_id >= previous) return page->count >= limit ? EXTERIA_E_MALFORMED : EXTERIA_OK;
+    *cursor = page->oldest_id;
+    *more = page->count >= limit && page->oldest_id > 1;
     return EXTERIA_OK;
 }
 

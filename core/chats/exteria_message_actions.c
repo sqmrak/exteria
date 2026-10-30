@@ -5,6 +5,22 @@
 #include "exteria_tl_ids.h"
 #include "exteria_app_config.h"
 
+int exteria_read_action_allowed(int ghost, exteria_read_action action) {
+    if (action != EXTERIA_READ_AUTOMATIC && action != EXTERIA_READ_EXPLICIT && action != EXTERIA_READ_ONCE) return 0;
+    return !ghost || action == EXTERIA_READ_EXPLICIT;
+}
+
+int exteria_code_has_hidden_spoiler(size_t offset, size_t length, const exteria_entity *entities, size_t count) {
+    if (!length || length > SIZE_MAX - offset || (count && !entities) || count > EXTERIA_MESSAGE_ENTITIES_MAX) return 1;
+    for (size_t i = 0; i < count; ++i) {
+        if (entities[i].kind != EXTERIA_ENTITY_SPOILER || entities[i].offset < 0 || entities[i].length <= 0) continue;
+        size_t start = (size_t)entities[i].offset, span = (size_t)entities[i].length;
+        if (span > SIZE_MAX - start) return 1;
+        if (start < offset + length && offset < start + span) return 1;
+    }
+    return 0;
+}
+
 exteria_status exteria_sharing_period_parse(const exteria_tl_value *answer, int32_t *seconds) {
     return exteria_app_config_i32(answer, "no_forwards_request_expire_period", seconds);
 }

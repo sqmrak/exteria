@@ -6,6 +6,48 @@
 
 static exteria_arena arena;
 
+static void test_history_page_cursor(void) {
+    exteria_history_page page;
+    exteria_tl_value *answer = exteria_tl_new_obj(&arena, "messages.channelMessages");
+    exteria_tl_value *list = exteria_tl_new_vec(&arena, 3);
+    exteria_tl_value *a = exteria_tl_new_obj(&arena, "message");
+    exteria_tl_value *b = exteria_tl_new_obj(&arena, "messageEmpty");
+    exteria_tl_value *c = exteria_tl_new_obj(&arena, "messageService");
+    CHECK(answer && list && a && b && c);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, a, "id", 100), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, b, "id", 98), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, c, "id", 99), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(list, 0, a), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(list, 1, b), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(list, 2, c), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(answer, "messages", list), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_history_page_read(answer, &page), EXTERIA_OK);
+    CHECK_EQ_INT(page.count, 3);
+    CHECK_EQ_INT(page.oldest_id, 98);
+    CHECK_EQ_INT(page.newest_id, 100);
+    int32_t cursor = 0;
+    int more = 0;
+    /* a sparse cached message at id 10 must not move the server cursor */
+    CHECK_EQ_INT(exteria_history_cursor_advance(0, &page, 3, &cursor, &more), EXTERIA_OK);
+    CHECK_EQ_INT(cursor, 98);
+    CHECK_EQ_INT(more, 1);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, a, "id", 98), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, b, "id", 97), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, c, "id", 96), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_history_page_read(answer, &page), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_history_cursor_advance(cursor, &page, 3, &cursor, &more), EXTERIA_OK);
+    CHECK_EQ_INT(cursor, 96);
+    CHECK_EQ_INT(more, 1);
+    CHECK_EQ_INT(exteria_history_cursor_advance(cursor, &page, 3, &cursor, &more), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(cursor, 96);
+    CHECK_EQ_INT(more, 0);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, b, "id", 0), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_history_page_read(answer, &page), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(page.count, 0);
+    CHECK_EQ_INT(exteria_history_page_read(NULL, &page), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_history_page_read(answer, NULL), EXTERIA_E_ARG);
+}
+
 static exteria_tl_value *obj(const char *name) {
     exteria_tl_value *v = exteria_tl_new_obj(&arena, name);
     CHECK(v != NULL);
@@ -123,6 +165,10 @@ static void test_text_message(void) {
     CHECK_EQ_INT(row->id, 7);
     CHECK_EQ_INT(row->date, 1007);
     CHECK_EQ_INT(row->out, 1);
+    CHECK_EQ_INT(row->noforwards, 0);
+    set_flag(m, "noforwards");
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->noforwards, 1);
     CHECK_EQ_INT(row->unread_mention, 0);
     set_flag(m, "mentioned");
     CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
@@ -1863,6 +1909,7 @@ static void test_uploaded_media_reply(void) {
 
 int main(void) {
     exteria_arena_init(&arena, 1u << 20);
+    test_history_page_cursor();
     test_text_message();
     test_edit_hide();
     test_gif_preview();

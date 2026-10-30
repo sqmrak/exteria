@@ -6,6 +6,7 @@
 #import "exteria_chat_settings.h"
 
 #include "exteria_sticker_make.h"
+#include "exteria_message_actions.h"
 #include "exteria_sticker_manage.h"
 #include <fcntl.h>
 #include <unistd.h>
@@ -746,24 +747,32 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
 }
 
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)offsetId addOffset:(int32_t)addOffset limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion {
-    ExteriaHistoryCompletion final = [[completion copy] autorelease];
+    ExteriaHistoryCompletion done = [[completion copy] autorelease];
+    [self loadHistoryOfDialog:dialog offsetId:offsetId addOffset:addOffset limit:limit pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
+        (void)page;
+        if (done) done(messages, people, errorName);
+    }];
+}
+
+- (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)offsetId addOffset:(int32_t)addOffset limit:(int32_t)limit pageCompletion:(ExteriaHistoryPageCompletion)completion {
+    ExteriaHistoryPageCompletion final = [[completion copy] autorelease];
     [self loadHistoryOfDialog:dialog offsetId:offsetId addOffset:addOffset limit:limit viaChannel:dialog.discussionViaChannel
-                   completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+                   pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
         /* the comments of a post are asked of its group with the group's copy of it; a server that answers MSG_ID_INVALID to that pair (seen for the discussion of
            a channel the account is not in the group of) takes the post itself on its own channel, which is how the comments are read without joining */
         if (!messages && !dialog.discussionViaChannel && dialog.discussion && dialog.discussionPost > 0 && [errorName isEqualToString:@"MSG_ID_INVALID"]) {
             NSLog(@"exteria: thread %d of group %lld was refused, asking post %d of channel %lld", (int)dialog.topicId, dialog.peerId, (int)dialog.discussionPost, dialog.discussionChannel);
             dialog.discussionViaChannel = YES;
-            [self loadHistoryOfDialog:dialog offsetId:offsetId addOffset:addOffset limit:limit viaChannel:YES completion:final];
+            [self loadHistoryOfDialog:dialog offsetId:offsetId addOffset:addOffset limit:limit viaChannel:YES pageCompletion:final];
             return;
         }
-        final(messages, people, errorName);
+        if (final) final(messages, people, page, errorName);
     }];
 }
 
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)beforeId addOffset:(int32_t)addOffset limit:(int32_t)limit viaChannel:(BOOL)viaChannel
-                 completion:(ExteriaHistoryCompletion)completion {
-    ExteriaHistoryCompletion done = [completion copy];
+             pageCompletion:(ExteriaHistoryPageCompletion)completion {
+    ExteriaHistoryPageCompletion done = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     if (viaChannel && dialog.discussionPost > 0) {
         peer.kind = 3;
@@ -776,18 +785,22 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
     ExteriaDialog *source = dialog.savedSource;
     exteria_peer_ref sourcePeer = source ? ExteriaPeerRefOfDialog(source) : peer;
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        return source ? exteria_saved_history_window_request(arena, &sourcePeer, beforeId, addOffset, limit, request) : exteria_history_window_request(arena, &peer, beforeId, addOffset, limit, request);
+        /* channel history includes the boundary message, so a deleted boundary cannot hide the next post */
+        int32_t serverOffset = beforeId > 0 && addOffset == 0 && peer.kind == 3 && limit > 1 ? -1 : addOffset;
+        return source ? exteria_saved_history_window_request(arena, &sourcePeer, beforeId, serverOffset, limit, request) : exteria_history_window_request(arena, &peer, beforeId, serverOffset, limit, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         NSMutableArray *messages = nil;
         NSMutableDictionary *people = nil;
         NSString *error = nil;
+        exteria_history_page page;
+        memset(&page, 0, sizeof(page));
         if (result->status != EXTERIA_OK) {
             error = ExteriaRpcErrorName(result);
             NSLog(@"exteria: history failed for peer %d:%lld topic %d offset %d: %@", peer.kind, (long long)peer.id, peer.topic_id, beforeId, error);
         } else {
             exteria_message_row *rows = calloc(EXTERIA_MESSAGES_MAX, sizeof(*rows));
             size_t count = 0;
-            if (rows && exteria_messages_parse(result->value, rows, EXTERIA_MESSAGES_MAX, &count) == EXTERIA_OK) {
+            if (rows && exteria_history_page_read(result->value, &page) == EXTERIA_OK && exteria_messages_parse(result->value, rows, EXTERIA_MESSAGES_MAX, &count) == EXTERIA_OK) {
                 messages = [NSMutableArray arrayWithCapacity:count];
                 [self keepMessagesOfAnswer:result->value];
                 for (size_t i = 0; i < count; ++i) {
@@ -821,22 +834,19 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
             /* what the person asked to keep joins the page; the kept deleted messages from the oldest of the page
                up to where the page began, which holes in the ids of the page (what was deleted) would otherwise
                leave out for good */
-            int32_t lowest = INT32_MAX, highest = 0;
-            for (ExteriaMessage *message in messages) {
-                lowest = MIN(lowest, message.messageId);
-                highest = MAX(highest, message.messageId);
-            }
+            int32_t lowest = page.oldest_id, highest = page.newest_id;
             exteria_peer storedPeer = {dialog.peerKind, dialog.peerId};
             /* a page that reaches toward newer messages ends at its own newest one, not at the offset */
             int32_t upper = addOffset < 0 ? (highest ? highest : INT32_MAX) : (beforeId > 0 ? beforeId - 1 : INT32_MAX);
-            NSMutableArray *kept = ExteriaSavedDeletedOfPeer([self workerStore], storedPeer, messages.count ? lowest : 1, upper);
+            int32_t lower = page.count && (addOffset < 0 || page.count >= (uint32_t)limit) ? lowest : 1;
+            NSMutableArray *kept = ExteriaSavedDeletedOfPeer([self workerStore], storedPeer, lower, upper);
             ExteriaKeepTopic(kept, topic, discussion);
             [messages addObjectsFromArray:kept];
         }
         NSArray *deliveredMessages = [[messages copy] autorelease];
         NSDictionary *deliveredPeople = [[people copy] autorelease];
         NSString *deliveredError = [[error copy] autorelease];
-        [self deliverMain:^{ done(deliveredMessages, deliveredPeople, deliveredError); [done release]; }];
+        [self deliverMain:^{ if (done) done(deliveredMessages, deliveredPeople, page, deliveredError); [done release]; }];
     }];
 }
 
@@ -892,11 +902,14 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
 }
 
 - (void)markReactionsReadOfDialog:(ExteriaDialog *)dialog {
+    if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return;
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return EXTERIA_E_RETRY;
         return exteria_read_reactions_request(arena, &peer, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         if (result->status == EXTERIA_OK) return;
+        if (result->status == EXTERIA_E_RETRY && ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) return;
         NSString *error = ExteriaRpcErrorName(result);
         [self noteRpcError:error];
         NSLog(@"exteria: marking reactions of chat %lld seen failed: %@", peer.id, error);
@@ -1354,12 +1367,13 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
 
 - (void)markDialogRead:(ExteriaDialog *)dialog upTo:(int32_t)maxId {
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
-    /* ghost mode: the chat is read on the screen and the other side is not told */
-    if (maxId <= 0 || ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) return;
+    if (maxId <= 0 || !exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return;
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return EXTERIA_E_RETRY;
         return exteria_read_history_request(arena, &peer, maxId, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         if (result->status == EXTERIA_OK) return;
+        if (result->status == EXTERIA_E_RETRY && ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) return;
         NSString *error = ExteriaRpcErrorName(result);
         [self noteRpcError:error];
         NSLog(@"exteria: marking chat %lld read failed: %@", peer.id, error);
@@ -1367,17 +1381,19 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
 }
 
 - (void)markMentionsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
-    if (ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) { if (completion) completion(@"NOT_SENT"); return; }
+    if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) { if (completion) completion(@"NOT_SENT"); return; }
     [self markContentsRead:ids dialog:dialog completion:completion];
 }
 
-/* the ghost mode does not apply here: opening a one-time photo is the point where the server must hear that it was seen, or it stays openable */
+/* one-time media cannot be consumed without telling the server, so ghost mode refuses the acknowledgement */
 - (void)markContentsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_ONCE)) { if (completion) completion(@"NOT_SENT"); return; }
     if (!ids.count || ids.count > EXTERIA_MESSAGES_MAX) { if (completion) completion(@"NOT_SENT"); return; }
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     NSArray *messages = [ids copy];
     void (^done)(NSString *) = [completion copy];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_ONCE)) return EXTERIA_E_RETRY;
         exteria_tl_value *list = exteria_tl_new_vec(arena, (uint32_t)messages.count);
         *request = exteria_tl_new_obj(arena, peer.kind == 3 ? "channels.readMessageContents" : "messages.readMessageContents");
         if (!list || !*request) return EXTERIA_E_NOMEM;
@@ -1635,7 +1651,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
         else {
             exteria_reaction rows[EXTERIA_REACTION_CATALOG_MAX];
             size_t count = 0;
-            exteria_status status = exteria_reaction_catalog_read(result->value, rows, EXTERIA_REACTION_CATALOG_MAX, &count);
+            exteria_status status = exteria_reaction_catalog_read(result->value, rows, EXTERIA_REACTION_CATALOG_MAX, &count, premium);
             if (status != EXTERIA_OK) {
                 NSLog(@"exteria: reaction catalog rejected: %s", exteria_status_name(status));
                 error = @"INTERNAL";

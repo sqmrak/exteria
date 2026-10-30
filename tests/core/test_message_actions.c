@@ -5,6 +5,33 @@
 
 static exteria_arena arena;
 
+static void test_code_spoilers(void) {
+    exteria_entity entities[2];
+    memset(entities, 0, sizeof(entities));
+    entities[0].kind = EXTERIA_ENTITY_SPOILER;
+    entities[0].offset = 4;
+    entities[0].length = 3;
+    CHECK(!exteria_code_has_hidden_spoiler(0, 4, entities, 1));
+    CHECK(exteria_code_has_hidden_spoiler(0, 5, entities, 1));
+    CHECK(exteria_code_has_hidden_spoiler(5, 1, entities, 1));
+    CHECK(!exteria_code_has_hidden_spoiler(7, 1, entities, 1));
+    CHECK(exteria_code_has_hidden_spoiler(0, 10, entities, 1));
+    entities[0].kind = EXTERIA_ENTITY_BOLD;
+    CHECK(!exteria_code_has_hidden_spoiler(0, 10, entities, 1));
+    CHECK(exteria_code_has_hidden_spoiler(0, 10, NULL, 1));
+    CHECK(exteria_code_has_hidden_spoiler(SIZE_MAX, 2, entities, 1));
+}
+
+static void test_ghost_read_policy(void) {
+    CHECK(exteria_read_action_allowed(0, EXTERIA_READ_AUTOMATIC));
+    CHECK(exteria_read_action_allowed(0, EXTERIA_READ_ONCE));
+    CHECK(exteria_read_action_allowed(0, EXTERIA_READ_EXPLICIT));
+    CHECK(!exteria_read_action_allowed(1, EXTERIA_READ_AUTOMATIC));
+    CHECK(!exteria_read_action_allowed(1, EXTERIA_READ_ONCE));
+    CHECK(exteria_read_action_allowed(1, EXTERIA_READ_EXPLICIT));
+    CHECK(!exteria_read_action_allowed(0, (exteria_read_action)99));
+}
+
 static void test_sharing_expiry(void) {
     int32_t period = -1;
     exteria_tl_value *answer = exteria_tl_new_obj(&arena, "help.appConfig");
@@ -668,6 +695,8 @@ static void test_schedule(void) {
 }
 
 int main(void) {
+    test_code_spoilers();
+    test_ghost_read_policy();
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
     test_sharing();
     test_sharing_expiry();

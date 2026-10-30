@@ -192,6 +192,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize targetId = _targetId;
 @synthesize randomId = _randomId;
 @synthesize outgoing = _outgoing;
+@synthesize noForwards = _noForwards;
 @synthesize unreadMention = _unreadMention;
 @synthesize post = _post;
 @synthesize spoilersRevealed = _spoilersRevealed;
@@ -333,6 +334,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_targetId = row->target_id;
     /* a post is written by the channel, not by the account that typed it, so it stands on the left like the posts of anyone else */
     message->_outgoing = row->out && !row->post;
+    message->_noForwards = row->noforwards != 0;
     message->_unreadMention = row->unread_mention;
     message->_post = row->post;
     message->_forwarded = row->forwarded;

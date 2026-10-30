@@ -147,6 +147,7 @@ typedef struct exteria_message_row {
     int64_t from_channel;       /* the channel it was written as in a group, zero when a user wrote it */
     int64_t target_id;          /* the user a service message is about */
     uint8_t out;
+    uint8_t noforwards;
     uint8_t unread_mention;
     uint8_t post;
     uint8_t forwarded;
@@ -222,6 +223,16 @@ exteria_status exteria_message_read(const exteria_tl_value *message, exteria_mes
 
 /* a messages.messages, messagesSlice or channelMessages answer in server order (newest first), at most cap rows */
 exteria_status exteria_messages_parse(const exteria_tl_value *answer, exteria_message_row *rows, size_t cap, size_t *count);
+
+typedef struct exteria_history_page {
+    uint32_t count;
+    int32_t oldest_id;
+    int32_t newest_id;
+} exteria_history_page;
+
+/* pagination follows server ids, including messageEmpty, not the locally visible or cached rows */
+exteria_status exteria_history_page_read(const exteria_tl_value *answer, exteria_history_page *page);
+exteria_status exteria_history_cursor_advance(int32_t previous, const exteria_history_page *page, uint32_t limit, int32_t *cursor, int *more);
 
 /* a messages.allStickers answer; allStickersNotModified is EXTERIA_E_NOTFOUND; sets of masks and of custom emoji
    are left out, they are no use in a message */

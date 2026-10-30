@@ -243,6 +243,7 @@ typedef void (^ExteriaListCompletion)(NSArray *items, NSString *errorName);
 
 /* the answers of the chat calls, on the main thread */
 typedef void (^ExteriaHistoryCompletion)(NSArray *messages, NSDictionary *people, NSString *errorName);
+typedef void (^ExteriaHistoryPageCompletion)(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName);
 typedef void (^ExteriaSendCompletion)(int32_t messageId, NSString *errorName);
 typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSString *errorName);
 
@@ -255,6 +256,7 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion;
 /* a page that may reach toward newer messages: offsetId and a negative addOffset as exteria_history_window_request takes them */
 - (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)offsetId addOffset:(int32_t)addOffset limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion;
+- (void)loadHistoryOfDialog:(ExteriaDialog *)dialog offsetId:(int32_t)offsetId addOffset:(int32_t)addOffset limit:(int32_t)limit pageCompletion:(ExteriaHistoryPageCompletion)completion;
 
 /* the topics of a forum as ExteriaDialog items carrying a topicId, pinned ones first and then by last message; at
    most 200 */
