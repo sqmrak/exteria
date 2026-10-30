@@ -39,6 +39,7 @@
     void (^_closeHandler)(void);
     NSUInteger _generation;
     BOOL _hasPoint, _manual, _followFix, _loading, _closed, _botLoading, _searched, _searchOpen;
+    BOOL _locationOnly;
 }
 @end
 
@@ -80,6 +81,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
 
 @implementation ExteriaLocationController
 @synthesize closeHandler=_closeHandler;
+@synthesize locationOnly=_locationOnly;
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog location:(exteria_geo_point)location
              selection:(void (^)(exteria_geo_point))selection {
     self=[super init];
@@ -127,7 +129,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
     if (classic) {
         self.navigationItem.leftBarButtonItem=[[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(close)] autorelease];
         if (!_selection) self.navigationItem.rightBarButtonItem=[[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(showActions)] autorelease];
-        else self.navigationItem.rightBarButtonItem=[[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSearch target:self action:@selector(toggleSearch)] autorelease];
+        else if (!_locationOnly) self.navigationItem.rightBarButtonItem=[[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSearch target:self action:@selector(toggleSearch)] autorelease];
     } else {
         _header=[[UIView alloc] init]; _header.backgroundColor=ExteriaColorBar();
         _headerTitle=[[UILabel alloc] init]; _headerTitle.backgroundColor=[UIColor clearColor]; _headerTitle.font=ExteriaFontSemibold(17);
@@ -140,6 +142,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
         [_headerAction setImage:ExteriaSymbolImage(_selection ? ExteriaSymbolMagnifier : ExteriaSymbolEllipsisVertical,22,ExteriaColorAccent()) forState:UIControlStateNormal];
         _headerAction.accessibilityLabel=NSLocalizedString(_selection ? @"map.search" : @"profile.more",nil);
         [_headerAction addTarget:self action:_selection ? @selector(toggleSearch) : @selector(showActions) forControlEvents:UIControlEventTouchUpInside];
+        _headerAction.hidden=_selection && _locationOnly;
         [_header addSubview:_headerAction];
         _badgeSend=[ExteriaLocationBadge(ExteriaSymbolMapPin,ExteriaColorAccent()) retain];
         /* a place stands on a plain disc until its own picture comes; the pin is the sign of the chosen point alone */
@@ -187,7 +190,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
 }
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    if (_selection && !_closed) { [self locate]; [self loadBot]; }
+    if (_selection && !_closed) { [self locate]; if (!_locationOnly) [self loadBot]; }
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
@@ -271,7 +274,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
         [_map setCenterLatitude:fix.coordinate.latitude longitude:fix.coordinate.longitude zoom:15];
         _hasPoint=YES; _manual=NO;
         [_table reloadData];
-        if (_selection && !_searched) [self requestPlaces];
+        if (_selection && !_locationOnly && !_searched) [self requestPlaces];
     }
     [self stopLocating];
 }
@@ -302,7 +305,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
     _hasPoint=YES; _manual=YES; _followFix=NO; [_table reloadData];
 }
 - (void)loadBot {
-    if (!_session || !_dialog || _bot || _botLoading || _closed) return;
+    if (_locationOnly || !_session || !_dialog || _bot || _botLoading || _closed) return;
     _botLoading=YES;
     ExteriaWeakReference *weak=_weak;
     [_session loadVenueSearchBot:^(ExteriaPerson *bot,NSString *error) {
@@ -342,6 +345,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
     [self requestPlaces];
 }
 - (void)requestPlaces {
+    if (_locationOnly) return;
     if (_closed || (!_hasPoint && !_search.text.length)) return;
     if (!_bot) { [self loadBot]; return; }
     _searched=YES; _loading=YES;
@@ -387,7 +391,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
     [self.view setNeedsLayout]; [_table reloadData];
     if (_hasPoint) [self requestPlaces];
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { (void)tableView; return 2; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { (void)tableView; return _locationOnly ? 1 : 2; }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     (void)tableView; return section==0 ? 1 : (NSInteger)MAX((NSUInteger)1,_venues.count);
 }

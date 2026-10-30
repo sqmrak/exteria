@@ -42,6 +42,8 @@ typedef void (^ExteriaInviteCheckCompletion)(ExteriaDialog *member, NSString *ti
 /* @bot query typed in a chat; offset is empty for the first page and the page's nextOffset for the next */
 - (void)searchInline:(NSString *)query bot:(ExteriaPerson *)bot inDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
           completion:(void (^)(ExteriaInlinePage *page, NSString *errorName))completion;
+- (void)searchInline:(NSString *)query bot:(ExteriaPerson *)bot inDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
+           location:(exteria_geo_point)point completion:(void (^)(ExteriaInlinePage *page, NSString *errorName))completion;
 - (void)loadVenueSearchBot:(void (^)(ExteriaPerson *bot, NSString *errorName))completion;
 - (void)searchVenues:(NSString *)query latitude:(double)latitude longitude:(double)longitude bot:(ExteriaPerson *)bot
            inDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaInlinePage *page, NSString *errorName))completion;

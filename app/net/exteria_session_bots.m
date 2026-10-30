@@ -306,11 +306,7 @@ static NSString *ExteriaParseFailure(const char *method, exteria_status status) 
     NSString *text = [query copy], *start = [(offset ? offset : @"") copy];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         exteria_status status = exteria_inline_query_request(arena, &botRef, &peer, text.UTF8String, start.UTF8String, request);
-        if (status == EXTERIA_OK && point.valid) {
-            exteria_tl_value *geo = NULL;
-            status = exteria_geo_input(arena,&point,&geo);
-            if (status == EXTERIA_OK) status = exteria_tl_set(*request,"geo_point",geo);
-        }
+        if (status == EXTERIA_OK) status = exteria_inline_query_set_location(arena, *request, &point);
         return status;
     } handler:^(const exteria_mt_rpc_result *result) {
         ExteriaInlinePage *page = nil;

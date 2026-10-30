@@ -1,5 +1,6 @@
 #include "test_util.h"
 #include "exteria_bots.h"
+#include "exteria_links.h"
 #include "exteria_tl_ids.h"
 #include "srp_vectors.h"
 
@@ -451,6 +452,16 @@ static void test_inline(void) {
 
     CHECK_EQ_INT(exteria_inline_query_request(&arena, &bot, &chat, "cats", "", &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_messages_getInlineBotResults);
+    exteria_geo_point inline_location;
+    memset(&inline_location, 0, sizeof(inline_location));
+    CHECK_EQ_INT(exteria_inline_query_set_location(&arena, request, &inline_location), EXTERIA_OK);
+    CHECK(!exteria_tl_has(request, "geo_point"));
+    inline_location.valid = 1; inline_location.latitude = 55.03; inline_location.longitude = 82.92;
+    CHECK_EQ_INT(exteria_inline_query_set_location(&arena, request, &inline_location), EXTERIA_OK);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "geo_point"), EXTERIA_TL_ID_inputGeoPoint));
+    roundtrip(request, EXTERIA_TL_ID_messages_getInlineBotResults);
+    inline_location.latitude = 100;
+    CHECK_EQ_INT(exteria_inline_query_set_location(&arena, request, &inline_location), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_inline_query_request(&arena, &bot, &forum, "", "next:2", &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_messages_getInlineBotResults);
     memset(query, 'q', sizeof(query));
@@ -497,7 +508,6 @@ static void test_inline(void) {
     str(pm, "text", "Connect");
     str(pm, "start_param", "login_1");
     set(answer, "switch_pm", pm);
-    /* the web app button of the page is not read: there is no way to open it */
     str(web, "text", "Open app");
     str(web, "url", "https://app.example.org/inline");
     set(answer, "switch_webview", web);
@@ -505,12 +515,14 @@ static void test_inline(void) {
     i32(answer, "cache_time", 300);
     set(answer, "users", vec_of(NULL, 0));
     CHECK_EQ_INT(exteria_inline_results_parse(answer, &page, rows, 8, &count), EXTERIA_OK);
+    CHECK(rows[0].query_id == 987654321);
     CHECK_EQ_INT(page.query_id, 987654321);
     CHECK_EQ_INT(page.gallery, 1);
     CHECK_EQ_INT(page.cache_time, 300);
     CHECK(!strcmp(page.next_offset, "page2"));
     CHECK(!strcmp(page.switch_text, "Connect"));
     CHECK(!strcmp(page.switch_param, "login_1"));
+    CHECK(!strcmp(page.web_text, "Open app"));
     /* the result without an id and the stray object are skipped */
     CHECK_EQ_INT(count, 4);
     CHECK_EQ_INT(rows[0].kind, EXTERIA_INLINE_ARTICLE);
@@ -528,6 +540,10 @@ static void test_inline(void) {
     CHECK_EQ_INT(rows[2].kind, EXTERIA_INLINE_GIF);
     CHECK_EQ_INT(rows[2].thumb.proxied, 1);
     CHECK_EQ_INT(rows[2].thumb.access_hash, 4444);
+    i64(answer, "query_id", 123456789);
+    CHECK_EQ_INT(exteria_inline_results_parse(answer, &page, rows, 8, &count), EXTERIA_OK);
+    CHECK(rows[0].query_id == 123456789 && rows[2].query_id == 123456789);
+    i64(answer, "query_id", 987654321);
     CHECK(!strcmp(rows[2].thumb.url, "https://img.example.org/t.jpg"));
     CHECK_EQ_INT(rows[2].width, 480);
     CHECK_EQ_INT(rows[3].kind, EXTERIA_INLINE_STICKER);
@@ -701,6 +717,15 @@ static void test_answers(void) {
 }
 
 int main(void) {
+    char inline_name[EXTERIA_LINK_NAME_MAX];
+    const char *inline_query = NULL;
+    CHECK(exteria_inline_address_parse("@pic cats", inline_name, sizeof(inline_name), &inline_query));
+    CHECK(!strcmp(inline_name, "pic") && !strcmp(inline_query, "cats"));
+    CHECK(exteria_inline_address_parse("@loaditgay ", inline_name, sizeof(inline_name), &inline_query));
+    CHECK(!strcmp(inline_name, "loaditgay") && !strcmp(inline_query, ""));
+    CHECK(!exteria_inline_address_parse("@pic", inline_name, sizeof(inline_name), &inline_query));
+    CHECK(!exteria_inline_address_parse("@@pic x", inline_name, sizeof(inline_name), &inline_query));
+    CHECK(!exteria_inline_address_parse("@bad-name x", inline_name, sizeof(inline_name), &inline_query));
     exteria_arena_init(&arena, 64u * 1024u * 1024u);
     test_resolve();
     test_invite();

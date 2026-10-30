@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "exteria_srp.h"
+#include "exteria_links.h"
 #include "exteria_store.h"
 #include "exteria_tl_ids.h"
 
@@ -427,6 +428,22 @@ exteria_status exteria_password_input(exteria_arena *arena, const exteria_tl_val
 
 /* inline mode */
 
+int exteria_inline_address_parse(const char *text, char *name, size_t capacity, const char **query) {
+    if (name && capacity) name[0] = 0;
+    if (query) *query = NULL;
+    if (!text || text[0] != '@' || !name || !capacity || !query) return 0;
+    const char *space = strchr(text, ' ');
+    if (!space || space == text + 1) return 0;
+    size_t length = (size_t)(space - text - 1);
+    if (length >= capacity || length >= EXTERIA_LINK_NAME_MAX) return 0;
+    char candidate[EXTERIA_LINK_NAME_MAX];
+    memcpy(candidate, text + 1, length);
+    candidate[length] = 0;
+    if (candidate[0] == '@' || exteria_mention_name(candidate, name, capacity) != EXTERIA_OK) return 0;
+    *query = space + 1;
+    return 1;
+}
+
 exteria_status exteria_inline_query_request(exteria_arena *arena, const exteria_peer_ref *bot, const exteria_peer_ref *peer,
                                             const char *query, const char *offset, exteria_tl_value **out) {
     exteria_tl_value *request, *user, *input;
@@ -445,6 +462,14 @@ exteria_status exteria_inline_query_request(exteria_arena *arena, const exteria_
     if (status == EXTERIA_OK) status = exteria_tl_set_str(arena, request, "offset", offset);
     if (status == EXTERIA_OK) *out = request;
     return status;
+}
+
+exteria_status exteria_inline_query_set_location(exteria_arena *arena, exteria_tl_value *request, const exteria_geo_point *point) {
+    exteria_tl_value *geo = NULL;
+    if (!arena || !exteria_tl_is(request, EXTERIA_TL_ID_messages_getInlineBotResults) || !point) return EXTERIA_E_ARG;
+    if (!point->valid) return EXTERIA_OK;
+    exteria_status status = exteria_geo_input(arena, point, &geo);
+    return status == EXTERIA_OK ? exteria_tl_set(request, "geo_point", geo) : status;
 }
 
 static void read_web_ref(const exteria_tl_value *document, exteria_web_ref *out, int32_t *width, int32_t *height, int32_t *duration) {
@@ -575,8 +600,14 @@ exteria_status exteria_inline_results_parse(const exteria_tl_value *answer, exte
             page->switch_param[0] = 0;
         }
     }
+    const exteria_tl_value *web = exteria_tl_get(answer, "switch_webview");
+    if (exteria_tl_is(web, EXTERIA_TL_ID_inlineBotWebView))
+        copy_text(page->web_text, sizeof(page->web_text), web, "text", 0);
     for (i = 0; i < results->u.vec.count && n < cap; ++i) {
-        if (read_inline_result(results->u.vec.items[i], &rows[n])) ++n;
+        if (read_inline_result(results->u.vec.items[i], &rows[n])) {
+            rows[n].query_id = page->query_id;
+            ++n;
+        }
     }
     *count = n;
     return EXTERIA_OK;

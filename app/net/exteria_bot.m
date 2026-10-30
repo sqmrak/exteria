@@ -96,6 +96,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
 
 @implementation ExteriaInlineResult
 @synthesize kind = _kind;
+@synthesize queryId = _queryId;
 @synthesize resultId = _resultId;
 @synthesize title = _title;
 @synthesize subtitle = _subtitle;
@@ -108,6 +109,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
 + (ExteriaInlineResult *)resultWithRow:(const exteria_inline_result *)row {
     ExteriaInlineResult *result = [[[ExteriaInlineResult alloc] init] autorelease];
     result->_kind = (exteria_inline_kind)row->kind;
+    result->_queryId = row->query_id;
     result->_resultId = [ExteriaUtf8(row->id) copy];
     result->_title = [ExteriaUtf8(row->title) copy];
     result->_subtitle = [ExteriaUtf8(row->description) copy];
@@ -135,6 +137,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
 @synthesize nextOffset = _nextOffset;
 @synthesize switchText = _switchText;
 @synthesize switchParam = _switchParam;
+@synthesize webText = _webText;
 @synthesize results = _results;
 
 + (ExteriaInlinePage *)pageWithRow:(const exteria_inline_page *)row results:(NSArray *)results {
@@ -144,6 +147,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
     page->_nextOffset = [ExteriaUtf8(row->next_offset) copy];
     page->_switchText = [ExteriaUtf8(row->switch_text) copy];
     page->_switchParam = [ExteriaUtf8(row->switch_param) copy];
+    page->_webText = [ExteriaUtf8(row->web_text) copy];
     page->_results = [results copy];
     return page;
 }
@@ -152,6 +156,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
     [_nextOffset release];
     [_switchText release];
     [_switchParam release];
+    [_webText release];
     [_results release];
     [super dealloc];
 }

@@ -17,6 +17,9 @@
 /* sends text as the person's own message in this chat */
 - (void)botsSendText:(NSString *)text replyTo:(int32_t)replyTo;
 - (long long)botsRandomId;
+- (int32_t)botsInlineReplyId;
+- (void)botsInlineDidSendReply:(int32_t)replyId;
+- (BOOL)botsCanSendInline;
 /* the geometry of the bar or the panels changed */
 - (void)botsRelayout;
 /* the view that stands in for the system keyboard, nil to give the system keyboard back */

@@ -129,6 +129,9 @@ exteria_status exteria_password_request(exteria_arena *arena, exteria_tl_value *
 #define EXTERIA_INLINE_TEXT_MAX 200
 #define EXTERIA_INLINE_OFFSET_MAX 80
 #define EXTERIA_INLINE_RESULTS_MAX 50
+
+/* parses the leading @name and returns the query inside text */
+int exteria_inline_address_parse(const char *text, char *name, size_t capacity, const char **query);
 #define EXTERIA_INLINE_QUERY_MAX 256
 #define EXTERIA_WEB_URL_MAX 512
 
@@ -159,6 +162,7 @@ typedef struct exteria_web_ref {
 
 typedef struct exteria_inline_result {
     uint8_t kind;                   /* exteria_inline_kind */
+    int64_t query_id;               /* the page that produced this result */
     char id[EXTERIA_INLINE_ID_MAX];
     char title[EXTERIA_INLINE_TITLE_MAX];
     char description[EXTERIA_INLINE_TEXT_MAX];
@@ -176,11 +180,13 @@ typedef struct exteria_inline_page {
     char next_offset[EXTERIA_INLINE_OFFSET_MAX];    /* empty on the last page */
     char switch_text[EXTERIA_BOT_MENU_TEXT_MAX];    /* a button that opens the chat with the bot */
     char switch_param[EXTERIA_START_PARAM_MAX + 1];
+    char web_text[EXTERIA_BOT_MENU_TEXT_MAX];
 } exteria_inline_page;
 
 /* messages.getInlineBotResults; offset is "" for the first page */
 exteria_status exteria_inline_query_request(exteria_arena *arena, const exteria_peer_ref *bot, const exteria_peer_ref *peer,
                                             const char *query, const char *offset, exteria_tl_value **out);
+exteria_status exteria_inline_query_set_location(exteria_arena *arena, exteria_tl_value *request, const exteria_geo_point *point);
 /* a messages.botResults answer into page and at most cap results; a result this client cannot show is skipped */
 exteria_status exteria_inline_results_parse(const exteria_tl_value *answer, exteria_inline_page *page, exteria_inline_result *rows,
                                             size_t cap, size_t *count);

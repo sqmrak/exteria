@@ -64,6 +64,7 @@
 
 @interface ExteriaInlineResult : NSObject {
     exteria_inline_kind _kind;
+    long long _queryId;
     NSString *_resultId;
     NSString *_title;
     NSString *_subtitle;
@@ -75,6 +76,7 @@
 }
 + (ExteriaInlineResult *)resultWithRow:(const exteria_inline_result *)row;
 @property (nonatomic, readonly) exteria_inline_kind kind;
+@property (nonatomic, readonly) long long queryId;
 @property (nonatomic, readonly, copy) NSString *resultId;
 @property (nonatomic, readonly, copy) NSString *title;
 @property (nonatomic, readonly, copy) NSString *subtitle;
@@ -92,6 +94,7 @@
     NSString *_nextOffset;
     NSString *_switchText;
     NSString *_switchParam;
+    NSString *_webText;
     NSArray *_results;
 }
 + (ExteriaInlinePage *)pageWithRow:(const exteria_inline_page *)row results:(NSArray *)results;
@@ -101,6 +104,7 @@
 /* a button that opens the chat with the bot; empty text when there is none */
 @property (nonatomic, readonly, copy) NSString *switchText;
 @property (nonatomic, readonly, copy) NSString *switchParam;
+@property (nonatomic, readonly, copy) NSString *webText;
 @property (nonatomic, readonly, retain) NSArray *results;
 @end
 

@@ -6,6 +6,8 @@
 #import "exteria_chat_settings.h"
 #import "exteria_bot_keyboard_view.h"
 #import "exteria_dialog_picker_controller.h"
+#import "exteria_location_controller.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_remote_file.h"
 #import "exteria_session_channels.h"
@@ -61,9 +63,16 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     ExteriaInlineBot *_inlineBot;
     NSString *_inlineQuery;
     NSString *_nextOffset;
+    NSString *_resolvingInlineName;
+    NSUInteger _resolveGeneration;
     NSUInteger _inlineToken;
-    long long _inlineQueryId;
     BOOL _loadingMore;
+    BOOL _sendingInline;
+    NSUInteger _inlinePages;
+    long long _inlineGeoBot;
+    exteria_geo_point _inlineGeo;
+    BOOL _inlineGeoPending;
+    BOOL _inlineGeoDenied;
     /* the members of a supergroup the server named for the name typed after an @, and which search they answer */
     NSArray *_mentionRemote;
     NSUInteger _mentionToken;
@@ -76,6 +85,8 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     BOOL _cardShown;
     BOOL _keyboardOpenedOnce;
 }
+- (void)askInlineLocation;
+- (void)showInlineLocationNeeded;
 @end
 
 @implementation ExteriaChatBots
@@ -125,6 +136,7 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     [_inlineBots release];
     [_mentionRemote release];
     [_inlineBot release];
+    [_resolvingInlineName release];
     [_inlineQuery release];
     [_nextOffset release];
     [_busyButton release];
@@ -138,6 +150,7 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
 - (void)teardown {
     [NSObject cancelPreviousPerformRequestsWithTarget:self];
     ++_inlineToken;
+    ++_resolveGeneration;
     ++_mentionToken;
 }
 
@@ -645,14 +658,12 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
 
 /* "@name " with the query after it; the name must have the shape of a public name */
 static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query) {
-    if (![text hasPrefix:@"@"]) return NO;
-    NSRange space = [text rangeOfString:@" "];
-    if (space.location == NSNotFound) return NO;
     char buffer[EXTERIA_LINK_NAME_MAX];
-    NSString *candidate = [text substringWithRange:NSMakeRange(1, space.location - 1)];
-    if (exteria_mention_name(candidate.UTF8String, buffer, sizeof(buffer)) != EXTERIA_OK || [candidate hasPrefix:@"@"]) return NO;
-    *name = candidate;
-    *query = [text substringFromIndex:space.location + 1];
+    const char *body = NULL;
+    if (!exteria_inline_address_parse(text.UTF8String, buffer, sizeof(buffer), &body)) return NO;
+    *name = [NSString stringWithUTF8String:buffer];
+    *query = [NSString stringWithUTF8String:body];
+    if (!*name || !*query) return NO;
     return YES;
 }
 
@@ -688,30 +699,63 @@ static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query
         [self scheduleInline:known query:query];
         return;
     }
-    NSUInteger token = ++_inlineToken;
+    if ([_resolvingInlineName isEqualToString:key]) return;
+    [_resolvingInlineName release];
+    _resolvingInlineName = [key copy];
+    ++_inlineToken;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runInline) object:nil];
+    [_inlineBot release];
+    _inlineBot = nil;
+    _mode = ExteriaPanelInline;
+    ExteriaSuggestionPanel *loading = [self ensurePanel];
+    [loading setHeaderTitle:nil handler:nil];
+    [loading setEmptyText:nil];
+    [loading setSuggestions:[NSArray array] gallery:NO];
+    [loading setLoading:YES];
+    [_host botsRelayout];
+    NSUInteger generation = ++_resolveGeneration;
     ExteriaWeakReference *weak = _weak;
     [_session resolveUsername:name completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
-        (void)errorName;
         ExteriaChatBots *bots = weak.target;
-        if (!bots) return;
+        if (!bots || generation != bots->_resolveGeneration) return;
+        [bots->_resolvingInlineName release];
+        bots->_resolvingInlineName = nil;
+        NSString *current = nil, *currentQuery = nil;
+        BOOL matches = ExteriaInlineParse([bots bar].textView.text, &current, &currentQuery) && [current.lowercaseString isEqualToString:key];
+        if (errorName) {
+            if (matches) {
+                bots->_mode = ExteriaPanelInline;
+                ExteriaSuggestionPanel *panel = [bots ensurePanel];
+                [panel setLoading:NO];
+                [panel setSuggestions:[NSArray array] gallery:NO];
+                [panel setHeaderTitle:nil handler:nil];
+                [panel setEmptyText:[ExteriaLinkRouter textForError:errorName]];
+                [bots->_host botsRelayout];
+            }
+            return;
+        }
         if (!person.botInline) {
             [bots->_inlineBots setObject:[NSNull null] forKey:key];
+            if (matches && bots->_mode == ExteriaPanelInline) [bots hidePanel];
             return;
         }
         ExteriaInlineBot *bot = [[[ExteriaInlineBot alloc] init] autorelease];
         bot->person = [person retain];
         bot->dialog = [dialog retain];
         [bots->_inlineBots setObject:bot forKey:key];
-        /* the field may have moved on while the name was looked up */
-        if (token != bots->_inlineToken) return;
-        NSString *current = nil, *currentQuery = nil;
-        if (ExteriaInlineParse([bots bar].textView.text, &current, &currentQuery) && [current.lowercaseString isEqualToString:key])
+        if (matches)
             [bots scheduleInline:bot query:currentQuery];
     }];
 }
 
 - (void)scheduleInline:(ExteriaInlineBot *)bot query:(NSString *)query {
     BOOL sameBot = bot == _inlineBot;
+    if (_inlineGeoBot != bot->person.userId) {
+        _inlineGeoBot = bot->person.userId;
+        memset(&_inlineGeo, 0, sizeof(_inlineGeo));
+        _inlineGeoPending = NO;
+        _inlineGeoDenied = NO;
+    }
     [_inlineBot release];
     _inlineBot = [bot retain];
     if (sameBot && [query isEqualToString:_inlineQuery] && _mode == ExteriaPanelInline) return;
@@ -731,12 +775,17 @@ static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query
 
 - (void)runInline {
     if (_mode != ExteriaPanelInline || !_inlineBot) return;
+    if (_inlineBot->person.botInlineGeo && !_inlineGeo.valid) {
+        [self askInlineLocation];
+        return;
+    }
     NSUInteger token = _inlineToken;
     ExteriaWeakReference *weak = _weak;
     [_nextOffset release];
     _nextOffset = nil;
     _loadingMore = NO;
-    [_session searchInline:_inlineQuery bot:_inlineBot->person inDialog:_dialog offset:@"" completion:^(ExteriaInlinePage *page, NSString *errorName) {
+    _inlinePages = 0;
+    [_session searchInline:_inlineQuery bot:_inlineBot->person inDialog:_dialog offset:@"" location:_inlineGeo completion:^(ExteriaInlinePage *page, NSString *errorName) {
         ExteriaChatBots *bots = weak.target;
         if (!bots || token != bots->_inlineToken || bots->_mode != ExteriaPanelInline) return;
         ExteriaSuggestionPanel *panel = bots->_panel;
@@ -746,13 +795,78 @@ static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query
             [bots->_host botsRelayout];
             return;
         }
-        bots->_inlineQueryId = page.queryId;
+        bots->_inlinePages = 1;
         bots->_nextOffset = page.nextOffset.length ? [page.nextOffset copy] : nil;
         [panel setSuggestions:[bots suggestionsOfPage:page] gallery:page.gallery];
         [panel setEmptyText:page.results.count ? nil : NSLocalizedString(@"bots.inline.empty", nil)];
         [bots configureInlineHeader:page];
         [bots->_host botsRelayout];
     }];
+}
+
+- (void)showInlineLocationNeeded {
+    [_panel setLoading:NO];
+    [_panel setEmptyText:NSLocalizedString(@"bots.inline.location.needed", nil)];
+    ExteriaWeakReference *weak = _weak;
+    [_panel setHeaderTitle:NSLocalizedString(@"bots.inline.location.choose", nil) handler:^{
+        ExteriaChatBots *bots = weak.target;
+        if (!bots) return;
+        bots->_inlineGeoDenied = NO;
+        [bots askInlineLocation];
+    }];
+    [_host botsRelayout];
+}
+
+- (void)askInlineLocation {
+    if (_inlineGeoPending || !_inlineBot || !_inlineBot->person.botInlineGeo) return;
+    if (_inlineGeoDenied) { [self showInlineLocationNeeded]; return; }
+    _inlineGeoPending = YES;
+    long long botId = _inlineGeoBot;
+    NSString *prompt = [NSString stringWithFormat:NSLocalizedString(@"bots.inline.location.ask", nil), _inlineBot->person.name];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaShowAlert(nil, prompt, [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"bots.inline.location.choose", nil), nil], 0, NO, ^(NSInteger index, NSString *text) {
+        (void)text;
+        ExteriaChatBots *bots = weak.target;
+        if (!bots || bots->_inlineGeoBot != botId) return;
+        if (bots->_mode != ExteriaPanelInline) { bots->_inlineGeoPending = NO; return; }
+        if (index != 1) {
+            bots->_inlineGeoPending = NO;
+            bots->_inlineGeoDenied = YES;
+            [bots showInlineLocationNeeded];
+            return;
+        }
+        UIViewController *anchor = bots->_router.anchor;
+        if (!anchor || !anchor.view.window || anchor.presentedViewController) {
+            bots->_inlineGeoPending = NO;
+            bots->_inlineGeoDenied = YES;
+            [bots showInlineLocationNeeded];
+            return;
+        }
+        exteria_geo_point empty;
+        memset(&empty, 0, sizeof(empty));
+        ExteriaLocationController *picker = [[[ExteriaLocationController alloc] initWithSession:bots->_session dialog:bots->_dialog location:empty selection:^(exteria_geo_point point) {
+            ExteriaChatBots *again = weak.target;
+            if (!again || again->_inlineGeoBot != botId) return;
+            again->_inlineGeoPending = NO;
+            again->_inlineGeo = point;
+            [again->_router.anchor dismissViewControllerAnimated:YES completion:^{
+                ExteriaChatBots *ready = weak.target;
+                if (ready && ready->_inlineGeoBot == botId && ready->_mode == ExteriaPanelInline) [ready runInline];
+            }];
+        }] autorelease];
+        picker.locationOnly = YES;
+        picker.title = NSLocalizedString(@"bots.inline.location.choose", nil);
+        picker.closeHandler = ^{
+            ExteriaChatBots *again = weak.target;
+            if (!again || again->_inlineGeoBot != botId) return;
+            again->_inlineGeoPending = NO;
+            again->_inlineGeoDenied = YES;
+            if (again->_mode == ExteriaPanelInline) [again showInlineLocationNeeded];
+        };
+        UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:picker] autorelease];
+        if (ExteriaThemeIsClassic()) ExteriaClassicStyleNavigationBar(navigation.navigationBar);
+        [anchor presentViewController:navigation animated:YES completion:nil];
+    });
 }
 
 - (NSArray *)suggestionsOfPage:(ExteriaInlinePage *)page {
@@ -787,17 +901,23 @@ static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query
             [[bots bar] clear];
             [bots->_router openDialog:dialog person:person draft:nil startParam:param.length ? param : @""];
         }];
+    } else if (page.webText.length) {
+        [_panel setHeaderTitle:page.webText handler:^{
+            ExteriaChatBots *bots = weak.target;
+            if (bots) [bots->_router showNote:NSLocalizedString(@"bots.inline.webapp.unsupported", nil)];
+        }];
     } else {
         [_panel setHeaderTitle:nil handler:nil];
     }
 }
 
 - (void)loadMoreInline {
-    if (_mode != ExteriaPanelInline || _loadingMore || !_nextOffset.length || !_inlineBot) return;
+    if (_mode != ExteriaPanelInline || _loadingMore || !_nextOffset.length || !_inlineBot || _inlinePages >= 20) return;
     _loadingMore = YES;
     NSUInteger token = _inlineToken;
+    NSString *requestedOffset = [[_nextOffset copy] autorelease];
     ExteriaWeakReference *weak = _weak;
-    [_session searchInline:_inlineQuery bot:_inlineBot->person inDialog:_dialog offset:_nextOffset completion:^(ExteriaInlinePage *page, NSString *errorName) {
+    [_session searchInline:_inlineQuery bot:_inlineBot->person inDialog:_dialog offset:_nextOffset location:_inlineGeo completion:^(ExteriaInlinePage *page, NSString *errorName) {
         ExteriaChatBots *bots = weak.target;
         if (!bots || token != bots->_inlineToken) return;
         bots->_loadingMore = NO;
@@ -808,21 +928,40 @@ static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query
             return;
         }
         [bots->_nextOffset release];
-        bots->_nextOffset = page.nextOffset.length ? [page.nextOffset copy] : nil;
+        bots->_nextOffset = page.results.count && page.nextOffset.length && ![page.nextOffset isEqualToString:requestedOffset] ? [page.nextOffset copy] : nil;
+        ++bots->_inlinePages;
         [bots->_panel appendSuggestions:[bots suggestionsOfPage:page]];
         [bots->_host botsRelayout];
     }];
 }
 
 - (void)sendInlineResult:(ExteriaInlineResult *)result {
-    long long queryId = _inlineQueryId;
+    if (_sendingInline || !result.resultId.length) return;
+    if (![_host botsCanSendInline]) {
+        [_router showNote:NSLocalizedString(@"bots.inline.cannot_send", nil)];
+        return;
+    }
+    long long queryId = result.queryId;
+    int32_t replyId = [_host botsInlineReplyId];
+    NSUInteger token = _inlineToken;
+    NSString *draft = [[self bar].textView.text copy];
+    _sendingInline = YES;
+    [_panel setLoading:YES];
     ExteriaWeakReference *weak = _weak;
-    [[self bar] clear];
-    [self hidePanel];
-    [_session sendInlineResult:result queryId:queryId toDialog:_dialog randomId:[_host botsRandomId] completion:^(int32_t messageId, NSString *errorName) {
+    [_session sendInlineResult:result queryId:queryId toDialog:_dialog randomId:[_host botsRandomId] replyTo:replyId completion:^(int32_t messageId, NSString *errorName) {
         (void)messageId;
         ExteriaChatBots *bots = weak.target;
-        if (bots && errorName) [bots->_router showNote:[ExteriaLinkRouter textForError:errorName]];
+        if (bots) {
+            bots->_sendingInline = NO;
+            if (token == bots->_inlineToken) [bots->_panel setLoading:NO];
+            if (errorName) [bots->_router showNote:[ExteriaLinkRouter textForError:errorName]];
+            else if ([[bots bar].textView.text isEqualToString:draft]) {
+                [[bots bar] clear];
+                [bots hidePanel];
+                [bots->_host botsInlineDidSendReply:replyId];
+            }
+        }
+        [draft release];
     }];
 }
 
