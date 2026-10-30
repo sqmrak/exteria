@@ -176,7 +176,7 @@ typedef enum {
     ExteriaChatFlagDeleteForMe,
     ExteriaChatFlagReplyColors,                 /* the quote of a reply takes the color of the name of its author; default on */
     ExteriaChatFlagReplyBackground,             /* the quote of a reply has a plate under it; default on */                 /* deleting a message in a private chat or a group leaves it with the others */
-    ExteriaChatFlagGhostNoRead,                 /* AyuMoments, ghost mode: reading a chat does not tell the other side */
+    ExteriaChatFlagGhostNoRead,                 /* viewing a chat leaves its messages unread locally and on Telegram */
     ExteriaChatFlagGhostNoStories,              /* and a story that is looked at is not marked as seen */
     ExteriaChatFlagGhostOffline,                /* and the account says it is offline while the app runs */
     ExteriaChatFlagAyuRegex,                    /* messages that match a filter of the person are not shown */
@@ -242,6 +242,8 @@ void ExteriaChatSetDoubleTap(BOOL outgoing, ExteriaDoubleTapAction action);
 /* the emoji a double tap reacts with, the red heart until the person picks another; if the chat does not offer it, the first reaction it offers is sent */
 NSString *ExteriaChatQuickReaction(void);
 void ExteriaChatSetQuickReaction(NSString *emoji);
+NSString *ExteriaChatQuickReactionDisplay(void);
+void ExteriaChatSetQuickCustomReaction(long long documentId, NSString *alt);
 
 /* the jump of a double tap on the left or right half of a video, in seconds: 5, 10, 15 or 30; the default is 10 */
 NSInteger ExteriaChatSeekSeconds(void);

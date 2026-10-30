@@ -12,6 +12,9 @@
    server's recent list to hold every reactor */
 #define EXTERIA_REACTORS_MAX 3
 
+/* the persisted quick reaction uses animated_<document id> for a custom emoji */
+int64_t exteria_quick_reaction_document(const char *value);
+
 typedef enum exteria_reaction_kind {
     EXTERIA_REACTION_EMOJI = 1,
     EXTERIA_REACTION_CUSTOM,
@@ -69,7 +72,7 @@ exteria_status exteria_reactions_read(const exteria_tl_value *value, exteria_rea
 int exteria_reaction_equal(const exteria_reaction *a, const exteria_reaction *b);
 /* the catalog contains active ordinary emoji, custom and paid reactions have separate APIs */
 exteria_status exteria_reaction_catalog_read(const exteria_tl_value *answer, exteria_reaction *items,
-                                             size_t cap, size_t *count);
+                                             size_t cap, size_t *count, int premium);
 exteria_status exteria_reaction_policy_read(const exteria_tl_value *answer, exteria_reactions *allowed, int *all);
 /* whether a chatFull answer lets everyone use any custom emoji as a reaction (chatReactionsAll with allow_custom) */
 int exteria_reaction_policy_custom(const exteria_tl_value *answer);

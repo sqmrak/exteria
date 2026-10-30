@@ -6,6 +6,8 @@
 #import "exteria_chat_settings.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_expressive_slider.h"
+#import "exteria_emoji_label.h"
+#import "exteria_message.h"
 #import "exteria_platform.h"
 #import "exteria_split_controller.h"
 #import "exteria_sheet.h"
@@ -248,6 +250,8 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind) {
 @synthesize title = _title;
 @synthesize subtitle = _subtitle;
 @synthesize value = _value;
+@synthesize valueIsEmoji = _valueIsEmoji;
+@synthesize valueEmojiDocument = _valueEmojiDocument;
 @synthesize line3 = _line3;
 @synthesize picture = _picture;
 @synthesize tileImage = _tileImage;
@@ -473,7 +477,7 @@ static CGFloat ExteriaRowTextWidth(ExteriaSettingsRow *row, CGFloat width) {
     CGFloat right = ICON_PAD;
     if (row.hasSwitch) right = 16 + ExteriaSwitchWidth() + 8;
     else if (row.checked) right = ICON_PAD + 22 + 8;
-    else if (row.value.length) right = ICON_PAD + MIN(ceil(ExteriaStringSize(row.value, ExteriaFontRegular(16)).width) + 4, width * 0.45) + 8;
+    else if (row.value.length) right = ICON_PAD + (row.valueIsEmoji ? MIN(34, width * 0.45) : MIN(ceil(ExteriaStringSize(row.value, ExteriaFontRegular(16)).width) + 4, width * 0.45)) + 8;
     else if (row.trailingImage) right = ICON_PAD + TRAILING_SIDE + 10;
     return MAX(0, width - left - right);
 }
@@ -715,6 +719,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     UILabel *_subtitle;
     UILabel *_line3;
     UILabel *_value;
+    ExteriaEmojiLabel *_emojiValue;
     UISwitch *_switch;
     UIImageView *_check;
     ExteriaExpressiveSlider *_slider;
@@ -765,6 +770,9 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     _value.backgroundColor = [UIColor clearColor];
     _value.textAlignment = ExteriaTextAlignmentRight;
     [_card addSubview:_value];
+    _emojiValue = [[ExteriaEmojiLabel alloc] init];
+    _emojiValue.textAlignment = ExteriaTextAlignmentRight;
+    [_card addSubview:_emojiValue];
     _switch = [[UISwitch alloc] init];
     [_switch addTarget:self action:@selector(switched) forControlEvents:UIControlEventValueChanged];
     [_card addSubview:_switch];
@@ -802,6 +810,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     [_subtitle release];
     [_line3 release];
     [_value release];
+    [_emojiValue release];
     [_switch release];
     [_check release];
     [_slider release];
@@ -904,7 +913,16 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _value.text = row.value;
     _value.font = ExteriaFontRegular(16);
     _value.textColor = ExteriaColorAccent();
-    _value.hidden = row.value.length == 0;
+    _value.hidden = row.value.length == 0 || row.valueIsEmoji;
+    _emojiValue.hidden = !row.valueIsEmoji || row.value.length == 0;
+    _emojiValue.text = row.value;
+    _emojiValue.font = ExteriaFontRegular(16);
+    _emojiValue.textColor = ExteriaColorAccent();
+    if (row.valueEmojiDocument && row.value.length) {
+        ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji range:NSMakeRange(0, row.value.length) url:nil] autorelease];
+        entity.documentId = row.valueEmojiDocument;
+        _emojiValue.entities = [NSArray arrayWithObject:entity];
+    } else _emojiValue.entities = nil;
     _switch.hidden = !row.hasSwitch;
     _switch.on = row.on;
     _check.hidden = !row.checked;
@@ -1027,9 +1045,9 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
         return;
     }
     CGFloat valueWidth = 0;
-    if (!_value.hidden) {
-        valueWidth = MIN(ceil(ExteriaStringSize(_value.text, _value.font).width) + 4, width * 0.45);
-        _value.frame = CGRectMake(width - ICON_PAD - valueWidth, 0, valueWidth, height);
+    if (!_value.hidden || !_emojiValue.hidden) {
+        valueWidth = !_emojiValue.hidden ? MIN(34, width * 0.45) : MIN(ceil(ExteriaStringSize(_value.text, _value.font).width) + 4, width * 0.45);
+        _value.frame = _emojiValue.frame = CGRectMake(width - ICON_PAD - valueWidth, 0, valueWidth, height);
         right = ICON_PAD + valueWidth + 8;
     }
     CGFloat textWidth = MAX(0, width - left - right);
@@ -1980,6 +1998,16 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
         }
     } else {
         cell.detailTextLabel.text = row.value;
+    }
+    if (row.valueIsEmoji && row.value.length) {
+        cell.detailTextLabel.text = subtitle ? row.subtitle : nil;
+        ExteriaEmojiLabel *value = [[[ExteriaEmojiLabel alloc] initWithFrame:CGRectMake(0, 0, 34, 34)] autorelease];
+        value.font = [UIFont systemFontOfSize:16]; value.text = row.value; value.textAlignment = ExteriaTextAlignmentCenter;
+        if (row.valueEmojiDocument) {
+            ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji range:NSMakeRange(0, row.value.length) url:nil] autorelease];
+            entity.documentId = row.valueEmojiDocument; value.entities = [NSArray arrayWithObject:entity];
+        }
+        cell.accessoryView = value;
     }
     if (row.hasSymbol && !row.destructive) cell.imageView.image = ExteriaSettingsTileImage(row.symbol, row.tone, 29);
     else if (row.tileImage) cell.imageView.image = row.tileImage;

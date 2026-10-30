@@ -3,6 +3,7 @@
 
 #import "exteria_platform.h"
 #import "exteria_theme.h"
+#include "exteria_reactions.h"
 
 NSString *const ExteriaChatSettingsDidChangeNotification = @"ExteriaChatSettingsDidChange";
 
@@ -353,6 +354,18 @@ NSString *ExteriaChatQuickReaction(void) {
 
 void ExteriaChatSetQuickReaction(NSString *emoji) {
     if (emoji.length) [[NSUserDefaults standardUserDefaults] setObject:emoji forKey:ExteriaChatQuickReactionKey];
+}
+
+NSString *ExteriaChatQuickReactionDisplay(void) {
+    if (!exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String)) return ExteriaChatQuickReaction();
+    NSString *alt = [[NSUserDefaults standardUserDefaults] stringForKey:@"exteria.chat.quickreaction.alt"];
+    return alt.length ? alt : @"✨";
+}
+
+void ExteriaChatSetQuickCustomReaction(long long documentId, NSString *alt) {
+    if (documentId <= 0) return;
+    [[NSUserDefaults standardUserDefaults] setObject:alt.length ? alt : @"✨" forKey:@"exteria.chat.quickreaction.alt"];
+    ExteriaChatSetQuickReaction([NSString stringWithFormat:@"animated_%lld", documentId]);
 }
 
 void ExteriaChatSetDoubleTap(BOOL outgoing, ExteriaDoubleTapAction action) {

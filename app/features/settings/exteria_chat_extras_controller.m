@@ -2,15 +2,18 @@
 
 #import "exteria_chat_preview_view.h"
 #import "exteria_chat_settings.h"
+#import "exteria_custom_emoji.h"
 #import "exteria_name_color_controller.h"
 #import "exteria_quick_reaction_controller.h"
 #import "exteria_person.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
+#include "exteria_reactions.h"
 
 @interface ExteriaChatExtrasController () {
     ExteriaSession *_session;
+    ExteriaMediaCache *_reactionMedia;
     ExteriaWeakReference *_weak;
     /* the account itself, loaded for the name color row */
     ExteriaPerson *_me;
@@ -31,9 +34,11 @@
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaCustomEmojiDidLoadNotification object:nil];
     [_weak clear];
     [_weak release];
     [_session release];
+    [_reactionMedia release];
     [_me release];
     [_preview release];
     [super dealloc];
@@ -41,12 +46,20 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(quickReactionPictureLoaded:) name:ExteriaCustomEmojiDidLoadNotification object:nil];
+    NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+    _reactionMedia = [[ExteriaMediaCache alloc] initWithSession:_session directory:[[caches stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"media"]];
     [self rebuild];
     [self loadMe];
 }
 
+- (void)quickReactionPictureLoaded:(NSNotification *)notification {
+    if ([notification.object longLongValue] == exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String)) [self rebuild];
+}
+
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    ExteriaLoadQuickReactionPicture(_session, _reactionMedia, nil);
     if (self.isViewLoaded) [self rebuild];
 }
 
@@ -204,10 +217,13 @@ static ExteriaSettingsRow *ExteriaFlagRow(NSString *titleKey, NSString *infoKey,
 /* the emoji a double tap sends; the chat falls back to its first reaction when it does not offer the one chosen */
 - (ExteriaSettingsRow *)quickReactionRow {
     ExteriaWeakReference *weak = _weak;
-    return [ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chatset.quickreaction", nil) value:ExteriaChatQuickReaction() tap:^{
+    ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chatset.quickreaction", nil) value:ExteriaChatQuickReactionDisplay() tap:^{
         ExteriaChatExtrasController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaQuickReactionController alloc] initWithSession:me->_session] autorelease] animated:YES];
     }];
+    row.valueIsEmoji = YES;
+    row.valueEmojiDocument = exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String);
+    return row;
 }
 
 - (void)stickerScaleMoved:(float)value {

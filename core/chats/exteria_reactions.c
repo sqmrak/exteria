@@ -6,6 +6,18 @@
 #include "exteria_store.h"
 #include "exteria_tl_ids.h"
 
+int64_t exteria_quick_reaction_document(const char *value) {
+    uint64_t id = 0;
+    if (!value || strncmp(value, "animated_", 9) != 0 || !value[9]) return 0;
+    for (const char *p = value + 9; *p; ++p) {
+        if (*p < '0' || *p > '9') return 0;
+        unsigned digit = (unsigned)(*p - '0');
+        if (id > ((uint64_t)INT64_MAX - digit) / 10) return 0;
+        id = id * 10 + digit;
+    }
+    return (int64_t)id;
+}
+
 static int valid_utf8(const uint8_t *data, size_t len) {
     size_t i = 0;
     while (i < len) {
@@ -197,7 +209,7 @@ exteria_faces exteria_reaction_faces(const exteria_reactions *all, size_t index,
 }
 
 exteria_status exteria_reaction_catalog_read(const exteria_tl_value *answer, exteria_reaction *items,
-                                             size_t cap, size_t *count) {
+                                             size_t cap, size_t *count, int premium) {
     const exteria_tl_value *vec;
     uint32_t i;
     size_t n = 0;
@@ -211,7 +223,7 @@ exteria_status exteria_reaction_catalog_read(const exteria_tl_value *answer, ext
         const exteria_tl_value *v = vec->u.vec.items[i];
         memset(&r, 0, sizeof(r));
         if (!exteria_tl_is(v, EXTERIA_TL_ID_availableReaction)) return EXTERIA_E_MALFORMED;
-        if (exteria_tl_has(v, "inactive") || exteria_tl_has(v, "premium")) continue;
+        if (exteria_tl_has(v, "inactive") || (!premium && exteria_tl_has(v, "premium"))) continue;
         if (read_emoji(v, "reaction", &r) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
         if (n == cap) return EXTERIA_E_LIMIT;
         items[n++] = r;

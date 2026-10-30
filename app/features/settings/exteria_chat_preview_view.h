@@ -6,7 +6,8 @@
    and an answer with a sticker), or the one of the Exteria chat screen */
 typedef enum {
     ExteriaChatPreviewTalkSettings = 0,
-    ExteriaChatPreviewTalkExteria
+    ExteriaChatPreviewTalkExteria,
+    ExteriaChatPreviewTalkQuickReaction
 } ExteriaChatPreviewTalk;
 
 @interface ExteriaChatPreviewView : UIView
@@ -18,5 +19,6 @@ typedef enum {
 @property (nonatomic, copy) void (^heightHandler)(void);
 /* the height the preview takes at this width, for the text size now set */
 - (CGFloat)heightForWidth:(CGFloat)width;
+- (void)setQuickReaction:(NSString *)value display:(NSString *)display;
 
 @end

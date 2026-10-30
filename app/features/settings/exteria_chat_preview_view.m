@@ -9,6 +9,8 @@
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_wallpaper.h"
+#import "exteria_reactions_view.h"
+#include "exteria_reactions.h"
 
 #define PREVIEW_RADIUS 22.0
 #define PREVIEW_PAD 12.0
@@ -40,6 +42,11 @@ static const ExteriaPreviewLine ExteriaPreviewExteria[PREVIEW_ITEMS] = {
 /* the talk of the settings of chats: somebody asks, with a quote of an earlier message of the person in the plain link color, and the person answers with a sticker */
 static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
     {NO, NO, @"chat.preview.question", @"10:46", @"sqmrak", @"chat.preview.quote", -1},
+    {YES, YES, nil, @"10:47", nil, nil, 0},
+};
+
+static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
+    {NO, NO, @"chatset.quickreaction.preview.in", @"10:46", @"sqmrak", @"chatset.quickreaction.preview.quote", -1},
     {YES, YES, nil, @"10:47", nil, nil, 0},
 };
 
@@ -87,6 +94,7 @@ static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
     NSMutableArray *_bubbles;
     CGFloat _reportedHeight;
     void (^_heightHandler)(void);
+    ExteriaReactionsView *_quickReaction;
 }
 @end
 
@@ -101,8 +109,8 @@ static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
 - (id)initWithTalk:(ExteriaChatPreviewTalk)talk {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
-    _lines = talk == ExteriaChatPreviewTalkExteria ? ExteriaPreviewExteria : ExteriaPreviewSettings;
-    _stickerName = talk == ExteriaChatPreviewTalkExteria ? @"preview_fox" : @"preview_sticker";
+    _lines = talk == ExteriaChatPreviewTalkExteria ? ExteriaPreviewExteria : (talk == ExteriaChatPreviewTalkQuickReaction ? ExteriaPreviewQuickReaction : ExteriaPreviewSettings);
+    _stickerName = talk == ExteriaChatPreviewTalkExteria ? @"preview_fox" : (talk == ExteriaChatPreviewTalkQuickReaction ? @"preview_quick_fox" : @"preview_sticker");
     self.layer.cornerRadius = ExteriaThemeIsClassic() ? 0 : PREVIEW_RADIUS;
     self.layer.masksToBounds = YES;
     /* the rounded clip is drawn once and kept while the preview scrolls with its table; a change of a slider draws it again */
@@ -172,6 +180,14 @@ static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
         [_bubbles addObject:bubble];
     }
 
+    if (talk == ExteriaChatPreviewTalkQuickReaction) {
+        ExteriaPreviewBubble *bubble = [_bubbles objectAtIndex:0];
+        _quickReaction = [[ExteriaReactionsView alloc] init];
+        _quickReaction.inBubble = YES;
+        _quickReaction.userInteractionEnabled = NO;
+        [bubble->box addSubview:_quickReaction];
+    }
+
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(settingsChanged) name:ExteriaChatSettingsDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wallpaperChanged) name:ExteriaWallpaperDidChangeNotification object:nil];
     [self applyColors];
@@ -185,7 +201,25 @@ static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
     [_wallpaper release];
     [_bubbles release];
     [_heightHandler release];
+    [_quickReaction release];
     [super dealloc];
+}
+
+- (void)setQuickReaction:(NSString *)value display:(NSString *)display {
+    if (!_quickReaction) return;
+    exteria_reaction row;
+    memset(&row, 0, sizeof(row));
+    row.chosen = 1; row.count = 1;
+    row.document_id = exteria_quick_reaction_document(value.UTF8String);
+    if (row.document_id) {
+        row.kind = EXTERIA_REACTION_CUSTOM;
+        if (display.length) [ExteriaReaction rememberCustomTexts:[NSDictionary dictionaryWithObject:display forKey:[NSNumber numberWithLongLong:row.document_id]]];
+    } else {
+        row.kind = EXTERIA_REACTION_EMOJI;
+        snprintf(row.emoji, sizeof(row.emoji), "%s", value.UTF8String ?: "");
+    }
+    [_quickReaction setReactions:[NSArray arrayWithObject:[ExteriaReaction reactionWithRow:&row]] counts:YES];
+    [self setNeedsLayout];
 }
 
 /* the colors of the quote follow the switches of the screen: the color of the author's name or the plain link color, and a solid plate or none */
@@ -313,7 +347,8 @@ static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
         BOOL beside = textWidth + 6 + timeWidth <= limit;
         CGFloat contentWidth = MAX(MAX(textWidth, quoteWidth), beside ? textWidth + 6 + timeWidth : timeWidth);
         CGFloat boxWidth = MIN(limit, contentWidth) + 2 * BUBBLE_PAD_X;
-        CGFloat boxHeight = BUBBLE_PAD_Y + quoteBlock + ceil(textSize.height) + (beside ? 0 : meta - 2) + BUBBLE_PAD_Y;
+        CGFloat reactionHeight = _quickReaction && bubble == [_bubbles objectAtIndex:0] ? 38 : 0;
+        CGFloat boxHeight = BUBBLE_PAD_Y + quoteBlock + ceil(textSize.height) + (beside || reactionHeight ? 0 : meta - 2) + BUBBLE_PAD_Y + reactionHeight;
         if (apply) {
             CGFloat corner = ExteriaThemeIsClassic() ? (CGFloat)ExteriaChatClassicBubbleRadius() : MIN(radius, MIN(boxWidth, boxHeight) / 2);
             CGFloat x = bubble->outgoing ? width - PREVIEW_PAD - boxWidth : PREVIEW_PAD;
@@ -327,6 +362,7 @@ static const ExteriaPreviewLine ExteriaPreviewSettings[PREVIEW_ITEMS] = {
                 [self layoutQuote:bubble width:inner height:quoteHeight line:quoteLine];
             }
             bubble->text.frame = CGRectMake(BUBBLE_PAD_X, BUBBLE_PAD_Y + quoteBlock, inner, ceil(textSize.height));
+            if (reactionHeight) _quickReaction.frame = CGRectMake(BUBBLE_PAD_X, boxHeight - reactionHeight, inner, reactionHeight);
             bubble->time.frame = CGRectMake(boxWidth - BUBBLE_PAD_X - timeWidth, boxHeight - BUBBLE_PAD_Y - meta + 2, timeText, meta);
             bubble->checks.frame = CGRectMake(boxWidth - BUBBLE_PAD_X - CHECK_WIDTH + 2, boxHeight - BUBBLE_PAD_Y - meta + 4, 14, 10);
         }

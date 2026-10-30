@@ -1,6 +1,7 @@
 #import "exteria_stickers_settings_controller.h"
 
 #import "exteria_chat_settings.h"
+#import "exteria_custom_emoji.h"
 #import "exteria_gift_screen.h"
 #import "exteria_session_stickermanage.h"
 #import "exteria_sheet.h"
@@ -9,6 +10,7 @@
 #import "exteria_sticker_maker.h"
 #import "exteria_symbol.h"
 #import "exteria_weak_reference.h"
+#include "exteria_reactions.h"
 
 @interface ExteriaStickersSettingsController () {
     ExteriaSession *_session;
@@ -41,6 +43,7 @@
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaCustomEmojiDidLoadNotification object:nil];
     [_weak clear];
     [_weak release];
     [_session release];
@@ -54,13 +57,19 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(quickReactionPictureLoaded:) name:ExteriaCustomEmojiDidLoadNotification object:nil];
     [self rebuild];
     [self load];
+}
+
+- (void)quickReactionPictureLoaded:(NSNotification *)notification {
+    if ([notification.object longLongValue] == exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String)) [self rebuild];
 }
 
 /* a page opened from here may have changed what is counted, so coming back asks again */
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    ExteriaLoadQuickReactionPicture(_session, _media, nil);
     if (_loaded) { [self rebuild]; [self load]; }
 }
 
@@ -123,10 +132,13 @@
     /* an archive with nothing in it is not offered */
     if (_archivedTotal > 0) [catalog addObject:archived];
     [catalog addObject:emoji];
-    [catalog addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolHeart tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"chatset.quickreaction", nil) subtitle:nil value:ExteriaChatQuickReaction() tap:^{
+    ExteriaSettingsRow *quick = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolHeart tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"chatset.quickreaction", nil) subtitle:nil value:ExteriaChatQuickReactionDisplay() tap:^{
         ExteriaStickersSettingsController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaQuickReactionController alloc] initWithSession:me->_session] autorelease] animated:YES];
-    }]];
+    }];
+    quick.valueIsEmoji = YES;
+    quick.valueEmojiDocument = exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String);
+    [catalog addObject:quick];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:catalog]];
     ExteriaSettingsRow *large = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.largeemoji", nil) subtitle:NSLocalizedString(@"chatset.largeemoji.info", nil)
                                                                     on:ExteriaChatLargeEmoji() toggle:^(BOOL on) { ExteriaChatSetLargeEmoji(on); }];

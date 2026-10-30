@@ -239,13 +239,16 @@ static void test_catalog_policy(void) {
         CHECK_EQ_INT(exteria_tl_vec_set(vec, i, r), EXTERIA_OK);
     }
     set(v, "reactions", vec);
-    CHECK_EQ_INT(exteria_reaction_catalog_read(v, items, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_reaction_catalog_read(v, items, 4, &count, 0), EXTERIA_OK);
     CHECK_EQ_INT(count, 1);
     CHECK(!strcmp(items[0].emoji, "👍"));
+    CHECK_EQ_INT(exteria_reaction_catalog_read(v, items, 4, &count, 1), EXTERIA_OK);
+    CHECK_EQ_INT(count, 2);
+    CHECK(!strcmp(items[1].emoji, "👎"));
     set(v, "reactions", exteria_tl_new_vec(&arena, EXTERIA_REACTION_CATALOG_MAX + 1));
-    CHECK_EQ_INT(exteria_reaction_catalog_read(v, items, 4, &count), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(exteria_reaction_catalog_read(v, items, 4, &count, 0), EXTERIA_E_LIMIT);
     CHECK_EQ_INT(count, 0);
-    CHECK_EQ_INT(exteria_reaction_catalog_read(obj("boolTrue"), items, 4, &count), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_reaction_catalog_read(obj("boolTrue"), items, 4, &count, 0), EXTERIA_E_MALFORMED);
     v = obj("messages.chatFull");
     r = obj("channelFull");
     set(v, "full_chat", r);
@@ -548,6 +551,13 @@ static void test_faces(void) {
 }
 
 int main(void) {
+    CHECK(exteria_quick_reaction_document("animated_123456789") == 123456789);
+    CHECK(exteria_quick_reaction_document("animated_9223372036854775807") == INT64_MAX);
+    CHECK(exteria_quick_reaction_document("animated_9223372036854775808") == 0);
+    CHECK(exteria_quick_reaction_document("animated_-1") == 0);
+    CHECK(exteria_quick_reaction_document("animated_12x") == 0);
+    CHECK(exteria_quick_reaction_document("animated_") == 0);
+    CHECK(exteria_quick_reaction_document("heart") == 0);
     exteria_arena_init(&arena, 16u * 1024u * 1024u);
     test_parse();
     test_reaction_people();
