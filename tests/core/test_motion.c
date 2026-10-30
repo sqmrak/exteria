@@ -123,9 +123,13 @@ static void reply_swipe_direction(void) {
     CHECK(exteria_motion_reply_swipe_begins(-90, 20));
     CHECK(!exteria_motion_reply_swipe_begins(90, 20));
     CHECK(!exteria_motion_reply_swipe_begins(-20, 30));
+    CHECK(!exteria_motion_reply_swipe_begins(-60, 20));
+    CHECK(exteria_motion_reply_swipe_begins(-61, 20));
     CHECK(!exteria_motion_reply_swipe_begins(0, 0));
     CHECK(!exteria_motion_reply_swipe_begins(NAN, 0));
     CHECK(near(exteria_motion_reply_swipe_pull(-75), 75));
+    CHECK(near(exteria_motion_reply_swipe_pull(-80), 80));
+    CHECK(near(exteria_motion_reply_swipe_pull(-1000), 80));
     CHECK(near(exteria_motion_reply_swipe_pull(75), 0));
     CHECK(near(exteria_motion_reply_swipe_pull(NAN), 0));
 }

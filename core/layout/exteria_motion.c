@@ -82,11 +82,11 @@ double exteria_motion_snapshot_scale(double width, double height, double display
 }
 
 int exteria_motion_reply_swipe_begins(double velocity_x, double velocity_y) {
-    return isfinite(velocity_x) && isfinite(velocity_y) && velocity_x < 0 && -velocity_x > fabs(velocity_y) * 1.5;
+    return isfinite(velocity_x) && isfinite(velocity_y) && velocity_x < 0 && -velocity_x > fabs(velocity_y) * 3;
 }
 
 double exteria_motion_reply_swipe_pull(double translation_x) {
-    return isfinite(translation_x) && translation_x < 0 ? -translation_x : 0;
+    return isfinite(translation_x) && translation_x < 0 ? fmin(-translation_x, 80) : 0;
 }
 
 exteria_motion_swipe exteria_motion_back_swipe(double width, double translation, double velocity, int ended) {
