@@ -21,6 +21,7 @@
 @property (nonatomic, assign) BOOL showsBack;
 /* the title stands at the left margin of the content instead of the middle of the bar */
 @property (nonatomic, assign) BOOL titleOnLeft;
+@property (nonatomic, assign) BOOL contentUnderBar;
 /* the title reads "Connecting..." with moving dots while the session has no working link */
 @property (nonatomic, assign) BOOL showsConnection;
 /* a button at the right end of the bar, such as the menu; the screen sizes and handles it, the list places it */

@@ -97,6 +97,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 - (id)initWithSession:(ExteriaSession *)session {
     self = [super initWithSession:session];
     if (!self) return nil;
+    self.contentUnderBar = YES;
     _badgeWeak = [[ExteriaWeakReference referenceTo:self] retain];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
@@ -257,7 +258,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
         cell.transform = CGAffineTransformIdentity;
     }
     if (ExteriaReduceMotionEnabled() || !self.isViewLoaded || !table.window || !_folders.slideDirection) return nil;
-    CGFloat top = MAX(0, CGRectGetMaxY(_header.frame) - table.contentOffset.y);
+    CGFloat top = MAX(table.contentInset.top, CGRectGetMaxY(_header.frame) - table.contentOffset.y);
     CGSize size = CGSizeMake(table.bounds.size.width, table.bounds.size.height - top);
     if (size.width <= 0 || size.height <= 0) return nil;
     UIGraphicsBeginImageContextWithOptions(size, NO, 0);
@@ -1042,7 +1043,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
     if (index == NSNotFound) return;
     CGRect row = [self.table rectForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)index inSection:0]];
     CGPoint offset = self.table.contentOffset;
-    if (CGRectGetMaxY(row) > offset.y) return;
+    if (CGRectGetMaxY(row) > offset.y + self.table.contentInset.top) return;
     _archiveRevealed = NO;
     [self applyFilters];
     [self reloadTable];
@@ -1059,7 +1060,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
     [super scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
     if (!decelerate) [self hideRevealedArchiveIfScrolledAway];
-    if (scrollView.contentOffset.y > -ARCHIVE_PULL_DISTANCE || !ExteriaArchiveHidden() || _archiveRevealed) return;
+    if (scrollView.contentOffset.y + scrollView.contentInset.top > -ARCHIVE_PULL_DISTANCE || !ExteriaArchiveHidden() || _archiveRevealed) return;
     BOOL hasArchive = NO;
     for (ExteriaDialog *dialog in _dialogs) hasArchive = hasArchive || dialog.folder;
     if (!hasArchive) return;

@@ -25,6 +25,8 @@
     ExteriaBarButton *_back;
     BOOL _showsBack;
     BOOL _titleOnLeft;
+    BOOL _contentUnderBar;
+    BOOL _barFilled;
     BOOL _showsConnection;
     UIView *_barAccessory;
     UILabel *_status;
@@ -47,6 +49,7 @@
 @synthesize avatars = _avatars;
 @synthesize showsBack = _showsBack;
 @synthesize titleOnLeft = _titleOnLeft;
+@synthesize contentUnderBar = _contentUnderBar;
 @synthesize showsConnection = _showsConnection;
 
 - (id)initWithSession:(ExteriaSession *)session {
@@ -327,7 +330,15 @@
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
     if (scrollView != _table) return;
     CGFloat distance = scrollView.contentOffset.y + scrollView.contentInset.top;
-    _barShade.alpha = MIN(1.0f, MAX(0.0f, distance / 32.0f));
+    if (!_contentUnderBar) {
+        _barShade.alpha = MIN(1.0f, MAX(0.0f, distance / 32.0f));
+        return;
+    }
+    BOOL filled = distance > 0.5;
+    if (filled == _barFilled) return;
+    _barFilled = filled;
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.42 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
+                     animations:^{ _barShade.alpha = filled ? 1 : 0; } completion:nil];
 }
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
@@ -426,8 +437,13 @@
         CGFloat accessoryWidth = _barAccessory ? MAX(52, _barAccessory.bounds.size.width) : 0;
         _barAccessory.frame = CGRectMake(edge - accessoryWidth - 2, insets.top, accessoryWidth, BAR_HEIGHT);
     }
-    _table.frame = CGRectMake(left, barBottom, column.size.width, size.height - barBottom);
-    _table.contentInset = UIEdgeInsetsMake(0, 0, MAX(_bottomInset, insets.bottom), 0);
+    CGFloat tableTop = _contentUnderBar ? insets.top : barBottom;
+    CGFloat oldTop = _table.contentInset.top;
+    CGFloat newTop = _contentUnderBar ? BAR_HEIGHT : 0;
+    BOOL atTop = _table.contentOffset.y <= -oldTop + 0.5;
+    _table.frame = CGRectMake(left, tableTop, column.size.width, size.height - tableTop);
+    _table.contentInset = UIEdgeInsetsMake(newTop, 0, MAX(_bottomInset, insets.bottom), 0);
+    if (oldTop != newTop && atTop) _table.contentOffset = CGPointMake(_table.contentOffset.x, -newTop);
     _table.scrollIndicatorInsets = _table.contentInset;
     CGFloat contentTop = barBottom + _table.tableHeaderView.bounds.size.height;
     CGFloat midY = contentTop + MAX(0, size.height - contentTop - MAX(_bottomInset, insets.bottom)) / 2;

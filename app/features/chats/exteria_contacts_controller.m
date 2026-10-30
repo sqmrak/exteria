@@ -63,6 +63,7 @@ static const CGFloat ExteriaContactsSearchClear = 30.0;
 - (id)initWithSession:(ExteriaSession *)session {
     self = [super initWithSession:session];
     if (!self) return nil;
+    self.contentUnderBar = YES;
     self.heading = NSLocalizedString(@"tab.contacts", nil);
     /* three buttons stand at the right end of the bar, so the title lines up with the field under it, as the one of the chats does */
     self.titleOnLeft = YES;

@@ -109,6 +109,7 @@
     ExteriaMediaCache *_media;
     ExteriaWaveBackgroundView *_backdrop;
     UIView *_bar;
+    BOOL _barFilled;
     UILabel *_titleLabel;
     ExteriaEmojiLabel *_barName;
     UILabel *_barStatus;
@@ -302,7 +303,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _grid.headerView = _head;
 
     _bar = [[UIView alloc] init];
-    _bar.backgroundColor = ExteriaColorBar();
+    _bar.backgroundColor = [ExteriaColorScreen() colorWithAlphaComponent:0.94];
     _bar.alpha = 0;
     [root addSubview:_bar];
     _titleLabel = ExteriaProfileLabel(ExteriaColorTitle(), ExteriaFontBold(ExteriaIsPad() ? 24 : 20), ExteriaTextAlignmentCenter);
@@ -647,7 +648,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _titleLabel.frame = CGRectMake(left + 60, insets.top, width - 120, BAR_HEIGHT);
     _barName.frame = CGRectMake(left + 60, insets.top + 3, width - 120, 22);
     _barStatus.frame = CGRectMake(left + 60, insets.top + 24, width - 120, 16);
-    _grid.frame = CGRectMake(left, barHeight, width, size.height - barHeight);
+    _grid.frame = CGRectMake(left, insets.top, width, size.height - insets.top);
+    _grid.topInset = BAR_HEIGHT;
     _grid.bottomInset = _bottomInset + (_tab == 2 ? SEND_HEIGHT + 24 : 0);
     CGFloat sendWidth = MIN(width - 64, 280);
     _send.frame = CGRectMake(CGRectGetMidX(column) - sendWidth / 2, size.height - _bottomInset - SEND_HEIGHT - 16, sendWidth, SEND_HEIGHT);
@@ -661,8 +663,14 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
     CGFloat limit = 140;
+    offset += BAR_HEIGHT;
     CGFloat mix = MAX(0, MIN(1, (offset - limit + 40) / 40));
-    _bar.alpha = mix;
+    BOOL filled = offset > 0.5;
+    if (filled != _barFilled) {
+        _barFilled = filled;
+        [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.42 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
+                         animations:^{ _bar.alpha = filled ? 1 : 0; } completion:nil];
+    }
     _titleLabel.alpha = 1 - mix;
     _barName.alpha = mix;
     _barStatus.alpha = mix;
