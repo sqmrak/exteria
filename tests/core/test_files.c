@@ -3,8 +3,29 @@
 #include "exteria_tl_ids.h"
 
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#define TOKEN_THREADS 4
+#define TOKENS_PER_THREAD 256
+static void *make_tokens(void *context) {
+    uint64_t *tokens = context;
+    for (size_t i = 0; i < TOKENS_PER_THREAD; ++i) tokens[i] = exteria_file_temporary_token();
+    return NULL;
+}
+
+static void test_temporary_tokens(void) {
+    uint64_t tokens[TOKEN_THREADS][TOKENS_PER_THREAD];
+    pthread_t threads[TOKEN_THREADS];
+    for (size_t i = 0; i < TOKEN_THREADS; ++i) CHECK_EQ_INT(pthread_create(&threads[i], NULL, make_tokens, tokens[i]), 0);
+    for (size_t i = 0; i < TOKEN_THREADS; ++i) CHECK_EQ_INT(pthread_join(threads[i], NULL), 0);
+    for (size_t i = 0; i < TOKEN_THREADS * TOKENS_PER_THREAD; ++i) {
+        uint64_t token = tokens[i / TOKENS_PER_THREAD][i % TOKENS_PER_THREAD];
+        CHECK(token != 0);
+        for (size_t j = 0; j < i; ++j) CHECK(token != tokens[j / TOKENS_PER_THREAD][j % TOKENS_PER_THREAD]);
+    }
+}
 
 static exteria_tl_value *location(exteria_arena *a, int64_t id) {
     exteria_tl_value *v = exteria_tl_new_obj(a, "inputDocumentFileLocation");
@@ -364,6 +385,7 @@ static void test_retry_delays(void) {
 }
 
 int main(void) {
+    test_temporary_tokens();
     test_download_part_boundaries();
     test_retry_delays();
     test_large_download_with_short_part();

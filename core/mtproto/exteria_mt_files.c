@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -14,6 +15,17 @@
 #define FILE_SIZE_MAX UINT64_C(34359738368)
 #define DOWNLOAD_PART (128u * 1024u)
 #define FILE_RETRY_WAIT_MAX_SECONDS 300
+
+uint64_t exteria_file_temporary_token(void) {
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    static uint64_t counter;
+    uint64_t result;
+    pthread_mutex_lock(&lock);
+    if (++counter == 0) ++counter;
+    result = counter;
+    pthread_mutex_unlock(&lock);
+    return result;
+}
 
 exteria_status exteria_file_download_part(uint64_t offset, uint32_t preferred, uint32_t *limit) {
     if (limit) *limit = 0;

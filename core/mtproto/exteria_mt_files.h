@@ -9,6 +9,9 @@
 #define EXTERIA_FILE_RANGE_MAX (1024u * 1024u)
 #define EXTERIA_FILE_RETRIES_MAX 5u
 
+/* unique within the process, including across media cache instances */
+uint64_t exteria_file_temporary_token(void);
+
 typedef enum exteria_file_state {
     EXTERIA_FILE_ACTIVE = 0,
     EXTERIA_FILE_REFRESH,

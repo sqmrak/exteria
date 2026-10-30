@@ -38,6 +38,21 @@ static void ExteriaRemovePartial(NSString *path) {
     [pool drain];
 }
 
+/* cache instances share one directory: cleanup must run before any instance can create a partial */
+static dispatch_queue_t ExteriaMediaWorkQueue(void) {
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ queue = dispatch_queue_create("exteria.media", DISPATCH_QUEUE_SERIAL); });
+    return queue;
+}
+
+static NSMutableSet *ExteriaMediaCleanedDirectories(void) {
+    static NSMutableSet *directories;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ directories = [[NSMutableSet alloc] init]; });
+    return directories;
+}
+
 @interface ExteriaMediaCache () {
     NSString *_directory;
     NSCache *_memory;
@@ -65,7 +80,7 @@ static void ExteriaRemovePartial(NSString *path) {
     self = [super init];
     if (!self) return nil;
     _session = [session retain];
-    _directory = [directory copy];
+    _directory = [[directory stringByStandardizingPath] copy];
     _memory = [[NSCache alloc] init];
     _memory.totalCostLimit = MEMORY_BYTES;
     _imageWaiters = [[NSMutableDictionary alloc] init];
@@ -76,12 +91,18 @@ static void ExteriaRemovePartial(NSString *path) {
     _pathRequestKeys = [[NSMutableDictionary alloc] init];
     _origins = [[NSMutableDictionary alloc] init];
     /* one decode at a time: old devices have one or two cores and the main thread needs the other */
-    _work = dispatch_queue_create("exteria.media", DISPATCH_QUEUE_SERIAL);
+    _work = ExteriaMediaWorkQueue();
+    dispatch_retain(_work);
     NSError *error = nil;
     if (![[NSFileManager defaultManager] createDirectoryAtPath:_directory withIntermediateDirectories:YES attributes:nil error:&error]) {
         NSLog(@"exteria: cannot create %@: %@", _directory, error);
     }
-    dispatch_async(_work, ^{ [self trimDiskKeepingPath:nil removePartials:YES]; });
+    NSMutableSet *directories = ExteriaMediaCleanedDirectories();
+    @synchronized(directories) {
+        BOOL first = ![directories containsObject:_directory];
+        if (first) [directories addObject:_directory];
+        dispatch_async(_work, ^{ [self trimDiskKeepingPath:nil removePartials:first]; });
+    }
     return self;
 }
 
@@ -655,10 +676,10 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     }
     waiting = [NSMutableArray arrayWithObject:waiter];
     [_pathWaiters setObject:waiting forKey:key];
-    NSNumber *token = request;
+    NSNumber *token = [NSNumber numberWithUnsignedLongLong:exteria_file_temporary_token()];
     [_pathTokens setObject:token forKey:key];
     /* a loop that was cancelled may still be writing, so each ask keeps its own partial file */
-    NSString *temporary = [final stringByAppendingFormat:@".%lu.part", (unsigned long)token.unsignedIntegerValue];
+    NSString *temporary = [final stringByAppendingFormat:@".%llu.part", token.unsignedLongLongValue];
     dispatch_async(_work, ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         NSFileManager *files = [NSFileManager defaultManager];
@@ -701,7 +722,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     [_pathRequestKeys removeObjectForKey:request];
     if (waiting.count) return;
     NSNumber *token = [_pathTokens objectForKey:key];
-    NSString *temporary = [[_directory stringByAppendingPathComponent:key] stringByAppendingFormat:@".%lu.part", (unsigned long)token.unsignedIntegerValue];
+    NSString *temporary = [[_directory stringByAppendingPathComponent:key] stringByAppendingFormat:@".%llu.part", token.unsignedLongLongValue];
     [_pathWaiters removeObjectForKey:key];
     [_pathTokens removeObjectForKey:key];
     dispatch_async(_work, ^{ ExteriaRemovePartial(temporary); });
@@ -758,6 +779,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         NSFileManager *files = [NSFileManager defaultManager];
         for (NSString *name in [files contentsOfDirectoryAtPath:directory error:NULL]) {
+            if ([name hasSuffix:@".part"]) continue;
             NSString *path = [directory stringByAppendingPathComponent:name];
             NSDate *touched = [[files attributesOfItemAtPath:path error:NULL] objectForKey:NSFileModificationDate];
             if (!touched || [touched compare:limit] != NSOrderedAscending) continue;
@@ -781,6 +803,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
 - (void)clear {
     NSFileManager *files = [NSFileManager defaultManager];
     for (NSString *name in [files contentsOfDirectoryAtPath:_directory error:NULL]) {
+        if ([name hasSuffix:@".part"]) continue;
         NSError *error = nil;
         if (![files removeItemAtPath:[_directory stringByAppendingPathComponent:name] error:&error]) NSLog(@"exteria: cannot remove %@: %@", name, error);
     }
