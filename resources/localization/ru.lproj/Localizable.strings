@@ -2258,6 +2258,11 @@
 "profile.choosephoto" = "Выбрать фото";
 "attach.pick.profile" = "Выберите фотографию или видео";
 "profile.video.unsupported" = "Видео пока нельзя поставить на аватарку.";
+"avatar.save" = "Сохранить в галерею";
+"avatar.saved" = "Сохранено в галерею";
+"avatar.save.failed" = "Не удалось сохранить";
+"avatar.save.wait" = "Фото ещё грузится";
+"avatar.date" = "Поставлено: %@";
 "notif.chat.vibrate" = "Вибрация";
 "notif.chat.vibrate.info" = "Встряхивает телефон при сообщении этого чата, пока приложение открыто. Настройка этого телефона.";
 "chat.comments.post" = "Пост";

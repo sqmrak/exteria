@@ -129,6 +129,7 @@ static void read_photo(const exteria_tl_value *photo, int32_t target, exteria_me
     char type[8];
     out->kind = EXTERIA_PREVIEW_PHOTO;
     if (!exteria_tl_is(photo, EXTERIA_TL_ID_photo)) return;
+    if (exteria_tl_get_i32(photo, "date", &out->date) != EXTERIA_OK || out->date < 0) out->date = 0;
     if (exteria_tl_get_i32(photo, "dc_id", &dc) != EXTERIA_OK) return;
     if (!pick_size(exteria_tl_get(photo, "sizes"), target, type, &w, &h, &bytes)) return;
     ref_from(&out->ref, EXTERIA_MEDIA_SOURCE_PHOTO, photo, dc, type);

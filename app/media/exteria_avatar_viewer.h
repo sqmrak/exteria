@@ -15,6 +15,9 @@
     UIScrollView *_pager;
     UILabel *_counter;
     UIButton *_close;
+    UIButton *_save;
+    UILabel *_dateLabel;
+    UILabel *_toast;
     UIActivityIndicatorView *_spinner;
     NSMutableArray *_pages;
     NSInteger _index;

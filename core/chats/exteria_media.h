@@ -43,6 +43,7 @@ typedef struct exteria_media_info {
     int64_t sticker_set_hash;
     int64_t paid_stars;             /* the price in stars of paid media, locked or already bought; zero for ordinary media */
     uint8_t spoiler;                /* a photo or a video the sender asked to show blurred until it is tapped */
+    int32_t date;                   /* unix seconds a photo was set, when the photo says so (a profile photo does), zero otherwise */
     int32_t ttl_seconds;            /* zero for ordinary media; EXTERIA_VIEW_ONCE_TTL for media that is gone after one view, and any other positive value is a timed one */
     char mime[EXTERIA_MEDIA_MIME_MAX];
     char title[EXTERIA_MEDIA_TAG_MAX];      /* the song title of an audio file, empty when the tags have none */

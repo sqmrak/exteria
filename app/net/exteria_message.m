@@ -51,12 +51,14 @@ static NSString *ExteriaUtf8(const char *bytes) {
 - (long long)stickerSetHash { return _info.sticker_set_hash; }
 - (BOOL)spoiler { return _info.spoiler != 0; }
 - (int32_t)ttlSeconds { return _info.ttl_seconds; }
+- (int32_t)date { return _info.date; }
 - (BOOL)viewOnce { return _info.ttl_seconds > 0; }
 - (long long)paidStars { return _info.paid_stars; }
 - (int32_t)width { return _info.width; }
 - (int32_t)height { return _info.height; }
 - (int32_t)duration { return _info.duration; }
 - (long long)size { return _info.size; }
+- (NSString *)mime { return ExteriaUtf8(_info.mime); }
 - (exteria_media_ref)ref { return _info.ref; }
 - (ExteriaRemoteFile *)file { return [ExteriaRemoteFile fileForMedia:&_info.ref]; }
 - (ExteriaRemoteFile *)previewFile { return [ExteriaRemoteFile fileForMedia:&_info.preview]; }

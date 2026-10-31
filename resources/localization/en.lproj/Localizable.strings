@@ -2253,6 +2253,11 @@
 "profile.choosephoto" = "Choose photo";
 "attach.pick.profile" = "Choose a photo or a video";
 "profile.video.unsupported" = "A video cannot be a profile picture yet.";
+"avatar.save" = "Save to gallery";
+"avatar.saved" = "Saved to the gallery";
+"avatar.save.failed" = "Could not be saved";
+"avatar.save.wait" = "The photo is still loading";
+"avatar.date" = "Set on %@";
 "notif.chat.vibrate" = "Vibration";
 "notif.chat.vibrate.info" = "Shakes the phone for a message of this chat while the app is open. A setting of this phone.";
 "chat.comments.post" = "Post";

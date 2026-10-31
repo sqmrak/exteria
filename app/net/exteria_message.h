@@ -31,6 +31,8 @@
 @property (nonatomic, readonly) BOOL spoiler;
 /* seconds the media lives after it is opened, zero for ordinary media; a one-time photo, video, voice note or round video carries EXTERIA_VIEW_ONCE_TTL */
 @property (nonatomic, readonly) int32_t ttlSeconds;
+/* the time a photo was set, unix seconds, zero when it does not say */
+@property (nonatomic, readonly) int32_t date;
 /* the server removes it once the other side has opened it; the file is gone from the message afterwards */
 @property (nonatomic, readonly) BOOL viewOnce;
 /* the price in stars of paid media, zero for ordinary media; the media is locked while its kind is EXTERIA_PREVIEW_PAID */
@@ -41,6 +43,7 @@
 @property (nonatomic, readonly) long long size;
 /* the file name, empty when the file has none */
 @property (nonatomic, readonly, copy) NSString *name;
+@property (nonatomic, readonly, copy) NSString *mime;
 /* the emoji a sticker stands for */
 @property (nonatomic, readonly, copy) NSString *alt;
 /* the tags of a song, empty when the file has none */

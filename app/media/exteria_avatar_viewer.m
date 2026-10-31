@@ -1,5 +1,6 @@
 #import "exteria_avatar_viewer.h"
 
+#import <QuartzCore/QuartzCore.h>
 #import "exteria_platform.h"
 #import "exteria_remote_file.h"
 #import "exteria_session_profile.h"
@@ -70,6 +71,9 @@
     [_pager release];
     [_counter release];
     [_close release];
+    [_save release];
+    [_dateLabel release];
+    [_toast release];
     [_spinner release];
     [_pages release];
     [super dealloc];
@@ -118,6 +122,30 @@
     _close.accessibilityLabel = NSLocalizedString(@"story.close", nil);
     [root addSubview:_close];
 
+    /* the day the photo was set, at the foot, and the button that keeps the photo in the gallery */
+    _dateLabel = [[UILabel alloc] init];
+    _dateLabel.backgroundColor = [UIColor clearColor];
+    _dateLabel.textColor = [UIColor colorWithWhite:1 alpha:0.85];
+    _dateLabel.font = ExteriaFontRegular(15);
+    _dateLabel.shadowColor = [UIColor colorWithWhite:0 alpha:0.6];
+    _dateLabel.shadowOffset = CGSizeMake(0, 1);
+    [root addSubview:_dateLabel];
+    _save = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    [_save setImage:ExteriaSymbolImage(ExteriaSymbolArrowDown, 22, [UIColor whiteColor]) forState:UIControlStateNormal];
+    _save.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45];
+    _save.layer.cornerRadius = CLOSE_SIZE / 2;
+    _save.accessibilityLabel = NSLocalizedString(@"avatar.save", nil);
+    [_save addTarget:self action:@selector(savePhoto) forControlEvents:UIControlEventTouchUpInside];
+    [root addSubview:_save];
+    _toast = [[UILabel alloc] init];
+    _toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.6];
+    _toast.textColor = [UIColor whiteColor];
+    _toast.font = ExteriaFontMedium(14);
+    _toast.textAlignment = ExteriaTextAlignmentCenter;
+    _toast.layer.cornerRadius = 14;
+    _toast.clipsToBounds = YES;
+    _toast.alpha = 0;
+    [root addSubview:_toast];
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
     [root addSubview:_spinner];
 
@@ -162,7 +190,11 @@
     CGFloat top = insets.top;
     _close.frame = CGRectMake(bounds.size.width - insets.right - CLOSE_SIZE - 6, top + 4, CLOSE_SIZE, CLOSE_SIZE);
     _counter.frame = CGRectMake(insets.left + CLOSE_SIZE + 12, top + 4, MAX(0, bounds.size.width - insets.left - insets.right - 2 * (CLOSE_SIZE + 12)), CLOSE_SIZE);
-    _spinner.center = CGPointMake(CGRectGetMidX(bounds), bounds.size.height - 40);
+    CGFloat bottom = insets.bottom + 14;
+    _save.frame = CGRectMake(bounds.size.width - insets.right - CLOSE_SIZE - 16, bounds.size.height - bottom - CLOSE_SIZE, CLOSE_SIZE, CLOSE_SIZE);
+    _dateLabel.frame = CGRectMake(insets.left + 20, bounds.size.height - bottom - CLOSE_SIZE, MAX(0, CGRectGetMinX(_save.frame) - insets.left - 32), CLOSE_SIZE);
+    _toast.frame = CGRectMake(floor((bounds.size.width - 200) / 2), CGRectGetMinY(_save.frame) - 44, 200, 28);
+    _spinner.center = CGPointMake(CGRectGetMidX(bounds), bounds.size.height - 90);
     [self layoutPages];
 }
 
@@ -221,7 +253,37 @@
     }
 }
 
+- (void)updateDate {
+    int32_t date = _index < (NSInteger)_photos.count ? [[_photos objectAtIndex:(NSUInteger)_index] date] : 0;
+    if (date <= 0) { _dateLabel.text = @""; return; }
+    NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
+    format.dateStyle = NSDateFormatterMediumStyle;
+    format.timeStyle = NSDateFormatterShortStyle;
+    _dateLabel.text = [NSString stringWithFormat:NSLocalizedString(@"avatar.date", nil), [format stringFromDate:[NSDate dateWithTimeIntervalSince1970:date]]];
+}
+
+/* the photo on the page that is shown goes to the gallery as it is on screen, the sharp one when it has come and the small one before */
+- (void)savePhoto {
+    if (_index < 0 || _index >= (NSInteger)_pages.count) return;
+    UIImage *image = ((ExteriaAvatarPage *)[_pages objectAtIndex:(NSUInteger)_index])->image.image;
+    if (!image) { [self showToast:NSLocalizedString(@"avatar.save.wait", nil)]; return; }
+    UIImageWriteToSavedPhotosAlbum(image, self, @selector(image:didFinishSavingWithError:contextInfo:), NULL);
+}
+
+- (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error contextInfo:(void *)context {
+    (void)image; (void)context;
+    if (error) NSLog(@"exteria: the profile photo was not saved: %@", error);
+    [self showToast:NSLocalizedString(error ? @"avatar.save.failed" : @"avatar.saved", nil)];
+}
+
+- (void)showToast:(NSString *)text {
+    _toast.text = text;
+    _toast.alpha = 1;
+    [UIView animateWithDuration:0.3 delay:1.4 options:0 animations:^{ _toast.alpha = 0; } completion:nil];
+}
+
 - (void)updateCounter {
+    [self updateDate];
     NSInteger total = (NSInteger)_photos.count;
     _counter.hidden = total < 2;
     _counter.text = [NSString stringWithFormat:@"%ld / %ld", (long)_index + 1, (long)total];
