@@ -1379,7 +1379,11 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 - (void)loadChannelFull {
-    if (_dialog.topicId > 0 && !_pinnedList) [self loadTopicPinned];
+    if (_dialog.topicId > 0 && !_pinnedList) {
+        /* the comments of a post are a thread of a group that is not a forum, and the post is what the bar shows there; a topic of a forum shows its pins */
+        if (_dialog.forum) [self loadTopicPinned];
+        else [self loadCommentsPost];
+    }
     ExteriaWeakReference *weak = _weak;
     [_session loadFullChannelOfDialog:_dialog completion:^(ExteriaFullChannel *channel, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
@@ -3246,12 +3250,35 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
     return a->index < b->index ? -1 : (a->index > b->index);
 }
 
+/* the answer of a send carries the server's copy of the message before the call that numbers the pending one is told, so for a moment the chat
+   holds both; the pending one is left out while a copy of it (ours, same words, written at the same time) is already there */
+- (NSArray *)localWithoutServerTwins {
+    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:_local.count];
+    NSMutableSet *claimed = [NSMutableSet set];
+    for (ExteriaMessage *pending in _local) {
+        BOOL twin = NO;
+        if (pending.messageId <= 0 && pending.state != ExteriaMessageStateFailed) {
+            for (ExteriaMessage *copy in [_server allValues]) {
+                NSNumber *key = [NSNumber numberWithInt:copy.messageId];
+                if (!copy.outgoing || [claimed containsObject:key]) continue;
+                if (copy.date < pending.date - 2 || copy.date > pending.date + 120) continue;
+                if (pending.text != copy.text && ![pending.text isEqualToString:copy.text]) continue;
+                [claimed addObject:key];
+                twin = YES;
+                break;
+            }
+        }
+        if (!twin) [kept addObject:pending];
+    }
+    return kept;
+}
+
 /* the server's messages and the ones only this screen knows, in the order the chat has them: by id, and a message that has
    no id yet after all of those, in the order it was written */
 - (NSArray *)orderedMessages {
     NSArray *server = [_server allValues];
     /* a message on its way belongs to the end of the chat, which a window around an old message does not show */
-    NSArray *local = _window ? [NSArray array] : _local;
+    NSArray *local = _window ? [NSArray array] : [self localWithoutServerTwins];
     NSUInteger count = server.count + local.count;
     ExteriaMessageOrder *order = malloc(sizeof(ExteriaMessageOrder) * (count ? count : 1));
     NSMutableArray *all = [NSMutableArray arrayWithCapacity:count];
@@ -4919,7 +4946,9 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     /* a kept message can be removed locally, but the server no longer has it for other actions */
     if (message.deletedLocally) mask = (mask & (EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE)) | EXTERIA_ACTION_DELETE;
     /* the server refuses the list of who reacted in a broadcast channel (BROADCAST_FORBIDDEN, so that readers cannot be told apart), so the entry is not offered there */
-    else if (message.messageId > 0 && message.reactions.count && _dialog.kind != EXTERIA_DIALOG_CHANNEL) mask |= EXTERIA_ACTION_REACTORS;
+    /* the post that heads its comments is that same post, forwarded into the discussion group, and the server refuses the list for it as well: it comes from a channel (its origin is one), or it is the root of the thread */
+    else if (message.messageId > 0 && message.reactions.count && _dialog.kind != EXTERIA_DIALOG_CHANNEL && !message.post && message.forwardKey >= 0 &&
+             !(_dialog.topicId > 0 && message.messageId == _dialog.topicId)) mask |= EXTERIA_ACTION_REACTORS;
     /* a one-time file must not be kept, sent on or sent again by this client */
     if (ExteriaMessageIsViewOnce(message)) mask &= ~(uint32_t)(EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_SAVE | EXTERIA_ACTION_GALLERY |
                                                               EXTERIA_ACTION_COPY_PHOTO | EXTERIA_ACTION_REPEAT | EXTERIA_ACTION_BOOKMARK | EXTERIA_ACTION_UNBOOKMARK);
