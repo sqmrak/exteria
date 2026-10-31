@@ -69,10 +69,10 @@ static ExteriaInAppBanner *ExteriaShownBanner;
         avatar.seed = dialog.avatarSeed;
         avatar.initials = dialog.initials;
         avatar.deleted = dialog.deleted;
-        avatar.accent = dialog.saved;
-        avatar.symbol = ExteriaSymbolBookmark;
-        avatar.showsSymbol = dialog.saved;
-        [avatar setPhoto:dialog.saved ? nil : dialog.photo cache:avatars];
+        avatar.accent = dialog.saved || dialog.replies;
+        avatar.symbol = dialog.replies ? ExteriaSymbolReply : ExteriaSymbolBookmark;
+        avatar.showsSymbol = dialog.saved || dialog.replies;
+        [avatar setPhoto:dialog.saved || dialog.replies ? nil : dialog.photo cache:avatars];
         avatar.hidden = NO;
     }
     if (picture) {
@@ -117,9 +117,8 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     _body.numberOfLines = 2;
     [self addSubview:_body];
     [self addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped)] autorelease]];
-    UISwipeGestureRecognizer *up = [[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(leave)] autorelease];
-    up.direction = UISwipeGestureRecognizerDirectionUp;
-    [self addGestureRecognizer:up];
+    /* the card follows the finger to the left, to the right or up, and goes when it is let go far enough or flicked; a tap still opens the chat */
+    [self addGestureRecognizer:[[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dragged:)] autorelease]];
     return self;
 }
 
@@ -170,6 +169,80 @@ static ExteriaInAppBanner *ExteriaShownBanner;
         (void)finished;
         [self removeNow];
     }];
+}
+
+/* how far a drag must go, as a part of the card width, or how fast a flick must be (points per second), to send the card away */
+#define DISMISS_FRACTION 0.35
+#define DISMISS_SPEED 500.0
+#define DISMISS_UP_DISTANCE 24.0
+/* the card stays this long after a drag that did not send it away */
+#define RETURN_SECONDS 3.0
+
+- (void)dragged:(UIPanGestureRecognizer *)pan {
+    if (_leaving) return;
+    UIView *host = self.superview;
+    if (!host) return;
+    CGPoint move = [pan translationInView:host];
+    /* downward there is nowhere to go: the card rests against its place */
+    CGFloat y = MIN(0, move.y);
+    CGFloat width = MAX(1, self.bounds.size.width);
+    switch (pan.state) {
+    case UIGestureRecognizerStateBegan:
+        /* the timer must not take the card from under the finger */
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(leave) object:nil];
+        break;
+    case UIGestureRecognizerStateChanged:
+        self.transform = CGAffineTransformMakeTranslation(move.x, y);
+        self.alpha = (CGFloat)MAX(0.3, 1.0 - fabs(move.x) / (width * 1.5));
+        break;
+    case UIGestureRecognizerStateEnded: {
+        CGPoint speed = [pan velocityInView:host];
+        BOOL sideways = fabs(move.x) > width * DISMISS_FRACTION || fabs(speed.x) > DISMISS_SPEED;
+        BOOL up = -y > DISMISS_UP_DISTANCE || speed.y < -DISMISS_SPEED;
+        if (sideways && fabs(move.x) >= fabs(y)) {
+            [self flyAwayToward:(move.x != 0 ? move.x : speed.x) < 0 ? -1 : 1];
+        } else if (up) {
+            [self leave];
+        } else {
+            [self settle];
+        }
+        break;
+    }
+    case UIGestureRecognizerStateCancelled:
+    case UIGestureRecognizerStateFailed:
+        [self settle];
+        break;
+    default:
+        break;
+    }
+}
+
+/* the card leaves across the screen edge on the side it was thrown to */
+- (void)flyAwayToward:(int)direction {
+    if (_leaving) return;
+    _leaving = YES;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    CGFloat distance = direction * (self.superview.bounds.size.width + self.bounds.size.width);
+    CGFloat lift = self.transform.ty;
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 delay:0 options:UIViewAnimationOptionCurveEaseIn
+                     animations:^{
+        self.transform = CGAffineTransformMakeTranslation(distance, lift);
+        self.alpha = 0;
+    } completion:^(BOOL finished) {
+        (void)finished;
+        [self removeNow];
+    }];
+}
+
+/* a drag that stopped short puts the card back and gives it a few more seconds */
+- (void)settle {
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 delay:0 options:UIViewAnimationOptionCurveEaseOut
+                     animations:^{
+        self.transform = CGAffineTransformIdentity;
+        self.alpha = 1;
+    } completion:nil];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(leave) object:nil];
+    [self performSelector:@selector(leave) withObject:nil afterDelay:RETURN_SECONDS];
 }
 
 - (void)tapped {
