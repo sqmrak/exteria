@@ -29,6 +29,9 @@
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media;
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media
               forUser:(BOOL)forUser;
+/* the same for a channel whose list of members the account may not see (it is not an administrator, and the server answers a broadcast channel's members only to those): the tab is left out */
+- (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media
+              forUser:(BOOL)forUser hidesMembers:(BOOL)hidesMembers;
 /* 0 is Members, or Gifts for a user */
 @property (nonatomic, readonly) NSUInteger selectedTab;
 

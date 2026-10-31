@@ -62,6 +62,11 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
 
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media
               forUser:(BOOL)forUser {
+    return [self initWithSession:session dialog:dialog avatars:avatars media:media forUser:forUser hidesMembers:NO];
+}
+
+- (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media
+              forUser:(BOOL)forUser hidesMembers:(BOOL)hidesMembers {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     _forUser = forUser;
@@ -74,7 +79,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     for (int i = 0; i < ExteriaGroupTabCount; ++i) _items[i] = [[NSMutableArray alloc] init];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(forUser ? @"gifts.title" : @"group.tab.members", nil), NSLocalizedString(@"group.tab.media", nil),
                                                 NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil), nil];
-    BOOL skipFirst = dialog.saved;
+    BOOL skipFirst = dialog.saved || hidesMembers;
     if (skipFirst) {
         titles = [titles subarrayWithRange:NSMakeRange(1, titles.count - 1)];
         _tab = ExteriaGroupTabMedia;
