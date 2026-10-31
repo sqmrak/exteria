@@ -561,8 +561,10 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
     UIColor *accent = ExteriaColorBubbleLink(outgoing);
     [accent set];
     CGSize text = ExteriaStringSize(_item.commentsText, ExteriaFontSemibold(14));
-    ExteriaDrawStringAt(_item.commentsText, ExteriaFontSemibold(14), CGPointMake(textX, row.origin.y + (row.size.height - text.height) / 2));
     UIImage *chevron = ExteriaSymbolImage(ExteriaSymbolChevronRight, 14, accent);
+    /* the words end before the arrow: a row that is too narrow for them is cut with dots and does not run into it */
+    CGFloat room = MAX(0, CGRectGetMaxX(row) - PAD_X_COMMENTS - chevron.size.width - 8 - textX);
+    ExteriaDrawStringIn(_item.commentsText, ExteriaFontSemibold(14), CGRectMake(textX, row.origin.y + (row.size.height - text.height) / 2, MIN(room, ceil(text.width)), text.height), ExteriaStringTailTruncate, ExteriaTextAlignmentLeft);
     [chevron drawAtPoint:CGPointMake(CGRectGetMaxX(row) - PAD_X_COMMENTS - chevron.size.width, row.origin.y + (row.size.height - chevron.size.height) / 2)];
 }
 
@@ -2110,8 +2112,11 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_roundRing removeFromSuperlayer];
     [_roundRing release];
     _roundRing = nil;
+    /* the button went with the circle while it was big, and sits on the picture again */
+    _play.transform = CGAffineTransformIdentity;
     [_roundSpeed removeFromSuperview];
     [_roundSpeed release];
+    self.layer.zPosition = 0;
     _roundSpeed = nil;
     if (_item.kind == ExteriaChatItemRound) {
         _play.hidden = NO;
@@ -2211,9 +2216,43 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _roundSpeed.frame = CGRectMake(CGRectGetMidX(_picture.frame) - 20, CGRectGetMaxY(_picture.frame) - 34, 40, 22);
     [_roundSpeed addTarget:self action:@selector(cycleRoundSpeed) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:_roundSpeed];
+    [self growRound];
     [_roundPlayer play];
     [self applyRoundSpeed];
     _roundTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(roundTick:) userInfo:nil repeats:YES];
+}
+
+/* a video message that plays swells, and settles back when it stops. the row keeps its height, so the circle may grow only into
+   the room its own row has above (the gap to the row before) and below (the line of the time): that keeps it off the neighbours,
+   and it moves down or up by the difference so it fills that room evenly. the pause button and the speed chip follow the
+   circle, since they are laid out for the picture, not for where the circle ends up */
+- (void)growRound {
+    CGFloat side = _picture.frame.size.width, width = self.contentView.bounds.size.width, margin = 6;
+    if (side < 1 || width < side || ExteriaReduceMotionEnabled()) return;
+    CGFloat above = CGRectGetMinY(_picture.frame), below = self.contentView.bounds.size.height - CGRectGetMaxY(_picture.frame);
+    if (above < 0 || below < 0) return;
+    CGFloat grow = MIN(1.5, MIN((width - 2 * margin) / side, 1 + (above + below) / side));
+    if (grow < 1.05) return;
+    /* the swell reaches up and down in the proportion of the room on each side, so the center moves by half of the difference */
+    CGFloat extra = side * (grow - 1), up = extra * above / (above + below), dy = extra / 2 - up;
+    CGFloat half = side * grow / 2, middle = CGRectGetMidX(_picture.frame), shift = 0;
+    if (middle - half < margin) shift = margin - (middle - half);
+    else if (middle + half > width - margin) shift = (width - margin) - (middle + half);
+    self.clipsToBounds = NO;
+    self.contentView.clipsToBounds = NO;
+    self.layer.zPosition = 10;
+    CATransform3D ring = CATransform3DMakeTranslation(shift, dy, 0);
+    ring = CATransform3DScale(ring, grow, grow, 1);
+    ring = CATransform3DRotate(ring, (CGFloat)(-M_PI / 2), 0, 0, 1);
+    _roundRing.transform = ring;
+    CGAffineTransform view = CGAffineTransformScale(CGAffineTransformMakeTranslation(shift, dy), grow, grow);
+    CGAffineTransform speed = CGAffineTransformMakeTranslation(shift, dy + side * (grow - 1) / 2);
+    CGAffineTransform button = CGAffineTransformMakeTranslation(shift, dy);
+    [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
+        _roundView.transform = view;
+        _roundSpeed.transform = speed;
+        _play.transform = button;
+    } completion:nil];
 }
 
 - (void)roundTick:(NSTimer *)timer {
