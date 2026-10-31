@@ -1,4 +1,5 @@
 #import "exteria_shiro_fox_field.h"
+#import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -156,7 +157,7 @@ static UIImage *ExteriaShiroSprite(NSString *name, BOOL pad) {
     _lastStamp = 0;
     if (!self.window || ExteriaReduceMotionEnabled()) return;
     _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(step:)] retain];
-    if ([_link respondsToSelector:@selector(setFrameInterval:)]) _link.frameInterval = 2;
+    ExteriaSetFrameRate(_link, 30);
     [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 

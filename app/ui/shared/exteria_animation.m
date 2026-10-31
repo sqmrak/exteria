@@ -1,11 +1,13 @@
 #import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 #import "exteria_platform.h"
 
-#define MOTION_SAMPLES 61
+/* a sample every 8 ms or less at the longest motion, so the spring is smooth on a 120 Hz screen too */
+#define MOTION_SAMPLES 121
 
 @interface ExteriaMotionCompletion : NSObject {
     void (^_completion)(BOOL);
@@ -221,4 +223,14 @@ void ExteriaAttachBounce(UIControl *control, CGFloat depth) {
     [control addTarget:target action:@selector(press:) forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
     [control addTarget:target action:@selector(lift:)
       forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
+}
+
+void ExteriaSetFrameRate(CADisplayLink *link, NSInteger framesPerSecond) {
+    if (!link || framesPerSecond <= 0) return;
+    SEL preferred = NSSelectorFromString(@"setPreferredFramesPerSecond:");
+    if ([link respondsToSelector:preferred]) {
+        ((void (*)(id, SEL, NSInteger))objc_msgSend)(link, preferred, framesPerSecond);
+        return;
+    }
+    if ([link respondsToSelector:@selector(setFrameInterval:)]) link.frameInterval = (NSUInteger)MAX(1, 60 / framesPerSecond);
 }

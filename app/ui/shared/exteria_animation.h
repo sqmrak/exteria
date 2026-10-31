@@ -16,3 +16,7 @@ void ExteriaCancelEnter(UIView *view);
 /* the press feedback of ButtonBounce: the control shrinks by depth (0.05 is five percent) within 60 ms while a
    finger is on it and springs back past its size when the finger leaves */
 void ExteriaAttachBounce(UIControl *control, CGFloat depth);
+
+/* the rate a display link asks for, in frames a second: the link that is left alone runs at the full rate of the screen, 120 on the phones and tablets that have it, and
+   the ones that only need to draw a 30 or a 60 frame say so; an old system that has no such call gets the interval of its 60 */
+void ExteriaSetFrameRate(CADisplayLink *link, NSInteger framesPerSecond);

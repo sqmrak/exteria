@@ -1,4 +1,5 @@
 #import "exteria_lottie_view.h"
+#import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -12,6 +13,7 @@
     NSData *_packed;
     id<ExteriaFrameAnimation> _animation;
     CADisplayLink *_link;
+    NSInteger _linkRate;
     NSUInteger _side;
     NSUInteger _requestedFrame;
     CFTimeInterval _startTime;
@@ -94,7 +96,8 @@
     BOOL wanted = _animation && self.window && _side >= 8 && (_playing || _needsPoster);
     if (wanted && !_link) {
         _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
-        _link.frameInterval = 1;
+        _linkRate = 60;
+        ExteriaSetFrameRate(_link, _linkRate);
         [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
         _clockStarted = NO;
     } else if (!wanted && _link) {
@@ -148,8 +151,11 @@
     }
     if (!_animation.ready) return;
     /* requestFrame admits one render at a time, so a slow device drops frames without building a queue */
-    NSInteger interval = _animation.framesPerSecond > 30 ? 1 : 2;
-    if (_link.frameInterval != interval) _link.frameInterval = interval;
+    NSInteger rate = _animation.framesPerSecond > 30 ? 60 : 30;
+    if (rate != _linkRate) {
+        _linkRate = rate;
+        ExteriaSetFrameRate(_link, rate);
+    }
     CGImageRef image = [_animation copyFinishedFrame];
     if (image) {
         self.layer.contents = (id)image;

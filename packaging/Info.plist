@@ -295,6 +295,9 @@
 	<true/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- an iphone with a 120 Hz screen runs the app at the full rate; without this key the system holds the phones to 60 -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>MinimumOSVersion</key>
 	<string>5.0</string>
 	<key>UIBackgroundModes</key>

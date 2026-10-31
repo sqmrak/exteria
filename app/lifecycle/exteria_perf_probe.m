@@ -1,3 +1,4 @@
+#import "exteria_animation.h"
 #import "exteria_perf_probe.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -109,6 +110,8 @@ void ExteriaPerfRecord(const char *name, double seconds) {
 
 - (void)start {
     _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
+    /* a slow frame is a gap of 25 ms, so 60 a second sees it as well as 120 does, at half the wake-ups */
+    ExteriaSetFrameRate(_link, 60);
     [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 

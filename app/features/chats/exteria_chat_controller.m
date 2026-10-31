@@ -2883,7 +2883,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     if (_liveLink || !_visible || _interacting || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
     ExteriaReactionPollTarget *target = [[[ExteriaReactionPollTarget alloc] initWithReference:_weak] autorelease];
     _liveLink = [[CADisplayLink displayLinkWithTarget:target selector:@selector(display:)] retain];
-    _liveLink.frameInterval = 2;
+    ExteriaSetFrameRate(_liveLink, 30);
     [_liveLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 

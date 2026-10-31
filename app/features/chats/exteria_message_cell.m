@@ -721,7 +721,7 @@ static float ExteriaSpoilerRandom(void) {
     BOOL run = self.window && !self.hidden && (_revealing || [self animates]);
     if (run && !_link) {
         _link = [CADisplayLink displayLinkWithTarget:_ticker selector:@selector(tick:)];
-        _link.frameInterval = SPOILER_FPS_INTERVAL;
+        ExteriaSetFrameRate(_link, 60 / SPOILER_FPS_INTERVAL);
         _last = 0;
         [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
     } else if (!run && _link) {

@@ -1,4 +1,5 @@
 #import "exteria_falling_view.h"
+#import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -226,7 +227,7 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
     _last = 0;
     self.hidden = NO;
     _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
-    if ([_link respondsToSelector:@selector(setFrameInterval:)]) _link.frameInterval = 2;
+    ExteriaSetFrameRate(_link, 30);
     [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 

@@ -1,4 +1,5 @@
 #import "exteria_frame_view.h"
+#import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -82,7 +83,7 @@ static CGImageRef ExteriaDecodeFrame(NSString *path) {
     BOOL wanted = self.window && _count > 0 && (_playing || !_hasContent);
     if (wanted && !_link) {
         _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
-        _link.frameInterval = EXTERIA_FRAME_INTERVAL;
+        ExteriaSetFrameRate(_link, 30);
         [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
         _startTime = CACurrentMediaTime();
     } else if (!wanted && _link) {

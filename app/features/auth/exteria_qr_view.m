@@ -1,4 +1,5 @@
 #import "exteria_qr_view.h"
+#import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -257,7 +258,7 @@ static UIImage *ExteriaMetalDisc(UIImage *face, CGFloat side) {
     if (_link) return;
     _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(step:)];
     /* the pop is a short wave, so a frame in two keeps an old phone smooth */
-    if ([_link respondsToSelector:@selector(setFrameInterval:)]) _link.frameInterval = 2;
+    ExteriaSetFrameRate(_link, 30);
     [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 
