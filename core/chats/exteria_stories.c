@@ -45,6 +45,8 @@ exteria_status exteria_story_read(const exteria_tl_value *item, exteria_story_ro
     out->out = exteria_tl_has(item, "out") ? 1 : 0;
     out->edited = exteria_tl_has(item, "edited") ? 1 : 0;
     out->noforwards = exteria_tl_has(item, "noforwards") ? 1 : 0;
+    out->contacts = exteria_tl_has(item, "contacts") ? 1 : 0;
+    out->selected = exteria_tl_has(item, "selected_contacts") ? 1 : 0;
     exteria_media_classify_sized(exteria_tl_get(item, "media"), STORY_PHOTO_TARGET, &out->media);
     if (exteria_tl_has(item, "music")) exteria_document_read(exteria_tl_get(item, "music"), &out->music);
     copy_caption(out->caption, sizeof(out->caption), item);
@@ -300,6 +302,79 @@ exteria_status exteria_story_send_photo_request(exteria_arena *arena, exteria_tl
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "privacy_rules", rules);
     if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "period", EXTERIA_STORY_PERIOD);
     if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "random_id", random_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_story_privacy exteria_story_row_privacy(const exteria_story_row *row) {
+    if (!row) return EXTERIA_STORY_EVERYONE;
+    if (row->close_friends) return EXTERIA_STORY_CLOSE_FRIENDS;
+    if (row->contacts) return EXTERIA_STORY_CONTACTS;
+    return EXTERIA_STORY_EVERYONE;
+}
+
+/* the rule list of an audience */
+static exteria_status privacy_rules(exteria_arena *arena, exteria_story_privacy privacy, exteria_tl_value **out) {
+    static const char *const names[] = {"inputPrivacyValueAllowAll", "inputPrivacyValueAllowContacts", "inputPrivacyValueAllowCloseFriends"};
+    exteria_tl_value *rules, *rule;
+    if ((int)privacy < 0 || (int)privacy > EXTERIA_STORY_CLOSE_FRIENDS) return EXTERIA_E_ARG;
+    rules = exteria_tl_new_vec(arena, 1);
+    rule = exteria_tl_new_obj(arena, names[privacy]);
+    if (!rules || !rule) return EXTERIA_E_NOMEM;
+    *out = rules;
+    return exteria_tl_vec_set(rules, 0, rule);
+}
+
+exteria_status exteria_story_publish_photo_request(exteria_arena *arena, exteria_tl_value *file, int64_t random_id, const char *caption,
+                                                   exteria_story_privacy privacy, exteria_tl_value **out) {
+    exteria_tl_value *request, *rules = NULL;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!out || (caption && strlen(caption) > EXTERIA_STORY_CAPTION_MAX - 1)) return EXTERIA_E_ARG;
+    status = privacy_rules(arena, privacy, &rules);
+    if (status != EXTERIA_OK) return status;
+    status = exteria_story_send_photo_request(arena, file, random_id, &request);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "privacy_rules", rules);
+    if (status == EXTERIA_OK && caption && caption[0]) status = exteria_tl_set_str(arena, request, "caption", caption);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_story_edit_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, const char *caption, int set_privacy,
+                                          exteria_story_privacy privacy, exteria_tl_value **out) {
+    exteria_tl_value *request, *rules = NULL, *entities;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!out || id <= 0 || (caption && strlen(caption) > EXTERIA_STORY_CAPTION_MAX - 1)) return EXTERIA_E_ARG;
+    if (set_privacy) {
+        status = privacy_rules(arena, privacy, &rules);
+        if (status != EXTERIA_OK) return status;
+    }
+    status = peer_request(arena, "stories.editStory", peer, &request);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "id", id);
+    if (status == EXTERIA_OK && caption) {
+        /* the caption and its entities share one flag, so the entities go with it, empty */
+        entities = exteria_tl_new_vec(arena, 0);
+        status = entities ? exteria_tl_set_str(arena, request, "caption", caption) : EXTERIA_E_NOMEM;
+        if (status == EXTERIA_OK) status = exteria_tl_set(request, "entities", entities);
+    }
+    if (status == EXTERIA_OK && rules) status = exteria_tl_set(request, "privacy_rules", rules);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_story_delete_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count,
+                                            exteria_tl_value **out) {
+    return ids_request(arena, "stories.deleteStories", peer, ids, count, out);
+}
+
+exteria_status exteria_story_pin_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count, int pinned,
+                                         exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status = ids_request(arena, "stories.togglePinned", peer, ids, count, &request);
+    if (out) *out = NULL;
+    if (!out) return EXTERIA_E_ARG;
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "pinned", exteria_tl_new_obj(arena, pinned ? "boolTrue" : "boolFalse"));
     if (status == EXTERIA_OK) *out = request;
     return status;
 }

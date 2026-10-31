@@ -13,6 +13,7 @@
 #import "exteria_music_player.h"
 #import "exteria_premium_gate_view.h"
 #import "exteria_session_profile.h"
+#import "exteria_alert.h"
 #import "exteria_popup_menu.h"
 #import "exteria_story.h"
 #import "exteria_symbol.h"
@@ -156,6 +157,7 @@
     BOOL _failed;
     BOOL _classic;
     BOOL _turning;
+    NSUInteger _turnToken;
     NSString *_previousAudioCategory;
 
     UIImageView *_image;
@@ -1015,6 +1017,16 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
     if (_turning || index >= _peers.count) return;
     if (ExteriaReduceMotionEnabled()) { [self openPeerAtIndex:index]; return; }
     _turning = YES;
+    /* a turn that was cut short (two fingers on the screen, a pause of the app) must not leave the picture edge on, a thin line that still pages */
+    ExteriaWeakReference *guard = _weak;
+    NSUInteger turn = ++_turnToken;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((TURN_SECONDS * 2 + 0.3) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        ExteriaStoryViewerController *me = guard.target;
+        if (!me || !me->_turning || me->_turnToken != turn) return;
+        [me.view.layer removeAllAnimations];
+        me.view.layer.transform = CATransform3DIdentity;
+        me->_turning = NO;
+    });
     UIView *stage = self.view;
     CGFloat half = stage.bounds.size.width / 2;
     CGFloat sign = forward ? 1 : -1;
@@ -1116,11 +1128,117 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
 }
 
 - (void)menuTapped {
+    if (_current.outgoing) { [self ownMenuTapped]; return; }
     ExteriaSymbol symbols[1] = {ExteriaSymbolClose};
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:[NSArray arrayWithObject:NSLocalizedString(@"story.close", nil)] symbols:symbols
                                                                  handler:^(NSUInteger index) { (void)index; [self close]; }] autorelease];
     CGPoint anchor = [_menu.superview convertPoint:CGPointMake(CGRectGetMaxX(_menu.frame) - 6, CGRectGetMaxY(_menu.frame) - 8) toView:self.view];
     [menu showInView:self.view anchor:anchor];
+}
+
+#pragma mark own story
+
+/* the menu of a story of ours: its text, who sees it, the profile or the archive, and the end of it */
+- (void)ownMenuTapped {
+    ExteriaStory *story = _current;
+    int32_t storyId = story.storyId;
+    BOOL pinned = story.pinned;
+    ExteriaSymbol symbols[5] = {ExteriaSymbolCompose, ExteriaSymbolLock, pinned ? ExteriaSymbolArchive : ExteriaSymbolPin, ExteriaSymbolTrash, ExteriaSymbolClose};
+    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"story.manage.caption", nil), NSLocalizedString(@"story.manage.privacy", nil),
+                       NSLocalizedString(pinned ? @"story.manage.archive" : @"story.manage.profile", nil), NSLocalizedString(@"story.manage.delete", nil),
+                       NSLocalizedString(@"story.close", nil), nil];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed) return;
+        if (index < 4) [me pause];
+        switch (index) {
+        case 0: [me editCaptionOfStory:story]; break;
+        case 1: [me chooseAudienceOfStory:story]; break;
+        case 2: [me runManagement:^(void (^done)(NSString *)) { [me->_session setStory:storyId pinned:!pinned completion:done]; } stayOn:storyId]; break;
+        case 3: [me confirmDeleteOfStory:storyId]; break;
+        default: [me close]; break;
+        }
+    }] autorelease];
+    CGPoint anchor = [_menu.superview convertPoint:CGPointMake(CGRectGetMaxX(_menu.frame) - 6, CGRectGetMaxY(_menu.frame) - 8) toView:self.view];
+    [menu showInView:self.view anchor:anchor];
+}
+
+- (void)editCaptionOfStory:(ExteriaStory *)story {
+    int32_t storyId = story.storyId;
+    ExteriaWeakReference *weak = _weak;
+    ExteriaPromptTextOrCancel(NSLocalizedString(@"story.manage.caption", nil), nil, story.caption, NSLocalizedString(@"story.camera.caption", nil), ^(NSString *text) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed) return;
+        NSString *clean = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (clean.length > EXTERIA_STORY_CAPTION_SEND_MAX) clean = [clean substringToIndex:EXTERIA_STORY_CAPTION_SEND_MAX];
+        [me runManagement:^(void (^done)(NSString *)) { [me->_session editStory:storyId caption:clean privacy:nil completion:done]; } stayOn:storyId];
+    }, ^{
+        ExteriaStoryViewerController *me = weak.target;
+        if (me && !me->_closed) [me resume];
+    });
+}
+
+- (void)chooseAudienceOfStory:(ExteriaStory *)story {
+    int32_t storyId = story.storyId;
+    NSArray *buttons = [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"story.privacy.everyone", nil),
+                        NSLocalizedString(@"story.privacy.contacts", nil), NSLocalizedString(@"story.privacy.close", nil), nil];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaShowAlert(NSLocalizedString(@"story.manage.privacy", nil), nil, buttons, 0, NO, ^(NSInteger index, NSString *text) {
+        (void)text;
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed) return;
+        if (index < 1 || index > 3) { [me resume]; return; }
+        [me runManagement:^(void (^done)(NSString *)) {
+            [me->_session editStory:storyId caption:nil privacy:[NSNumber numberWithInt:(int)index - 1] completion:done];
+        } stayOn:storyId];
+    });
+}
+
+- (void)confirmDeleteOfStory:(int32_t)storyId {
+    ExteriaWeakReference *weak = _weak;
+    NSArray *buttons = [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"story.manage.delete", nil), nil];
+    ExteriaShowAlert(NSLocalizedString(@"story.manage.delete", nil), NSLocalizedString(@"story.manage.delete.ask", nil), buttons, 0, NO, ^(NSInteger index, NSString *text) {
+        (void)text;
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed) return;
+        if (index != 1) { [me resume]; return; }
+        [me runManagement:^(void (^done)(NSString *)) { [me->_session deleteStory:storyId completion:done]; } stayOn:0];
+    });
+}
+
+/* runs one call on the story, then asks for the stories of the poster again and shows the same one (storyId zero: the next, since it is gone) */
+- (void)runManagement:(void (^)(void (^done)(NSString *errorName)))call stayOn:(int32_t)storyId {
+    ExteriaWeakReference *weak = _weak;
+    ExteriaStoryPeer *peer = [self peer];
+    NSUInteger peerIndex = _peerIndex;
+    NSUInteger oldIndex = _storyIndex;
+    call(^(NSString *errorName) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me) return;
+        if (errorName) {
+            NSLog(@"exteria: the change of the story failed: %@", errorName);
+            ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"story.manage.failed", nil), errorName]);
+            if (!me->_closed) [me resume];
+            return;
+        }
+        [me->_session loadStoriesOfDialog:peer.owner completion:^(ExteriaStoryPeer *fresh, NSArray *stories, NSString *loadError) {
+            ExteriaStoryViewerController *again = weak.target;
+            if (!again) return;
+            (void)fresh;
+            if (again->_closed || again->_peerIndex != peerIndex) return;
+            if (loadError) { [again resume]; return; }
+            if (!stories.count) { [again close]; return; }
+            [again->_stories setObject:stories forKey:[NSNumber numberWithUnsignedInteger:peerIndex]];
+            NSUInteger target = oldIndex;
+            if (storyId) {
+                for (NSUInteger i = 0; i < stories.count; ++i) if (((ExteriaStory *)[stories objectAtIndex:i]).storyId == storyId) { target = i; break; }
+            }
+            if (target >= stories.count) target = stories.count - 1;
+            [again showStoryAtIndex:target];
+            [again resume];
+        }];
+    });
 }
 
 #pragma mark progress

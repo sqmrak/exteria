@@ -420,10 +420,21 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
     _scroll.frame = frame;
 }
 
+/* the flag says a viewer is up; when nothing is presented over the host any more, the viewer left in a way that never ran its close handler, and the
+   flag must not keep every ring dead */
+- (BOOL)viewerIsOpen {
+    UIViewController *host = _host.target;
+    if (_viewerOpen && host && !host.presentedViewController) {
+        NSLog(@"exteria: the story viewer is gone but was never closed; the rings work again");
+        _viewerOpen = NO;
+    }
+    return _viewerOpen;
+}
+
 /* the server's list is what the viewer pages through; an own cell that was put in front is not in it, and a tap on it starts a story */
 - (void)ringTapped:(UIControl *)ring {
     UIViewController *host = _host.target;
-    if (!host || _viewerOpen || (NSUInteger)ring.tag >= _cells.count) return;
+    if (!host || [self viewerIsOpen] || (NSUInteger)ring.tag >= _cells.count) return;
     ExteriaStoryPeer *cell = [_cells objectAtIndex:(NSUInteger)ring.tag];
     if (cell.count == 0) { [self addTapped]; return; }
     NSUInteger offset = _cells.count - _peers.count;
@@ -445,15 +456,16 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
    instead */
 - (void)addTapped {
     UIViewController *host = _host.target;
-    if (!host || _posting || _viewerOpen) return;
+    if (!host || _posting || [self viewerIsOpen]) return;
     if (![ExteriaStoryCameraController cameraAvailable]) { [self pickFromLibraryIn:host]; return; }
     ExteriaStoryCameraController *camera = [[[ExteriaStoryCameraController alloc] init] autorelease];
     ExteriaWeakReference *weak = _weak;
-    camera.publishHandler = ^(NSString *path) {
+    camera.publishHandler = ^(NSString *path, NSString *caption, exteria_story_privacy privacy) {
         ExteriaStoryStrip *me = weak.target;
         UIViewController *top = me ? me->_host.target : nil;
         [top dismissViewControllerAnimated:YES completion:nil];
-        [me postStoryAtPath:path];
+        if (!me) { [[NSFileManager defaultManager] removeItemAtPath:path error:NULL]; return; }
+        [me postStoryAtPath:path caption:caption privacy:privacy];
     };
     camera.closeHandler = ^{
         ExteriaStoryStrip *me = weak.target;
@@ -482,21 +494,46 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
         }
-        [me postStoryAtPath:path];
+        /* the picker is still leaving the screen, so the editor comes a turn later */
+        dispatch_async(dispatch_get_main_queue(), ^{ [me dressStoryAtPath:path]; });
     } unavailable:^{
         ExteriaShowNotice(nil, NSLocalizedString(@"attach.gallery.unavailable", nil));
     }];
 }
 
-/* the file goes up as a story for everyone and is deleted either way; the row is asked again when it is live */
-- (void)postStoryAtPath:(NSString *)path {
+/* a photo from the library gets the same screen as a shot: words over it, a caption and the audience, before it goes up */
+- (void)dressStoryAtPath:(NSString *)path {
+    UIViewController *host = _host.target;
+    if (!host) {
+        [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+        return;
+    }
+    ExteriaStoryCameraController *editor = [[[ExteriaStoryCameraController alloc] initWithPhotoPath:path] autorelease];
+    ExteriaWeakReference *weak = _weak;
+    editor.publishHandler = ^(NSString *file, NSString *caption, exteria_story_privacy privacy) {
+        ExteriaStoryStrip *me = weak.target;
+        UIViewController *top = me ? me->_host.target : nil;
+        [top dismissViewControllerAnimated:YES completion:nil];
+        if (!me) { [[NSFileManager defaultManager] removeItemAtPath:file error:NULL]; return; }
+        [me postStoryAtPath:file caption:caption privacy:privacy];
+    };
+    editor.closeHandler = ^{
+        ExteriaStoryStrip *me = weak.target;
+        UIViewController *top = me ? me->_host.target : nil;
+        [top dismissViewControllerAnimated:YES completion:nil];
+    };
+    [host presentViewController:editor animated:YES completion:nil];
+}
+
+/* the file goes up as a story and is deleted either way; the row is asked again when it is live */
+- (void)postStoryAtPath:(NSString *)path caption:(NSString *)caption privacy:(exteria_story_privacy)privacy {
     if (_posting) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         return;
     }
     _posting = YES;
     ExteriaWeakReference *weak = _weak;
-    [_session postStoryPhotoAtPath:path completion:^(NSString *errorName) {
+    [_session postStoryPhotoAtPath:path caption:caption privacy:privacy completion:^(NSString *errorName) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         ExteriaStoryStrip *again = weak.target;
         if (!again) return;

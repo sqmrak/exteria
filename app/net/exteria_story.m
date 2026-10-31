@@ -44,6 +44,8 @@ static NSString *ExteriaUtf8(const char *bytes) {
 - (BOOL)outgoing { return _row.out; }
 - (BOOL)pinned { return _row.pinned; }
 - (BOOL)closeFriends { return _row.close_friends; }
+- (exteria_story_privacy)privacy { return exteria_story_row_privacy(&_row); }
+- (BOOL)selectedAudience { return _row.selected != 0; }
 
 @end
 

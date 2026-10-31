@@ -268,6 +268,47 @@ static void test_send_photo(void) {
     CHECK_EQ_INT(exteria_story_send_photo_request(&arena, file, 5, NULL), EXTERIA_E_ARG);
 }
 
+static void test_manage(void) {
+    exteria_peer_ref self = {1, 5, 0, 1, 0};
+    exteria_tl_value *request = NULL, *file = obj("inputFile");
+    int32_t ids[] = {4, 5};
+    int32_t zero[] = {0};
+    exteria_story_row row;
+    i64(file, "id", 9);
+    i32(file, "parts", 1);
+    str(file, "name", "story.jpg");
+    str(file, "md5_checksum", "");
+    CHECK_EQ_INT(exteria_story_publish_photo_request(&arena, file, 5, "hello", EXTERIA_STORY_CLOSE_FRIENDS, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_sendStory);
+    CHECK_EQ_INT(exteria_tl_has(request, "caption"), 1);
+    CHECK_EQ_INT(exteria_story_publish_photo_request(&arena, file, 5, NULL, EXTERIA_STORY_CONTACTS, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_sendStory);
+    CHECK_EQ_INT(exteria_tl_has(request, "caption"), 0);
+    CHECK_EQ_INT(exteria_story_publish_photo_request(&arena, file, 5, NULL, (exteria_story_privacy)9, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_story_edit_request(&arena, &self, 3, "new", 1, EXTERIA_STORY_CONTACTS, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_editStory);
+    CHECK_EQ_INT(exteria_tl_has(request, "caption"), 1);
+    CHECK_EQ_INT(exteria_tl_has(request, "privacy_rules"), 1);
+    CHECK_EQ_INT(exteria_story_edit_request(&arena, &self, 3, NULL, 0, EXTERIA_STORY_EVERYONE, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_editStory);
+    CHECK_EQ_INT(exteria_tl_has(request, "caption"), 0);
+    CHECK_EQ_INT(exteria_tl_has(request, "privacy_rules"), 0);
+    CHECK_EQ_INT(exteria_story_edit_request(&arena, &self, 0, "x", 0, EXTERIA_STORY_EVERYONE, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_story_delete_request(&arena, &self, ids, 2, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_deleteStories);
+    CHECK_EQ_INT(exteria_story_delete_request(&arena, &self, zero, 1, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_story_pin_request(&arena, &self, ids, 2, 0, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_togglePinned);
+    CHECK_EQ_INT(exteria_story_pin_request(&arena, &self, ids, 2, 1, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_togglePinned);
+    memset(&row, 0, sizeof(row));
+    CHECK_EQ_INT(exteria_story_row_privacy(&row), EXTERIA_STORY_EVERYONE);
+    row.contacts = 1;
+    CHECK_EQ_INT(exteria_story_row_privacy(&row), EXTERIA_STORY_CONTACTS);
+    row.close_friends = 1;
+    CHECK_EQ_INT(exteria_story_row_privacy(&row), EXTERIA_STORY_CLOSE_FRIENDS);
+}
+
 static void test_requests(void) {
     exteria_peer_ref peers[] = {{1, 5, 7, 0, 0}, {3, 7, 9, 0, 0}, {1, 1, 0, 1, 0}};
     exteria_peer_ref bad = {1, 5, 0, 0, 0};
@@ -339,6 +380,7 @@ int main(void) {
     test_peer_and_list();
     test_requests();
     test_send_photo();
+    test_manage();
     exteria_arena_free(&arena);
     return test_finish("test_stories");
 }

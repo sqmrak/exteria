@@ -231,4 +231,47 @@
     }];
 }
 
+#pragma mark management
+
+/* one call on our own account, answered with the error name or nil */
+- (void)runStoryCall:(exteria_status (^)(exteria_arena *arena, const exteria_peer_ref *self, exteria_tl_value **request))build completion:(void (^)(NSString *errorName))completion {
+    void (^done)(NSString *) = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        exteria_peer_ref mine;
+        memset(&mine, 0, sizeof(mine));
+        mine.kind = 1;
+        mine.id = [self workerAccount];
+        mine.self = 1;
+        return build(arena, &mine, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        [self noteRpcError:error];
+        [self deliverMain:^{ done(error); [done release]; }];
+    }];
+}
+
+- (void)editStory:(int32_t)storyId caption:(NSString *)caption privacy:(NSNumber *)privacy completion:(void (^)(NSString *errorName))completion {
+    NSString *text = [caption copy];
+    BOOL setPrivacy = privacy != nil;
+    exteria_story_privacy audience = (exteria_story_privacy)privacy.intValue;
+    [self runStoryCall:^exteria_status(exteria_arena *arena, const exteria_peer_ref *mine, exteria_tl_value **request) {
+        return exteria_story_edit_request(arena, mine, storyId, text ? text.UTF8String : NULL, setPrivacy, audience, request);
+    } completion:completion];
+    [text release];
+}
+
+- (void)deleteStory:(int32_t)storyId completion:(void (^)(NSString *errorName))completion {
+    [self runStoryCall:^exteria_status(exteria_arena *arena, const exteria_peer_ref *mine, exteria_tl_value **request) {
+        int32_t one = storyId;
+        return exteria_story_delete_request(arena, mine, &one, 1, request);
+    } completion:completion];
+}
+
+- (void)setStory:(int32_t)storyId pinned:(BOOL)pinned completion:(void (^)(NSString *errorName))completion {
+    [self runStoryCall:^exteria_status(exteria_arena *arena, const exteria_peer_ref *mine, exteria_tl_value **request) {
+        int32_t one = storyId;
+        return exteria_story_pin_request(arena, mine, &one, 1, pinned, request);
+    } completion:completion];
+}
+
 @end

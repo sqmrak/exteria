@@ -6,6 +6,7 @@
 #import "exteria_alert.h"
 #import "exteria_photo_library.h"
 #import "exteria_platform.h"
+#import "exteria_popup_menu.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
@@ -17,7 +18,7 @@
 #define SIDE_BUTTON 52.0
 #define THUMB 48.0
 
-@interface ExteriaStoryCameraController () {
+@interface ExteriaStoryCameraController () <UITextFieldDelegate> {
     AVCaptureSession *_capture;
     AVCaptureDeviceInput *_input;
     AVCaptureStillImageOutput *_still;
@@ -37,6 +38,14 @@
     UIButton *_publish;
     UIActivityIndicatorView *_spinner;
     NSString *_heldPath;
+    /* the words laid over the picture, which move with a finger and are drawn into the jpeg at publishing */
+    UITextField *_overlay;
+    UITextField *_captionField;
+    UIButton *_textButton;
+    UIButton *_audience;
+    exteria_story_privacy _privacy;
+    NSString *_photoPath;
+    CGFloat _keyboardShift;
     BOOL _shooting;
     BOOL _closed;
 }
@@ -57,6 +66,13 @@ static AVCaptureDevice *ExteriaStoryCamera(AVCaptureDevicePosition position) {
 
 + (BOOL)cameraAvailable {
     return [[AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo] count] > 0;
+}
+
+- (id)initWithPhotoPath:(NSString *)path {
+    self = [self init];
+    if (!self) return nil;
+    _photoPath = [path copy];
+    return self;
 }
 
 - (id)init {
@@ -90,6 +106,12 @@ static AVCaptureDevice *ExteriaStoryCamera(AVCaptureDevicePosition position) {
     [_retake release];
     [_publish release];
     [_spinner release];
+    [_overlay release];
+    [_captionField release];
+    [_textButton release];
+    [_audience release];
+    [_photoPath release];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_input release];
     [_still release];
     [_preview release];
@@ -177,6 +199,159 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     [_publish addTarget:self action:@selector(publishTapped) forControlEvents:UIControlEventTouchUpInside];
     _publish.hidden = YES;
     [root addSubview:_publish];
+
+    _textButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _textButton.accessibilityLabel = NSLocalizedString(@"story.camera.text", nil);
+    _textButton.backgroundColor = glass;
+    _textButton.layer.cornerRadius = 22;
+    _textButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
+    [_textButton setTitle:@"Aa" forState:UIControlStateNormal];
+    [_textButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [_textButton addTarget:self action:@selector(textTapped) forControlEvents:UIControlEventTouchUpInside];
+    _textButton.hidden = YES;
+    [root addSubview:_textButton];
+    _audience = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _audience.backgroundColor = glass;
+    _audience.layer.cornerRadius = 17;
+    _audience.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    _audience.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
+    [_audience setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [_audience addTarget:self action:@selector(audienceTapped) forControlEvents:UIControlEventTouchUpInside];
+    _audience.hidden = YES;
+    [root addSubview:_audience];
+    [self refreshAudienceTitle];
+    _captionField = [[UITextField alloc] init];
+    _captionField.delegate = self;
+    _captionField.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
+    _captionField.textColor = [UIColor whiteColor];
+    _captionField.font = [UIFont systemFontOfSize:16];
+    _captionField.layer.cornerRadius = 18;
+    _captionField.returnKeyType = UIReturnKeyDone;
+    _captionField.leftView = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 12, 36)] autorelease];
+    _captionField.leftViewMode = UITextFieldViewModeAlways;
+    _captionField.placeholder = NSLocalizedString(@"story.camera.caption", nil);
+    _captionField.hidden = YES;
+    [root addSubview:_captionField];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillHideNotification object:nil];
+}
+
+#pragma mark dressing the shot
+
+- (NSString *)audienceTitle {
+    switch (_privacy) {
+    case EXTERIA_STORY_CONTACTS: return NSLocalizedString(@"story.privacy.contacts", nil);
+    case EXTERIA_STORY_CLOSE_FRIENDS: return NSLocalizedString(@"story.privacy.close", nil);
+    default: return NSLocalizedString(@"story.privacy.everyone", nil);
+    }
+}
+
+- (void)refreshAudienceTitle {
+    [_audience setTitle:[self audienceTitle] forState:UIControlStateNormal];
+    [_audience sizeToFit];
+    [self.view setNeedsLayout];
+}
+
+- (void)audienceTapped {
+    [self.view endEditing:YES];
+    ExteriaSymbol symbols[3] = {ExteriaSymbolGlobe, ExteriaSymbolPerson, ExteriaSymbolStar};
+    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"story.privacy.everyone", nil), NSLocalizedString(@"story.privacy.contacts", nil),
+                       NSLocalizedString(@"story.privacy.close", nil), nil];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
+        ExteriaStoryCameraController *me = weak.target;
+        if (!me) return;
+        me->_privacy = (exteria_story_privacy)index;
+        [me refreshAudienceTitle];
+    }] autorelease];
+    CGPoint anchor = [_audience.superview convertPoint:CGPointMake(CGRectGetMidX(_audience.frame), CGRectGetMaxY(_audience.frame)) toView:self.view];
+    [menu showInView:self.view anchor:anchor];
+}
+
+- (void)textTapped {
+    if (!_overlay) {
+        _overlay = [[UITextField alloc] init];
+        _overlay.delegate = self;
+        _overlay.textAlignment = UITextAlignmentCenter;
+        _overlay.textColor = [UIColor whiteColor];
+        _overlay.font = [UIFont boldSystemFontOfSize:30];
+        _overlay.returnKeyType = UIReturnKeyDone;
+        _overlay.autocorrectionType = UITextAutocorrectionTypeNo;
+        _overlay.layer.shadowColor = [UIColor blackColor].CGColor;
+        _overlay.layer.shadowOpacity = 0.8f;
+        _overlay.layer.shadowRadius = 3;
+        _overlay.layer.shadowOffset = CGSizeMake(0, 1);
+        _overlay.frame = CGRectMake(20, CGRectGetHeight(_stage.bounds) / 2 - 22, CGRectGetWidth(_stage.bounds) - 40, 44);
+        UIPanGestureRecognizer *pan = [[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(overlayPanned:)] autorelease];
+        [_overlay addGestureRecognizer:pan];
+        [_stage addSubview:_overlay];
+    }
+    [_overlay becomeFirstResponder];
+}
+
+- (void)overlayPanned:(UIPanGestureRecognizer *)pan {
+    CGPoint move = [pan translationInView:_stage];
+    CGPoint center = CGPointMake(_overlay.center.x + move.x, _overlay.center.y + move.y);
+    center.x = MAX(0, MIN(CGRectGetWidth(_stage.bounds), center.x));
+    center.y = MAX(0, MIN(CGRectGetHeight(_stage.bounds), center.y));
+    _overlay.center = center;
+    [pan setTranslation:CGPointZero inView:_stage];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)field {
+    [field resignFirstResponder];
+    return YES;
+}
+
+- (BOOL)textField:(UITextField *)field shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
+    if (field != _captionField) return YES;
+    NSString *next = [field.text stringByReplacingCharactersInRange:range withString:string];
+    return next.length <= EXTERIA_STORY_CAPTION_SEND_MAX;
+}
+
+/* the caption field rides above the keyboard; the text over the picture sits mid-screen and needs no help */
+- (void)keyboardWillChange:(NSNotification *)note {
+    BOOL show = [note.name isEqualToString:UIKeyboardWillShowNotification];
+    CGFloat shift = 0;
+    if (show && _captionField.isFirstResponder) {
+        CGRect keyboard = [[note.userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
+        keyboard = [self.view convertRect:keyboard fromView:nil];
+        shift = MAX(0, CGRectGetMaxY(_captionField.frame) + 8 - CGRectGetMinY(keyboard));
+    }
+    NSTimeInterval duration = [[note.userInfo objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    [UIView animateWithDuration:duration animations:^{ self.view.transform = CGAffineTransformMakeTranslation(0, -shift); }];
+}
+
+/* the picture with the words drawn in where they sit, at the size of the shot; the same path when there are none. The stage shows the shot filled in,
+   so a point of the stage is a point of the picture past the crop that the fill cut away */
+- (NSString *)composedPath {
+    NSString *text = [_overlay.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!_overlay || !text.length) return [[_heldPath retain] autorelease];
+    UIImage *image = [UIImage imageWithContentsOfFile:_heldPath];
+    CGSize size = image.size, stage = _stage.bounds.size;
+    if (size.width < 1 || size.height < 1 || stage.width < 1 || stage.height < 1) return [[_heldPath retain] autorelease];
+    CGFloat k = MAX(stage.width / size.width, stage.height / size.height);
+    CGFloat originX = (size.width - stage.width / k) / 2, originY = (size.height - stage.height / k) / 2;
+    UIGraphicsBeginImageContextWithOptions(size, YES, 1.0);
+    [image drawInRect:CGRectMake(0, 0, size.width, size.height)];
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextSetShadowWithColor(context, CGSizeMake(0, 1 / k), 3 / k, [UIColor colorWithWhite:0 alpha:0.8f].CGColor);
+    [[UIColor whiteColor] set];
+    UIFont *font = [UIFont boldSystemFontOfSize:_overlay.font.pointSize / k];
+    CGRect box = CGRectMake(originX + _overlay.frame.origin.x / k, originY + _overlay.frame.origin.y / k, _overlay.frame.size.width / k, _overlay.frame.size.height / k);
+    CGSize used = [text sizeWithFont:font constrainedToSize:CGSizeMake(box.size.width, CGFLOAT_MAX) lineBreakMode:UILineBreakModeWordWrap];
+    box.origin.y += (box.size.height - used.height) / 2;
+    box.size.height = used.height;
+    [text drawInRect:box withFont:font lineBreakMode:UILineBreakModeWordWrap alignment:UITextAlignmentCenter];
+    UIImage *composed = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    NSData *jpeg = UIImageJPEGRepresentation(composed, STORY_QUALITY);
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"story-%u.jpg", arc4random()]];
+    if (!jpeg || ![jpeg writeToFile:path atomically:YES]) {
+        NSLog(@"exteria: the story with its text was not written, the plain shot goes");
+        return [[_heldPath retain] autorelease];
+    }
+    return path;
 }
 
 /* the four cells of the grid switch, lit when the grid is on */
@@ -222,6 +397,10 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     _thumb.frame = _gallery.bounds;
     _flip.frame = CGRectMake(width - 24 - SIDE_BUTTON, sideY, SIDE_BUTTON, SIDE_BUTTON);
     _retake.frame = CGRectMake(24, sideY, SIDE_BUTTON, SIDE_BUTTON);
+    _textButton.frame = _gridButton.frame;
+    CGFloat pillWidth = MIN(MAX(_audience.frame.size.width, 90), width - 2 * (12 + 44 + 12));
+    _audience.frame = CGRectMake((width - pillWidth) / 2, top + 14, pillWidth, 34);
+    _captionField.frame = CGRectMake(12, CGRectGetMaxY(_stage.frame) - 12 - 36, width - 24, 36);
 }
 
 /* two lines each way, a third of the picture apart */
@@ -244,6 +423,12 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    if (_photoPath) {
+        _heldPath = [_photoPath retain];
+        _held.image = [UIImage imageWithContentsOfFile:_heldPath];
+        [self showHeld:YES];
+        return;
+    }
     [self loadLatestThumbnail];
 }
 
@@ -255,6 +440,7 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    if (_photoPath) return;
     if (!_capture) [self startCapture];
     else [self resumeCapture];
 }
@@ -407,9 +593,20 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     _flip.hidden = held;
     _gallery.hidden = held;
     _gridButton.hidden = held;
+    _textButton.hidden = !held;
+    _audience.hidden = !held;
+    _captionField.hidden = !held;
+    if (!held) {
+        [self.view endEditing:YES];
+        [_overlay removeFromSuperview];
+        [_overlay release];
+        _overlay = nil;
+        _captionField.text = @"";
+    }
 }
 
 - (void)retakeTapped {
+    if (_photoPath) { [self backTapped]; return; }
     if (_heldPath) [[NSFileManager defaultManager] removeItemAtPath:_heldPath error:NULL];
     [_heldPath release];
     _heldPath = nil;
@@ -419,10 +616,14 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)publishTapped {
     if (!_heldPath || !_publishHandler) return;
-    /* the receiver deletes the file, so the screen lets go of it first */
-    NSString *path = [_heldPath autorelease];
+    [self.view endEditing:YES];
+    NSString *path = [[self composedPath] retain];
+    NSString *caption = [_captionField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    /* the receiver deletes the file, so the screen lets go of it first; the plain shot goes with it when text was drawn into a copy */
+    if (![path isEqualToString:_heldPath]) [[NSFileManager defaultManager] removeItemAtPath:_heldPath error:NULL];
+    [_heldPath release];
     _heldPath = nil;
-    _publishHandler(path);
+    _publishHandler([path autorelease], caption.length ? caption : nil, _privacy);
 }
 
 - (void)galleryTapped {

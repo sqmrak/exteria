@@ -37,6 +37,8 @@ exteria_peer_ref ExteriaPeerRefOfDialog(ExteriaDialog *dialog) {
 }
 
 /* one file on its way to the server: the transfer state, and what the message that names it needs once it is there */
+typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_privacy privacy; } ExteriaStoryPostOptions;
+
 @interface ExteriaUploadJob : NSObject {
 @public
     exteria_file_transfer transfer;
@@ -44,8 +46,13 @@ exteria_peer_ref ExteriaPeerRefOfDialog(ExteriaDialog *dialog) {
     exteria_peer_ref peer;
     /* the file becomes the profile photo of the signed in user instead of a message */
     BOOL profilePhoto;
+    /* ... and the file is an mp4 that moves, not a picture */
+    BOOL profileVideo;
     /* the file becomes a story of the signed in user */
     BOOL storyPhoto;
+    /* ... with this text and for this audience */
+    char storyCaption[EXTERIA_STORY_CAPTION_MAX];
+    exteria_story_privacy storyPrivacy;
     /* the file is a sticker, which becomes a document of the signed in user for a set to take */
     void (^stickerDone)(ExteriaStickerDocument *document, NSString *errorName);
     /* the file is one item of an album: its media, as an NSData of exteria_album_media, or the error */
@@ -328,7 +335,8 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
         [self submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
             exteria_tl_value *file = NULL;
             exteria_status status = exteria_file_uploaded(&job->transfer, arena, &file);
-            if (status == EXTERIA_OK && job->storyPhoto) status = exteria_story_send_photo_request(arena, file, job->randomId, request);
+            if (status == EXTERIA_OK && job->storyPhoto) status = exteria_story_publish_photo_request(arena, file, job->randomId, job->storyCaption, job->storyPrivacy, request);
+            else if (status == EXTERIA_OK && job->profileVideo) status = exteria_profile_video_request(arena, file, 0, request);
             else if (status == EXTERIA_OK) status = exteria_profile_photo_request(arena, file, request);
             return status;
         } handler:^(const exteria_mt_rpc_result *result) {
@@ -607,15 +615,32 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
 }
 
 - (void)postStoryPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
-    [self uploadJobAtPath:path story:YES completion:completion];
+    [self postStoryPhotoAtPath:path caption:nil privacy:EXTERIA_STORY_EVERYONE completion:completion];
+}
+
+- (void)postStoryPhotoAtPath:(NSString *)path caption:(NSString *)caption privacy:(exteria_story_privacy)privacy completion:(void (^)(NSString *errorName))completion {
+    ExteriaStoryPostOptions options;
+    memset(&options, 0, sizeof(options));
+    options.privacy = privacy;
+    if (caption.length) snprintf(options.caption, sizeof(options.caption), "%s", caption.UTF8String);
+    [self uploadJobAtPath:path story:YES video:NO options:&options completion:completion];
 }
 
 /* both end in a call that takes the file: the profile photo or the story of the signed in user */
-- (void)uploadJobAtPath:(NSString *)path story:(BOOL)story completion:(void (^)(NSString *errorName))completion {
+- (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video completion:(void (^)(NSString *errorName))completion {
+    [self uploadJobAtPath:path story:story video:video options:NULL completion:completion];
+}
+
+- (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video options:(const ExteriaStoryPostOptions *)options completion:(void (^)(NSString *errorName))completion {
     void (^done)(NSString *) = [completion copy];
     ExteriaUploadJob *job = [[ExteriaUploadJob alloc] init];
     job->profilePhoto = !story;
+    job->profileVideo = video && !story;
     job->storyPhoto = story;
+    if (story && options) {
+        memcpy(job->storyCaption, options->caption, sizeof(job->storyCaption));
+        job->storyPrivacy = options->privacy;
+    }
     job->randomId = story ? (((long long)arc4random() << 32) | arc4random()) | 1 : 0;
     job->completion = [^(int32_t messageId, NSString *errorName) {
         (void)messageId;

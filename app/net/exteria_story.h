@@ -22,6 +22,9 @@
 @property (nonatomic, readonly) BOOL outgoing;
 @property (nonatomic, readonly) BOOL pinned;
 @property (nonatomic, readonly) BOOL closeFriends;
+/* who sees it; a story shown to a chosen list reads as its nearest audience and is kept as it is unless the person picks another */
+@property (nonatomic, readonly) exteria_story_privacy privacy;
+@property (nonatomic, readonly) BOOL selectedAudience;
 @property (nonatomic, readonly, copy) NSString *caption;
 /* a picture or a video; kind says which */
 @property (nonatomic, readonly, retain) ExteriaMedia *media;
@@ -80,6 +83,13 @@ typedef void (^ExteriaStoriesCompletion)(ExteriaStoryPeer *peer, NSArray *storie
 /* our own pinned stories, newest first, and one page of our archive of expired ones before beforeId (zero for the newest);
    ExteriaStory items, empty on the last page */
 - (void)loadPinnedStories:(ExteriaListCompletion)completion;
+
+/* the management of our own stories; the completion runs on the main thread with the error name or nil */
+/* a nil caption leaves the text as it is, an empty one takes it off; a nil privacy leaves the audience as it is */
+- (void)editStory:(int32_t)storyId caption:(NSString *)caption privacy:(NSNumber *)privacy completion:(void (^)(NSString *errorName))completion;
+- (void)deleteStory:(int32_t)storyId completion:(void (^)(NSString *errorName))completion;
+/* pinned keeps it on the profile after the day, otherwise it only stays in the archive */
+- (void)setStory:(int32_t)storyId pinned:(BOOL)pinned completion:(void (^)(NSString *errorName))completion;
 - (void)loadStoryArchiveBefore:(int32_t)beforeId completion:(ExteriaListCompletion)completion;
 
 @end

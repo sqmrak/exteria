@@ -6,6 +6,8 @@
 #import "exteria_shiro.h"
 #import "exteria_typing_board.h"
 
+#include "exteria_stories.h"
+
 typedef enum {
     ExteriaAuthEventCode,
     ExteriaAuthEventPassword,
@@ -323,6 +325,8 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)uploadProfileVideoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
 /* a jpeg becomes a story of the signed in user, shown to everyone for a day, no caption; the completion is the same as the profile photo's */
 - (void)postStoryPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
+/* the same with a caption (at most 200 characters, nil for none) and the audience that sees it */
+- (void)postStoryPhotoAtPath:(NSString *)path caption:(NSString *)caption privacy:(exteria_story_privacy)privacy completion:(void (^)(NSString *errorName))completion;
 /* the custom emoji documents with the ordinary emoji each stands for and the files that draw it, as
    ExteriaCustomEmojiDocument items; a document the server does not know is missing */
 - (void)loadCustomEmojiDocuments:(NSArray *)documentIds completion:(void (^)(NSArray *documents, NSString *errorName))completion;

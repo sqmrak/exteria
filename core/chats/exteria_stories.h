@@ -24,6 +24,8 @@ typedef struct exteria_story_row {
     uint8_t out;
     uint8_t edited;
     uint8_t noforwards;
+    uint8_t contacts;       /* shown to contacts only */
+    uint8_t selected;       /* shown to a chosen list of people, which this client can keep but not build */
     uint8_t reacted;        /* our reaction is in reaction */
     exteria_reaction reaction;
     exteria_media_info media;
@@ -79,6 +81,26 @@ exteria_status exteria_story_react_request(exteria_arena *arena, const exteria_p
    no caption. random_id must not be zero */
 #define EXTERIA_STORY_PERIOD 86400
 exteria_status exteria_story_send_photo_request(exteria_arena *arena, exteria_tl_value *file, int64_t random_id, exteria_tl_value **out);
+/* who sees a story we publish or edit */
+typedef enum exteria_story_privacy {
+    EXTERIA_STORY_EVERYONE = 0,
+    EXTERIA_STORY_CONTACTS,
+    EXTERIA_STORY_CLOSE_FRIENDS
+} exteria_story_privacy;
+#define EXTERIA_STORY_CAPTION_SEND_MAX 200
+/* the audience of a story row we read */
+exteria_story_privacy exteria_story_row_privacy(const exteria_story_row *row);
+/* stories.sendStory of an uploaded photo with a caption (NULL or empty for none, at most EXTERIA_STORY_CAPTION_SEND_MAX bytes) and an audience */
+exteria_status exteria_story_publish_photo_request(exteria_arena *arena, exteria_tl_value *file, int64_t random_id, const char *caption,
+                                                   exteria_story_privacy privacy, exteria_tl_value **out);
+/* stories.editStory of one of our stories: a NULL caption leaves the text alone, an empty one takes it off; set_privacy 0 leaves the audience alone */
+exteria_status exteria_story_edit_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, const char *caption, int set_privacy,
+                                          exteria_story_privacy privacy, exteria_tl_value **out);
+exteria_status exteria_story_delete_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count,
+                                            exteria_tl_value **out);
+/* pinned keeps the story on the profile after it expires, unpinned leaves it only in the archive */
+exteria_status exteria_story_pin_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count, int pinned,
+                                         exteria_tl_value **out);
 /* messages.sendMessage as a reply to a story of the chat's user */
 exteria_status exteria_story_reply_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t story_id, const char *text,
                                            int64_t random_id, exteria_tl_value **out);
