@@ -396,7 +396,11 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     /* the song that plays has its strip over the folders, with the buttons to change it */
     ExteriaWeakReference *playerWeak = [ExteriaWeakReference referenceTo:self];
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
-    _miniPlayer.changeHandler = ^{ [[(ExteriaChatsController *)playerWeak.target view] setNeedsLayout]; };
+    _miniPlayer.changeHandler = ^{
+        UIView *view = [(ExteriaChatsController *)playerWeak.target view];
+        [view setNeedsLayout];
+        [view layoutIfNeeded];
+    };
     [_header addSubview:_miniPlayer];
 
     if (!_folderId && !self.showsBack) {
@@ -595,11 +599,19 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     });
 }
 
+NSString *const ExteriaUnreadTotalDidChangeNotification = @"ExteriaUnreadTotalDidChange";
+static NSInteger sUnreadTotal;
+NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
+
 - (void)refreshCounts {
     if (_folders.selectedFolder.folderId) return;
     NSInteger total = 0;
     for (ExteriaDialog *dialog in _dialogs) {
         if (dialog.unread && !dialog.folder && !dialog.muted && !(dialog.peerKind == 3 && dialog.left)) total += dialog.unreadCount;
+    }
+    if (!_folderId && !self.showsBack && total != sUnreadTotal) {
+        sUnreadTotal = total;
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaUnreadTotalDidChangeNotification object:nil];
     }
     [_chatsDelegate chatsController:self didChangeUnreadTotal:total];
 }
@@ -653,6 +665,17 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     }] autorelease];
     CGPoint anchor = [button.superview convertPoint:CGPointMake(CGRectGetMaxX(button.frame) - 6, CGRectGetMaxY(button.frame) - 8) toView:self.view];
     [menu showInView:self.view anchor:anchor];
+}
+
+/* the badges a developer gave himself on this phone: the names in the rows are drawn again */
+- (void)localMarksChanged {
+    if (self.isViewLoaded) [self reloadTable];
+}
+
+- (void)scrollToTopAnimated {
+    if (!self.isViewLoaded) return;
+    [self closeOpenCell];
+    [self.table setContentOffset:CGPointMake(0, -self.table.contentInset.top) animated:YES];
 }
 
 - (void)openBookmarks {

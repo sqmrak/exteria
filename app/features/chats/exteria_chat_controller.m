@@ -90,6 +90,7 @@
 #import "exteria_session_saved.h"
 #import "exteria_falling_view.h"
 #import "exteria_wallpaper.h"
+#import "exteria_chats_controller.h"
 #import "exteria_wallpaper_controller.h"
 #import "exteria_time.h"
 #include "exteria_scroll.h"
@@ -225,6 +226,10 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     UIView *_header;
     UIView *_headerLine;
     ExteriaBarButton *_back;
+    /* the unread messages of the other chats, over the arrow that goes back to them */
+    UILabel *_backBadge;
+    /* the classic style: the way back is made here, as an arrow with the count (or the name of the list when nothing is unread), and the system one hidden */
+    BOOL _classicBack;
     ExteriaAvatarView *_avatar;
     /* the arcs of the stories of the person, round the picture of the bar; hidden while there are none */
     ExteriaStoryRing *_storyRing;
@@ -531,6 +536,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_header release];
     [_headerLine release];
     [_back release];
+    [_backBadge release];
     [_avatar release];
     [_storyRing release];
     [_title release];
@@ -655,7 +661,11 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     /* the song that plays follows the person into the chat, with the buttons to change it; the strip has no height while nothing plays */
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
     ExteriaWeakReference *playerWeak = _weak;
-    _miniPlayer.changeHandler = ^{ [[(ExteriaChatController *)playerWeak.target view] setNeedsLayout]; };
+    _miniPlayer.changeHandler = ^{
+        UIView *view = [(ExteriaChatController *)playerWeak.target view];
+        [view setNeedsLayout];
+        [view layoutIfNeeded];
+    };
     [root addSubview:_miniPlayer];
     if (ExteriaChatFlagGet(ExteriaChatFlagSnow)) {
         /* the snow falls over the background and under the messages */
@@ -790,13 +800,19 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [root addSubview:_toast];
     /* the way back to the newest message, which shows once the list is more than a screen above its end */
     _toEnd = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    _toEnd.backgroundColor = ExteriaColorCard();
-    _toEnd.layer.cornerRadius = 22;
-    _toEnd.layer.shadowColor = [UIColor blackColor].CGColor;
-    _toEnd.layer.shadowOpacity = 0.25f;
-    _toEnd.layer.shadowRadius = 5;
-    _toEnd.layer.shadowOffset = CGSizeMake(0, 2);
-    [_toEnd setImage:ExteriaSymbolImage(ExteriaSymbolArrowDown, 20, ExteriaColorTitle()) forState:UIControlStateNormal];
+    if (ExteriaThemeIsClassic()) {
+        /* the classic style has no flat card: the same glossy dome as the send button of the bar */
+        [_toEnd setImage:ExteriaClassicRoundButtonImage(ExteriaSymbolArrowDown, 44, NO) forState:UIControlStateNormal];
+        [_toEnd setImage:ExteriaClassicRoundButtonImage(ExteriaSymbolArrowDown, 44, YES) forState:UIControlStateHighlighted];
+    } else {
+        _toEnd.backgroundColor = ExteriaColorCard();
+        _toEnd.layer.cornerRadius = 22;
+        _toEnd.layer.shadowColor = [UIColor blackColor].CGColor;
+        _toEnd.layer.shadowOpacity = 0.25f;
+        _toEnd.layer.shadowRadius = 5;
+        _toEnd.layer.shadowOffset = CGSizeMake(0, 2);
+        [_toEnd setImage:ExteriaSymbolImage(ExteriaSymbolArrowDown, 20, ExteriaColorTitle()) forState:UIControlStateNormal];
+    }
     [_toEnd addTarget:self action:@selector(toEndTapped) forControlEvents:UIControlEventTouchUpInside];
     _toEnd.accessibilityLabel = NSLocalizedString(@"chat.toend", nil);
     _toEnd.alpha = 0;
@@ -844,6 +860,12 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if (classic) {
         /* the system's navigation bar carries the name and the status, the person's picture and the back button */
         self.navigationItem.titleView = ExteriaClassicTitleViewWithStatus(_dialog.title, [self statusLine], (int)[self statusKind]);
+        _classicBack = !ExteriaIsDetailRoot(self);
+        if (_classicBack) {
+            self.navigationItem.hidesBackButton = YES;
+            [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(unreadTotalChanged:) name:ExteriaUnreadTotalDidChangeNotification object:nil];
+            [self refreshBackBadge];
+        }
         self.navigationItem.titleView.userInteractionEnabled = YES;
         [self.navigationItem.titleView addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
         ExteriaAvatarView *mini = [[[ExteriaAvatarView alloc] initWithFrame:CGRectMake(0, 0, 32, 32)] autorelease];
@@ -890,6 +912,18 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _back.title = @"";
     [_back addTarget:self action:@selector(goBack) forControlEvents:UIControlEventTouchUpInside];
     [_header addSubview:_back];
+    _backBadge = [[UILabel alloc] init];
+    _backBadge.backgroundColor = ExteriaColorAccent();
+    _backBadge.textColor = [UIColor whiteColor];
+    _backBadge.font = ExteriaFontBold(12);
+    _backBadge.textAlignment = ExteriaTextAlignmentCenter;
+    _backBadge.layer.cornerRadius = 9;
+    _backBadge.clipsToBounds = YES;
+    _backBadge.userInteractionEnabled = NO;
+    _backBadge.hidden = YES;
+    [_header addSubview:_backBadge];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(unreadTotalChanged:) name:ExteriaUnreadTotalDidChangeNotification object:nil];
+    [self refreshBackBadge];
     _storyRing = [[ExteriaStoryRing alloc] init];
     _storyRing.hidden = YES;
     [_header addSubview:_storyRing];
@@ -2178,9 +2212,12 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _headerLine.frame = CGRectMake(0, headerHeight - 1.0 / ExteriaScreenScale(), size.width, 1.0 / ExteriaScreenScale());
     /* the only page of the right pane of a tablet has no left pane to go back to, so the title moves into the room the arrow leaves */
     BOOL alone = ExteriaIsDetailRoot(self);
-    CGFloat shift = alone ? 36 : 0;
+    CGFloat badge = [self backBadgeWidth];
+    /* the count stands against the arrow, and the picture and the name move over by what it takes beyond the room the arrow leaves */
+    CGFloat shift = alone ? 36 : -MAX(0, badge - 14);
     _back.hidden = alone;
     _back.frame = CGRectMake(left, insets.top, 52, BAR_HEIGHT);
+    _backBadge.frame = CGRectMake(left + 30, insets.top + 9, badge, 18);
     _avatar.frame = CGRectMake(left + 48 - shift, insets.top + 5, 34, 34);
     _storyRing.frame = CGRectInset(_avatar.frame, -3, -3);
     _menuButton.frame = CGRectMake(edge - 48, insets.top, 44, BAR_HEIGHT);
@@ -2225,7 +2262,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     /* on a tablet the chat list beside the chat already shows the strip, and a second one would stand over the messages */
     BOOL listHasStrip = ExteriaListShowsPlayer(self);
     CGFloat playerHeight = _miniPlayer.showing && !listHasStrip ? [ExteriaMiniPlayer height] : 0;
-    _miniPlayer.hidden = !_miniPlayer.showing || listHasStrip;
+    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
+    _miniPlayer.hidden = listHasStrip || (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
     _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
     headerHeight += playerHeight;
     CGRect viewport = CGRectMake(left, headerHeight, width, MAX(0, inputY - contextHeight - headerHeight));
@@ -2297,8 +2335,62 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 
 #pragma mark keyboard
 
+/* the count of the other chats: this one is left out, since it is the one that is read now */
+/* the button of the classic bar: the arrow, and after it the count in the blue badge of the lists or, with nothing unread, the name of the list */
+- (void)refreshClassicBackWithCount:(NSInteger)count {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    UIImageView *arrow = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])] autorelease];
+    arrow.frame = CGRectMake(0, 4, 22, 22);
+    [button addSubview:arrow];
+    UIView *tail;
+    if (count > 0) {
+        tail = ExteriaClassicBadge(count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count], NO);
+        tail.frame = CGRectMake(26, 4, tail.frame.size.width, 22);
+    } else {
+        UILabel *name = [[[UILabel alloc] init] autorelease];
+        name.backgroundColor = [UIColor clearColor];
+        name.textColor = [UIColor whiteColor];
+        name.font = [UIFont boldSystemFontOfSize:15];
+        name.text = NSLocalizedString(@"chats.title", nil);
+        [name sizeToFit];
+        name.frame = CGRectMake(26, floor((30 - name.frame.size.height) / 2), MIN(90, name.frame.size.width), name.frame.size.height);
+        tail = name;
+    }
+    [button addSubview:tail];
+    button.frame = CGRectMake(0, 0, CGRectGetMaxX(tail.frame) + 4, 30);
+    [button addTarget:self action:@selector(goBack) forControlEvents:UIControlEventTouchUpInside];
+    button.accessibilityLabel = NSLocalizedString(@"chats.title", nil);
+    self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithCustomView:button] autorelease];
+}
+
+- (void)refreshBackBadge {
+    NSInteger count = ExteriaUnreadTotal();
+    if (_dialog.unread && !_dialog.muted && !_dialog.folder) count -= _dialog.unreadCount;
+    if (_classicBack) {
+        [self refreshClassicBackWithCount:MAX(0, count)];
+        return;
+    }
+    if (!_backBadge) return;
+    BOOL show = count > 0 && !ExteriaIsDetailRoot(self);
+    NSString *text = count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count];
+    if (show) _backBadge.text = text;
+    BOOL changed = _backBadge.hidden == show;
+    _backBadge.hidden = !show;
+    if (changed) [self.view setNeedsLayout];
+}
+
+- (void)unreadTotalChanged:(NSNotification *)note {
+    (void)note;
+    [self refreshBackBadge];
+}
+
+- (CGFloat)backBadgeWidth {
+    return !_backBadge || _backBadge.hidden ? 0 : MAX(18, ceil([_backBadge.text sizeWithFont:_backBadge.font].width) + 12);
+}
+
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self refreshBackBadge];
     _visible = YES;
     [self rebuildItems];
     [self refreshVoiceChat];

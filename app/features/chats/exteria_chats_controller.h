@@ -4,6 +4,10 @@
 
 @class ExteriaChatsController;
 
+/* the unread messages of the main list, those of muted chats left out: the count a chat shows by its way back; posted on the main thread when it changes */
+extern NSString *const ExteriaUnreadTotalDidChangeNotification;
+NSInteger ExteriaUnreadTotal(void);
+
 @protocol ExteriaChatsControllerDelegate <NSObject>
 /* the unread messages of the chats that are not muted, for the badge on the tab */
 - (void)chatsController:(ExteriaChatsController *)controller didChangeUnreadTotal:(NSInteger)total;
@@ -19,6 +23,8 @@
 @property (nonatomic, assign) int32_t folderId;
 /* whether the strip of the song that plays is up in this list */
 @property (nonatomic, readonly) BOOL playerStripShowing;
+/* the list goes back to its first row, as the chats tab does when it is pressed while it is shown */
+- (void)scrollToTopAnimated;
 /* what a chat opened from the list needs for its pictures and its sticker panel; set before the first tap */
 @property (nonatomic, retain) ExteriaMediaCache *media;
 @property (nonatomic, retain) ExteriaStickerLibrary *stickerLibrary;

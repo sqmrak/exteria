@@ -90,8 +90,20 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     }
     if (showing != _showing) {
         _showing = showing;
-        self.hidden = !showing;
-        if (_changeHandler) _changeHandler();
+        /* the owner lays the strip in and out at its new height inside the animation, so the list under it slides instead of jumping when a voice
+           message opens or ends the player; the strip stays visible until the collapse is done, and its clipping hides the rest */
+        if (showing) self.hidden = NO;
+        BOOL animate = self.window != nil && !ExteriaReduceMotionEnabled();
+        void (^change)(void) = ^{ if (_changeHandler) _changeHandler(); };
+        if (!animate) {
+            change();
+            self.hidden = !_showing;
+        } else {
+            [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:change completion:^(BOOL finished) {
+                (void)finished;
+                self.hidden = !_showing;
+            }];
+        }
     }
     [self setNeedsLayout];
 }
