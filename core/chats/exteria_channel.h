@@ -31,6 +31,23 @@
 #define EXTERIA_ADMIN_MANAGE_TOPICS   0x400u
 #define EXTERIA_ADMIN_ALL             0x7FFu
 
+/* the background an admin gave a channel: a gradient of one to four colors, with a pattern over it or a picture in its place */
+typedef struct exteria_chat_wallpaper {
+    uint8_t present;                /* zero when the channel has none, and every other field is then zero too */
+    uint8_t pattern;                /* the file is a pattern drawn over the colors, not a picture */
+    uint8_t blur;
+    uint8_t color_count;            /* 0 to 4 of colors */
+    uint32_t colors[4];             /* 0xRRGGBB */
+    int32_t rotation;               /* degrees of the gradient, as the server sends them */
+    int32_t intensity;              /* 0 to 100, how strong the pattern is; the sign the server gives a dark pattern is dropped */
+    uint8_t has_file;
+    exteria_media_ref file;
+    int64_t file_size;
+} exteria_chat_wallpaper;
+
+/* a wallPaper or wallPaperNoFile; anything else is none. out is always initialised */
+void exteria_chat_wallpaper_read(const exteria_tl_value *wallpaper, exteria_chat_wallpaper *out);
+
 /* what the profile of a channel shows, read from a channels.getFullChannel answer */
 typedef struct exteria_full_channel {
     exteria_dialog_row dialog;      /* the channel as a chat: title, picture, access hash */
@@ -56,6 +73,7 @@ typedef struct exteria_full_channel {
     /* who the account writes as here when it has chosen someone else than itself: a channel or an anonymous identity; zero for itself */
     int32_t send_as_kind;           /* 1 user, 3 channel, as exteria_peer; zero when none */
     int64_t send_as_id;
+    exteria_chat_wallpaper wallpaper;
 } exteria_full_channel;
 
 /* channels.getFullChannel for a channel (kind 3 with an access hash) */

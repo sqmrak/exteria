@@ -1342,6 +1342,25 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }];
 }
 
+/* the background the admins gave the channel replaces the one of the app in this chat; a picture waits for its file and then takes the place */
+- (void)applyChannelWallpaper:(exteria_chat_wallpaper)paper {
+    if (!paper.present || !self.isViewLoaded) return;
+    CGSize size = _wallpaper.bounds.size.width > 1 ? _wallpaper.bounds.size : [UIScreen mainScreen].bounds.size;
+    if (paper.has_file && !paper.pattern) {
+        ExteriaRemoteFile *file = [ExteriaRemoteFile fileForMedia:&paper.file];
+        ExteriaWeakReference *weak = _weak;
+        [_media loadImageForFile:file maxSide:MAX(size.width, size.height) * [UIScreen mainScreen].scale completion:^(UIImage *image) {
+            ExteriaChatController *chat = weak.target;
+            if (!chat || !image) return;
+            UIImage *picture = ExteriaChannelWallpaperImage(&paper, image, size);
+            if (picture) chat->_wallpaper.image = picture;
+        }];
+        return;
+    }
+    UIImage *picture = ExteriaChannelWallpaperImage(&paper, nil, size);
+    if (picture) _wallpaper.image = picture;
+}
+
 - (void)loadChannelFull {
     if (_dialog.topicId > 0 && !_pinnedList) [self loadTopicPinned];
     ExteriaWeakReference *weak = _weak;
@@ -1354,6 +1373,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }
         [chat->_channelFull release];
         chat->_channelFull = [channel retain];
+        [chat applyChannelWallpaper:channel.wallpaper];
         /* a channel or group the account is not in shows the way in where the field would be */
         /* the flag is only trusted on a full object; a min one says nothing, and the server is asked once */
         if (channel.membershipKnown) [chat applyMembership:!channel.dialog.left];

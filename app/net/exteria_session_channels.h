@@ -5,6 +5,8 @@
 #import "exteria_person.h"
 #import "exteria_session.h"
 
+#include "exteria_channel.h"
+
 /* posted on the main thread when the signed in account joined or left a chat, so the chat lists load again */
 extern NSString *const ExteriaDialogsChangedNotification;
 
@@ -30,6 +32,7 @@ extern NSString *const ExteriaDialogsChangedNotification;
     int32_t _pinnedMessage;
     int32_t _sendAsKind;
     long long _sendAsId;
+    exteria_chat_wallpaper _wallpaper;
 }
 /* the channel as a chat, with its title, picture and access hash */
 @property (nonatomic, readonly, retain) ExteriaDialog *dialog;
@@ -65,6 +68,8 @@ extern NSString *const ExteriaDialogsChangedNotification;
 /* who the account writes as here when the server keeps a choice other than the account itself: 1 user, 3 channel (as peerKind), zero for none */
 @property (nonatomic, readonly) int32_t sendAsKind;
 @property (nonatomic, readonly) long long sendAsId;
+/* the background the admins gave the channel; present is zero when it has none */
+@property (nonatomic, readonly) exteria_chat_wallpaper wallpaper;
 @end
 
 /* the lists of people a channel keeps */

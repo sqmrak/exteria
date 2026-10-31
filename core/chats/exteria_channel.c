@@ -224,6 +224,40 @@ uint32_t exteria_admin_rights_read(const exteria_tl_value *rights) {
     return bits;
 }
 
+void exteria_chat_wallpaper_read(const exteria_tl_value *wallpaper, exteria_chat_wallpaper *out) {
+    static const char *const names[4] = {"background_color", "second_background_color", "third_background_color", "fourth_background_color"};
+    const exteria_tl_value *settings;
+    size_t i;
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
+    if (!exteria_tl_is(wallpaper, EXTERIA_TL_ID_wallPaper) && !exteria_tl_is(wallpaper, EXTERIA_TL_ID_wallPaperNoFile)) return;
+    out->present = 1;
+    settings = exteria_tl_get(wallpaper, "settings");
+    if (exteria_tl_is(settings, EXTERIA_TL_ID_wallPaperSettings)) {
+        int32_t value = 0;
+        out->blur = exteria_tl_has(settings, "blur") ? 1 : 0;
+        for (i = 0; i < 4; ++i) {
+            if (!exteria_tl_has(settings, names[i]) || exteria_tl_get_i32(settings, names[i], &value) != EXTERIA_OK) break;
+            out->colors[out->color_count++] = (uint32_t)value & 0xFFFFFFu;
+        }
+        if (exteria_tl_get_i32(settings, "rotation", &value) == EXTERIA_OK) out->rotation = value;
+        if (exteria_tl_get_i32(settings, "intensity", &value) == EXTERIA_OK) out->intensity = value < 0 ? -value : value;
+        if (out->intensity > 100) out->intensity = 100;
+    }
+    if (exteria_tl_is(wallpaper, EXTERIA_TL_ID_wallPaper)) {
+        exteria_media_info info;
+        out->pattern = exteria_tl_has(wallpaper, "pattern") ? 1 : 0;
+        exteria_document_read(exteria_tl_get(wallpaper, "document"), &info);
+        if (info.ref.source != EXTERIA_MEDIA_SOURCE_NONE && info.size > 0) {
+            out->has_file = 1;
+            out->file = info.ref;
+            out->file_size = info.size;
+        }
+    }
+    /* nothing to paint: no colors and no file */
+    if (!out->color_count && !out->has_file) memset(out, 0, sizeof(*out));
+}
+
 exteria_status exteria_full_channel_parse(const exteria_tl_value *answer, int64_t channel_id, int32_t now, exteria_full_channel *out) {
     const exteria_tl_value *full, *chats, *entity, *invite, *notify;
     int64_t linked = 0;
@@ -265,6 +299,7 @@ exteria_status exteria_full_channel_parse(const exteria_tl_value *answer, int64_
             out->send_as_id = chosen.id;
         }
     }
+    exteria_chat_wallpaper_read(exteria_tl_get(full, "wallpaper"), &out->wallpaper);
     if (exteria_tl_get_i64(full, "linked_chat_id", &linked) == EXTERIA_OK && linked > 0 && find_channel(chats, linked)) {
         read_dialog(&out->linked, linked, chats);
         out->has_linked = out->linked.title[0] != 0;

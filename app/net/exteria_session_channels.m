@@ -36,6 +36,7 @@ NSString *const ExteriaDialogsChangedNotification = @"ExteriaDialogsChanged";
 @synthesize pinnedMessage = _pinnedMessage;
 @synthesize sendAsKind = _sendAsKind;
 @synthesize sendAsId = _sendAsId;
+@synthesize wallpaper = _wallpaper;
 
 - (id)initWithRow:(const exteria_full_channel *)row {
     self = [super init];
@@ -64,6 +65,7 @@ NSString *const ExteriaDialogsChangedNotification = @"ExteriaDialogsChanged";
     _pinnedMessage = row->pinned_message;
     _sendAsKind = row->send_as_kind;
     _sendAsId = row->send_as_id;
+    _wallpaper = row->wallpaper;
     return self;
 }
 

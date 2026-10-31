@@ -553,6 +553,34 @@ static void test_member(void) {
     CHECK_EQ_INT(exteria_channel_member_parse(NULL, &member), EXTERIA_E_MALFORMED);
 }
 
+static void test_wallpaper(void) {
+    exteria_chat_wallpaper w;
+    exteria_tl_value *paper = obj("wallPaperNoFile"), *settings = obj("wallPaperSettings");
+    set_i32(settings, "background_color", 0x112233);
+    set_i32(settings, "second_background_color", 0x445566);
+    set_i32(settings, "rotation", 45);
+    set_i32(settings, "intensity", -40);
+    set_flag(settings, "blur");
+    set(paper, "settings", settings);
+    exteria_chat_wallpaper_read(paper, &w);
+    CHECK_EQ_INT(w.present, 1);
+    CHECK_EQ_INT(w.color_count, 2);
+    CHECK_EQ_INT((int)w.colors[0], 0x112233);
+    CHECK_EQ_INT((int)w.colors[1], 0x445566);
+    CHECK_EQ_INT(w.rotation, 45);
+    /* the sign of a dark pattern is not strength */
+    CHECK_EQ_INT(w.intensity, 40);
+    CHECK_EQ_INT(w.blur, 1);
+    CHECK_EQ_INT(w.has_file, 0);
+    /* nothing to paint is no wallpaper, and a foreign object is none */
+    exteria_chat_wallpaper_read(obj("wallPaperNoFile"), &w);
+    CHECK_EQ_INT(w.present, 0);
+    exteria_chat_wallpaper_read(obj("boolTrue"), &w);
+    CHECK_EQ_INT(w.present, 0);
+    exteria_chat_wallpaper_read(NULL, &w);
+    CHECK_EQ_INT(w.present, 0);
+}
+
 int main(void) {
     CHECK(exteria_channel_already_left(3, "USER_NOT_PARTICIPANT"));
     CHECK(!exteria_channel_already_left(2, "USER_NOT_PARTICIPANT"));
@@ -574,6 +602,7 @@ int main(void) {
     test_settings_requests();
     test_member();
     test_by_id();
+    test_wallpaper();
     exteria_arena_free(&arena);
     return test_finish("test_channel");
 }
