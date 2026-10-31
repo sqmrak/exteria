@@ -413,6 +413,11 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
 }
 
 - (void)drawBody:(CGContextRef)context {
+    if (_item.bare) {
+        /* the emoji stands on the wallpaper; its time is on the plate over it */
+        [_item.textLayout drawAtPoint:_item.textOrigin];
+        return;
+    }
     ExteriaMessage *message = _item.message;
     BOOL outgoing = message.outgoing;
     BOOL classic = ExteriaThemeIsClassic();
@@ -1566,7 +1571,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _replyPreview.frame = CGRectOffset(item.replyFrame, bubble.origin.x, bubble.origin.y);
     [_replyPreview setNeedsDisplay];
     /* a classic bubble ends its run with a tail, which takes a few points beside it */
-    CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? CLASSIC_TAIL : 0;
+    CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.bare && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? CLASSIC_TAIL : 0;
     _body.tailWidth = tail;
     CGRect bodyFrame = bubble;
     if (item.kind != ExteriaChatItemBubble && !CGRectIsEmpty(item.commentsFrame)) {
@@ -1645,7 +1650,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     }
     if (item.kind == ExteriaChatItemPill) return;
     ExteriaMedia *content = item.message.media;
-    BOOL pictureOnly = item.content == ExteriaChatItemContentPicture && !item.textLayout;
+    BOOL pictureOnly = (item.content == ExteriaChatItemContentPicture && !item.textLayout) || item.bare;
     if (item.kind == ExteriaChatItemEmoji) {
         _picture.hidden = NO;
         _picture.contentMode = UIViewContentModeScaleAspectFit;

@@ -70,6 +70,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     NSString *_fileTitle;
     NSString *_fileDetail;
     BOOL _joinsPrevious;
+    BOOL _bare;
     BOOL _joinsNext;
     BOOL _read;
     /* the message as it was when the item was built; the message object can change under the item */
@@ -241,6 +242,8 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly) BOOL showsAvatar;
 @property (nonatomic, readonly, retain) ExteriaPerson *senderPerson;
 @property (nonatomic, assign) BOOL joinsPrevious;
+/* a message of one custom emoji and nothing else stands without a bubble, large, with its time on a plate over it, as a sticker does */
+@property (nonatomic, readonly) BOOL bare;
 @property (nonatomic, assign) BOOL joinsNext;
 /* the other side has read this message of ours */
 @property (nonatomic, assign) BOOL read;

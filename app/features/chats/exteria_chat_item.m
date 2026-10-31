@@ -98,6 +98,7 @@
 @synthesize commentsText = _commentsText;
 @synthesize commenterPeople = _commenterPeople;
 @synthesize showsShare = _showsShare;
+@synthesize bare = _bare;
 @synthesize albumMessages = _albumMessages;
 @synthesize albumFrames = _albumFrames;
 @synthesize pollQuestionLayout = _pollQuestionLayout;
@@ -982,7 +983,16 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     UIColor *linkColor = ExteriaColorBubbleLink(outgoing);
 
     [_textLayout release];
-    _textLayout = hasText ? [[ExteriaTextLayout layoutForText:bodyText entities:ownText ? _message.entities : nil font:ExteriaFontRegular((CGFloat)ExteriaChatTextSize())
+    /* a message of custom emoji alone shows them large, the fewer the larger, by the sizes of the official client */
+    CGFloat textSize = (CGFloat)ExteriaChatTextSize();
+    NSUInteger emojis = 0;
+    _bare = NO;
+    if (ownText && !picture && !file && !poll) {
+        emojis = ExteriaCustomEmojiOnlyCount(_message);
+        static const CGFloat sizes[] = {0, 82, 82, 55, 41, 34, 26, 23, 23, 23};
+        if (emojis >= 1 && emojis <= 9 && sizes[emojis] > textSize) textSize = sizes[emojis];
+    }
+    _textLayout = hasText ? [[ExteriaTextLayout layoutForText:bodyText entities:ownText ? _message.entities : nil font:ExteriaFontRegular(textSize)
                                                         color:textColor linkColor:linkColor width:MAX(40, textMax) maxLines:0 flush:0] retain] : nil;
     _textLayout.spoilersRevealed = _message.spoilersRevealed;
 
@@ -1147,6 +1157,19 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         _timeOrigin = CGPointMake(bubbleWidth - PICTURE_INSET - _timeSize.width - 5, bubbleHeight - commentsRoom - PICTURE_INSET - _timeSize.height - 5);
     } else {
         _timeOrigin = CGPointMake(bubbleWidth - PAD_X - metaWidth, bubbleHeight - commentsRoom - PAD_BOTTOM - META_HEIGHT + 1);
+    }
+    /* one custom emoji alone: no bubble, no sender line, reply, forward, chips or comments to carry */
+    if (emojis == 1 && hasText && !_forwardText.length && !_replyTitle.length && !(_senderName.length && !_joinsPrevious) && !_commentsText.length && !chipsInside &&
+        ![self shownReactions].count && !_message.markup && !_call) {
+        _bare = YES;
+        bubbleWidth = MAX(ceil(_textLayout.size.width), 40);
+        bubbleHeight = ceil(_textLayout.size.height);
+        _textOrigin = CGPointMake(0, 0);
+        x = outgoing ? width - SIDE_MARGIN - bubbleWidth : [self incomingLeft];
+        _bubbleFrame = CGRectMake(x, top, bubbleWidth, bubbleHeight);
+        _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
+        _timeOrigin = CGPointMake(bubbleWidth - _timeSize.width, bubbleHeight - _timeSize.height);
+        commentsRoom = 0;
     }
     _commentsFrame = _commentsText.length ? CGRectMake(0, bubbleHeight - COMMENTS_HEIGHT, bubbleWidth, COMMENTS_HEIGHT) : CGRectZero;
     _shareFrame = _showsShare ? CGRectMake(bubbleWidth + 6, bubbleHeight - SHARE_SIDE, SHARE_SIDE, SHARE_SIDE) : CGRectZero;
