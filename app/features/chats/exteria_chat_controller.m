@@ -384,6 +384,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _inputHiddenBeforeSelection;
     BOOL _pinnedList;
     NSInteger _pinnedCount;
+    /* every message the chat has pinned, the newest first: the bar shows the one that belongs to the part of the history on screen */
+    NSArray *_pinnedAll;
     UIImageView *_pinnedThumb;
     UIButton *_pinnedListButton;
     NSUInteger _pinnedThumbToken;
@@ -444,7 +446,12 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     _animatedFirst = _animatedLast = -2;
     _sharingPeriod = EXTERIA_SHARING_PERIOD_DEFAULT;
     _session = [session retain];
-    _dialog = [dialog retain];
+    long long account = [ExteriaSession accountIdInDirectory:session.directory];
+    if (!dialog.saved && dialog.peerKind == 1 && account > 0 && dialog.peerId == account)
+        _dialog = [[ExteriaDialog savedMessagesOfUserId:account] retain];
+    else
+        _dialog = [dialog retain];
+    dialog = _dialog;
     _avatars = [avatars retain];
     _media = [media retain];
     _stickers = [stickers retain];
@@ -510,6 +517,11 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_weak release];
     [_session stopWatchingForOwner:self];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    /* the delegate of a cell is not retained, and the table can outlive this controller (a pop that is still on screen), so a round
+       message that ends or a tap that lands after this point would reach whatever took the memory of the controller */
+    for (UITableViewCell *cell in _table.visibleCells) {
+        if ([cell isKindOfClass:[ExteriaMessageCell class]]) ((ExteriaMessageCell *)cell).delegate = nil;
+    }
     _table.delegate = nil;
     _table.dataSource = nil;
     _input.delegate = nil;
@@ -566,6 +578,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_callButton release];
     [_greeting release];
     [_premiumGate release];
+    [_pinnedAll release];
     [_pinnedThumb release];
     [_pinnedListButton release];
     [_retry release];
@@ -1486,8 +1499,34 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }
         chat->_pinnedCount = (NSInteger)messages.count;
         chat->_pinnedListButton.hidden = messages.count < 2;
+        NSArray *sorted = [messages sortedArrayUsingComparator:^NSComparisonResult(ExteriaMessage *a, ExteriaMessage *b) {
+            return a.messageId < b.messageId ? NSOrderedDescending : (a.messageId > b.messageId ? NSOrderedAscending : NSOrderedSame);
+        }];
+        [chat->_pinnedAll release];
+        chat->_pinnedAll = [sorted retain];
+        [chat refreshPinnedForVisible];
         [chat.view setNeedsLayout];
     }];
+}
+
+/* with several pins the bar names the one that belongs to what is on screen: the newest pin that is not newer than the top message shown, and once the person has gone up past the oldest
+   pin that pin; a chat with one pin keeps showing it */
+- (void)refreshPinnedForVisible {
+    if (_pinnedAll.count < 2 || _pinnedList || !_items.count) return;
+    NSArray *rows = [_table indexPathsForVisibleRows];
+    if (!rows.count) return;
+    int32_t top = 0;
+    for (NSIndexPath *path in rows) {
+        if ((NSUInteger)path.row >= _items.count) continue;
+        int32_t identifier = ((ExteriaChatItem *)[_items objectAtIndex:(NSUInteger)path.row]).message.messageId;
+        if (identifier > 0 && (!top || identifier < top)) top = identifier;
+    }
+    if (!top) return;
+    ExteriaMessage *chosen = [_pinnedAll lastObject];
+    for (ExteriaMessage *pin in _pinnedAll) {
+        if (pin.messageId <= top) { chosen = pin; break; }
+    }
+    if (chosen.messageId != _pinnedId) [self showPinnedMessage:chosen];
 }
 
 /* the small square of a pinned photo or video: the photo itself, or the preview of the video, a gif or a sticker */
@@ -1592,6 +1631,12 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     return newest;
 }
 
+- (int32_t)oldestLoadedId {
+    int32_t oldest = 0;
+    for (NSNumber *key in [_server allKeys]) if ([key intValue] > 0 && (!oldest || [key intValue] < oldest)) oldest = [key intValue];
+    return oldest;
+}
+
 - (void)scrollToTargetOrLoadMore {
     if (_scrollTarget <= 0) return;
     for (NSUInteger i = 0; i < _items.count; ++i) {
@@ -1607,7 +1652,10 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if ([_server objectForKey:[NSNumber numberWithInt:_scrollTarget]]) return;
     /* a message outside what is loaded is opened as the official clients do: the stretch of history around it is fetched and shown, instead of paging through
        everything between it and the newest message, which never got to an old message of a busy group */
-    BOOL outside = (_historyOldestId && _scrollTarget < _historyOldestId) || (_window && _scrollTarget > [self newestLoadedId]);
+    /* older than the oldest message held counts as outside whether or not the page that was last loaded said where the history begins: paging back through a long history for a message
+       from years ago stopped after a dozen pages short of it */
+    int32_t oldestHeld = [self oldestLoadedId];
+    BOOL outside = (_historyOldestId && _scrollTarget < _historyOldestId) || (oldestHeld && _scrollTarget < oldestHeld) || (_window && _scrollTarget > [self newestLoadedId]);
     if (outside && !_pinnedList && !_loadingOlder) {
         [self openWindowAround:_scrollTarget];
         return;
@@ -4036,6 +4084,7 @@ static void ExteriaRedrawTree(UIView *view) {
         exteria_scroll_begin(&_scroll, scrollView.contentOffset.y, CFAbsoluteTimeGetCurrent());
     [self loadOlderIfNeeded];
     [self loadNewerIfNeeded:distance];
+    [self refreshPinnedForVisible];
     [self prepareAhead:NO];
     [self refreshAnimationsIfRowsChanged];
     [self scheduleVisibleMentionsRead];
