@@ -165,6 +165,7 @@ $(APP)/$(APP_NAME): $(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME) $(EXTERIA_IOS_BUILD)/
 $(EXTERIA_IOS_BUILD)/app-signed.stamp: $(APP)/$(APP_NAME)
 	@test -x "$(EXTERIA_LDID)" || { echo "missing signer in EXTERIA_LDID" >&2; exit 1; }
 	"$(EXTERIA_LDID)" -S $(APP)/$(APP_NAME)
+	@sh scripts/keep_symbols.sh $(APP)/$(APP_NAME)
 	@touch $@
 
 inspect-app: app
