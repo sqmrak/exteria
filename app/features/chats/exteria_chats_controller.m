@@ -469,6 +469,10 @@ static CGFloat ExteriaChatsHeaderTop(void) {
             ExteriaChatCommand command = action == ExteriaChatPeekPin ? (current.pinned ? ExteriaChatCommandUnpin : ExteriaChatCommandPin)
                                                                         : (current.muted ? ExteriaChatCommandUnmute : ExteriaChatCommandMute);
             [controller runCommand:command onDialog:current cell:(ExteriaDialogCell *)[controller.table cellForRowAtIndexPath:currentPath]];
+        } else if (action == ExteriaChatPeekMarkRead) {
+            /* a chat that is only marked unread has nothing to read, and the mark is taken off instead */
+            [controller runCommand:current.unreadCount > 0 ? ExteriaChatCommandMarkRead : ExteriaChatCommandClearUnreadMark onDialog:current
+                              cell:(ExteriaDialogCell *)[controller.table cellForRowAtIndexPath:currentPath]];
         } else if (action == ExteriaChatPeekArchive) {
             [controller.session moveDialog:current toFolder:current.folderId ? 0 : 1 completion:^(NSString *error) {
                 ExteriaChatsController *again = weak.target;

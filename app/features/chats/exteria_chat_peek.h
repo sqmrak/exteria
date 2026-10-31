@@ -8,7 +8,8 @@ typedef enum {
     ExteriaChatPeekPin,
     ExteriaChatPeekMute,
     ExteriaChatPeekArchive,
-    ExteriaChatPeekSelect
+    ExteriaChatPeekSelect,
+    ExteriaChatPeekMarkRead
 } ExteriaChatPeekAction;
 
 void ExteriaShowChatPeek(UIView *host, CGRect source, ExteriaDialog *dialog, ExteriaSession *session,

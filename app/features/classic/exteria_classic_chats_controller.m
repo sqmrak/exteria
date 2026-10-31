@@ -986,6 +986,8 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
             ExteriaChatCommand command = action == ExteriaChatPeekPin ? (current.pinned ? ExteriaChatCommandUnpin : ExteriaChatCommandPin)
                                                                         : (current.muted ? ExteriaChatCommandUnmute : ExteriaChatCommandMute);
             [controller applyAction:command toDialogs:[NSArray arrayWithObject:current]];
+        } else if (action == ExteriaChatPeekMarkRead) {
+            [controller applyAction:current.unreadCount > 0 ? ExteriaChatCommandMarkRead : ExteriaChatCommandClearUnreadMark toDialogs:[NSArray arrayWithObject:current]];
         } else if (action == ExteriaChatPeekArchive) {
             [controller applyToDialogs:[NSArray arrayWithObject:current] perform:^(ExteriaDialog *item, void (^finished)(NSString *)) {
                 [controller->_session moveDialog:item toFolder:item.folderId ? 0 : 1 completion:finished];

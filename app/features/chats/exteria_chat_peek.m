@@ -105,12 +105,19 @@
     [self addSubview:_menu];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(dialog.pinned ? @"chats.unpin" : @"chats.pin", nil),
         NSLocalizedString(dialog.muted ? @"chats.unmute" : @"chats.mute", nil),
-        NSLocalizedString(dialog.folderId ? @"chats.unarchive.action" : @"chats.archive.action", nil), NSLocalizedString(@"peek.select", nil), nil];
-    ExteriaSymbol symbols[] = {ExteriaSymbolPin, dialog.muted ? ExteriaSymbolBell : ExteriaSymbolBellMuted, ExteriaSymbolArchive, ExteriaSymbolCheck};
+        NSLocalizedString(dialog.folderId ? @"chats.unarchive.action" : @"chats.archive.action", nil), NSLocalizedString(@"peek.select", nil),
+        NSLocalizedString(@"chats.swipe.read", nil), nil];
+    ExteriaSymbol symbols[] = {ExteriaSymbolPin, dialog.muted ? ExteriaSymbolBell : ExteriaSymbolBellMuted, ExteriaSymbolArchive, ExteriaSymbolCheck, ExteriaSymbolCheckDouble};
+    /* the read button sits above archive and shows only for a chat that has something to mark; the tag of a button is its action */
+    NSMutableArray *rows = [NSMutableArray arrayWithObjects:[NSNumber numberWithInt:0], [NSNumber numberWithInt:1], nil];
+    if (dialog.unread) [rows addObject:[NSNumber numberWithInt:4]];
+    [rows addObject:[NSNumber numberWithInt:2]];
+    if (canSelect) [rows addObject:[NSNumber numberWithInt:3]];
     NSMutableArray *buttons = [NSMutableArray array];
-    for (NSUInteger i = 0; i < (canSelect ? 4u : 3u); ++i) {
+    for (NSNumber *row in rows) {
+        NSUInteger i = (NSUInteger)row.intValue;
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-        button.tag = (NSInteger)i + 1;
+        button.tag = i == 4 ? ExteriaChatPeekMarkRead : (NSInteger)i + 1;
         button.accessibilityLabel = [titles objectAtIndex:i];
         [button addTarget:self action:@selector(picked:) forControlEvents:UIControlEventTouchUpInside];
         UIImageView *icon = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(symbols[i], 20, ExteriaColorAccent())] autorelease];
