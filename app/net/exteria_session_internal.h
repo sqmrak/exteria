@@ -23,6 +23,8 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
 
 /* a send request built for chat: sets who it is sent as when the person chose another identity there */
 exteria_status ExteriaApplySendAs(ExteriaSession *session, const exteria_peer_ref *chat, exteria_arena *arena, exteria_tl_value *request);
+/* the stars the person accepted to pay for every later message to the chat; zero takes the approval back */
+void ExteriaApprovePaidMessages(ExteriaSession *session, const exteria_peer_ref *chat, long long stars);
 
 /* what the session's own files and its chat code share; nothing here is for screens */
 @interface ExteriaSession (Internal)

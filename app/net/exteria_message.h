@@ -33,6 +33,8 @@
 @property (nonatomic, readonly) int32_t ttlSeconds;
 /* the server removes it once the other side has opened it; the file is gone from the message afterwards */
 @property (nonatomic, readonly) BOOL viewOnce;
+/* the price in stars of paid media, zero for ordinary media; the media is locked while its kind is EXTERIA_PREVIEW_PAID */
+@property (nonatomic, readonly) long long paidStars;
 @property (nonatomic, readonly) int32_t width;
 @property (nonatomic, readonly) int32_t height;
 @property (nonatomic, readonly) int32_t duration;

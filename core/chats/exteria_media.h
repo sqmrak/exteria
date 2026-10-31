@@ -41,6 +41,7 @@ typedef struct exteria_media_info {
     char alt[EXTERIA_MEDIA_ALT_MAX];    /* the emoji a sticker stands for */
     int64_t sticker_set_id;         /* the set a sticker belongs to, zero when the document names none by id */
     int64_t sticker_set_hash;
+    int64_t paid_stars;             /* the price in stars of paid media, locked or already bought; zero for ordinary media */
     uint8_t spoiler;                /* a photo or a video the sender asked to show blurred until it is tapped */
     int32_t ttl_seconds;            /* zero for ordinary media; EXTERIA_VIEW_ONCE_TTL for media that is gone after one view, and any other positive value is a timed one */
     char mime[EXTERIA_MEDIA_MIME_MAX];

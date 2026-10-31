@@ -5,5 +5,5 @@
 
 @interface ExteriaInviteSheet : UIView
 + (void)showInView:(UIView *)host title:(NSString *)title subtitle:(NSString *)subtitle about:(NSString *)about
-             photo:(ExteriaRemoteFile *)photo media:(ExteriaMediaCache *)media requestNeeded:(BOOL)requestNeeded join:(void (^)(void))join;
+             photo:(ExteriaRemoteFile *)photo media:(ExteriaMediaCache *)media requestNeeded:(BOOL)requestNeeded joinTitle:(NSString *)joinTitle join:(void (^)(void))join;
 @end

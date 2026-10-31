@@ -3,6 +3,8 @@
 #import "exteria_rpc.h"
 #import "exteria_star_gift.h"
 
+#include "exteria_bots.h"
+
 /* the server sends the text of a gift note as is, so the limit is the core's */
 @implementation ExteriaSession (Gifts)
 
@@ -118,6 +120,10 @@ static exteria_status ExteriaBuildInvoice(exteria_arena *arena, ExteriaPaymentQu
         return exteria_gift_invoice_upgrade(arena, quote->messageId, quote->keepDetails, invoice);
     case ExteriaPaymentGiftTransfer:
         return exteria_gift_invoice_transfer(arena, quote->messageId, &quote->peer, invoice);
+    case ExteriaPaymentPaidMedia:
+        return exteria_paid_media_invoice(arena, &quote->peer, quote->messageId, invoice);
+    case ExteriaPaymentInviteSubscription:
+        return exteria_invite_subscription_invoice(arena, quote->note.UTF8String, invoice);
     }
     return EXTERIA_E_ARG;
 }
@@ -178,6 +184,21 @@ static exteria_status ExteriaBuildInvoice(exteria_arena *arena, ExteriaPaymentQu
     ExteriaPaymentQuote *quote = [[[ExteriaPaymentQuote alloc] init] autorelease];
     quote->kind = ExteriaPaymentGiftTransfer;
     quote->messageId = gift.messageId;
+    quote->peer = ExteriaPeerRefOfDialog(dialog);
+    [self askForm:quote completion:completion];
+}
+
+- (void)quoteSubscribingInviteHash:(NSString *)hash completion:(void (^)(ExteriaPaymentQuote *, NSString *))completion {
+    ExteriaPaymentQuote *quote = [[[ExteriaPaymentQuote alloc] init] autorelease];
+    quote->kind = ExteriaPaymentInviteSubscription;
+    quote->note = [hash copy];
+    [self askForm:quote completion:completion];
+}
+
+- (void)quoteUnlockingMediaOfMessageId:(int32_t)messageId inDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaPaymentQuote *, NSString *))completion {
+    ExteriaPaymentQuote *quote = [[[ExteriaPaymentQuote alloc] init] autorelease];
+    quote->kind = ExteriaPaymentPaidMedia;
+    quote->messageId = messageId;
     quote->peer = ExteriaPeerRefOfDialog(dialog);
     [self askForm:quote completion:completion];
 }

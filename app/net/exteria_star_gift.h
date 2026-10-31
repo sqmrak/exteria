@@ -114,7 +114,9 @@
 typedef enum {
     ExteriaPaymentGiftSend,
     ExteriaPaymentGiftUpgrade,
-    ExteriaPaymentGiftTransfer
+    ExteriaPaymentGiftTransfer,
+    ExteriaPaymentPaidMedia,
+    ExteriaPaymentInviteSubscription
 } ExteriaPaymentKind;
 
 /* what the server asked for a gift action: the form is valid for a short while, so pay it soon after quoting */
@@ -155,6 +157,11 @@ typedef void (^ExteriaSavedGiftsCompletion)(NSArray *gifts, NSInteger total, NSS
                 completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;
 - (void)quoteTransferringGift:(ExteriaSavedGift *)gift toDialog:(ExteriaDialog *)dialog
                    completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;
+/* asks the server what the subscription of a paid invite link costs; the hash travels in the note of the quote */
+- (void)quoteSubscribingInviteHash:(NSString *)hash completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;
+/* asks the server what unlocking the paid media of one message costs */
+- (void)quoteUnlockingMediaOfMessageId:(int32_t)messageId inDialog:(ExteriaDialog *)dialog
+                            completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;
 /* pays a quote in stars; the balance is checked first */
 - (void)payQuote:(ExteriaPaymentQuote *)quote completion:(void (^)(NSString *errorName))completion;
 

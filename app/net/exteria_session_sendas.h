@@ -21,6 +21,9 @@
 /* who the account writes as in groups and channels that let it choose */
 @interface ExteriaSession (SendAs)
 
+/* the person accepted the price of a paid chat: later messages to it carry the amount, and 0 takes the approval back */
+- (void)approvePaidMessages:(long long)stars ofDialog:(ExteriaDialog *)dialog;
+
 /* the identities for a chat, the account itself first; a chat that offers no choice answers one option or none */
 - (void)loadSendAsOptionsOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSArray *options, NSString *errorName))completion;
 /* the identity messages to the chat are sent as: nil for the account itself */

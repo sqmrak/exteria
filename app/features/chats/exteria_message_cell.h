@@ -41,6 +41,8 @@
 @required
 /* the photo, video or animation of a message was tapped */
 - (void)messageCellDidTapMedia:(ExteriaMessageCell *)cell;
+/* a tap on a message whose paid media is still locked */
+- (void)messageCellDidTapPaid:(ExteriaMessageCell *)cell;
 /* a button under a bot's message was pressed */
 - (void)messageCell:(ExteriaMessageCell *)cell didPressButton:(ExteriaMarkupButton *)button;
 /* a swipe to the left over the message answers it: asked before the swipe may start, and told when it went far enough */

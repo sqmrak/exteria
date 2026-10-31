@@ -232,6 +232,10 @@ exteria_status exteria_invite_import_request(exteria_arena *arena, const char *h
     return invite_request(arena, "messages.importChatInvite", hash, out);
 }
 
+exteria_status exteria_invite_subscription_invoice(exteria_arena *arena, const char *hash, exteria_tl_value **out) {
+    return invite_request(arena, "inputInvoiceChatInviteSubscription", hash, out);
+}
+
 /* a row for one chat object; the row reader looks the chat up by id in a list, so the chat is put in a list of one */
 static exteria_status chat_row(const exteria_tl_value *chat, int64_t self_id, exteria_dialog_row *row) {
     exteria_tl_value *items[1];
@@ -276,6 +280,17 @@ exteria_status exteria_invite_parse(const exteria_tl_value *answer, int64_t self
     out->broadcast = exteria_tl_has(answer, "broadcast") ? 1 : 0;
     out->request_needed = exteria_tl_has(answer, "request_needed") ? 1 : 0;
     out->verified = exteria_tl_has(answer, "verified") ? 1 : 0;
+    if (exteria_tl_has(answer, "subscription_pricing")) {
+        const exteria_tl_value *pricing = exteria_tl_get(answer, "subscription_pricing");
+        int64_t stars = 0;
+        int32_t period = 0;
+        /* a price that is not positive is no price, so the chat is offered as free and the server decides */
+        if (exteria_tl_is(pricing, EXTERIA_TL_ID_starsSubscriptionPricing) && exteria_tl_get_i64(pricing, "amount", &stars) == EXTERIA_OK && stars > 0 &&
+            exteria_tl_get_i32(pricing, "period", &period) == EXTERIA_OK && period > 0) {
+            out->subscription_stars = stars;
+            out->subscription_period = period;
+        }
+    }
     return EXTERIA_OK;
 }
 
@@ -350,7 +365,7 @@ exteria_status exteria_start_bot_request(exteria_arena *arena, const exteria_pee
     exteria_tl_value *request, *user, *input;
     exteria_status status;
     if (out) *out = NULL;
-    if (!arena || !out || !peer || random_id == 0 || !param || (param[0] && !word_valid(param, 1, EXTERIA_START_PARAM_MAX, 1))) return EXTERIA_E_ARG;
+    if (!arena || !out || !peer || random_id == 0 || !param || !word_valid(param, 1, EXTERIA_START_PARAM_MAX, 1)) return EXTERIA_E_ARG;
     status = input_user(arena, bot, &user);
     if (status == EXTERIA_OK) status = exteria_input_peer(arena, peer, &input);
     if (status != EXTERIA_OK) return status;

@@ -2709,6 +2709,11 @@ static void ExteriaSwipeTick(void) {
     }
     [_tappedMedia release];
     _tappedMedia = nil;
+    if (!_selecting && _item.message.media.kind == EXTERIA_PREVIEW_PAID && _item.message.messageId > 0 &&
+        [_delegate respondsToSelector:@selector(messageCellDidTapPaid:)]) {
+        [_delegate messageCellDidTapPaid:self];
+        return;
+    }
     if (!_selecting && _item.message.media.kind == EXTERIA_PREVIEW_LOCATION && _item.message.media.location.valid &&
         CGRectContainsPoint(_map.frame,[tap locationInView:self.contentView])) {
         [_delegate messageCellDidTapMedia:self];

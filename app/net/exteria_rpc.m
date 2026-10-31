@@ -8,6 +8,8 @@ NSString *ExteriaRpcErrorName(const exteria_mt_rpc_result *result) {
     if (result->status == EXTERIA_E_TIMEOUT) return @"TIMEOUT";
     if (result->status != EXTERIA_E_RPC || !result->error_text) return @"INTERNAL";
     exteria_mt_rpc_error_split(result->error_text, name, sizeof(name), &number);
+    /* the price of a paid message is the number in the name, and the caller needs it to ask the person */
+    if (!strcmp(name, "ALLOW_PAYMENT_REQUIRED") && number > 0) return [NSString stringWithFormat:@"%s_%d", name, (int)number];
     return [NSString stringWithUTF8String:name];
 }
 

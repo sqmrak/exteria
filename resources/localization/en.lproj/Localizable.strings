@@ -2184,6 +2184,15 @@
 "profile.choosephoto" = "Choose photo";
 "attach.pick.profile" = "Choose a photo or a video";
 "profile.video.unsupported" = "A video cannot be a profile picture yet.";
+"preview.paid" = "Paid media";
+"chat.paid.unlock" = "Unlock for %lld stars";
+"chat.paid.confirm" = "Unlock for %lld stars?";
+"chat.paid.confirm.button" = "Unlock";
+"chat.paidmessage.confirm" = "Each message to this chat costs %lld stars. Send it?";
+"chat.paidmessage.button" = "Pay and send";
+"invite.subscribe" = "Subscribe for %lld stars / month";
+"invite.subscribe.confirm" = "Subscribe to this channel for %lld stars a month?";
+"invite.subscribe.button" = "Subscribe";
 "theme.pick.title" = "Choose a theme";
 "theme.pick.search" = "Search themes";
 "language.custom.header" = "Custom languages";

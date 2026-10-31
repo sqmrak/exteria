@@ -361,6 +361,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     ExteriaGreetingView *_greeting;
     ExteriaPremiumGateView *_premiumGate;
     BOOL _greetingAsked;
+    BOOL _paidBusy;
     BOOL _joinPending;
     BOOL _membershipAsked;
     BOOL _joining;

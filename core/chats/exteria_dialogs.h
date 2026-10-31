@@ -37,7 +37,8 @@ typedef enum exteria_preview_kind {
     EXTERIA_PREVIEW_CONTACT,
     EXTERIA_PREVIEW_POLL,
     EXTERIA_PREVIEW_SERVICE,
-    EXTERIA_PREVIEW_OTHER
+    EXTERIA_PREVIEW_OTHER,
+    EXTERIA_PREVIEW_PAID    /* paid media that is still locked: only the size is known, the file comes with the payment */
 } exteria_preview_kind;
 
 /* one chat list row; text is UTF-8 cut at a character boundary with line breaks turned into spaces */

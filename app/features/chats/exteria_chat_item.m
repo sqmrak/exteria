@@ -557,6 +557,11 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     case EXTERIA_PREVIEW_STICKER:
         if (!sticker) { item->_content = ExteriaChatItemContentFile; item->_fileTitle = [NSLocalizedString(@"preview.sticker", nil) copy]; }
         break;
+    case EXTERIA_PREVIEW_PAID:
+        item->_content = ExteriaChatItemContentFile;
+        item->_fileTitle = [NSLocalizedString(@"preview.paid", nil) copy];
+        item->_fileDetail = [[NSString stringWithFormat:NSLocalizedString(@"chat.paid.unlock", nil), media.paidStars] copy];
+        break;
     case EXTERIA_PREVIEW_OTHER:
         item->_content = ExteriaChatItemContentFile;
         item->_fileTitle = [NSLocalizedString(@"chat.unsupported", nil) copy];

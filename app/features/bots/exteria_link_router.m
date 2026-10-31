@@ -381,7 +381,7 @@ static NSString *ExteriaCloudThemePath(void) {
 - (void)openInviteOfHash:(NSString *)hash {
     NSUInteger token = [self beginBusy];
     [self retain];
-    [_session checkInviteHash:hash completion:^(ExteriaDialog *member, NSString *title, NSString *about, ExteriaRemoteFile *photo, NSInteger participants, BOOL broadcast, BOOL requestNeeded, NSString *errorName) {
+    [_session checkInviteHash:hash completion:^(ExteriaDialog *member, NSString *title, NSString *about, ExteriaRemoteFile *photo, NSInteger participants, BOOL broadcast, BOOL requestNeeded, long long subscriptionStars, NSString *errorName) {
         [self endBusy:token];
         if (errorName) {
             [self showNote:[ExteriaLinkRouter textForError:errorName]];
@@ -395,10 +395,56 @@ static NSString *ExteriaCloudThemePath(void) {
         }
         NSString *kind = NSLocalizedString(broadcast ? @"invite.channel" : @"invite.group", nil);
         NSString *subtitle = [NSString stringWithFormat:NSLocalizedString(@"invite.members", nil), kind, (long)participants];
-        [ExteriaInviteSheet showInView:ExteriaOverlayHost() title:title subtitle:subtitle about:about photo:photo media:_media requestNeeded:requestNeeded join:^{
-            [self joinInviteOfHash:hash];
+        [ExteriaInviteSheet showInView:ExteriaOverlayHost() title:title subtitle:subtitle about:about photo:photo media:_media requestNeeded:requestNeeded
+                                joinTitle:subscriptionStars > 0 ? [NSString stringWithFormat:NSLocalizedString(@"invite.subscribe", nil), subscriptionStars] : nil
+                                     join:^{
+            if (subscriptionStars > 0) [self subscribeInviteOfHash:hash];
+            else [self joinInviteOfHash:hash];
         }];
         [self autorelease];
+    }];
+}
+
+/* a paid channel: the server quotes the price, the person agrees, the stars go, and the invite is read again, which now names the chat the account is in */
+- (void)subscribeInviteOfHash:(NSString *)hash {
+    NSUInteger token = [self beginBusy];
+    [self retain];
+    [_session quoteSubscribingInviteHash:hash completion:^(ExteriaPaymentQuote *quote, NSString *errorName) {
+        [self endBusy:token];
+        if (!quote) {
+            [self showNote:[ExteriaLinkRouter textForError:errorName]];
+            [self autorelease];
+            return;
+        }
+        ExteriaShowAlert(nil, [NSString stringWithFormat:NSLocalizedString(@"invite.subscribe.confirm", nil), quote.stars],
+                         [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"invite.subscribe.button", nil), nil], 0, NO,
+                         ^(NSInteger index, NSString *text) {
+            (void)text;
+            if (index != 1) {
+                [self autorelease];
+                return;
+            }
+            NSUInteger payToken = [self beginBusy];
+            [_session payQuote:quote completion:^(NSString *payError) {
+                if (payError) {
+                    [self endBusy:payToken];
+                    [self showNote:[ExteriaLinkRouter textForError:payError]];
+                    [self autorelease];
+                    return;
+                }
+                [_session checkInviteHash:hash completion:^(ExteriaDialog *member, NSString *title, NSString *about, ExteriaRemoteFile *photo, NSInteger participants,
+                                                            BOOL broadcast, BOOL requestNeeded, long long stars, NSString *checkError) {
+                    [self endBusy:payToken];
+                    [self autorelease];
+                    if (!member) {
+                        NSLog(@"exteria: the subscription was paid but the chat did not open: %@", checkError ? checkError : @"not a member yet");
+                        [self showNote:[ExteriaLinkRouter textForError:checkError ? checkError : @"INTERNAL"]];
+                        return;
+                    }
+                    [self openDialog:member person:nil draft:nil startParam:nil messageId:0];
+                }];
+            }];
+        });
     }];
 }
 

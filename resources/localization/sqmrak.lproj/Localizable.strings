@@ -2190,6 +2190,15 @@
 "profile.choosephoto" = "выбрать фото";
 "attach.pick.profile" = "выберите фотографию или видео";
 "profile.video.unsupported" = "видео пока нельзя поставить на аватарку.";
+"preview.paid" = "платное медиа";
+"chat.paid.unlock" = "раскрыть за %lld ⭐";
+"chat.paid.confirm" = "раскрыть за %lld ⭐?";
+"chat.paid.confirm.button" = "Раскрыть";
+"chat.paidmessage.confirm" = "каждое сообщение в этот чат стоит %lld ⭐. отправить?";
+"chat.paidmessage.button" = "оплатить и отправить";
+"invite.subscribe" = "подписаться за %lld ⭐ в месяц";
+"invite.subscribe.confirm" = "подписаться на канал за %lld ⭐ в месяц?";
+"invite.subscribe.button" = "подписаться";
 "theme.pick.title" = "выберите тему";
 "theme.pick.search" = "поиск тем";
 "language.custom.header" = "свои языки";

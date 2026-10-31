@@ -291,6 +291,21 @@ void exteria_media_classify_sized(const exteria_tl_value *media, int32_t photo_t
         exteria_geo_read(exteria_tl_get(media, "geo"), exteria_tl_is(media, EXTERIA_TL_ID_messageMediaVenue) ? media : NULL, &out->location);
         out->width = 320;
         out->height = 180;
+    } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaPaidMedia)) {
+        /* only the first item is shown: a bought one is read as the media it is, a locked one keeps its size and waits for the payment */
+        const exteria_tl_value *items = exteria_tl_get(media, "extended_media"), *first;
+        int64_t stars = 0;
+        out->kind = EXTERIA_PREVIEW_PAID;
+        if (exteria_tl_get_i64(media, "stars_amount", &stars) != EXTERIA_OK || stars <= 0) stars = 0;
+        first = is_vec(items) && items->u.vec.count ? items->u.vec.items[0] : NULL;
+        if (first && exteria_tl_is(first, EXTERIA_TL_ID_messageExtendedMedia)) {
+            exteria_media_classify_sized(exteria_tl_get(first, "media"), photo_target, out);
+        } else if (first && exteria_tl_is(first, EXTERIA_TL_ID_messageExtendedMediaPreview)) {
+            exteria_tl_get_i32(first, "w", &out->width);
+            exteria_tl_get_i32(first, "h", &out->height);
+            if (exteria_tl_has(first, "video_duration")) exteria_tl_get_i32(first, "video_duration", &out->duration);
+        }
+        out->paid_stars = stars;
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaContact)) {
         out->kind = EXTERIA_PREVIEW_CONTACT;
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaPoll)) {

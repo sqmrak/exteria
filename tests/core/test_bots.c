@@ -155,6 +155,23 @@ static void test_invite(void) {
     CHECK(!strcmp(invite.title, "Secret club"));
     CHECK(!strcmp(invite.about, "line one\nline two"));
     CHECK_EQ_INT(invite.photo.source, EXTERIA_MEDIA_SOURCE_NONE);
+    CHECK_EQ_INT(invite.subscription_stars, 0);
+    {
+        exteria_tl_value *pricing = obj("starsSubscriptionPricing"), *invoice = NULL;
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, pricing, "period", 2592000), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, pricing, "amount", 50), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set(answer, "subscription_pricing", pricing), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_invite_parse(answer, 1, &invite), EXTERIA_OK);
+        CHECK_EQ_INT(invite.subscription_stars, 50);
+        CHECK_EQ_INT(invite.subscription_period, 2592000);
+        /* a price of zero is no subscription */
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, pricing, "amount", 0), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_invite_parse(answer, 1, &invite), EXTERIA_OK);
+        CHECK_EQ_INT(invite.subscription_stars, 0);
+        CHECK_EQ_INT(exteria_invite_subscription_invoice(&arena, "abc_DEF-1", &invoice), EXTERIA_OK);
+        CHECK(exteria_tl_is(invoice, EXTERIA_TL_ID_inputInvoiceChatInviteSubscription));
+        CHECK_EQ_INT(exteria_invite_subscription_invoice(&arena, "a b", &invoice), EXTERIA_E_ARG);
+    }
     {
         exteria_tl_value *photo = obj("photo"), *small = obj("photoSize"), *large = obj("photoSize");
         exteria_tl_value *sizes[2] = {small, large};
@@ -279,7 +296,9 @@ static void test_bot_info(void) {
 static void test_start(void) {
     exteria_tl_value *request = NULL;
     exteria_peer_ref no_hash = {1, 77, 0, 0, 0};
-    CHECK_EQ_INT(exteria_start_bot_request(&arena, &bot, &chat, 5, "", &request), EXTERIA_OK);
+    /* the server answers START_PARAM_EMPTY to an empty parameter, so none is built: a start without one is the text "/start" */
+    CHECK_EQ_INT(exteria_start_bot_request(&arena, &bot, &chat, 5, "", &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_start_bot_request(&arena, &bot, &chat, 5, "go", &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_messages_startBot);
     CHECK_EQ_INT(exteria_start_bot_request(&arena, &bot, &group, 5, "ref_1-a", &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_messages_startBot);

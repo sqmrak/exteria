@@ -4,17 +4,47 @@
 #import "exteria_session_internal.h"
 
 #include "exteria_send_as.h"
+#include "exteria_tl_ids.h"
 
 /* a chat is told apart by its kind and id; the topic of a forum does not change who writes */
 static NSString *ExteriaSendAsKey(const exteria_peer_ref *chat) {
     return [NSString stringWithFormat:@"%d:%lld", (int)chat->kind, (long long)chat->id];
 }
 
+/* the stars the person agreed to pay for each message to a chat that charges for them; the server refuses a message without the amount (ALLOW_PAYMENT_REQUIRED_n) and
+   takes a smaller one than its price just as badly, so the amount it named is what is sent. the sends run on a worker, hence the lock */
+static NSMutableDictionary *sPaidApprovals;
+
+static NSString *ExteriaPaidKey(ExteriaSession *session, const exteria_peer_ref *chat) {
+    return [NSString stringWithFormat:@"%p:%d:%lld", session, (int)chat->kind, (long long)chat->id];
+}
+
+void ExteriaApprovePaidMessages(ExteriaSession *session, const exteria_peer_ref *chat, long long stars) {
+    @synchronized([ExteriaSession class]) {
+        if (!sPaidApprovals) sPaidApprovals = [[NSMutableDictionary alloc] init];
+        if (stars > 0) [sPaidApprovals setObject:[NSNumber numberWithLongLong:stars] forKey:ExteriaPaidKey(session, chat)];
+        else [sPaidApprovals removeObjectForKey:ExteriaPaidKey(session, chat)];
+    }
+}
+
+static long long ExteriaApprovedPaidStars(ExteriaSession *session, const exteria_peer_ref *chat) {
+    @synchronized([ExteriaSession class]) {
+        return [[sPaidApprovals objectForKey:ExteriaPaidKey(session, chat)] longLongValue];
+    }
+}
+
 exteria_status ExteriaApplySendAs(ExteriaSession *session, const exteria_peer_ref *chat, exteria_arena *arena, exteria_tl_value *request) {
     ExteriaDialog *identity = [session storedSendAsForChat:chat];
-    if (!identity) return EXTERIA_OK;
-    exteria_peer_ref who = ExteriaPeerRefOfDialog(identity);
-    return exteria_set_send_as(arena, request, &who);
+    if (identity) {
+        exteria_peer_ref who = ExteriaPeerRefOfDialog(identity);
+        exteria_status status = exteria_set_send_as(arena, request, &who);
+        if (status != EXTERIA_OK) return status;
+    }
+    long long paid = ExteriaApprovedPaidStars(session, chat);
+    if (paid > 0 && (exteria_tl_is(request, EXTERIA_TL_ID_messages_sendMessage) || exteria_tl_is(request, EXTERIA_TL_ID_messages_sendMedia) ||
+                     exteria_tl_is(request, EXTERIA_TL_ID_messages_sendMultiMedia) || exteria_tl_is(request, EXTERIA_TL_ID_messages_forwardMessages)))
+        return exteria_tl_set_i64(arena, request, "allow_paid_stars", paid);
+    return EXTERIA_OK;
 }
 
 @implementation ExteriaSendAsOption
@@ -38,6 +68,11 @@ exteria_status ExteriaApplySendAs(ExteriaSession *session, const exteria_peer_re
 @end
 
 @implementation ExteriaSession (SendAs)
+
+- (void)approvePaidMessages:(long long)stars ofDialog:(ExteriaDialog *)dialog {
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    ExteriaApprovePaidMessages(self, &peer, stars);
+}
 
 - (void)loadSendAsOptionsOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSArray *, NSString *))completion {
     void (^done)(NSArray *, NSString *) = [completion copy];

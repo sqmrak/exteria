@@ -104,6 +104,8 @@ exteria_status exteria_gift_invoice_send(exteria_arena *arena, const exteria_pee
                                          int hide_name, int include_upgrade, exteria_tl_value **out);
 exteria_status exteria_gift_invoice_upgrade(exteria_arena *arena, int32_t msg_id, int keep_details, exteria_tl_value **out);
 exteria_status exteria_gift_invoice_transfer(exteria_arena *arena, int32_t msg_id, const exteria_peer_ref *to, exteria_tl_value **out);
+/* the invoice that unlocks the paid media of one message */
+exteria_status exteria_paid_media_invoice(exteria_arena *arena, const exteria_peer_ref *peer, int32_t msg_id, exteria_tl_value **out);
 /* payments.getPaymentForm and payments.sendStarsForm for an invoice made above */
 exteria_status exteria_payment_form_request(exteria_arena *arena, exteria_tl_value *invoice, exteria_tl_value **out);
 exteria_status exteria_payment_send_request(exteria_arena *arena, int64_t form_id, exteria_tl_value *invoice, exteria_tl_value **out);

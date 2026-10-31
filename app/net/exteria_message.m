@@ -52,6 +52,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
 - (BOOL)spoiler { return _info.spoiler != 0; }
 - (int32_t)ttlSeconds { return _info.ttl_seconds; }
 - (BOOL)viewOnce { return _info.ttl_seconds > 0; }
+- (long long)paidStars { return _info.paid_stars; }
 - (int32_t)width { return _info.width; }
 - (int32_t)height { return _info.height; }
 - (int32_t)duration { return _info.duration; }

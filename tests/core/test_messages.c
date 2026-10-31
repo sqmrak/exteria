@@ -69,6 +69,37 @@ static exteria_tl_value *vec_of(exteria_tl_value **items, uint32_t n) {
     return v;
 }
 
+static void test_paid_media(void) {
+    exteria_media_info info;
+    exteria_tl_value *media = obj("messageMediaPaidMedia"), *preview = obj("messageExtendedMediaPreview"), *items[1];
+    CHECK_EQ_INT(exteria_tl_set_i64(&arena, media, "stars_amount", 25), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, preview, "w", 640), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, preview, "h", 480), EXTERIA_OK);
+    items[0] = preview;
+    set(media, "extended_media", vec_of(items, 1));
+    /* a locked item keeps its price and size and has no file */
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_PAID);
+    CHECK_EQ_INT(info.paid_stars, 25);
+    CHECK_EQ_INT(info.width, 640);
+    CHECK_EQ_INT(info.height, 480);
+    CHECK_EQ_INT(info.ref.source, EXTERIA_MEDIA_SOURCE_NONE);
+    /* a price that is not positive is no price */
+    CHECK_EQ_INT(exteria_tl_set_i64(&arena, media, "stars_amount", -3), EXTERIA_OK);
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.paid_stars, 0);
+    /* a bought item is read as the media it is */
+    {
+        exteria_tl_value *bought = obj("messageExtendedMedia"), *inner = obj("messageMediaContact");
+        set(bought, "media", inner);
+        items[0] = bought;
+        set(media, "extended_media", vec_of(items, 1));
+        exteria_media_classify(media, &info);
+        CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_CONTACT);
+    }
+}
+
+
 static exteria_tl_value *peer_user(int64_t id) {
     exteria_tl_value *p = obj("peerUser");
     set_i64(p, "user_id", id);
@@ -1909,6 +1940,7 @@ static void test_uploaded_media_reply(void) {
 
 int main(void) {
     exteria_arena_init(&arena, 1u << 20);
+    test_paid_media();
     test_history_page_cursor();
     test_text_message();
     test_edit_hide();

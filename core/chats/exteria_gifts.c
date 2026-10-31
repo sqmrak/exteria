@@ -433,6 +433,22 @@ exteria_status exteria_gift_invoice_transfer(exteria_arena *arena, int32_t msg_i
     return status;
 }
 
+exteria_status exteria_paid_media_invoice(exteria_arena *arena, const exteria_peer_ref *peer, int32_t msg_id, exteria_tl_value **out) {
+    exteria_tl_value *invoice, *target;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!arena || !peer || msg_id <= 0) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &target);
+    if (status != EXTERIA_OK) return status;
+    invoice = exteria_tl_new_obj(arena, "inputInvoiceMessage");
+    if (!invoice) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(invoice, "peer", target);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, invoice, "msg_id", msg_id);
+    if (status == EXTERIA_OK) *out = invoice;
+    return status;
+}
+
 exteria_status exteria_payment_form_request(exteria_arena *arena, exteria_tl_value *invoice, exteria_tl_value **out) {
     exteria_tl_value *request;
     exteria_status status;

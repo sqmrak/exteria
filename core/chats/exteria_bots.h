@@ -43,11 +43,15 @@ typedef struct exteria_invite {
     uint8_t broadcast;              /* a channel, not a group */
     uint8_t request_needed;         /* joining sends a request that an admin approves */
     uint8_t verified;
+    int64_t subscription_stars;     /* a paid channel: the stars each period costs, zero for a free chat */
+    int32_t subscription_period;    /* the length of that period in seconds */
 } exteria_invite;
 
 /* messages.checkChatInvite and messages.importChatInvite; a hash outside A-Z a-z 0-9 _ - or longer than 128 is EXTERIA_E_ARG */
 exteria_status exteria_invite_check_request(exteria_arena *arena, const char *hash, exteria_tl_value **out);
 exteria_status exteria_invite_import_request(exteria_arena *arena, const char *hash, exteria_tl_value **out);
+/* the invoice that pays the subscription a paid invite asks for; the hash is checked as for the requests above */
+exteria_status exteria_invite_subscription_invoice(exteria_arena *arena, const char *hash, exteria_tl_value **out);
 /* the ChatInvite answer */
 exteria_status exteria_invite_parse(const exteria_tl_value *answer, int64_t self_id, exteria_invite *out);
 /* the answer of the import: the chat the account joined, from the chats of the updates; a bot check that needs a web view is

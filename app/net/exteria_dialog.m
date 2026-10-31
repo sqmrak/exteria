@@ -87,6 +87,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     case EXTERIA_PREVIEW_CONTACT: return NSLocalizedString(@"preview.contact", nil);
     case EXTERIA_PREVIEW_POLL: return NSLocalizedString(@"preview.poll", nil);
     case EXTERIA_PREVIEW_SERVICE: return NSLocalizedString(@"preview.service", nil);
+    case EXTERIA_PREVIEW_PAID: return NSLocalizedString(@"preview.paid", nil);
     case EXTERIA_PREVIEW_OTHER: break;
     }
     return NSLocalizedString(@"preview.message", nil);

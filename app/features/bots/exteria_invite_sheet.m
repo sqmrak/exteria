@@ -41,7 +41,7 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
 }
 
 + (void)showInView:(UIView *)host title:(NSString *)title subtitle:(NSString *)subtitle about:(NSString *)about
-             photo:(ExteriaRemoteFile *)photo media:(ExteriaMediaCache *)media requestNeeded:(BOOL)requestNeeded join:(void (^)(void))join {
+             photo:(ExteriaRemoteFile *)photo media:(ExteriaMediaCache *)media requestNeeded:(BOOL)requestNeeded joinTitle:(NSString *)joinTitle join:(void (^)(void))join {
     if (!host) { NSLog(@"exteria: no host for invite sheet"); return; }
     ExteriaInviteSheet *sheet = [[[ExteriaInviteSheet alloc] initWithFrame:host.bounds] autorelease];
     sheet.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -83,7 +83,7 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
     sheet->_join.backgroundColor = ExteriaColorAccent();
     sheet->_join.layer.cornerRadius = 23;
     sheet->_join.titleLabel.font = ExteriaFontSemibold(16);
-    [sheet->_join setTitle:NSLocalizedString(requestNeeded ? @"invite.send" : @"invite.join", nil) forState:UIControlStateNormal];
+    [sheet->_join setTitle:joinTitle.length ? joinTitle : NSLocalizedString(requestNeeded ? @"invite.send" : @"invite.join", nil) forState:UIControlStateNormal];
     [sheet->_join setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [sheet->_join addTarget:sheet action:@selector(joinTapped) forControlEvents:UIControlEventTouchUpInside];
     [sheet->_card addSubview:sheet->_join];
