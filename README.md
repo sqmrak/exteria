@@ -27,11 +27,20 @@
 - passcode lock: four digits or a password, auto-lock
 - keeps deleted and edited messages on the phone, if you ask for it
 - several accounts, login by phone or qr
-- two looks: modern, and classic with the glossy ios 5 and 6 style and a hue of your own
+- two looks: modern, and classic with the glossy ios 5 and 6 style and a hue of your own (classic is available on ios 5 through 10)
+- local Telegram iOS `.tgios-theme` files in the modern look
 - power saver, quiet background link, local notifications
 - russian, english
 
 location uses OpenStreetMap tiles with attribution, a 48-entry and 12 MiB memory cache, and a 32 MiB disk cache. nearby places use Telegram's venue search bot. map requests follow the Shiro route.
+
+## telegram ios themes
+
+open a `.tgios-theme` file in Exteria from another app, or copy it to Exteria Documents with file sharing and choose it in Chat Settings. The preview shows the incoming and outgoing bubbles before applying. The file selects its day or night slot; switching day and night restores the selection for each slot. Tap a built-in theme card to return that slot to the built-in palette. Classic remains available only through iOS 10 and uses its own palette.
+
+The import limit is 256 KiB, 512 values and 16 nesting levels. Exteria applies colors to its list, navigation, search, tabs, chat input, chat list and message bubbles. Missing values use the Exteria palette. A picked Exteria wallpaper takes priority over the theme background. Plain colors and gradients of up to four colors are drawn locally. Telegram wallpaper slugs need Telegram's wallpaper service and are not downloaded. Pattern resources, motion, bubble animations, Telegram-only controls and colors without an Exteria counterpart are not reproduced. Exteria draws four-color gradients as static linear gradients; Telegram's animated gradient rendering is different. Exteria does not claim pixel-for-pixel compatibility with Telegram.
+
+A `t.me/addtheme/<slug>` or `tg://addtheme?slug=<slug>` link asks Telegram for the ios file of the theme and opens the same preview. A theme that is only a set of accent colors has no file and is refused with a note.
 
 ## shiro
 

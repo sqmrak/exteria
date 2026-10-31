@@ -55,3 +55,9 @@ void ExteriaWallpaperRetintTheme(CGPoint origin);
 /* the hue of the client is that of the wallpaper of the tone it wears: stores the hue of the wallpaper of the day or the night theme, without a notification, for
    the change of tone that posts its own */
 void ExteriaWallpaperSyncTintForTone(BOOL dark);
+
+#include "exteria_channel.h"
+
+/* the background the admins gave a channel, at the size of the screen: its gradient with the pattern over it, or the picture of its file; nil when there is
+   nothing to paint, or when the paper is a picture whose file has not come yet (file is that picture when it has) */
+UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIImage *file, CGSize size);

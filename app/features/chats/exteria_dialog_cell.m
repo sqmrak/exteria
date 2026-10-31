@@ -15,6 +15,7 @@
 #import "exteria_story_ring.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_time.h"
 #import "exteria_topic_icon.h"
 #import "exteria_developers.h"
@@ -156,7 +157,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     self.backgroundColor = [UIColor clearColor];
     self.contentView.backgroundColor = [UIColor clearColor];
     UIView *selected = [[[UIView alloc] init] autorelease];
-    selected.backgroundColor = ExteriaColorField();
+    selected.backgroundColor = ExteriaImportedThemeColor("chatList.itemHighlightedBg") ?: ExteriaColorField();
     self.selectedBackgroundView = selected;
 
     /* the row slides inside the content view, which the cell resets to its own frame on every layout */
@@ -204,7 +205,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _communityHit.hidden = YES;
     [_communityHit addTarget:self action:@selector(communityTapped) forControlEvents:UIControlEventTouchUpInside];
     [_slider addSubview:_communityHit];
-    _title = [ExteriaCellEmojiLabel(ExteriaFontSemibold(15.5), ExteriaColorTitle(), ExteriaTextAlignmentLeft) retain];
+    _title = [ExteriaCellEmojiLabel(ExteriaFontSemibold(15.5), ExteriaImportedThemeColor("chatList.title") ?: ExteriaColorTitle(), ExteriaTextAlignmentLeft) retain];
     _title.dropsUndrawable = YES;
     [_slider addSubview:_title];
     _markHit = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
@@ -212,11 +213,11 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_slider addSubview:_markHit];
     _mutedIcon = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBellSlash, 13, ExteriaColorMuted())];
     [_slider addSubview:_mutedIcon];
-    _time = [ExteriaCellLabel(ExteriaFontRegular(12.5), ExteriaColorSecondary(), ExteriaTextAlignmentRight) retain];
+    _time = [ExteriaCellLabel(ExteriaFontRegular(12.5), ExteriaImportedThemeColor("chatList.dateText") ?: ExteriaColorSecondary(), ExteriaTextAlignmentRight) retain];
     [_slider addSubview:_time];
     _checks = [[UIImageView alloc] init];
     [_slider addSubview:_checks];
-    _preview = [ExteriaCellEmojiLabel(ExteriaFontRegular(14), ExteriaColorSecondary(), ExteriaTextAlignmentLeft) retain];
+    _preview = [ExteriaCellEmojiLabel(ExteriaFontRegular(14), ExteriaImportedThemeColor("chatList.messageText") ?: ExteriaColorSecondary(), ExteriaTextAlignmentLeft) retain];
     _preview.numberOfLines = 2;
     [_slider addSubview:_preview];
     _typing = [[ExteriaStatusLabel alloc] init];
@@ -255,7 +256,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _pin = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPin, 14, ExteriaColorMuted())];
     [_slider addSubview:_pin];
     _line = [[UIView alloc] init];
-    _line.backgroundColor = ExteriaColorHairline();
+    _line.backgroundColor = ExteriaImportedThemeColor("chatList.itemSeparator") ?: ExteriaColorHairline();
     [_slider addSubview:_line];
     return self;
 }
@@ -302,10 +303,10 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _avatar.seed = dialog.avatarSeed;
     _avatar.initials = dialog.initials;
     _avatar.deleted = dialog.deleted;
-    _avatar.accent = dialog.saved || dialog.folder;
-    _avatar.symbol = dialog.folder ? ExteriaSymbolArchive : ExteriaSymbolBookmark;
-    _avatar.showsSymbol = dialog.saved || dialog.folder;
-    [_avatar setPhoto:dialog.saved || dialog.folder ? nil : dialog.photo cache:avatars];
+    _avatar.accent = dialog.saved || dialog.folder || dialog.replies;
+    _avatar.symbol = dialog.folder ? ExteriaSymbolArchive : (dialog.replies ? ExteriaSymbolReply : ExteriaSymbolBookmark);
+    _avatar.showsSymbol = dialog.saved || dialog.folder || dialog.replies;
+    [_avatar setPhoto:dialog.saved || dialog.folder || dialog.replies ? nil : dialog.photo cache:avatars];
     /* a topic has the icon of its own in the place of the group's photo */
     BOOL topic = dialog.topicId > 0;
     _avatar.hidden = topic;
@@ -325,11 +326,14 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_markName release];
     _markName = [dialog.title copy];
     _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), _marks, &badge);
+    self.backgroundColor = ExteriaImportedThemeColor(dialog.pinned ? "chatList.pinnedItemBg" : "chatList.itemBg") ?: [UIColor clearColor];
+    self.selectedBackgroundView.backgroundColor = ExteriaImportedThemeColor(dialog.pinned ? "chatList.pinnedItemHighlightedBg" : "chatList.itemHighlightedBg") ?: ExteriaColorField();
     _title.entities = badge;
     _mutedIcon.hidden = !dialog.muted;
     _time.text = ExteriaListTimeText(dialog.date);
     _preview.text = dialog.preview;
-    _preview.textColor = ExteriaColorSecondary();
+    _preview.entities = dialog.previewEntities;
+    _preview.textColor = ExteriaImportedThemeColor("chatList.messageText") ?: ExteriaColorSecondary();
     [_preview setPrefixLength:0 color:nil];
     _preview.hidden = NO;
     BOOL mini = dialog.showsSender && ExteriaChatFlagGet(ExteriaChatFlagSenderAvatars);
@@ -347,7 +351,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _forwardIcon.hidden = !dialog.forwarded;
     if (dialog.forwarded) _forwardIcon.image = ExteriaSymbolImage(ExteriaSymbolForward, FORWARD_SIDE, ExteriaColorSecondary());
     if (dialog.outgoing && dialog.date > 0) {
-        _checks.image = ExteriaCheckImage(dialog.read, ICON_SIZE, ExteriaColorAccent());
+        _checks.image = ExteriaCheckImage(dialog.read, ICON_SIZE, ExteriaImportedThemeColor("chatList.checkmark") ?: ExteriaColorAccent());
         _checks.hidden = NO;
     } else {
         _checks.hidden = YES;
@@ -355,7 +359,8 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     BOOL showsBadge = dialog.unreadCount > 0 || (dialog.unread && dialog.unreadCount == 0);
     _badge.hidden = !showsBadge;
     _badge.text = dialog.unreadCount > 999 ? @"999+" : (dialog.unreadCount > 0 ? [NSString stringWithFormat:@"%ld", (long)dialog.unreadCount] : @"");
-    _badge.backgroundColor = ExteriaColorAccent();
+    _badge.backgroundColor = ExteriaImportedThemeColor(dialog.muted ? "chatList.unreadBadgeInactiveBg" : "chatList.unreadBadgeActiveBg") ?: ExteriaColorAccent();
+    _badge.textColor = ExteriaImportedThemeColor(dialog.muted ? "chatList.unreadBadgeInactiveText" : "chatList.unreadBadgeActiveText") ?: [UIColor whiteColor];
     _mention.hidden = dialog.mentions <= 0;
     _reaction.hidden = dialog.reactions <= 0;
     _pin.hidden = !dialog.pinned || showsBadge || !_mention.hidden || !_reaction.hidden;
@@ -373,7 +378,8 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     if (!draft) return;
     NSString *label = NSLocalizedString(@"chats.draft", nil);
     _preview.text = [NSString stringWithFormat:@"%@ %@", label, ExteriaDraftPreviewText(draft)];
-    [_preview setPrefixLength:label.length color:ExteriaColorBadgeRed()];
+    _preview.entities = nil;
+    [_preview setPrefixLength:label.length color:ExteriaImportedThemeColor("chatList.messageDraftText") ?: ExteriaColorBadgeRed()];
     _time.text = ExteriaListTimeText(draft.date);
     _checks.hidden = YES;
     _mini.hidden = YES;

@@ -8,6 +8,11 @@
 
 @protocol ExteriaTabBarDelegate <NSObject>
 - (void)tabBar:(ExteriaTabBar *)tabBar didSelectIndex:(NSInteger)index;
+@optional
+/* a tap on the tab that is already selected */
+- (void)tabBar:(ExteriaTabBar *)tabBar didReselectIndex:(NSInteger)index;
+/* a finger held on a tab; frame is the tab in the coordinates of the bar */
+- (void)tabBar:(ExteriaTabBar *)tabBar didLongPressIndex:(NSInteger)index frame:(CGRect)frame;
 @end
 
 /* the bottom bar of the signed in app: a symbol over a caption per tab, an optional red count on a tab,

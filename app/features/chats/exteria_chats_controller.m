@@ -32,6 +32,7 @@
 #import "exteria_falling_view.h"
 #import "exteria_sheet.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_community_screen.h"
 #import "exteria_topics_screen.h"
 #import "exteria_weak_reference.h"
@@ -375,14 +376,14 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
     _search = [[ExteriaSearchField alloc] init];
     _search.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-    _search.backgroundColor = ExteriaColorField();
+    _search.backgroundColor = ExteriaImportedThemeColor("root.searchBar.inputFill") ?: ExteriaColorField();
     _search.layer.cornerRadius = SEARCH_HEIGHT / 2;
     _search.delegate = self;
     _search.placeholder = NSLocalizedString(@"chats.search", nil);
     _search.font = ExteriaFontRegular(16);
-    _search.textColor = ExteriaColorTitle();
+    _search.textColor = ExteriaImportedThemeColor("root.searchBar.inputText") ?: ExteriaColorTitle();
     _search.autocorrectionType = UITextAutocorrectionTypeNo;
-    UIImageView *glass = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 16, ExteriaColorMuted())] autorelease];
+    UIImageView *glass = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 16, ExteriaImportedThemeColor("root.searchBar.inputIcon") ?: ExteriaColorMuted())] autorelease];
     glass.contentMode = UIViewContentModeCenter;
     glass.frame = CGRectMake(0, 0, 38, SEARCH_HEIGHT);
     _search.leftView = glass;

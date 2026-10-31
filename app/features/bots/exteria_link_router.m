@@ -11,11 +11,19 @@
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
 #import "exteria_invite_sheet.h"
+#import "exteria_language.h"
+#import "exteria_language_controller.h"
+#import "exteria_language_pack.h"
+#import "exteria_session_language.h"
+#import "exteria_session_theme.h"
+#import "exteria_imported_theme_preview_controller.h"
+#import "exteria_translate_config.h"
 #import "exteria_theme.h"
 #import "exteria_proxy_settings.h"
 #import "exteria_user_profile_controller.h"
 
 #include "exteria_links.h"
+#include "exteria_tgios_theme.h"
 #include "exteria_bytes.h"
 
 /* the schemes an address in a message or a button may hand to the system; javascript:, file: and the rest are not links to follow */
@@ -174,6 +182,100 @@ BOOL ExteriaIsTelegramLink(NSURL *url) {
         return;
     }
     if (![[UIApplication sharedApplication] openURL:target]) [self showNote:NSLocalizedString(@"bots.error.link", nil)];
+}
+
+#pragma mark language packs
+
+/* the window of a t.me/setlanguage link, worded as the one of Telegram. the server describes the pack, but the texts of this app are in its own bundle, so
+   a pack is applied only for a language the bundle has, and the share it shows is the share of the app's texts that language translates */
+- (void)showLanguagePack:(ExteriaLanguagePack *)pack {
+    NSString *target = ExteriaInterfaceLanguageForPackCode(pack.code);
+    if (target && [ExteriaNormalizedLanguageCode(ExteriaInterfaceLanguageVariant()) isEqualToString:ExteriaNormalizedLanguageCode(target)]) {
+        ExteriaShowAlert(NSLocalizedString(@"language.title", nil), [NSString stringWithFormat:NSLocalizedString(@"language.link.same", nil), pack.name],
+                         [NSArray arrayWithObjects:NSLocalizedString(@"notice.ok", nil), NSLocalizedString(@"tab.settings", nil), nil], 0, NO,
+                         ^(NSInteger index, NSString *text) {
+            (void)text;
+            if (index != 1) return;
+            UINavigationController *navigation = [self navigation];
+            if (navigation) [navigation pushViewController:[[[ExteriaLanguageSettingsController alloc] init] autorelease] animated:YES];
+        });
+        return;
+    }
+    if (!target) {
+        ExteriaShowNotice(NSLocalizedString(@"language.link.nodata.title", nil),
+                          [NSString stringWithFormat:NSLocalizedString(pack.official ? @"language.link.nodata" : @"language.link.nodata.custom", nil), pack.name]);
+        return;
+    }
+    NSString *message = [NSString stringWithFormat:NSLocalizedString(pack.official ? @"language.link.alert" : @"language.link.alert.custom", nil), pack.name,
+                         ExteriaInterfaceLanguageCompleteness(target)];
+    ExteriaConfirm(NSLocalizedString(@"language.link.title", nil), message, NSLocalizedString(@"language.link.change", nil), ^{
+        NSString *previous = ExteriaInterfaceLanguage();
+        ExteriaSetInterfaceLanguage(target);
+        ExteriaTranslateInterfaceLanguageChanged(previous, ExteriaInterfaceLanguage());
+    });
+}
+
+- (void)openLanguageOfCode:(NSString *)code {
+    NSUInteger token = [self beginBusy];
+    [self retain];
+    [_session loadLanguagePack:code completion:^(ExteriaLanguagePack *pack, NSString *errorName) {
+        [self endBusy:token];
+        [self autorelease];
+        if (pack) {
+            [self showLanguagePack:pack];
+            return;
+        }
+        BOOL unknown = [errorName isEqualToString:@"LANG_CODE_NOT_SUPPORTED"] || [errorName isEqualToString:@"LANG_PACK_INVALID"] || [errorName isEqualToString:@"LANG_CODE_INVALID"];
+        ExteriaShowNotice(NSLocalizedString(@"language.title", nil), unknown ? NSLocalizedString(@"language.link.unsupported", nil) : [ExteriaLinkRouter textForError:errorName]);
+    }];
+}
+
+#pragma mark themes
+
+/* the preview reads its theme from disk and the apply reads it again, so the file stays under one fixed name that the next link replaces */
+static NSString *ExteriaCloudThemePath(void) {
+    return [NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-cloud-theme.tgios-theme"];
+}
+
+- (void)openThemeOfSlug:(NSString *)slug {
+    NSUInteger token = [self beginBusy];
+    [self retain];
+    [_session loadThemeOfSlug:slug completion:^(ExteriaThemeLink *theme, NSString *errorName) {
+        if (!theme) {
+            BOOL unknown = [errorName isEqualToString:@"THEME_SLUG_INVALID"] || [errorName isEqualToString:@"THEME_FORMAT_INVALID"];
+            [self endBusy:token];
+            ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), unknown ? NSLocalizedString(@"theme.link.notfound", nil) : [ExteriaLinkRouter textForError:errorName]);
+            [self autorelease];
+            return;
+        }
+        /* a theme with accent colors only has no file, and the server sends no .tgios-theme for it */
+        if (!theme.file) {
+            [self endBusy:token];
+            ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), NSLocalizedString(@"theme.link.unsupported", nil));
+            [self autorelease];
+            return;
+        }
+        if (theme.file.size <= 0 || theme.file.size > (long long)EXTERIA_TGIOS_MAX_BYTES) {
+            [self endBusy:token];
+            ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), NSLocalizedString(@"theme.import.size", nil));
+            [self autorelease];
+            return;
+        }
+        [_media loadDataForFile:theme.file.file completion:^(NSData *data) {
+            [self endBusy:token];
+            NSString *path = ExteriaCloudThemePath();
+            NSError *writeError = nil;
+            if (!data.length) {
+                ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), NSLocalizedString(@"theme.link.download", nil));
+            } else if (![data writeToFile:path options:NSDataWritingAtomic error:&writeError]) {
+                NSLog(@"exteria: cloud theme did not save: %@", writeError);
+                ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), NSLocalizedString(@"theme.import.save", nil));
+            } else if (_anchor) {
+                [ExteriaImportedThemePreviewController openURL:[NSURL fileURLWithPath:path] fromController:_anchor];
+            }
+            [self autorelease];
+        }];
+    }];
 }
 
 #pragma mark links

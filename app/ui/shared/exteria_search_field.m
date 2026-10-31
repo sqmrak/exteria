@@ -5,6 +5,7 @@
 #import "exteria_string_drawing.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 
 static const CGFloat ExteriaSearchIconWidth = 38.0;
 
@@ -13,14 +14,14 @@ static const CGFloat ExteriaSearchIconWidth = 38.0;
 + (ExteriaSearchField *)fieldWithPlaceholder:(NSString *)placeholder height:(CGFloat)height {
     ExteriaSearchField *field = [[[ExteriaSearchField alloc] init] autorelease];
     field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-    field.backgroundColor = ExteriaColorField();
+    field.backgroundColor = ExteriaImportedThemeColor("root.searchBar.inputFill") ?: ExteriaColorField();
     field.layer.cornerRadius = height / 2;
     field.placeholder = placeholder;
     field.font = ExteriaFontRegular(16);
-    field.textColor = ExteriaColorTitle();
+    field.textColor = ExteriaImportedThemeColor("root.searchBar.inputText") ?: ExteriaColorTitle();
     field.autocorrectionType = UITextAutocorrectionTypeNo;
     field.clearButtonMode = UITextFieldViewModeWhileEditing;
-    UIImageView *glass = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 16, ExteriaColorMuted())] autorelease];
+    UIImageView *glass = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 16, ExteriaImportedThemeColor("root.searchBar.inputIcon") ?: ExteriaColorMuted())] autorelease];
     glass.contentMode = UIViewContentModeCenter;
     glass.frame = CGRectMake(0, 0, ExteriaSearchIconWidth, height);
     field.leftView = glass;
@@ -41,7 +42,7 @@ static const CGFloat ExteriaSearchIconWidth = 38.0;
 }
 
 - (void)drawPlaceholderInRect:(CGRect)rect {
-    [ExteriaColorSecondary() set];
+    [(ExteriaImportedThemeColor("root.searchBar.inputPlaceholderText") ?: ExteriaColorSecondary()) set];
     CGFloat height = ceil(self.font.lineHeight);
     rect.origin.y += floor((rect.size.height - height) / 2);
     rect.size.height = height;

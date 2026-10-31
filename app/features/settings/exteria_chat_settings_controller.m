@@ -21,6 +21,10 @@
 #import "exteria_tab_editor.h"
 #import "exteria_wallpaper_controller.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
+#import "exteria_imported_theme_preview_controller.h"
+#import "exteria_file_picker.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_weak_reference.h"
 
 @interface ExteriaChatSettingsController () {
@@ -33,6 +37,7 @@
     ExteriaChatPreviewView *_preview;
     UIButton *_more;
 }
+- (void)chooseThemeFile;
 @end
 
 /* the duck of the theme change covers the window while the icon is written, which takes a moment and ends the app
@@ -224,7 +229,11 @@ static NSString *ExteriaNightStateText(void) {
         };
         [themeRows addObject:[ExteriaSettingsRow viewRowWithView:themes height:^CGFloat(CGFloat width) { (void)width; return [ExteriaThemeListView height]; }]];
     }
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.colortheme.header", nil) footer:nil rows:themeRows]];
+    [themeRows addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolGallery tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"theme.import.title", nil) subtitle:nil value:nil tap:^{
+        [(ExteriaChatSettingsController *)weak.target chooseThemeFile];
+    }]];
+    NSString *themeFooter = ExteriaImportedThemeSelected(ExteriaThemeIsDark()) && !ExteriaThemeIsClassic() ? NSLocalizedString(@"theme.import.active", nil) : nil;
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.colortheme.header", nil) footer:themeFooter rows:themeRows]];
 
     {
         ExteriaSettingsRow *radius = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.corners.row", nil) format:@"%.0f" value:(float)ExteriaChatBubbleRadius()
@@ -429,9 +438,27 @@ static NSString *ExteriaNightStateText(void) {
 
 #pragma mark actions
 
+- (void)chooseThemeFile {
+    /* the same browser as the one that picks a file to send, asking for a theme: only folders and .tgios-theme files show, and the one that is tapped opens its preview */
+    ExteriaWeakReference *weak = _weak;
+    ExteriaFilePicker *picker = [[[ExteriaFilePicker alloc] initWithDirectory:nil handler:^(NSString *path) {
+        ExteriaChatSettingsController *me = weak.target;
+        if (me) [ExteriaImportedThemePreviewController openURL:[NSURL fileURLWithPath:path] fromController:me];
+    } cancel:nil] autorelease];
+    picker.extensions = [NSArray arrayWithObject:@"tgios-theme"];
+    picker.rootTitle = NSLocalizedString(@"theme.pick.title", nil);
+    picker.searchPlaceholder = NSLocalizedString(@"theme.pick.search", nil);
+    picker.emptyText = NSLocalizedString(@"theme.import.empty", nil);
+    picker.fileSymbol = ExteriaSymbolBackground;
+    UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:picker] autorelease];
+    if (ExteriaThemeIsClassic()) ExteriaClassicStyleNavigationBar(navigation.navigationBar);
+    [self presentViewController:navigation animated:YES completion:nil];
+}
+
 
 /* the colors spread from the point that was touched */
 - (void)applyThemeClassic:(BOOL)classic dark:(BOOL)dark from:(CGPoint)origin {
+    ExteriaImportedThemeUseBuiltin(dark);
     ExteriaThemeStoreClassic(classic);
     ExteriaThemeStoreDark(dark);
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
@@ -453,7 +480,7 @@ static NSString *ExteriaNightStateText(void) {
 
 - (void)showMenu {
     ExteriaWeakReference *weak = _weak;
-    ExteriaSymbol symbols[] = {ExteriaSymbolRepeat};
+    ExteriaSymbol symbols[] = {ExteriaSymbolRotate};
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:[NSArray arrayWithObject:NSLocalizedString(@"chatset.reset", nil)] symbols:symbols
                                                                handler:^(NSUInteger index) {
         (void)index;

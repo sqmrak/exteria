@@ -7,6 +7,7 @@
 #import "exteria_platform.h"
 #import "exteria_pill_label.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 
 #define TAB_BAR_HEIGHT 49.0
 #define TAB_ICON_SIZE 26.0
@@ -15,9 +16,11 @@
 /* the bar is opaque white, so the selected tab takes the accent and idle ones a quiet blue lilac */
 static UIColor *ExteriaTabIdleColor(void) {
     if (ExteriaThemeIsClassic()) return ExteriaColorSecondary();
+    UIColor *imported = ExteriaImportedThemeColor("root.tabBar.icon");
+    if (imported) return imported;
     return ExteriaThemeTinted(ExteriaThemeIsDark() ? [UIColor colorWithRed:0.52 green:0.49 blue:0.68 alpha:1] : [UIColor colorWithRed:0.58 green:0.55 blue:0.75 alpha:1]);
 }
-static UIColor *ExteriaTabActiveColor(void) { return ExteriaColorAccent(); }
+static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("root.tabBar.selectedIcon") ?: ExteriaColorAccent(); }
 
 @interface ExteriaTabItem : UIControl {
     UIImageView *_icon;
@@ -69,12 +72,12 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaColorAccent(); }
     _caption.backgroundColor = [UIColor clearColor];
     _caption.text = title;
     _caption.font = ExteriaFontMedium(10);
-    _caption.textColor = ExteriaTabIdleColor();
+    _caption.textColor = ExteriaImportedThemeColor("root.tabBar.text") ?: ExteriaTabIdleColor();
     _caption.textAlignment = ExteriaTextAlignmentCenter;
     [self addSubview:_caption];
     _badge = [[ExteriaPillLabel alloc] init];
-    _badge.backgroundColor = ExteriaColorAccent();
-    _badge.textColor = [UIColor whiteColor];
+    _badge.backgroundColor = ExteriaImportedThemeColor("root.tabBar.badgeBackground") ?: ExteriaColorAccent();
+    _badge.textColor = ExteriaImportedThemeColor("root.tabBar.badgeText") ?: [UIColor whiteColor];
     _badge.font = ExteriaFontSemibold(11);
     _badge.textAlignment = ExteriaTextAlignmentCenter;
     _badge.layer.cornerRadius = TAB_BADGE_HEIGHT / 2;
@@ -112,7 +115,7 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaColorAccent(); }
     }
     if (_icon) _icon.image = active ? _activeImage : _idleImage;
     _ring.layer.borderWidth = active ? 2 : 0;
-    _caption.textColor = active ? ExteriaTabActiveColor() : ExteriaTabIdleColor();
+    _caption.textColor = active ? (ExteriaImportedThemeColor("root.tabBar.selectedText") ?: ExteriaTabActiveColor()) : (ExteriaImportedThemeColor("root.tabBar.text") ?: ExteriaTabIdleColor());
     self.accessibilityTraits = active ? (UIAccessibilityTraitButton | UIAccessibilityTraitSelected) : UIAccessibilityTraitButton;
 }
 
@@ -157,7 +160,7 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaColorAccent(); }
 - (id)initWithTitles:(NSArray *)titles symbols:(NSArray *)symbols {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorBar();
+    self.backgroundColor = ExteriaImportedThemeColor("root.tabBar.background") ?: ExteriaColorBar();
     _itemArea = CGRectNull;
     /* the plate under the selected tab, a little lower than the middle of the bar */
     _items = [[NSMutableArray alloc] init];
@@ -166,11 +169,14 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaColorAccent(); }
         ExteriaTabItem *item = [[[ExteriaTabItem alloc] initWithTitle:[titles objectAtIndex:i]
                                                                symbol:symbol == [NSNull null] ? nil : symbol] autorelease];
         [item addTarget:self action:@selector(itemTapped:) forControlEvents:UIControlEventTouchUpInside];
+        UILongPressGestureRecognizer *hold = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(itemHeld:)] autorelease];
+        hold.minimumPressDuration = 0.45;
+        [item addGestureRecognizer:hold];
         [_items addObject:item];
         [self addSubview:item];
     }
     _hairline = [[UIView alloc] init];
-    _hairline.backgroundColor = ExteriaColorHairline();
+    _hairline.backgroundColor = ExteriaImportedThemeColor("root.tabBar.separator") ?: ExteriaColorHairline();
     [self addSubview:_hairline];
     [self setSelectedIndex:0];
     return self;
@@ -200,9 +206,19 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaColorAccent(); }
 
 - (void)itemTapped:(ExteriaTabItem *)item {
     NSInteger index = (NSInteger)[_items indexOfObject:item];
-    if (index == _selectedIndex) return;
+    if (index == _selectedIndex) {
+        if ([_delegate respondsToSelector:@selector(tabBar:didReselectIndex:)]) [_delegate tabBar:self didReselectIndex:index];
+        return;
+    }
     [self setSelectedIndex:index];
     [_delegate tabBar:self didSelectIndex:index];
+}
+
+- (void)itemHeld:(UILongPressGestureRecognizer *)hold {
+    if (hold.state != UIGestureRecognizerStateBegan) return;
+    NSInteger index = (NSInteger)[_items indexOfObject:hold.view];
+    if (index == NSNotFound || ![_delegate respondsToSelector:@selector(tabBar:didLongPressIndex:frame:)]) return;
+    [_delegate tabBar:self didLongPressIndex:index frame:hold.view.frame];
 }
 
 - (void)setItemArea:(CGRect)area {

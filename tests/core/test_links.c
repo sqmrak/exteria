@@ -67,6 +67,72 @@ static void test_web_links(void) {
     CHECK_EQ_INT(l.has_start, 0);
 }
 
+static void test_theme_links(void) {
+    exteria_tg_link l = link_of("https://t.me/addtheme/EUv1TXVWMHmXclaj");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_THEME);
+    CHECK(!strcmp(l.slug, "EUv1TXVWMHmXclaj"));
+    l = link_of("http://telegram.me/addtheme/night-1_x?utm=1#y");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_THEME);
+    CHECK(!strcmp(l.slug, "night-1_x"));
+    l = link_of("https://www.t.me/AddTheme/abc/extra");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_THEME);
+    CHECK(!strcmp(l.slug, "abc"));
+    l = link_of("tg://addtheme?slug=EUv1TXVWMHmXclaj");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_THEME);
+    CHECK(!strcmp(l.slug, "EUv1TXVWMHmXclaj"));
+    l = link_of("tg:addtheme?slug=abc&x=1");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_THEME);
+    CHECK(!strcmp(l.slug, "abc"));
+    l = link_of("https://t.me/addtheme");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+    l = link_of("https://t.me/addtheme/");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+    l = link_of("https://t.me/addtheme/bad%20slug");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+    l = link_of("tg://addtheme");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+    l = link_of("tg://addtheme?slug=");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+}
+
+static void test_language_links(void) {
+    exteria_tg_link l = link_of("https://t.me/setlanguage/ru");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK(!strcmp(l.slug, "ru"));
+    l = link_of("http://telegram.me/setlanguage/pt-br?utm=1#x");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK(!strcmp(l.slug, "pt-br"));
+    l = link_of("https://www.t.me/SetLanguage/classic-zh-cn");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK(!strcmp(l.slug, "classic-zh-cn"));
+    l = link_of("https://t.me/setlanguage/vi_dev/extra");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK(!strcmp(l.slug, "vi_dev"));
+    l = link_of("tg://setlanguage?lang=de");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK(!strcmp(l.slug, "de"));
+    l = link_of("tg:setlanguage?lang=en&x=1");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK(!strcmp(l.slug, "en"));
+    /* the longest code that is taken, and one more */
+    l = link_of("https://t.me/setlanguage/abcdefghijklmnopqrstuvwxyz012345");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_LANGUAGE);
+    CHECK_EQ_INT(strlen(l.slug), EXTERIA_LINK_LANGUAGE_MAX);
+    l = link_of("https://t.me/setlanguage/abcdefghijklmnopqrstuvwxyz0123456");
+    CHECK_EQ_INT(l.kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(l.slug[0], 0);
+    /* no code, a code that is not one, and a name that only looks like the page are not language links */
+    CHECK_EQ_INT(link_of("https://t.me/setlanguage").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/setlanguage/").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/setlanguage/ru;drop").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/setlanguage/a%20b").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/setlanguage/%00").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://t.me/setlanguages/ru").kind, EXTERIA_LINK_PEER);
+    CHECK_EQ_INT(link_of("tg://setlanguage").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("tg://setlanguage?lang=").kind, EXTERIA_LINK_OTHER);
+    CHECK_EQ_INT(link_of("https://example.com/setlanguage/ru").kind, EXTERIA_LINK_OTHER);
+}
+
 static void test_invoice_and_other(void) {
     exteria_tg_link l = link_of("https://t.me/$abc-DEF_1");
     CHECK_EQ_INT(l.kind, EXTERIA_LINK_INVOICE);
@@ -235,6 +301,8 @@ static void test_voice_chat_links(void) {
 int main(void) {
     test_invite_links();
     test_web_links();
+    test_language_links();
+    test_theme_links();
     test_invoice_and_other();
     test_private_posts();
     test_tg_scheme();

@@ -8,6 +8,7 @@ extern NSString *const ExteriaThemeDidChangeNotification;
 /* the optional key of its userInfo: an NSValue with the point in window coordinates the change of colors spreads from, which the screens that ask for a change give
    as the spot that was touched */
 extern NSString *const ExteriaThemeOriginKey;
+BOOL ExteriaClassicThemeAvailable(void);
 BOOL ExteriaThemeStoredClassic(void);
 void ExteriaThemeStoreClassic(BOOL classic);
 BOOL ExteriaThemeIsClassic(void);
@@ -19,7 +20,7 @@ void ExteriaThemeApply(BOOL dark);
 UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark);
 void ExteriaThemeApplyStored(void);
 
-/* the wallpaper of the chat gives the whole modern palette its hue */
+/* the wallpaper of the chat gives the whole modern palette its hue; -1 selects neutral tones */
 BOOL ExteriaThemeStoredTint(float *hue);
 void ExteriaThemeStoreTint(BOOL on, float hue);
 /* a color of the palette of the app, or any other color built from fixed numbers, turned the same way; other colors than RGB come back as they are */

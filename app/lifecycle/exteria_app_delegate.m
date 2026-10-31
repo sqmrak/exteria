@@ -34,6 +34,9 @@
 #import "exteria_splash_view.h"
 #import "exteria_split_controller.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
+#import "exteria_alert.h"
+#import "exteria_imported_theme_preview_controller.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -159,6 +162,10 @@ static NSString *ExteriaSupportDirectory(void) {
     (void)application;
     (void)sourceApplication;
     (void)annotation;
+    if ([url isFileURL] && [[[url path] pathExtension] caseInsensitiveCompare:@"tgios-theme"] == NSOrderedSame) {
+        [ExteriaImportedThemePreviewController openURL:url fromController:_navigation];
+        return YES;
+    }
     if (!ExteriaIsTelegramLink(url)) return NO;
     NSString *address = url.absoluteString;
     if (![ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)]) {
@@ -168,6 +175,12 @@ static NSString *ExteriaSupportDirectory(void) {
     }
     dispatch_async(dispatch_get_main_queue(), ^{ [self openLink:address]; });
     return YES;
+}
+
+/* ios 9 may deliver a document through the options form instead of the older source-application form */
+- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url options:(NSDictionary *)options {
+    (void)options;
+    return [self application:application openURL:url sourceApplication:nil annotation:nil];
 }
 
 - (void)openLink:(NSString *)address {

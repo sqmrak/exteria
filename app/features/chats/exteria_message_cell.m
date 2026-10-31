@@ -25,6 +25,7 @@
 #import "exteria_wave.h"
 #import "exteria_chat_settings.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_burn_effect.h"
 #include "exteria_message_actions.h"
 
@@ -289,7 +290,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
         CGContextRestoreGState(context);
         [ink set];
         ExteriaDrawStringIn(@"1", ExteriaFontBold(17), CGRectMake(icon.origin.x, icon.origin.y + 11, 44, 22), ExteriaStringClip, ExteriaTextAlignmentCenter);
-        UIColor *quiet = ExteriaColorBubbleMeta(message.outgoing);
+        UIColor *quiet = ExteriaImportedThemeColor(message.outgoing ? "chat.message.outgoing.fileDescription" : "chat.message.incoming.fileDescription") ?: ExteriaColorBubbleMeta(message.outgoing);
         CGFloat textX = icon.origin.x + 44 + 10, textWidth = frame.size.width - 44 - 10;
         [_item.fileTitleLayout drawAtPoint:CGPointMake(textX, frame.origin.y + 6)];
         [quiet set];
@@ -316,7 +317,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
         [self drawVoiceRow:context];
         return;
     }
-    UIColor *quiet = ExteriaColorBubbleMeta(message.outgoing);
+    UIColor *quiet = ExteriaImportedThemeColor(message.outgoing ? "chat.message.outgoing.fileDescription" : "chat.message.incoming.fileDescription") ?: ExteriaColorBubbleMeta(message.outgoing);
     CGFloat textX = icon.origin.x + 44 + 10, textWidth = frame.size.width - 44 - 10;
     [_item.fileTitleLayout drawAtPoint:CGPointMake(textX, frame.origin.y + 6)];
     [quiet set];

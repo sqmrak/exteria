@@ -3,7 +3,11 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_wallpaper.h"
+#import "exteria_blur.h"
+#import "exteria_symbol.h"
+#import "exteria_alert.h"
 
 #define CARD_WIDTH 96.0
 #define CARD_HEIGHT 132.0
@@ -55,6 +59,7 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
     picture.tag = 1;
     [self addSubview:picture];
     UIImageView *wallpaper = [[[UIImageView alloc] initWithFrame:picture.bounds] autorelease];
+    ExteriaImportedThemeSuspend(YES);
     ExteriaApplyWallpaperStyle(wallpaper, classic, dark);
     [picture addSubview:wallpaper];
     UIColor *incoming = nil, *outgoing = nil;
@@ -63,6 +68,16 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
     ExteriaThemeBubble(picture, incoming, CGRectMake(10, 18, 58, 26), 11);
     ExteriaThemeBubble(picture, outgoing, CGRectMake(CARD_WIDTH - 10 - 62, 52, 62, 26), 11);
     ExteriaThemeBubble(picture, incoming, CGRectMake(10, 86, 44, 22), 10);
+    ExteriaImportedThemeSuspend(NO);
+    if (classic && !ExteriaClassicThemeAvailable()) {
+        UIView *blur = ExteriaBlurBackdrop(picture, picture.bounds);
+        blur.alpha = 0.65;
+        blur.userInteractionEnabled = NO;
+        if (blur) [picture addSubview:blur];
+        UIImageView *lock = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolLock, 24, [UIColor whiteColor])] autorelease];
+        lock.frame = CGRectMake((CARD_WIDTH - 24) / 2, (CARD_HEIGHT - 24) / 2, 24, 24);
+        [picture addSubview:lock];
+    }
     UILabel *name = [[[UILabel alloc] initWithFrame:CGRectMake(-6, CARD_HEIGHT + 4, CARD_WIDTH + 12, LABEL_HEIGHT - 4)] autorelease];
     name.backgroundColor = [UIColor clearColor];
     name.textAlignment = ExteriaTextAlignmentCenter;
@@ -140,11 +155,16 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
 }
 
 - (void)refreshSelection {
-    for (ExteriaThemeCard *card in _cards) [card showSelected:card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark()];
+    for (ExteriaThemeCard *card in _cards) [card showSelected:card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark() && (card.classic || !ExteriaImportedThemeSelected(card.dark))];
 }
 
 - (void)cardTapped:(ExteriaThemeCard *)card {
-    if (card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark()) return;
+    if (card.classic && !ExteriaClassicThemeAvailable()) {
+        ExteriaShowAlert(nil, NSLocalizedString(@"chatset.theme.classic.unavailable", nil),
+                         [NSArray arrayWithObject:NSLocalizedString(@"notice.ok", nil)], 0, NO, nil);
+        return;
+    }
+    if (card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark() && (card.classic || !ExteriaImportedThemeSelected(card.dark))) return;
     _tapPoint = [card.superview convertPoint:card.center toView:nil];
     if (_chooseHandler) _chooseHandler(card.classic, card.dark);
 }

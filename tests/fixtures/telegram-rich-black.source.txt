@@ -1,0 +1,4 @@
+Source: https://github.com/duongdev/themes/blob/main/_reference/sample.tgios-theme
+Retrieved: 2026-10-30
+Used as a parser fixture; it is not bundled with the application.
+Second fixture: https://github.com/duongdev/themes/blob/main/claude/light.tgios-theme

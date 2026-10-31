@@ -10,6 +10,7 @@
 #import "exteria_person.h"
 #import "exteria_text_layout.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #include "exteria_reaction_layout.h"
 
 #define FACE_SIZE 20.0
@@ -108,12 +109,18 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
 /* the look of a chip over a bubble: our bubble is the accent color */
 - (UIColor *)chipColorChosen:(BOOL)chosen {
     if (!_inBubble) return chosen ? ExteriaColorAccent() : ExteriaColorCard();
+    UIColor *imported = ExteriaImportedThemeColor(_outgoing ? (chosen ? "chat.message.outgoing.bubble.withWp.reactionActiveBg" : "chat.message.outgoing.bubble.withWp.reactionInactiveBg")
+                                                        : (chosen ? "chat.message.incoming.bubble.withWp.reactionActiveBg" : "chat.message.incoming.bubble.withWp.reactionInactiveBg"));
+    if (imported) return imported;
     if (_outgoing) return chosen ? [UIColor whiteColor] : [UIColor colorWithWhite:1 alpha:0.22];
     return chosen ? ExteriaColorAccent() : [ExteriaColorAccent() colorWithAlphaComponent:0.16];
 }
 
 - (UIColor *)chipTextColorChosen:(BOOL)chosen {
     if (!_inBubble) return chosen ? [UIColor whiteColor] : ExteriaColorTitle();
+    UIColor *imported = ExteriaImportedThemeColor(_outgoing ? (chosen ? "chat.message.outgoing.bubble.withWp.reactionActiveFg" : "chat.message.outgoing.bubble.withWp.reactionInactiveFg")
+                                                        : (chosen ? "chat.message.incoming.bubble.withWp.reactionActiveFg" : "chat.message.incoming.bubble.withWp.reactionInactiveFg"));
+    if (imported && CGColorGetAlpha(imported.CGColor) > 0) return imported;
     if (_outgoing) return chosen ? ExteriaColorAccent() : [UIColor whiteColor];
     return chosen ? [UIColor whiteColor] : ExteriaColorAccent();
 }

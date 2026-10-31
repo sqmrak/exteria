@@ -651,6 +651,16 @@
 			<string>{1032, 1376}</string>
 		</dict>
 	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key><string>Telegram iOS theme</string>
+			<key>CFBundleTypeExtensions</key><array><string>tgios-theme</string></array>
+			<key>CFBundleTypeRole</key><string>Viewer</string>
+			<key>LSHandlerRank</key><string>Alternate</string>
+		</dict>
+	</array>
+	<key>UIFileSharingEnabled</key><true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

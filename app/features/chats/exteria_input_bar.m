@@ -12,6 +12,7 @@
 #import "exteria_platform.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 
 #define MARGIN 8.0
 /* on an ipad the one line bar is as tall as the tab bar beside it (49 points), so the tops of the two bars stand on one line */
@@ -24,6 +25,10 @@ static CGFloat ExteriaInputVerticalMargin(void) {
 /* the bar that has a button or a note in place of the field, as tall as the one line bar */
 static CGFloat ExteriaInputIdleHeight(void) {
     return ExteriaIsPad() ? 49 : 48;
+}
+
+static void ExteriaInputSetImage(UIButton *button, UIImage *image, UIControlState state) {
+    if ([button imageForState:state] != image) [button setImage:image forState:state];
 }
 #define FIELD_MIN 36.0
 #define FIELD_MAX 112.0
@@ -106,7 +111,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     self = [super initWithFrame:frame];
     if (!self) return nil;
     BOOL classic = ExteriaThemeIsClassic();
-    self.backgroundColor = classic ? [UIColor clearColor] : ExteriaColorBar();
+    self.backgroundColor = classic ? [UIColor clearColor] : (ExteriaImportedThemeColor("chat.inputPanel.panelBg") ?: ExteriaColorBar());
     if (classic) {
         /* the bar's surface is the system's own toolbar, whatever the system draws a toolbar as */
         _toolbar = [[UIToolbar alloc] init];
@@ -117,17 +122,17 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _writable = YES;
     _fieldHeight = FIELD_MIN;
     _hairline = [[UIView alloc] init];
-    _hairline.backgroundColor = ExteriaColorHairline();
+    _hairline.backgroundColor = classic ? ExteriaColorHairline() : (ExteriaImportedThemeColor("chat.inputPanel.panelSeparator") ?: ExteriaColorHairline());
     _hairline.hidden = classic;
     [self addSubview:_hairline];
 
     _field = [[UIView alloc] init];
-    _field.backgroundColor = classic ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.23 alpha:1] : [UIColor whiteColor]) : ExteriaColorField();
+    _field.backgroundColor = classic ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.23 alpha:1] : [UIColor whiteColor]) : (ExteriaImportedThemeColor("chat.inputPanel.inputBg") ?: ExteriaColorField());
     _field.layer.cornerRadius = FIELD_MIN / 2;
     if (classic) {
         /* the thin gray outline of the text box of the old messaging bars */
         _field.layer.borderWidth = 1;
-        _field.layer.borderColor = (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.1 alpha:1] : [UIColor colorWithWhite:0.62 alpha:1]).CGColor;
+        _field.layer.borderColor = (classic ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.1 alpha:1] : [UIColor colorWithWhite:0.62 alpha:1]) : (ExteriaImportedThemeColor("chat.inputPanel.inputStroke") ?: ExteriaColorHairline())).CGColor;
     }
     [self addSubview:_field];
 
@@ -135,7 +140,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _text.emojiBackgroundColor = _field.backgroundColor;
     _text.backgroundColor = [UIColor clearColor];
     _text.font = ExteriaFontRegular(16);
-    _text.textColor = ExteriaColorTitle();
+    _text.textColor = classic ? ExteriaColorTitle() : (ExteriaImportedThemeColor("chat.inputPanel.inputText_v2") ?: ExteriaColorTitle());
     _text.delegate = self;
     _text.scrollsToTop = NO;
     _text.scrollEnabled = NO;
@@ -155,7 +160,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _placeholder = [[UILabel alloc] init];
     _placeholder.backgroundColor = [UIColor clearColor];
     _placeholder.font = ExteriaFontRegular(16);
-    _placeholder.textColor = ExteriaColorMuted();
+    _placeholder.textColor = classic ? ExteriaColorMuted() : (ExteriaImportedThemeColor("chat.inputPanel.inputPlaceholder_v2") ?: ExteriaColorMuted());
     _placeholder.text = NSLocalizedString(@"chat.placeholder", nil);
     _placeholder.userInteractionEnabled = NO;
     [_field addSubview:_placeholder];
@@ -232,7 +237,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _recording.layer.cornerRadius = FIELD_MIN / 2;
     _recording.hidden = YES;
     _dot = [[UIView alloc] init];
-    _dot.backgroundColor = [UIColor colorWithRed:0.92 green:0.22 blue:0.22 alpha:1];
+    _dot.backgroundColor = ExteriaImportedThemeColor("chat.inputPanel.mediaRecordDot") ?: [UIColor colorWithRed:0.92 green:0.22 blue:0.22 alpha:1];
     _dot.layer.cornerRadius = 5;
     [_recording addSubview:_dot];
     _timer = [[UILabel alloc] init];
@@ -433,9 +438,9 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 - (void)refreshControls {
     UIColor *glyph = ExteriaColorSecondary();
-    [_panelButton setImage:ExteriaSymbolImage(_panelShown ? ExteriaSymbolKeyboard : ExteriaSymbolSmiley, 24, glyph) forState:UIControlStateNormal];
-    [_attachButton setImage:ExteriaSymbolImage(ExteriaSymbolPaperclip, 24, glyph) forState:UIControlStateNormal];
-    [_botButton setImage:_botState == ExteriaBotKeyboardOpen ? ExteriaSymbolImage(ExteriaSymbolKeyboard, 24, glyph) : ExteriaSymbolImage(ExteriaSymbolApps, 24, glyph) forState:UIControlStateNormal];
+    ExteriaInputSetImage(_panelButton, ExteriaSymbolImage(_panelShown ? ExteriaSymbolKeyboard : ExteriaSymbolSmiley, 24, glyph), UIControlStateNormal);
+    ExteriaInputSetImage(_attachButton, ExteriaSymbolImage(ExteriaSymbolPaperclip, 24, glyph), UIControlStateNormal);
+    ExteriaInputSetImage(_botButton, _botState == ExteriaBotKeyboardOpen ? ExteriaSymbolImage(ExteriaSymbolKeyboard, 24, glyph) : ExteriaSymbolImage(ExteriaSymbolApps, 24, glyph), UIControlStateNormal);
     BOOL empty = [[self trimmedText] length] == 0;
     _placeholder.hidden = _text.text.length > 0;
     /* the clip steps aside once there are words in the field, and the text takes its room */
@@ -447,10 +452,10 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     BOOL plane = !empty || _lockedRecording;
     ExteriaSymbol symbol = plane ? ExteriaSymbolSendArrow : (_mode == ExteriaRecordRound ? ExteriaSymbolVideoCamera : ExteriaSymbolMicrophone);
     if (ExteriaThemeIsClassic()) {
-        [_send setImage:ExteriaClassicRoundButtonImage(symbol, BUTTON, NO) forState:UIControlStateNormal];
-        [_send setImage:ExteriaClassicRoundButtonImage(symbol, BUTTON, YES) forState:UIControlStateHighlighted];
+        ExteriaInputSetImage(_send, ExteriaClassicRoundButtonImage(symbol, BUTTON, NO), UIControlStateNormal);
+        ExteriaInputSetImage(_send, ExteriaClassicRoundButtonImage(symbol, BUTTON, YES), UIControlStateHighlighted);
     } else {
-        [_send setImage:ExteriaSymbolImage(symbol, !empty ? 18 : 20, [UIColor whiteColor]) forState:UIControlStateNormal];
+        ExteriaInputSetImage(_send, ExteriaSymbolImage(symbol, !empty ? 18 : 20, [UIColor whiteColor]), UIControlStateNormal);
     }
     /* the glyph pops in when the field gains its first character or loses its last, never during a recording whose gesture owns the button */
     if (plane != _sendShowsPlane) {
@@ -1031,6 +1036,13 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     /* the smiley stands at the left edge of the field and the clip at the right, with the text between them */
     _panelButton.frame = CGRectMake(2, _fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
     _attachButton.frame = CGRectMake(fieldWidth - PANEL_BUTTON_WIDTH - 2, _fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
+    /* the images are assigned before the buttons have their first nonzero bounds */
+    if (fieldWidth > 0 && size.width > 0) {
+        [_attachButton setNeedsLayout];
+        [_send setNeedsLayout];
+        [_attachButton layoutIfNeeded];
+        [_send layoutIfNeeded];
+    }
     /* a bot's keyboard button stands between the text and the clip */
     CGFloat botRoom = _botButton.hidden ? 0 : PANEL_BUTTON_WIDTH;
     CGFloat attachRoom = _attachButton.hidden ? 0 : PANEL_BUTTON_WIDTH;

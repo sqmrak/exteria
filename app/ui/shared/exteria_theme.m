@@ -3,11 +3,14 @@
 #import <objc/message.h>
 
 #import "exteria_wallpaper.h"
+#import "exteria_imported_theme.h"
+#include "exteria_wallpaper_tint.h"
 
 #include <math.h>
 
 /* the palette is purple, and the chat wallpaper can turn every hue of it: the turn in degrees, zero for the purple of the app */
 static CGFloat ExteriaTintShift = 0;
+static BOOL ExteriaNeutralTint = NO;
 /* the hue of the accent in the palette below, which a wallpaper hue is measured from */
 #define EXTERIA_PALETTE_HUE 286.0
 
@@ -46,7 +49,9 @@ static void ExteriaHSVToRGB(CGFloat hue, CGFloat saturation, CGFloat value, CGFl
 
 /* the color with its hue turned by the shift of the wallpaper; greys stay grey, since the turn leaves the saturation alone */
 static UIColor *ExteriaTurnedColor(CGFloat red, CGFloat green, CGFloat blue, CGFloat alpha) {
-    if (ExteriaTintShift != 0) {
+    if (ExteriaNeutralTint) {
+        red = green = blue = 0.299f * red + 0.587f * green + 0.114f * blue;
+    } else if (ExteriaTintShift != 0) {
         CGFloat h, s, v;
         ExteriaRGBToHSV(red, green, blue, &h, &s, &v);
         if (s > 0) {
@@ -57,7 +62,7 @@ static UIColor *ExteriaTurnedColor(CGFloat red, CGFloat green, CGFloat blue, CGF
 }
 
 UIColor *ExteriaThemeTinted(UIColor *color) {
-    if (ExteriaTintShift == 0) return color;
+    if (ExteriaTintShift == 0 && !ExteriaNeutralTint) return color;
     CGColorRef ref = color.CGColor;
     const CGFloat *c = CGColorGetComponents(ref);
     size_t count = CGColorGetNumberOfComponents(ref);
@@ -96,12 +101,16 @@ static NSString *const ExteriaTintHueKey = @"ExteriaThemeTintHue";
 NSString *const ExteriaThemeDidChangeNotification = @"ExteriaThemeDidChangeNotification";
 NSString *const ExteriaThemeOriginKey = @"origin";
 
+BOOL ExteriaClassicThemeAvailable(void) {
+    return [[[UIDevice currentDevice] systemVersion] integerValue] <= 10;
+}
+
 BOOL ExteriaThemeStoredClassic(void) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:ExteriaClassicThemeKey];
+    return ExteriaClassicThemeAvailable() && [[NSUserDefaults standardUserDefaults] boolForKey:ExteriaClassicThemeKey];
 }
 
 void ExteriaThemeStoreClassic(BOOL classic) {
-    [[NSUserDefaults standardUserDefaults] setBool:classic forKey:ExteriaClassicThemeKey];
+    [[NSUserDefaults standardUserDefaults] setBool:classic && ExteriaClassicThemeAvailable() forKey:ExteriaClassicThemeKey];
     if (![[NSUserDefaults standardUserDefaults] synchronize]) NSLog(@"exteria: theme style was not saved");
 }
 
@@ -145,6 +154,7 @@ UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark) {
 void ExteriaThemeApply(BOOL dark) {
     ExteriaDark = dark;
     ExteriaTintShift = 0;
+    ExteriaNeutralTint = NO;
     /* the login keeps its light waves, the signed in root restores the stored style */
     ExteriaClassic = NO;
     UIApplication *application = [UIApplication sharedApplication];
@@ -155,33 +165,44 @@ void ExteriaThemeApply(BOOL dark) {
 
 void ExteriaThemeApplyStored(void) {
     ExteriaThemeApply(ExteriaThemeStoredDark());
+    ExteriaImportedThemeReload(ExteriaThemeStoredDark());
     /* the hue is that of the wallpaper of the tone that is stored now, whatever the other tone left behind */
     ExteriaWallpaperSyncTintForTone(ExteriaThemeStoredDark());
     ExteriaClassic = ExteriaThemeStoredClassic();
     float hue = 0;
-    ExteriaTintShift = ExteriaThemeStoredTint(&hue) ? (CGFloat)hue - EXTERIA_PALETTE_HUE : 0;
+    BOOL tinted = ExteriaThemeStoredTint(&hue);
+    ExteriaNeutralTint = tinted && hue == EXTERIA_WALLPAPER_NEUTRAL_HUE;
+    ExteriaTintShift = tinted && !ExteriaNeutralTint ? (CGFloat)hue - EXTERIA_PALETTE_HUE : 0;
+    if (!ExteriaClassic && ExteriaImportedThemeSelected(ExteriaDark)) {
+        ExteriaTintShift = 0;
+        ExteriaNeutralTint = NO;
+    }
     /* the classic bars are dark purple whatever the theme, so the status bar over them is light */
     UIApplication *application = [UIApplication sharedApplication];
     if (ExteriaClassic && [application respondsToSelector:@selector(setStatusBarStyle:animated:)]) [application setStatusBarStyle:(UIStatusBarStyle)1 animated:NO];
+    else if ([application respondsToSelector:@selector(setStatusBarStyle:animated:)]) {
+        NSString *status = ExteriaImportedThemeStatusBar();
+        if (status) [application setStatusBarStyle:ExteriaStatusBarStyle([status isEqualToString:@"white"]) animated:NO];
+    }
 }
 
-UIColor *ExteriaColorBackdrop(void) { if (ExteriaClassic || ExteriaDark) return ExteriaColorScreen(); return ExteriaRGB(242, 232, 249); }
-UIColor *ExteriaColorScreen(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(24, 21, 32) : ExteriaRGB(247, 245, 251); return ExteriaDark ? ExteriaRGB(21, 18, 31) : ExteriaRGB(251, 250, 254); }
-UIColor *ExteriaColorField(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(46, 41, 59) : ExteriaRGB(236, 232, 245); return ExteriaDark ? ExteriaRGB(43, 39, 62) : ExteriaRGB(237, 234, 248); }
-UIColor *ExteriaColorCard(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(34, 30, 44) : [UIColor whiteColor]; return ExteriaDark ? ExteriaRGB(34, 30, 49) : ExteriaRGB(255, 255, 255); }
-UIColor *ExteriaColorBar(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(38, 32, 52) : ExteriaRGB(253, 252, 254); return ExteriaDark ? ExteriaRGB(27, 23, 40) : ExteriaRGB(255, 255, 255); }
-UIColor *ExteriaColorHairline(void) { return ExteriaDark ? [UIColor colorWithWhite:1 alpha:0.09] : [UIColor colorWithWhite:0 alpha:0.1]; }
-UIColor *ExteriaColorAccent(void) { return ExteriaDark ? ExteriaRGB(172, 98, 222) : ExteriaRGB(164, 75, 190); }
-UIColor *ExteriaColorAccentDark(void) { return ExteriaRGB(132, 44, 160); }
-UIColor *ExteriaColorTitle(void) { return ExteriaDark ? ExteriaRGB(240, 238, 248) : ExteriaRGB(34, 34, 38); }
-UIColor *ExteriaColorMessage(void) { return ExteriaDark ? ExteriaRGB(176, 170, 196) : ExteriaRGB(86, 86, 92); }
-UIColor *ExteriaColorDotOff(void) { return ExteriaDark ? ExteriaRGB(84, 78, 104) : ExteriaRGB(208, 204, 212); }
-UIColor *ExteriaColorSecondary(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(172, 164, 190) : ExteriaRGB(116, 108, 132); return ExteriaDark ? ExteriaRGB(151, 143, 178) : ExteriaRGB(128, 112, 140); }
-UIColor *ExteriaColorMuted(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(130, 122, 150) : ExteriaRGB(156, 148, 172); return ExteriaDark ? ExteriaRGB(108, 101, 134) : ExteriaRGB(176, 166, 186); }
-UIColor *ExteriaColorBadgeRed(void) { return ExteriaRGB(230, 62, 72); }
+UIColor *ExteriaColorBackdrop(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.blocksBg"); if (color) return color; } if (ExteriaClassic || ExteriaDark) return ExteriaColorScreen(); return ExteriaRGB(242, 232, 249); }
+UIColor *ExteriaColorScreen(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.plainBg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(24, 21, 32) : ExteriaRGB(247, 245, 251); return ExteriaDark ? ExteriaRGB(21, 18, 31) : ExteriaRGB(251, 250, 254); }
+UIColor *ExteriaColorField(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.itemInputField.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(46, 41, 59) : ExteriaRGB(236, 232, 245); return ExteriaDark ? ExteriaRGB(43, 39, 62) : ExteriaRGB(237, 234, 248); }
+UIColor *ExteriaColorCard(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.itemBlocksBg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(34, 30, 44) : [UIColor whiteColor]; return ExteriaDark ? ExteriaRGB(34, 30, 49) : ExteriaRGB(255, 255, 255); }
+UIColor *ExteriaColorBar(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("root.navBar.background"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(38, 32, 52) : ExteriaRGB(253, 252, 254); return ExteriaDark ? ExteriaRGB(27, 23, 40) : ExteriaRGB(255, 255, 255); }
+UIColor *ExteriaColorHairline(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.plainSeparator") : nil; if (color) return color; return ExteriaDark ? [UIColor colorWithWhite:1 alpha:0.09] : [UIColor colorWithWhite:0 alpha:0.1]; }
+UIColor *ExteriaColorAccent(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.accent") : nil; if (color) return color; return ExteriaDark ? ExteriaRGB(172, 98, 222) : ExteriaRGB(164, 75, 190); }
+UIColor *ExteriaColorAccentDark(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("root.navBar.button") : nil; return color ? color : ExteriaRGB(132, 44, 160); }
+UIColor *ExteriaColorTitle(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.primaryText") : nil; if (color) return color; return ExteriaDark ? ExteriaRGB(240, 238, 248) : ExteriaRGB(34, 34, 38); }
+UIColor *ExteriaColorMessage(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("chatList.messageText") : nil; if (color) return color; return ExteriaDark ? ExteriaRGB(176, 170, 196) : ExteriaRGB(86, 86, 92); }
+UIColor *ExteriaColorDotOff(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.placeholderText") : nil; return color ? color : (ExteriaDark ? ExteriaRGB(84, 78, 104) : ExteriaRGB(208, 204, 212)); }
+UIColor *ExteriaColorSecondary(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.secondaryText"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(172, 164, 190) : ExteriaRGB(116, 108, 132); return ExteriaDark ? ExteriaRGB(151, 143, 178) : ExteriaRGB(128, 112, 140); }
+UIColor *ExteriaColorMuted(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chatList.muteIcon"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(130, 122, 150) : ExteriaRGB(156, 148, 172); return ExteriaDark ? ExteriaRGB(108, 101, 134) : ExteriaRGB(176, 166, 186); }
+UIColor *ExteriaColorBadgeRed(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("root.tabBar.badgeBackground") : nil; return color ? color : ExteriaRGB(230, 62, 72); }
 UIColor *ExteriaColorQrPaper(void) { return ExteriaRGB(244, 236, 251); }
-UIColor *ExteriaColorBubbleOut(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(65, 51, 84) : ExteriaRGB(235, 225, 249); return ExteriaDark ? ExteriaRGB(124, 70, 196) : ExteriaRGB(139, 80, 214); }
-UIColor *ExteriaColorBubbleIn(void) { if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(54, 47, 68) : [UIColor whiteColor]; return ExteriaDark ? ExteriaTurnedColor(0.14, 0.125, 0.2, 0.94) : [UIColor colorWithWhite:1 alpha:0.96]; }
+UIColor *ExteriaColorBubbleOut(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chat.message.outgoing.bubble.withWp.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(65, 51, 84) : ExteriaRGB(235, 225, 249); return ExteriaDark ? ExteriaRGB(124, 70, 196) : ExteriaRGB(139, 80, 214); }
+UIColor *ExteriaColorBubbleIn(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chat.message.incoming.bubble.withWp.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(54, 47, 68) : [UIColor whiteColor]; return ExteriaDark ? ExteriaTurnedColor(0.14, 0.125, 0.2, 0.94) : [UIColor colorWithWhite:1 alpha:0.96]; }
 UIColor *ExteriaColorBubbleCapsule(void) { return ExteriaTurnedColor(0.12, 0.1, 0.18, 0.5); }
 
 void ExteriaThemePreviewColors(BOOL classic, BOOL dark, UIColor **incoming, UIColor **outgoing, UIColor **incomingText, UIColor **outgoingText) {
@@ -197,18 +218,23 @@ void ExteriaThemePreviewColors(BOOL classic, BOOL dark, UIColor **incoming, UICo
 }
 
 UIColor *ExteriaColorChatBackground(void) {
+    UIColor *imported = !ExteriaClassic ? ExteriaImportedThemeColor("chat.defaultWallpaper") : nil;
+    if (imported) return imported;
     return ExteriaDark ? ExteriaRGB(25, 29, 36) : ExteriaRGB(218, 225, 233);
 }
 
 UIColor *ExteriaColorBubbleText(BOOL outgoing) {
+    if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.primaryText" : "chat.message.incoming.primaryText"); if (color) return color; }
     return outgoing && !ExteriaClassic ? [UIColor whiteColor] : ExteriaColorTitle();
 }
 
 UIColor *ExteriaColorBubbleLink(BOOL outgoing) {
+    if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.linkText" : "chat.message.incoming.linkText"); if (color) return color; }
     return outgoing && !ExteriaClassic ? [UIColor colorWithWhite:1 alpha:0.92] : ExteriaColorAccent();
 }
 
 UIColor *ExteriaColorBubbleMeta(BOOL outgoing) {
+    if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.secondaryText" : "chat.message.incoming.secondaryText"); if (color) return color; }
     return outgoing && !ExteriaClassic ? [UIColor colorWithWhite:1 alpha:0.78] : ExteriaColorSecondary();
 }
 

@@ -1,9 +1,12 @@
 #import "exteria_wallpaper.h"
 
 #include <math.h>
+#include <string.h>
 
 #import "exteria_platform.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
+#include "exteria_wallpaper_tint.h"
 #import "exteria_wave.h"
 #import <Accelerate/Accelerate.h>
 
@@ -412,8 +415,50 @@ void ExteriaApplyChatWallpaperSized(UIImageView *view, BOOL dark, CGSize size) {
     if (setting.kind != ExteriaWallpaperStandard) view.image = ExteriaSizedWallpaper(setting, size);
 }
 
+static UIImage *ExteriaImportedWallpaperGradientImage(const uint32_t values[4], NSUInteger count, int angle, CGSize size) {
+    if (size.width < 1 || size.height < 1 || count == 0 || count > 4) return nil;
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 3;
+        cache.totalCostLimit = 12 * 1024 * 1024;
+    });
+    NSString *key = [NSString stringWithFormat:@"%08x-%08x-%08x-%08x-%lu-%d-%.0fx%.0f", values[0], values[1], values[2], values[3], (unsigned long)count, angle, size.width, size.height];
+    UIImage *cached = [cache objectForKey:key];
+    if (cached) return cached;
+    CGFloat colors[16] = {0};
+    for (NSUInteger i = 0; i < count; ++i) {
+        colors[i * 4] = ((values[i] >> 16) & 255) / 255.0;
+        colors[i * 4 + 1] = ((values[i] >> 8) & 255) / 255.0;
+        colors[i * 4 + 2] = (values[i] & 255) / 255.0;
+        colors[i * 4 + 3] = ((values[i] >> 24) & 255) / 255.0;
+    }
+    UIGraphicsBeginImageContextWithOptions(size, YES, 1);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGFloat radians = angle * M_PI / 180.0;
+    CGFloat reach = (fabs(cos(radians)) * size.width + fabs(sin(radians)) * size.height) / 2;
+    CGPoint middle = CGPointMake(size.width / 2, size.height / 2);
+    CGPoint from = CGPointMake(middle.x - cos(radians) * reach, middle.y - sin(radians) * reach);
+    CGPoint to = CGPointMake(middle.x + cos(radians) * reach, middle.y + sin(radians) * reach);
+    if (count == 1) {
+        memcpy(colors + 4, colors, 4 * sizeof(CGFloat));
+        count = 2;
+    }
+    ExteriaFillGradient(context, from, to, colors, count);
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if (image) [cache setObject:image forKey:key cost:(NSUInteger)(size.width * size.height * 4)];
+    return image;
+}
+
 void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
-    view.image = classic ? nil : [UIImage imageNamed:dark ? @"chat_bg_dark.jpg" : @"chat_bg_light.jpg"];
+    uint32_t values[4] = {0};
+    int angle = 90;
+    NSUInteger importedColors = !classic ? ExteriaImportedThemeWallpaperGradient(values, &angle) : 0;
+    BOOL importedBackground = !classic && ExteriaImportedThemeColor("chat.defaultWallpaper") != nil;
+    view.image = classic || importedColors || importedBackground ? nil : [UIImage imageNamed:dark ? @"chat_bg_dark.jpg" : @"chat_bg_light.jpg"];
+    if (importedColors) view.image = ExteriaImportedWallpaperGradientImage(values, importedColors, angle, [UIScreen mainScreen].bounds.size);
     /* the classic wallpaper is a linen tile, laid as a pattern so the system repeats it at any size */
     UIImage *linen = classic ? [UIImage imageNamed:dark ? @"chat_linen_dark.png" : @"chat_linen_light.png"] : nil;
     view.backgroundColor = linen ? [UIColor colorWithPatternImage:linen] : ExteriaColorChatBackground();
@@ -421,6 +466,41 @@ void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
     view.clipsToBounds = YES;
 }
 
+
+UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIImage *file, CGSize size) {
+    if (!paper || !paper->present || size.width < 1 || size.height < 1) return nil;
+    if (paper->has_file && !paper->pattern) {
+        if (!file) return nil;
+        UIGraphicsBeginImageContextWithOptions(size, YES, 0);
+        CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationHigh);
+        [file drawInRect:ExteriaFillRect(file.size, size)];
+        UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        return image;
+    }
+    if (!paper->color_count) return nil;
+    uint32_t values[4] = {0};
+    for (NSUInteger i = 0; i < paper->color_count && i < 4; ++i) values[i] = 0xFF000000u | paper->colors[i];
+    /* the server counts its rotation from the top edge turning clockwise, the gradient here from the left edge turning the same way */
+    int angle = (int)(((paper->rotation % 360) + 360 + 90) % 360);
+    UIImage *ground = ExteriaImportedWallpaperGradientImage(values, paper->color_count, angle, size);
+    if (!ground || !paper->pattern || paper->intensity <= 0) return ground;
+    CGFloat red = 0, green = 0, blue = 0, shade = 0;
+    for (NSUInteger i = 0; i < paper->color_count; ++i) {
+        red += ((paper->colors[i] >> 16) & 255) / 255.0;
+        green += ((paper->colors[i] >> 8) & 255) / 255.0;
+        blue += (paper->colors[i] & 255) / 255.0;
+    }
+    shade = (red * 0.299 + green * 0.587 + blue * 0.114) / paper->color_count;
+    UIImage *doodle = ExteriaPatternInColor(shade > 0.5 ? [UIColor blackColor] : [UIColor whiteColor]);
+    if (!doodle) return ground;
+    UIGraphicsBeginImageContextWithOptions(size, YES, 0);
+    [ground drawInRect:CGRectMake(0, 0, size.width, size.height)];
+    [doodle drawInRect:ExteriaFillRect(doodle.size, size) blendMode:kCGBlendModeNormal alpha:(CGFloat)(paper->intensity / 100.0 * PATTERN_ALPHA_MAX)];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
 
 #pragma mark tint
 
@@ -432,7 +512,7 @@ static BOOL ExteriaPhotoHue(UIImage *image, float *hue) {
     CGContextRef context = CGBitmapContextCreate(pixels, Side, Side, 8, Side * 4, space, kCGImageAlphaPremultipliedLast);
     CGColorSpaceRelease(space);
     if (!context || !image.CGImage) {
-        CGContextRelease(context);
+        if (context) CGContextRelease(context);
         return NO;
     }
     CGContextDrawImage(context, CGRectMake(0, 0, Side, Side), image.CGImage);
@@ -465,15 +545,16 @@ static BOOL ExteriaWallpaperHue(ExteriaWallpaperSetting setting, BOOL dark, floa
     if (setting.kind == ExteriaWallpaperStandard) return NO;
     if (setting.kind == ExteriaWallpaperPhoto) {
         UIImage *photo = [UIImage imageWithContentsOfFile:ExteriaWallpaperPhotoPathForTone(dark)];
-        return photo && ExteriaPhotoHue(photo, hue);
+        if (!photo) return NO;
+        if (!ExteriaPhotoHue(photo, hue)) *hue = EXTERIA_WALLPAPER_NEUTRAL_HUE;
+        return YES;
     }
     CGFloat r = (((setting.top >> 16) & 0xFF) + ((setting.bottom >> 16) & 0xFF)) / 510.0;
     CGFloat g = (((setting.top >> 8) & 0xFF) + ((setting.bottom >> 8) & 0xFF)) / 510.0;
     CGFloat b = ((setting.top & 0xFF) + (setting.bottom & 0xFF)) / 510.0;
     CGFloat h, s, v;
     ExteriaRGBToHSV(r, g, b, &h, &s, &v);
-    if (s < 0.12 || v < 0.15) return NO;
-    *hue = (float)h;
+    *hue = exteria_wallpaper_tint((float)h, (float)s, (float)v);
     return YES;
 }
 
@@ -482,7 +563,7 @@ void ExteriaWallpaperRetintTheme(CGPoint origin) {
     BOOL tinted = ExteriaWallpaperHue(ExteriaWallpaperStored(), ExteriaThemeIsDark(), &hue);
     BOOL wasTinted = ExteriaThemeStoredTint(&was);
     /* a few degrees are not worth a new coat on every screen */
-    if (tinted == wasTinted && (!tinted || fabsf(hue - was) < 2)) return;
+    if (tinted == wasTinted && (!tinted || ((hue < 0) == (was < 0) && fabsf(hue - was) < 2))) return;
     ExteriaThemeStoreTint(tinted, hue);
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
                                                       userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:origin] forKey:ExteriaThemeOriginKey]];
@@ -493,6 +574,6 @@ void ExteriaWallpaperSyncTintForTone(BOOL dark) {
     BOOL tinted = ExteriaWallpaperHue(ExteriaWallpaperStoredForTone(dark), dark, &hue);
     float was = 0;
     BOOL wasTinted = ExteriaThemeStoredTint(&was);
-    if (tinted == wasTinted && (!tinted || fabsf(hue - was) < 0.5f)) return;
+    if (tinted == wasTinted && (!tinted || ((hue < 0) == (was < 0) && fabsf(hue - was) < 0.5f))) return;
     ExteriaThemeStoreTint(tinted, hue);
 }

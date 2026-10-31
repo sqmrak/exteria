@@ -189,10 +189,10 @@
     _avatar.seed = dialog.avatarSeed;
     _avatar.initials = dialog.initials;
     _avatar.deleted = dialog.deleted;
-    _avatar.accent = dialog.saved || dialog.folder;
-    _avatar.symbol = dialog.folder ? ExteriaSymbolArchive : ExteriaSymbolBookmark;
-    _avatar.showsSymbol = dialog.saved || dialog.folder;
-    [_avatar setPhoto:dialog.saved || dialog.folder ? nil : dialog.photo cache:avatars];
+    _avatar.accent = dialog.saved || dialog.folder || dialog.replies;
+    _avatar.symbol = dialog.folder ? ExteriaSymbolArchive : (dialog.replies ? ExteriaSymbolReply : ExteriaSymbolBookmark);
+    _avatar.showsSymbol = dialog.saved || dialog.folder || dialog.replies;
+    [_avatar setPhoto:dialog.saved || dialog.folder || dialog.replies ? nil : dialog.photo cache:avatars];
     /* a topic has the icon of its own in the place of the group's photo */
     BOOL topic = dialog.topicId > 0;
     _avatar.hidden = topic;
@@ -211,6 +211,7 @@
     _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), ExteriaDialogIsDeveloper(dialog), &badge);
     _title.entities = badge;
     _preview.text = dialog.preview;
+    _preview.entities = dialog.previewEntities;
     _draftPrefix = 0;
     _preview.hidden = NO;
     [_typing setStatus:@"" kind:ExteriaStatusPlain];
@@ -263,6 +264,7 @@
     if (!draft) return;
     NSString *label = NSLocalizedString(@"chats.draft", nil);
     _preview.text = [NSString stringWithFormat:@"%@ %@", label, ExteriaDraftPreviewText(draft)];
+    _preview.entities = nil;
     _draftPrefix = label.length;
     _time.text = ExteriaListTimeText(draft.date);
     _check.hidden = YES;
@@ -303,6 +305,7 @@
     _mutualButton.hidden = !person.mutual;
     _title.text = person.name;
     _preview.text = person.bot ? NSLocalizedString(@"seen.bot", nil) : ExteriaLastSeenText(person.presence, person.seen);
+    _preview.entities = nil;
     _preview.hidden = NO;
     _typing.hidden = YES;
     _preview.numberOfLines = 1;
@@ -337,6 +340,7 @@
     [_avatar setPhoto:call.photo cache:avatars];
     _title.text = call.name;
     _preview.text = [call summaryText];
+    _preview.entities = nil;
     _preview.hidden = NO;
     _typing.hidden = YES;
     _preview.numberOfLines = 1;

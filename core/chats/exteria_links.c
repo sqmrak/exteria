@@ -239,6 +239,10 @@ static void parse_tg(const char *rest, exteria_tg_link *out) {
         if (copy_slug(out->slug, sizeof(out->slug), value.start, value.len)) out->kind = EXTERIA_LINK_INVOICE;
     } else if (equals_nocase(rest, command_len, "join") && query_get(q, "invite", &value)) {
         if (copy_invite(out->slug, sizeof(out->slug), value.start, value.len)) out->kind = EXTERIA_LINK_INVITE;
+    } else if (equals_nocase(rest, command_len, "setlanguage") && query_get(q, "lang", &value)) {
+        if (copy_language(out->slug, sizeof(out->slug), value.start, value.len)) out->kind = EXTERIA_LINK_LANGUAGE;
+    } else if (equals_nocase(rest, command_len, "addtheme") && query_get(q, "slug", &value)) {
+        if (copy_slug(out->slug, sizeof(out->slug), value.start, value.len)) out->kind = EXTERIA_LINK_THEME;
     } else if (equals_nocase(rest, command_len, "proxy")) {
         read_proxy(q, 0, out);
     } else if (equals_nocase(rest, command_len, "socks")) {
@@ -282,6 +286,14 @@ static void parse_web(const char *path, size_t path_len, span q, exteria_tg_link
     }
     if (equals_nocase(first, first_len, "proxy") || equals_nocase(first, first_len, "socks")) {
         read_proxy(q, equals_nocase(first, first_len, "socks"), out);
+        return;
+    }
+    if (equals_nocase(first, first_len, "setlanguage")) {
+        if (second_len && copy_language(out->slug, sizeof(out->slug), second, second_len)) out->kind = EXTERIA_LINK_LANGUAGE;
+        return;
+    }
+    if (equals_nocase(first, first_len, "addtheme")) {
+        if (second_len && copy_slug(out->slug, sizeof(out->slug), second, second_len)) out->kind = EXTERIA_LINK_THEME;
         return;
     }
     if (equals_nocase(first, first_len, "call")) {

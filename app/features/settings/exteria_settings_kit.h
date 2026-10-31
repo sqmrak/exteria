@@ -20,7 +20,11 @@ typedef enum {
     ExteriaSettingsToneRed,
     ExteriaSettingsToneCyan,
     ExteriaSettingsTonePurple,
-    ExteriaSettingsToneGray
+    ExteriaSettingsToneGray,
+    /* a near black tone: the pale grey disc of the others with a black glyph on it, for what only the developers see */
+    ExteriaSettingsToneBlack,
+    /* a soft lilac, for the page that stands apart from the others */
+    ExteriaSettingsTonePurplePastel
 } ExteriaSettingsTone;
 
 /* the glyph in a circle of the tone, in the tonal style M3 list: a pale disc with a deep glyph, as the dark theme
@@ -185,6 +189,8 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
 - (void)themeDidChange;
 /* the middle of the row that was tapped last, in window coordinates, for a change that spreads over the screen from where the finger was */
 @property (nonatomic, readonly) CGPoint selectPoint;
+/* a view at the left end of the bar, where the title stands; a page that shows a picture there and no word sets it, and it hides while the search is open */
+@property (nonatomic, retain) UIView *leadingView;
 /* views at the right end of the bar, laid out from the right edge */
 @property (nonatomic, retain) NSArray *barViews;
 

@@ -13,6 +13,7 @@
 #import "exteria_sheet.h"
 #import "exteria_string_drawing.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_weak_reference.h"
 #import "exteria_wave_background_view.h"
 
@@ -37,7 +38,7 @@ static UIColor *ExteriaToneRGB(uint32_t rgb) {
 static void ExteriaToneEnds(ExteriaSettingsTone tone, uint32_t *top, uint32_t *bottom) {
     static const uint32_t table[][2] = {
         {0x1CA5ED, 0x1488E1}, {0x4F85F6, 0x3568E8}, {0x1BA4ED, 0x1488E1}, {0xF09F1B, 0xE18A11}, {0xEFA612, 0xE77512},
-        {0xF28B31, 0xE26314}, {0x55CA47, 0x27B434}, {0xF45255, 0xDF3955}, {0x32C0CE, 0x1D9CC6}, {0xC46EF4, 0x9F55DF}, {0x8699AA, 0x6E8397}
+        {0xF28B31, 0xE26314}, {0x55CA47, 0x27B434}, {0xF45255, 0xDF3955}, {0x32C0CE, 0x1D9CC6}, {0xC46EF4, 0x9F55DF}, {0x8699AA, 0x6E8397}, {0x2C2C30, 0x1C1C20}, {0xCDB8F5, 0xB59DEB}
     };
     *top = table[tone][0];
     *bottom = table[tone][1];
@@ -894,7 +895,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     [CATransaction commit];
     BOOL tappable = row.tap != nil;
     _card.backgroundColor = [UIColor clearColor];
-    UIColor *textColor = row.destructive ? ExteriaColorBadgeRed() : ExteriaColorTitle();
+    UIColor *textColor = row.destructive ? (ExteriaImportedThemeColor("list.destructive") ?: ExteriaColorBadgeRed()) : ExteriaColorTitle();
     _title.text = row.title;
     _title.textColor = textColor;
     _title.font = ExteriaRowTitleFont(row);
@@ -955,19 +956,19 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
             _value.hidden = NO;
         }
     }
+    UIImage *tile = nil;
     if (row.isSession) {
-        _tile.image = row.picture;
+        tile = row.picture;
     } else if (row.tileImage) {
-        _tile.image = row.tileImage;
+        tile = row.tileImage;
     } else if (row.hasSymbol && row.destructive) {
-        _tile.image = ExteriaSymbolImage(row.symbol, 26, textColor);
+        tile = ExteriaSymbolImage(row.symbol, 26, textColor);
     } else if (row.hasSymbol) {
-        _tile.image = ExteriaSettingsTileImage(row.symbol, row.tone, TILE);
-    } else {
-        _tile.image = nil;
+        tile = ExteriaSettingsTileImage(row.symbol, row.tone, TILE);
     }
+    if (_tile.image != tile) _tile.image = tile;
     _tile.hidden = _tile.image == nil;
-    _trailing.image = row.trailingImage;
+    if (_trailing.image != row.trailingImage) _trailing.image = row.trailingImage;
     _trailing.layer.masksToBounds = !row.trailingImageUnclipped;
     _trailing.hidden = row.trailingImage == nil;
     CGFloat dim = row.disabled ? 0.5 : 1;
@@ -1106,6 +1107,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     BOOL _showsBack;
     CGFloat _bottomInset;
     NSArray *_barViews;
+    UIView *_leadingView;
     CGFloat _titleAlpha;
     BOOL _contentUnderBar;
     CGFloat _barFill;
@@ -1181,6 +1183,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     [_headerView release];
     [_table release];
     [_barViews release];
+    [_leadingView release];
     [_backdrop release];
     [_back release];
     [_titleLabel release];
@@ -1226,6 +1229,15 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
         _table.tableHeaderView = _classic ? [self classicTableHeader] : _headerView;
         [self.view setNeedsLayout];
     }
+}
+
+- (UIView *)leadingView { return _leadingView; }
+- (void)setLeadingView:(UIView *)view {
+    [_leadingView removeFromSuperview];
+    [_leadingView release];
+    _leadingView = [view retain];
+    if ([self isViewLoaded] && _leadingView) [self.view addSubview:_leadingView];
+    [self.view setNeedsLayout];
 }
 
 - (NSArray *)barViews { return _barViews; }
@@ -1337,6 +1349,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _barBackground.alpha = 1;
     _back.hidden = NO;
     _titleLabel.hidden = YES;
+    _leadingView.hidden = YES;
     _searchButton.hidden = YES;
     for (UIView *view in _barViews) view.hidden = YES;
     _searchField.text = @"";
@@ -1365,6 +1378,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _searching = NO;
     _searchField.hidden = YES;
     _titleLabel.hidden = NO;
+    _leadingView.hidden = NO;
     _searchButton.hidden = !_searchable;
     for (UIView *view in _barViews) view.hidden = NO;
     _back.hidden = !_showsBack;
@@ -1523,7 +1537,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
         [root addSubview:_table];
     }
     _barBackground = [[UIView alloc] init];
-    _barBackground.backgroundColor = [ExteriaColorScreen() colorWithAlphaComponent:0.94];
+    _barBackground.backgroundColor = ExteriaImportedThemeColor("root.navBar.background") ?: [ExteriaColorScreen() colorWithAlphaComponent:0.94];
     _barBackground.alpha = _barFill;
     _barBackground.hidden = !_contentUnderBar;
     [root addSubview:_barBackground];
@@ -1535,20 +1549,21 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _emptyLabel.hidden = YES;
     [root addSubview:_emptyLabel];
     _back = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    [_back setImage:ExteriaSymbolImage(ExteriaSymbolBack, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
+    [_back setImage:ExteriaSymbolImage(ExteriaSymbolBack, 24, ExteriaImportedThemeColor("root.navBar.button") ?: ExteriaColorTitle()) forState:UIControlStateNormal];
     _back.accessibilityLabel = NSLocalizedString(@"story.close", nil);
     [_back addTarget:self action:@selector(goBack) forControlEvents:UIControlEventTouchUpInside];
     _back.hidden = !_showsBack;
     [root addSubview:_back];
     _titleLabel = [[UILabel alloc] init];
     _titleLabel.backgroundColor = [UIColor clearColor];
-    _titleLabel.textColor = ExteriaColorTitle();
+    _titleLabel.textColor = ExteriaImportedThemeColor("root.navBar.primaryText") ?: ExteriaColorTitle();
     _titleLabel.text = _pageTitle;
     _titleLabel.alpha = _titleAlpha;
     [root addSubview:_titleLabel];
     for (UIView *view in _barViews) [root addSubview:view];
+    if (_leadingView) [root addSubview:_leadingView];
     _searchButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    [_searchButton setImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
+    [_searchButton setImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 24, ExteriaImportedThemeColor("root.navBar.button") ?: ExteriaColorTitle()) forState:UIControlStateNormal];
     _searchButton.accessibilityLabel = NSLocalizedString(@"settings.search", nil);
     [_searchButton addTarget:self action:@selector(beginSearch) forControlEvents:UIControlEventTouchUpInside];
     _searchButton.frame = CGRectMake(0, 0, 44, 44);
@@ -1556,7 +1571,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     [root addSubview:_searchButton];
     _searchField = [[ExteriaSettingsSearchField alloc] init];
     _searchField.backgroundColor = [UIColor clearColor];
-    _searchField.textColor = ExteriaColorTitle();
+    _searchField.textColor = ExteriaImportedThemeColor("root.searchBar.inputText") ?: ExteriaColorTitle();
     _searchField.returnKeyType = UIReturnKeySearch;
     _searchField.autocorrectionType = UITextAutocorrectionTypeNo;
     _searchField.clearButtonMode = UITextFieldViewModeWhileEditing;
@@ -1693,6 +1708,11 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _back.hidden = !arrow;
     CGFloat titleLeft = arrow ? left + 62 : left + 20;
     _titleLabel.frame = CGRectMake(titleLeft, top, MAX(0, right - titleLeft), BAR_HEIGHT);
+    if (_leadingView) {
+        CGRect frame = _leadingView.frame;
+        frame.origin = CGPointMake(titleLeft - 8, top + (BAR_HEIGHT - frame.size.height) / 2);
+        _leadingView.frame = frame;
+    }
     _searchField.font = ExteriaFontRegular(18);
     _searchField.frame = CGRectMake(titleLeft, top + (BAR_HEIGHT - 32) / 2, MAX(0, edge - 12 - titleLeft), 32);
     CGFloat tableTop = (_contentUnderBar && !_searching) ? top : top + BAR_HEIGHT;

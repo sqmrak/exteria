@@ -22,7 +22,9 @@ typedef enum exteria_link_kind {
     EXTERIA_LINK_SOCKS,         /* a SOCKS5 proxy: server and port, with a user and a password or without */
     EXTERIA_LINK_INVITE,        /* an invite to a private group or channel: the hash is in slug */
     EXTERIA_LINK_CALL,          /* t.me/call/<slug>: a conference call by its slug */
-    EXTERIA_LINK_PRIVATE_POST   /* t.me/c/<channel>/<post> or tg://privatepost: a message of a channel or group by its number, for members */
+    EXTERIA_LINK_PRIVATE_POST,  /* t.me/c/<channel>/<post> or tg://privatepost: a message of a channel or group by its number, for members */
+    EXTERIA_LINK_LANGUAGE,      /* t.me/setlanguage/<code> or tg://setlanguage?lang=<code>: a language pack by its code, which is in slug */
+    EXTERIA_LINK_THEME          /* t.me/addtheme/<slug> or tg://addtheme?slug=<slug>: a cloud theme by its slug */
 } exteria_link_kind;
 
 typedef struct exteria_tg_link {

@@ -10,6 +10,7 @@
 #import "exteria_chat_settings.h"
 #import "exteria_peer_colors.h"
 #import "exteria_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_emoji_store.h"
 #import "exteria_music_player.h"
 #import "exteria_developers.h"
@@ -1013,13 +1014,14 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         y = pictureTop + pictureSize.height + (hasText ? 5 : PICTURE_INSET);
         contentWidth = MAX(contentWidth, pictureSize.width + 2 * PICTURE_INSET - 2 * PAD_X);
     } else if (file) {
+        UIColor *fileTitleColor = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.fileTitle" : "chat.message.incoming.fileTitle") ?: textColor;
         [_fileTitleLayout release];
         _fileTitleLayout = [[ExteriaTextLayout layoutForText:_fileTitle entities:nil font:ExteriaFontMedium(15) color:textColor
                                                    linkColor:textColor width:MAX(40, textMax - 54) maxLines:1 flush:0] retain];
         [_fileDetailLayout release];
         _fileDetailLayout = nil;
         if (_message.media.kind == EXTERIA_PREVIEW_AUDIO) {
-            UIColor *detailColor = ExteriaColorBubbleMeta(outgoing);
+            UIColor *detailColor = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.fileDescription" : "chat.message.incoming.fileDescription") ?: ExteriaColorBubbleMeta(outgoing);
             _fileDetailLayout = [[ExteriaTextLayout layoutForText:_fileDetail entities:nil font:ExteriaFontRegular(13) color:detailColor
                 linkColor:detailColor width:MAX(40, textMax - 54) maxLines:1 flush:0] retain];
         }
