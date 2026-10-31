@@ -14,7 +14,7 @@
 #define CARD_WIDTH 232.0
 #define ICON_SIDE 22.0
 
-@interface ExteriaPopupMenu () {
+@interface ExteriaPopupMenu () <UIGestureRecognizerDelegate> {
     NSArray *_titles;
     ExteriaSymbol *_symbols;
     void (^_handler)(NSUInteger);
@@ -39,8 +39,16 @@
     _handler = [handler copy];
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)] autorelease];
+    tap.delegate = self;
     [self addGestureRecognizer:tap];
     return self;
+}
+
+/* the tap that closes the menu belongs to the space around the card: a tap on a row is the row's alone, whatever the system does about the
+   tap recognizer of a view that lies under a button */
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
+    (void)gesture;
+    return !_card || ![touch.view isDescendantOfView:_card];
 }
 
 - (void)dealloc {
