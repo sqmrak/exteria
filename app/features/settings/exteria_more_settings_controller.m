@@ -1,7 +1,6 @@
 #import "exteria_more_settings_controller.h"
 
 #import "exteria_alert.h"
-#import "exteria_ayu_controller.h"
 #import "exteria_chat_settings.h"
 #import "exteria_gift_screen.h"
 #import "exteria_problem_report.h"
@@ -164,17 +163,8 @@ static NSString *ExteriaDeleteErrorText(NSString *errorName) {
     [proxyRows addObject:proxyAdd];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"proxy.title", nil) footer:NSLocalizedString(@"proxy.info", nil) rows:proxyRows]];
 
-    ExteriaSettingsRow *ayu = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolEyeSlash tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"ayu.title", nil) subtitle:nil value:nil tap:^{
-        ExteriaMoreSettingsController *me = weak.target;
-        if (me) [me.navigationController pushViewController:[[[ExteriaAyuController alloc] initWithSession:me->_session] autorelease] animated:YES];
-    }];
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"more.ayu.header", nil) footer:NSLocalizedString(@"ayu.info", nil) rows:[NSArray arrayWithObject:ayu]]];
-
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"more.experimental", nil) footer:NSLocalizedString(@"more.localpremium.info", nil)
                                                              rows:[NSArray arrayWithObject:[self flagRow:@"more.localpremium" info:nil flag:ExteriaChatFlagLocalPremium rebuild:YES]]]];
-
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"more.other", nil) footer:NSLocalizedString(@"more.boykisser.info", nil)
-                                                             rows:[NSArray arrayWithObject:[self flagRow:@"more.boykisser" info:nil flag:ExteriaChatFlagBoykisser rebuild:YES]]]];
 
     ExteriaSettingsRow *reset = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolRotate title:NSLocalizedString(@"more.reset", nil) destructive:YES tap:^{
         ExteriaMoreSettingsController *me = weak.target;

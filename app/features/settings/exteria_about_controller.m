@@ -1,3 +1,4 @@
+#import "exteria_ayu_controller.h"
 #import "exteria_about_controller.h"
 #import "exteria_general_settings_controller.h"
 #import "exteria_more_settings_controller.h"
@@ -550,6 +551,12 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
         }],
         [self categoryRow:ExteriaSymbolSettingsChat tone:ExteriaSettingsToneGreen key:@"about.chats" page:^UIViewController *{
             return [[[ExteriaChatExtrasController alloc] initWithSession:session] autorelease];
+        }],
+        [self categoryRow:ExteriaSymbolEyeSlash tone:ExteriaSettingsTonePurplePastel key:@"ayu.title" page:^UIViewController *{
+            return [[[ExteriaAyuController alloc] initWithSession:session] autorelease];
+        }],
+        [self categoryRow:ExteriaSymbolApps tone:ExteriaSettingsToneCyan key:@"plugins.title" page:^UIViewController *{
+            return [[[ExteriaPluginsController alloc] init] autorelease];
         }],
         [self categoryRow:ExteriaSymbolEllipsis tone:ExteriaSettingsToneGray key:@"about.more" page:^UIViewController *{
             return [[[ExteriaMoreSettingsController alloc] initWithSession:session] autorelease];
