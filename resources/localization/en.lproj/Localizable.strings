@@ -167,6 +167,7 @@
 "chat.empty" = "No messages yet";
 "chat.forwarded" = "Forwarded message";
 "chat.forwarded.from" = "Forwarded from %@";
+"chat.via" = "via @%@";
 "chat.panel" = "Emoji and stickers";
 "chat.placeholder" = "Message";
 "chat.readonly" = "Messages in this channel are read only";

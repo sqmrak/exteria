@@ -167,6 +167,7 @@
 "chat.empty" = "Сообщений пока нет";
 "chat.forwarded" = "Пересланное сообщение";
 "chat.forwarded.from" = "Переслано от %@";
+"chat.via" = "via @%@";
 "chat.panel" = "Эмодзи и стикеры";
 "chat.placeholder" = "Сообщение";
 "chat.readonly" = "Сообщения в этом канале только для чтения";

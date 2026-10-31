@@ -281,7 +281,9 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
     if (!_markup) return @"";
     NSMutableString *key = [NSMutableString stringWithFormat:@"%d:", (int)_markup.kind];
     for (NSArray *row in _markup.rows) {
-        for (ExteriaMarkupButton *button in row) [key appendFormat:@"%d,%@,%@;", (int)button.kind, button.text, button.argument];
+        /* the data of a callback is part of what the button is: a bot that edits its message in place keeps the words of "next" and changes what it sends back, and a
+           row kept for the old data answers every press with DATA_INVALID */
+        for (ExteriaMarkupButton *button in row) [key appendFormat:@"%d,%@,%@,%@;", (int)button.kind, button.text, button.argument, button.data ? [button.data description] : @""];
         [key appendString:@"|"];
     }
     return key;

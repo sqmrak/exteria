@@ -448,6 +448,7 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
         [_item.senderLayout drawAtPoint:_item.senderOrigin];
         [_item.senderTagLayout drawAtPoint:_item.senderTagOrigin];
     }
+    if (_item.viaText.length) [_item.viaLayout drawAtPoint:_item.viaOrigin];
     if (_item.forwardText.length) {
         [_item.forwardLayout drawAtPoint:_item.forwardOrigin];
     }

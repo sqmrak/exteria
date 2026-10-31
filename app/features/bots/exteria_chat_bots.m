@@ -335,10 +335,17 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
 
 - (void)startWithParam:(NSString *)param {
     if (!_bot || _starting) return;
+    /* messages.startBot refuses an empty parameter (START_PARAM_EMPTY), so a start with none is the "/start" message itself, which the official clients send too */
+    if (!param.length) {
+        [self bar].actionTitle = nil;
+        [_host botsSendText:@"/start" replyTo:0];
+        [_host botsRelayout];
+        return;
+    }
     _starting = YES;
     [self bar].actionTitle = nil;
     ExteriaWeakReference *weak = _weak;
-    [_session startBot:_bot inDialog:_dialog param:param ? param : @"" randomId:[_host botsRandomId] completion:^(int32_t messageId, NSString *errorName) {
+    [_session startBot:_bot inDialog:_dialog param:param randomId:[_host botsRandomId] completion:^(int32_t messageId, NSString *errorName) {
         (void)messageId;
         ExteriaChatBots *bots = weak.target;
         if (!bots) return;

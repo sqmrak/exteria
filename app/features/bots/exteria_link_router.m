@@ -5,6 +5,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
+#import "exteria_star_gift.h"
 #import "exteria_article_controller.h"
 #import "exteria_chat_controller.h"
 #import "exteria_session_channels.h"

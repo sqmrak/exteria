@@ -11,6 +11,9 @@
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
 
+/* the pages of the list the picker asks for before it stops: the chats that matter are among the first ones, and the search reaches the rest on the server */
+#define PICKER_PAGES_MAX 20
+
 @interface ExteriaDialogPickerController () {
     ExteriaSession *_session;
     ExteriaAvatarCache *_avatars;
@@ -28,6 +31,10 @@
     NSArray *_remoteResults;
     NSString *_remoteError;
     NSMutableSet *_pageCursors;
+    /* the chats held, by kind and id, so a page of the list is added in one pass; and whether the rows are due to be built again */
+    NSMutableSet *_heldKeys;
+    BOOL _rebuildScheduled;
+    NSUInteger _pagesLoaded;
 }
 @end
 
@@ -62,6 +69,8 @@
     [_remoteQuery release];
     [_remoteResults release];
     [_remoteError release];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    [_heldKeys release];
     [_pageCursors release];
     [_status release];
     [_picked release];
@@ -109,6 +118,14 @@
         }];
     }
     if (_forwarding) {
+        /* the chat list the main screen kept fills the picker at once, as the list of the destinations of the official clients does; the
+           pages from the network then add what was not kept, so a slow or refused page no longer leaves only the contacts */
+        for (int32_t kept = 0; kept <= 1; ++kept) {
+            [_session loadCachedDialogsInFolder:kept completion:^(NSArray *items, NSString *errorName) {
+                ExteriaDialogPickerController *me = weak.target;
+                if (me && items) [me addDestinations:items];
+            }];
+        }
         [self loadFolder:0 after:nil];
         [self loadFolder:1 after:nil];
         [_session loadContacts:^(NSArray *items, NSString *errorName) {
@@ -145,20 +162,41 @@
             NSLog(@"exteria: forwarding folder %d did not load: %@", (int)folder, errorName);
             [me->_status release]; me->_status = [ExteriaGiftErrorText(errorName) copy];
             [me rebuild];
-        } else if (next) [me loadFolder:folder after:next];
+        } else if (next && ++me->_pagesLoaded <= PICKER_PAGES_MAX) [me loadFolder:folder after:next];
     }];
 }
 
+/* a page of the list comes in a moment after the one before, and every one of them built the whole table again and searched the whole list for each chat of the page, which froze a phone with
+   a long list of chats; the chats are kept by key, and the table is built once after the pages have stopped coming */
 - (void)addDestinations:(NSArray *)items {
+    if (!_heldKeys) {
+        _heldKeys = [[NSMutableSet alloc] init];
+        for (ExteriaDialog *row in _all) [_heldKeys addObject:[NSString stringWithFormat:@"%d:%lld", row.peerKind, row.peerId]];
+    }
     NSMutableArray *rows = [NSMutableArray arrayWithArray:_all ? _all : [NSArray array]];
+    BOOL added = NO;
     for (ExteriaDialog *candidate in items) {
         if (![self usable:candidate]) continue;
-        BOOL found = NO;
-        for (ExteriaDialog *row in rows) if (row.peerKind == candidate.peerKind && row.peerId == candidate.peerId) { found = YES; break; }
-        if (!found) [rows addObject:candidate];
+        NSString *key = [NSString stringWithFormat:@"%d:%lld", candidate.peerKind, candidate.peerId];
+        if ([_heldKeys containsObject:key]) continue;
+        [_heldKeys addObject:key];
+        [rows addObject:candidate];
+        added = YES;
     }
+    if (!added) return;
     [_all release]; _all = [rows copy];
     if (_all.count) { [_status release]; _status = nil; }
+    [self scheduleRebuild];
+}
+
+- (void)scheduleRebuild {
+    if (_rebuildScheduled) return;
+    _rebuildScheduled = YES;
+    [self performSelector:@selector(runScheduledRebuild) withObject:nil afterDelay:0.2];
+}
+
+- (void)runScheduledRebuild {
+    _rebuildScheduled = NO;
     [self rebuild];
     if (self.searching) [self reloadSearchResults];
 }

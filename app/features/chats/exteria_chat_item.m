@@ -83,6 +83,7 @@
 @synthesize senderTagOrigin = _senderTagOrigin;
 @synthesize senderColor = _senderColor;
 @synthesize forwardText = _forwardText;
+@synthesize viaText = _viaText;
 @synthesize replyTitle = _replyTitle;
 @synthesize replyText = _replyText;
 @synthesize replyEntities = _replyEntities;
@@ -125,6 +126,7 @@
 @synthesize pillShift = _pillShift;
 @synthesize senderLayout = _senderLayout;
 @synthesize forwardLayout = _forwardLayout;
+@synthesize viaLayout = _viaLayout;
 @synthesize fileTitleLayout = _fileTitleLayout;
 @synthesize fileDetailLayout = _fileDetailLayout;
 @synthesize timeSize = _timeSize;
@@ -145,6 +147,7 @@
 @synthesize callVideo = _callVideo;
 @synthesize senderOrigin = _senderOrigin;
 @synthesize forwardOrigin = _forwardOrigin;
+@synthesize viaOrigin = _viaOrigin;
 @synthesize textOrigin = _textOrigin;
 @synthesize timeOrigin = _timeOrigin;
 
@@ -479,6 +482,10 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
         if (message.forwardDate > 0 && ExteriaChatFlagGet(ExteriaChatFlagForwardDate)) line = [NSString stringWithFormat:@"%@ \u00b7 %@", line, ExteriaDayText(message.forwardDate)];
         item->_forwardText = [line copy];
     }
+    if (message.viaBotId) {
+        ExteriaPerson *bot = [people objectForKey:[NSNumber numberWithLongLong:message.viaBotId]];
+        if ([bot isKindOfClass:[ExteriaPerson class]] && bot.username.length) item->_viaText = [[NSString stringWithFormat:NSLocalizedString(@"chat.via", nil), bot.username] copy];
+    }
     if (isCall) {
         BOOL incoming = NO, failed = NO;
         item->_call = YES;
@@ -574,6 +581,11 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     return item;
 }
 
+- (void)dropForwardText {
+    [_forwardText release];
+    _forwardText = nil;
+}
+
 - (void)dealloc {
     [_message release];
     [_builtText release];
@@ -593,6 +605,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_senderPerson release];
     [_senderColor release];
     [_forwardText release];
+    [_viaText release];
     [_replyTitle release];
     [_replyText release];
     [_replyEntities release];
@@ -620,6 +633,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_pillLayout release];
     [_senderLayout release];
     [_forwardLayout release];
+    [_viaLayout release];
     [_fileTitleLayout release];
     [_fileDetailLayout release];
     [super dealloc];
@@ -996,6 +1010,15 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
         _senderTagOrigin = CGPointMake(PAD_X + _senderLayout.size.width + 6, y + 1);
         contentWidth = MAX(contentWidth, _senderLayout.size.width + (tagWidth > 0 ? tagWidth + 6 : 0));
         y += 17;
+    }
+    [_viaLayout release];
+    _viaLayout = nil;
+    if (_viaText.length) {
+        UIColor *viaColor = ExteriaColorBubbleLink(outgoing);
+        _viaLayout = [[ExteriaTextLayout layoutForText:_viaText entities:nil font:ExteriaFontRegular(12) color:viaColor linkColor:viaColor width:textMax maxLines:1 flush:0] retain];
+        _viaOrigin = CGPointMake(PAD_X, y);
+        contentWidth = MAX(contentWidth, _viaLayout.size.width);
+        y += 16;
     }
     if (_forwardText.length) {
         UIColor *forwardColor = ExteriaColorBubbleLink(outgoing);
