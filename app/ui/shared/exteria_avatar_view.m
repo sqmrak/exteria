@@ -127,7 +127,7 @@
     /* a photo that is a round shape on white or on nothing is cut to its circle in every shape of avatar, or the white of the corners shows */
     CGFloat radius = side * (_circular || (_image && _imageIsRound) ? 0.5 : (CGFloat)ExteriaAvatarCornerPercent() / 200.0);
     BOOL classicSymbol = ExteriaThemeIsClassic() && _showsSymbol && !_image &&
-                         (_symbol == ExteriaSymbolArchive || _symbol == ExteriaSymbolBookmark);
+                         (_symbol == ExteriaSymbolArchive || _symbol == ExteriaSymbolBookmark || _symbol == ExteriaSymbolReply);
     CGContextSaveGState(context);
     if (radius >= side * 0.5 && bounds.size.width == bounds.size.height) {
         CGContextAddEllipseInRect(context, bounds);

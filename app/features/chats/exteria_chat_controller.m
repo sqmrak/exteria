@@ -705,6 +705,10 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if (_dialog.kind == EXTERIA_DIALOG_CHANNEL && !_dialog.canPost) {
         _input.writable = NO;
         _input.readOnlyNote = NSLocalizedString(@"chat.readonly", nil);
+    } else if (_dialog.replies) {
+        /* nobody writes to the chat of the replies; it is read, like a channel */
+        _input.writable = NO;
+        _input.readOnlyNote = NSLocalizedString(@"chat.replies.readonly", nil);
     } else if (_dialog.savedSource && !_dialog.savedSource.saved) {
         /* a message written here would be the account's own note, not one from the chat the list is narrowed to */
         _input.writable = NO;
@@ -846,11 +850,11 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         mini.seed = _dialog.avatarSeed;
         mini.initials = _dialog.initials;
         mini.deleted = _dialog.deleted;
-        mini.accent = _dialog.saved;
-        mini.showsSymbol = _dialog.saved;
-        mini.symbol = ExteriaSymbolBookmark;
+        mini.accent = _dialog.saved || _dialog.replies;
+        mini.showsSymbol = _dialog.saved || _dialog.replies;
+        mini.symbol = _dialog.replies ? ExteriaSymbolReply : ExteriaSymbolBookmark;
         mini.circular = YES;
-        [mini setPhoto:_dialog.saved ? nil : _dialog.photo cache:_avatars];
+        [mini setPhoto:_dialog.saved || _dialog.replies ? nil : _dialog.photo cache:_avatars];
         mini.userInteractionEnabled = YES;
         [mini addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
         /* the ring stands in the bar item, which is a little wider than the picture, so the bar does not clip it */
@@ -893,11 +897,11 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _avatar.seed = _dialog.avatarSeed;
     _avatar.initials = _dialog.initials;
     _avatar.deleted = _dialog.deleted;
-    _avatar.accent = _dialog.saved;
-    _avatar.showsSymbol = _dialog.saved;
-    _avatar.symbol = ExteriaSymbolBookmark;
+    _avatar.accent = _dialog.saved || _dialog.replies;
+    _avatar.showsSymbol = _dialog.saved || _dialog.replies;
+    _avatar.symbol = _dialog.replies ? ExteriaSymbolReply : ExteriaSymbolBookmark;
     _avatar.circular = YES;
-    [_avatar setPhoto:_dialog.saved ? nil : _dialog.photo cache:_avatars];
+    [_avatar setPhoto:_dialog.saved || _dialog.replies ? nil : _dialog.photo cache:_avatars];
     _avatar.userInteractionEnabled = YES;
     [_avatar addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
     [_header addSubview:_avatar];
@@ -3399,6 +3403,7 @@ static void ExteriaRedrawTree(UIView *view) {
         if (!item) {
             item = album ? [ExteriaChatItem itemForAlbum:album group:group people:_people role:role] : [ExteriaChatItem itemForMessage:message group:group people:_people role:role];
             if (message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1) item.sharingExpired = sharingExpired;
+            if (_dialog.replies) [item dropForwardText];
             [item setReplyTitle:replyTitle text:replyText color:replyColor];
             item.replyEntities = replyEntities;
             item.reactionsHidden = [self reactionsHidden];

@@ -190,7 +190,10 @@
 "chat.stickers.failed" = "Stickers could not be loaded";
 "chat.stickers.loading" = "Loading stickers...";
 "chat.today" = "Today";
-"chat.unsupported" = "This message is not supported yet";
+"chats.readall" = "Read All";
+"chats.replies" = "Replies";
+"chat.replies.readonly" = "You cannot write in this chat";
+"chat.unsupported" = "Exteria does not support this message format :(";
 "chat.yesterday" = "Yesterday";
 "chat.reaction.choose" = "Your reaction";
 "chat.reaction.loading" = "Loading reactions...";
@@ -279,6 +282,7 @@
 "chat.pinned" = "Pinned message";
 "chat.share.nolink" = "This channel has no public link, so its posts cannot be linked";
 "chat.comments.unavailable" = "The discussion has not loaded yet";
+"chat.comments.deleted" = "The message was deleted.";
 "channel.comments.none" = "Leave a comment";
 "channel.comments.one" = "%d comment";
 "channel.comments.few" = "%d comments";
@@ -2247,6 +2251,7 @@
 "profile.video.unsupported" = "A video cannot be a profile picture yet.";
 "notif.chat.vibrate" = "Vibration";
 "notif.chat.vibrate.info" = "Shakes the phone for a message of this chat while the app is open. A setting of this phone.";
+"chat.comments.post" = "Post";
 "developer.badges" = "My badges";
 "developer.badges.header" = "Badges";
 "developer.badges.row.info" = "Put any badge of the team on your name, on this phone only";

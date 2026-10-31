@@ -77,6 +77,8 @@
 @property (nonatomic, readonly) long long peerId;
 @property (nonatomic, readonly) exteria_dialog_kind kind;
 @property (nonatomic, readonly) BOOL saved;
+/* the service chat where the replies to the comments of the account arrive: a person of the server that nobody can write to */
+@property (nonatomic, readonly) BOOL replies;
 @property (nonatomic, readonly) BOOL contact;
 /* the archive entry of the list, not a chat; folderId says which folder it opens */
 @property (nonatomic, readonly) BOOL folder;

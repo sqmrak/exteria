@@ -120,10 +120,10 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     _avatar.seed = dialog.avatarSeed;
     _avatar.initials = dialog.initials;
     _avatar.deleted = dialog.deleted;
-    _avatar.accent = dialog.saved;
-    _avatar.showsSymbol = dialog.saved;
-    _avatar.symbol = ExteriaSymbolBookmark;
-    [_avatar setPhoto:dialog.saved ? nil : dialog.photo cache:avatars];
+    _avatar.accent = dialog.saved || dialog.replies;
+    _avatar.showsSymbol = dialog.saved || dialog.replies;
+    _avatar.symbol = dialog.replies ? ExteriaSymbolReply : ExteriaSymbolBookmark;
+    [_avatar setPhoto:dialog.saved || dialog.replies ? nil : dialog.photo cache:avatars];
     /* the name wears the marks and the status of the person, as in the list of chats */
     NSArray *badges = nil;
     _title.dropsUndrawable = YES;

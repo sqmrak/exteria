@@ -18,6 +18,11 @@
 @synthesize peerId = _peerId;
 @synthesize kind = _kind;
 @synthesize saved = _saved;
+
+- (BOOL)replies {
+    return _peerKind == 1 && !_saved && (_peerId == 1271266957LL || _peerId == 708513LL);
+}
+
 @synthesize contact = _contact;
 @synthesize folder = _folder;
 @synthesize forum = _forum;
@@ -140,6 +145,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _participantsCount = row->participants_count;
     if (row->folder) _title = [NSLocalizedString(@"chats.archive", nil) copy];
     else if (row->saved) _title = [NSLocalizedString(@"chats.saved", nil) copy];
+    else if (row->peer_kind == 1 && (row->peer_id == 1271266957LL || row->peer_id == 708513LL)) _title = [NSLocalizedString(@"chats.replies", nil) copy];
     else if (row->deleted || !row->title[0]) _title = [NSLocalizedString(@"chats.deleted", nil) copy];
     else _title = [ExteriaFilteredText(ExteriaUtf8(row->title)) copy];
     _initials = [(row->saved || row->deleted ? @"" : ExteriaInitialsOfName(_title)) copy];

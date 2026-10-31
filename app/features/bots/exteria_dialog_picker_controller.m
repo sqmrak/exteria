@@ -85,7 +85,7 @@
 
 /* a chat can be picked when it is a real chat the person can write in */
 - (BOOL)usable:(ExteriaDialog *)dialog {
-    if (dialog.folder || dialog.community || dialog.left || dialog.topicId) return NO;
+    if (dialog.folder || dialog.community || dialog.left || dialog.topicId || dialog.replies) return NO;
     if (dialog.kind == EXTERIA_DIALOG_CHANNEL && !dialog.canPost) return NO;
     return _filter ? _filter(dialog) : YES;
 }

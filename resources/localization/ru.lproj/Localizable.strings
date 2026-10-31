@@ -190,7 +190,10 @@
 "chat.stickers.failed" = "Не удалось загрузить стикеры";
 "chat.stickers.loading" = "Загрузка стикеров...";
 "chat.today" = "Сегодня";
-"chat.unsupported" = "Это сообщение пока не поддерживается";
+"chats.readall" = "Прочитать всё";
+"chats.replies" = "Ответы";
+"chat.replies.readonly" = "Писать в этот чат нельзя";
+"chat.unsupported" = "Exteria не поддерживает данный формат сообщений :(";
 "chat.yesterday" = "Вчера";
 "chat.reaction.choose" = "Ваша реакция";
 "chat.reaction.loading" = "Загрузка реакций...";
@@ -279,6 +282,7 @@
 "chat.pinned" = "Закреплённое сообщение";
 "chat.share.nolink" = "У канала нет публичной ссылки, поэтому на пост нельзя дать ссылку";
 "chat.comments.unavailable" = "Обсуждение ещё не загрузилось";
+"chat.comments.deleted" = "Сообщение удалено.";
 "channel.comments.none" = "Оставить комментарий";
 "channel.comments.one" = "%d комментарий";
 "channel.comments.few" = "%d комментария";
@@ -2252,6 +2256,7 @@
 "profile.video.unsupported" = "Видео пока нельзя поставить на аватарку.";
 "notif.chat.vibrate" = "Вибрация";
 "notif.chat.vibrate.info" = "Встряхивает телефон при сообщении этого чата, пока приложение открыто. Настройка этого телефона.";
+"chat.comments.post" = "Пост";
 "developer.badges" = "Мои бейджи";
 "developer.badges.header" = "Бейджи";
 "developer.badges.row.info" = "Выставить себе любые бейджи команды, только на этом телефоне";
