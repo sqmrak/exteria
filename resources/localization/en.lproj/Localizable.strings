@@ -161,6 +161,9 @@
 "chat.edited" = "edited";
 "chat.greeting.title" = "Nothing here yet...";
 "chat.greeting.text" = "Send a message or tap the greeting below.";
+"chat.intro.note" = "%@ set this message for all new chats";
+"chat.saved.card.title" = "Your personal storage";
+"chat.saved.card.text" = "• Forward the messages you need here\n• Keep photos and videos here\n• Open this chat from any device\n• Search helps you find a message";
 "chat.empty" = "No messages yet";
 "chat.forwarded" = "Forwarded message";
 "chat.forwarded.from" = "Forwarded from %@";

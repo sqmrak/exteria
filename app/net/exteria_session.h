@@ -391,5 +391,7 @@ typedef enum { ExteriaChatCommandPin, ExteriaChatCommandUnpin, ExteriaChatComman
 - (void)clearRecentStickers:(void (^)(NSString *errorName))completion;
 /* ExteriaSticker items the server suggests for a waving hand, the greetings an empty chat offers */
 - (void)loadGreetingStickers:(ExteriaListCompletion)completion;
+/* stickers that match one emoticon, a static C string such as the waving hand */
+- (void)loadStickersWithEmoticon:(const char *)emoticon completion:(ExteriaListCompletion)completion;
 
 @end

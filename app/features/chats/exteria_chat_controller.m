@@ -2634,6 +2634,17 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 #pragma mark loading
 
 /* a chat with a person says so with a greeting to send; every other chat keeps the plain line */
+- (void)ensureGreetingCard {
+    if (_greeting) return;
+    _greeting = [[ExteriaGreetingView alloc] initWithMedia:_media];
+    ExteriaWeakReference *weak = _weak;
+    _greeting.onSend = ^(ExteriaSticker *sticker) {
+        ExteriaChatController *chat = weak.target;
+        if (chat) [chat sendSticker:sticker.media];
+    };
+    [self.view addSubview:_greeting];
+}
+
 - (void)showEmptyState {
     BOOL person = _dialog.kind == EXTERIA_DIALOG_USER && !_dialog.saved && !_pinnedList;
     /* a bot's empty chat has its card and the start button instead */
@@ -2665,15 +2676,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         return;
     }
     [self showStatus:@"" retry:NO];
-    if (!_greeting) {
-        _greeting = [[ExteriaGreetingView alloc] initWithMedia:_media];
-        ExteriaWeakReference *weak = _weak;
-        _greeting.onSend = ^(ExteriaSticker *sticker) {
-            ExteriaChatController *chat = weak.target;
-            if (chat) [chat sendSticker:sticker.media];
-        };
-        [self.view addSubview:_greeting];
-    }
+    [self ensureGreetingCard];
     if (_greetingAsked) return;
     _greetingAsked = YES;
     ExteriaWeakReference *weak = _weak;

@@ -38,6 +38,12 @@ typedef struct exteria_full_user {
     uint8_t sharing_restricted;     /* either participant has disabled sharing */
     uint8_t has_music;              /* the song the profile shows first, from its saved music */
     exteria_media_info music;
+    /* the message the person set for every new chat with them: a title, a text and one sticker; a business account feature */
+    uint8_t has_intro;
+    char intro_title[64];
+    char intro_text[256];
+    uint8_t has_intro_sticker;
+    exteria_sticker_row intro_sticker;
     uint8_t has_rating;
     uint8_t has_pending_rating;
     int32_t pending_rating_date;
@@ -88,5 +94,7 @@ exteria_status exteria_username_request(exteria_arena *arena, const char *name, 
 
 /* photos.uploadProfilePhoto for a file already uploaded, the inputFile the upload gave */
 exteria_status exteria_profile_photo_request(exteria_arena *arena, exteria_tl_value *file, exteria_tl_value **out);
+/* a profile picture that moves: the uploaded mp4 and the second of it that stands for it while it does not play */
+exteria_status exteria_profile_video_request(exteria_arena *arena, exteria_tl_value *video, double start_seconds, exteria_tl_value **out);
 
 #endif

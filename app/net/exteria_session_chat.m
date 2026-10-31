@@ -2093,9 +2093,13 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
 }
 
 - (void)loadGreetingStickers:(ExteriaListCompletion)completion {
+    [self loadStickersWithEmoticon:"\xf0\x9f\x91\x8b" completion:completion];
+}
+
+- (void)loadStickersWithEmoticon:(const char *)emoticon completion:(ExteriaListCompletion)completion {
     ExteriaListCompletion done = [completion copy];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        return exteria_stickers_request(arena, "\xf0\x9f\x91\x8b", request);
+        return exteria_stickers_request(arena, emoticon, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         NSMutableArray *stickers = nil;
         NSString *error = nil;

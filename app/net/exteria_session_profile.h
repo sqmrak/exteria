@@ -31,6 +31,10 @@
     int32_t _birthdayYear;
     ExteriaPersonalChannel *_channel;
     ExteriaMedia *_music;
+    NSString *_introTitle;
+    NSString *_introText;
+    ExteriaSticker *_introSticker;
+    BOOL _hasIntro;
     BOOL _hasRating;
     BOOL _hasPendingRating;
     int32_t _pendingRatingDate;
@@ -51,6 +55,11 @@
 @property (nonatomic, readonly, retain) ExteriaPersonalChannel *channel;
 /* the song the profile shows first, nil when it has none */
 @property (nonatomic, readonly, retain) ExteriaMedia *music;
+/* the message this person set for every new chat with them: shown in an empty chat in place of the greeting; the sticker may be nil */
+@property (nonatomic, readonly) BOOL hasIntro;
+@property (nonatomic, readonly, copy) NSString *introTitle;
+@property (nonatomic, readonly, copy) NSString *introText;
+@property (nonatomic, readonly, retain) ExteriaSticker *introSticker;
 @property (nonatomic, readonly) BOOL hasRating;
 @property (nonatomic, readonly) BOOL hasPendingRating;
 @property (nonatomic, readonly) int32_t pendingRatingDate;

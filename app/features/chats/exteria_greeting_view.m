@@ -17,6 +17,9 @@
     ExteriaSticker *_sticker;
     UILabel *_title;
     UILabel *_text;
+    UILabel *_note;
+    BOOL _intro;
+    BOOL _saved;
     UIImageView *_picture;
     ExteriaLottieView *_lottie;
     NSUInteger _token;
@@ -49,6 +52,14 @@
     _text.font = ExteriaFontRegular(15);
     _text.text = NSLocalizedString(@"chat.greeting.text", nil);
     [self addSubview:_text];
+    _note = [[UILabel alloc] init];
+    _note.backgroundColor = [UIColor clearColor];
+    _note.textColor = [UIColor whiteColor];
+    _note.textAlignment = ExteriaTextAlignmentCenter;
+    _note.numberOfLines = 0;
+    _note.font = ExteriaFontRegular(12);
+    _note.hidden = YES;
+    [self addSubview:_note];
     _picture = [[UIImageView alloc] init];
     _picture.contentMode = UIViewContentModeScaleAspectFit;
     [self addSubview:_picture];
@@ -62,6 +73,7 @@
     [_sticker release];
     [_title release];
     [_text release];
+    [_note release];
     [_picture release];
     [_lottie release];
     [_onSend release];
@@ -71,7 +83,8 @@
 - (CGSize)cardSizeForWidth:(CGFloat)width {
     CGFloat inner = MIN(width - 64, 300) - 2 * CARD_PAD;
     CGSize text = [_text sizeThatFits:CGSizeMake(inner, 400)];
-    return CGSizeMake(inner + 2 * CARD_PAD, CARD_PAD + 22 + 10 + text.height + 18 + STICKER_SIZE + CARD_PAD);
+    CGFloat note = _note.hidden ? 0 : [_note sizeThatFits:CGSizeMake(inner, 200)].height + 12;
+    return CGSizeMake(inner + 2 * CARD_PAD, CARD_PAD + 22 + 10 + text.height + 18 + STICKER_SIZE + CARD_PAD + note);
 }
 
 - (void)layoutSubviews {
@@ -83,12 +96,40 @@
     CGRect stickerFrame = CGRectMake((self.bounds.size.width - STICKER_SIZE) / 2, CGRectGetMaxY(_text.frame) + 18, STICKER_SIZE, STICKER_SIZE);
     _picture.frame = stickerFrame;
     _lottie.frame = stickerFrame;
+    _note.frame = CGRectMake(CARD_PAD, CGRectGetMaxY(stickerFrame) + 12, inner, _note.hidden ? 0 : [_note sizeThatFits:CGSizeMake(inner, 200)].height);
+}
+
+- (void)showIntroTitle:(NSString *)title text:(NSString *)text sticker:(ExteriaSticker *)sticker author:(NSString *)author {
+    _intro = YES;
+    if (title.length) _title.text = title;
+    if (text.length) _text.text = text;
+    _note.text = author.length ? [NSString stringWithFormat:NSLocalizedString(@"chat.intro.note", nil), author] : nil;
+    _note.hidden = !_note.text.length;
+    if (sticker) [self applySticker:sticker];
+    [self setNeedsLayout];
+}
+
+- (void)showSavedCard {
+    _saved = YES;
+    _title.text = NSLocalizedString(@"chat.saved.card.title", nil);
+    _text.text = NSLocalizedString(@"chat.saved.card.text", nil);
+    _text.textAlignment = ExteriaTextAlignmentLeft;
+    [self setNeedsLayout];
 }
 
 - (void)showStickers:(NSArray *)stickers {
-    if (!stickers.count || _sticker) return;
-    ExteriaSticker *picked = [stickers objectAtIndex:arc4random() % stickers.count];
+    if (!stickers.count || _sticker || _intro) return;
+    [self applySticker:[stickers objectAtIndex:arc4random() % stickers.count]];
+}
+
+- (void)applySticker:(ExteriaSticker *)picked {
+    [_sticker release];
     _sticker = [picked retain];
+    [_lottie setPlaying:NO];
+    [_lottie removeFromSuperview];
+    [_lottie release];
+    _lottie = nil;
+    _picture.image = nil;
     ExteriaMedia *media = picked.media;
     NSUInteger token = ++_token;
     CGFloat side = STICKER_SIZE * ExteriaScreenScale();
@@ -118,7 +159,7 @@
 }
 
 - (void)tapped {
-    if (_sticker && _onSend) _onSend(_sticker);
+    if (!_saved && _sticker && _onSend) _onSend(_sticker);
 }
 
 @end

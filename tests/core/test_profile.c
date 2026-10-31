@@ -37,6 +37,19 @@ static void test_full_user(void) {
     CHECK_EQ_INT(full.about[0], 0);
     CHECK_EQ_INT(full.require_premium, 0);
     CHECK_EQ_INT(full.sharing_restricted, 0);
+    CHECK_EQ_INT(full.has_intro, 0);
+    {
+        exteria_tl_value *other = obj("users.userFull"), *mine = obj("userFull"), *intro = obj("businessIntro");
+        set(other, "full_user", mine);
+        CHECK_EQ_INT(exteria_tl_set_str(&arena, intro, "title", "hello"), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_str(&arena, intro, "description", "take cocoa"), EXTERIA_OK);
+        set(mine, "business_intro", intro);
+        CHECK_EQ_INT(exteria_full_user_parse(other, &full), EXTERIA_OK);
+        CHECK_EQ_INT(full.has_intro, 1);
+        CHECK(!strcmp(full.intro_title, "hello"));
+        CHECK(!strcmp(full.intro_text, "take cocoa"));
+        CHECK_EQ_INT(full.has_intro_sticker, 0);
+    }
     CHECK_EQ_INT(exteria_tl_set_flag(inner, "noforwards_peer_enabled"), EXTERIA_OK);
     CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
     CHECK_EQ_INT(full.sharing_restricted, 1);
@@ -147,6 +160,13 @@ static void test_photo(void) {
     roundtrip(request, EXTERIA_TL_ID_photos_uploadProfilePhoto);
     CHECK_EQ_INT(exteria_profile_photo_request(&arena, NULL, &request), EXTERIA_E_ARG);
     CHECK(request == NULL);
+    /* a clip: the request carries the video and the second that stands for it, and a second outside the clip is refused */
+    CHECK_EQ_INT(exteria_profile_video_request(&arena, file, 1.5, &request), EXTERIA_OK);
+    CHECK(exteria_tl_has(request, "video") && exteria_tl_has(request, "video_start_ts") && !exteria_tl_has(request, "file"));
+    roundtrip(request, EXTERIA_TL_ID_photos_uploadProfilePhoto);
+    CHECK_EQ_INT(exteria_profile_video_request(&arena, file, 11, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_profile_video_request(&arena, NULL, 0, &request), EXTERIA_E_ARG);
 }
 
 static exteria_tl_value *vec_of(exteria_tl_value **items, uint32_t n) {

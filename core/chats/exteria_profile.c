@@ -59,6 +59,20 @@ static exteria_status rating_parse(const exteria_tl_value *value, exteria_star_r
     return EXTERIA_OK;
 }
 
+/* a text field copied whole into a buffer, cut at a character boundary */
+static void copy_field(char *dst, size_t cap, const exteria_tl_value *object, const char *field) {
+    const uint8_t *data;
+    size_t len;
+    dst[0] = 0;
+    if (exteria_tl_get_bytes(object, field, &data, &len) != EXTERIA_OK || !data) return;
+    if (len >= cap) {
+        len = cap - 1;
+        while (len > 0 && (data[len] & 0xC0u) == 0x80u) --len;
+    }
+    memcpy(dst, data, len);
+    dst[len] = 0;
+}
+
 exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_full_user *out) {
     const exteria_tl_value *full, *users, *chats, *entity, *birthday;
     const uint8_t *data;
@@ -115,6 +129,16 @@ exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_f
             } else {
                 memset(&out->channel, 0, sizeof(out->channel));
             }
+        }
+    }
+    if (exteria_tl_has(full, "business_intro")) {
+        const exteria_tl_value *intro = exteria_tl_get(full, "business_intro");
+        if (exteria_tl_is(intro, EXTERIA_TL_ID_businessIntro)) {
+            copy_field(out->intro_title, sizeof(out->intro_title), intro, "title");
+            copy_field(out->intro_text, sizeof(out->intro_text), intro, "description");
+            if (exteria_tl_has(intro, "sticker") && exteria_sticker_read(exteria_tl_get(intro, "sticker"), &out->intro_sticker) == EXTERIA_OK)
+                out->has_intro_sticker = 1;
+            out->has_intro = out->intro_title[0] || out->intro_text[0] || out->has_intro_sticker;
         }
     }
     if (exteria_tl_has(full, "saved_music")) {
@@ -359,6 +383,21 @@ exteria_status exteria_username_request(exteria_arena *arena, const char *name, 
     request = exteria_tl_new_obj(arena, "account.updateUsername");
     if (!request) return EXTERIA_E_NOMEM;
     status = exteria_tl_set_str(arena, request, "username", name);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_profile_video_request(exteria_arena *arena, exteria_tl_value *video, double start_seconds, exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    /* a second out of the clip, and a clip is of ten seconds at most: a value outside it is a mistake of the caller */
+    if (!arena || !video || !(start_seconds >= 0) || start_seconds > 10) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "photos.uploadProfilePhoto");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "video", video);
+    if (status == EXTERIA_OK) status = exteria_tl_set_f64(arena, request, "video_start_ts", start_seconds);
     if (status == EXTERIA_OK) *out = request;
     return status;
 }
