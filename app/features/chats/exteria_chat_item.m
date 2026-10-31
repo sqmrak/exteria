@@ -59,7 +59,7 @@
 #define PILL_HEIGHT 24.0
 #define TIME_SIZE 11.0
 #define NAME_SIZE 13.0
-#define MAX_BUBBLE_FRACTION 0.8
+#define MAX_BUBBLE_FRACTION 0.88
 /* the widest a bubble gets; the text of a tablet is two points larger and its column wider */
 #define BUBBLE_CAP_PHONE 380.0
 #define BUBBLE_CAP_PAD 480.0
@@ -957,10 +957,40 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     return ratios;
 }
 
+/* how many custom emoji a message is made of when it holds nothing else: every character of the text is under a custom emoji, bar blanks, and no other
+   entity (a link, bold) is there; zero otherwise */
+static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
+    NSString *text = message.text;
+    if (!text.length || !message.entities.count || message.markup) return 0;
+    NSMutableIndexSet *covered = [NSMutableIndexSet indexSet];
+    NSUInteger count = 0;
+    for (ExteriaTextEntity *entity in message.entities) {
+        if (entity.style != ExteriaTextStyleCustomEmoji || !entity.documentId || entity.range.length == 0 || NSMaxRange(entity.range) > text.length) return 0;
+        [covered addIndexesInRange:entity.range];
+        ++count;
+    }
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    for (NSUInteger i = 0; i < text.length; ++i) {
+        if (![covered containsIndex:i] && ![blank characterIsMember:[text characterAtIndex:i]]) return 0;
+    }
+    return count;
+}
+
+/* the least width of the row of comments: the faces, the words and the arrow each with their room, so the words do not run into the arrow */
+- (CGFloat)commentsRowWidth {
+    NSUInteger shown = MIN(_commenterPeople.count, (NSUInteger)3);
+    CGFloat faces = shown ? 24 + (CGFloat)(shown - 1) * 16 + 8 : 0;
+    CGFloat words = ceil(ExteriaStringSize(_commentsText, ExteriaFontSemibold(14)).width);
+    return MAX(COMMENTS_MIN_WIDTH, 2 * 11 + faces + words + 8 + 14);
+}
+
 - (void)layoutBubbleForWidth:(CGFloat)width {
     ExteriaMedia *media = _message.media;
     BOOL outgoing = _message.outgoing;
-    CGFloat maxBubble = floor(MIN((width - (_avatarColumn && !outgoing ? AVATAR_COLUMN : 0) - (_showsShare ? SHARE_ROOM : 0)) * MAX_BUBBLE_FRACTION, ExteriaIsPad() ? BUBBLE_CAP_PAD : BUBBLE_CAP_PHONE));
+    CGFloat room = width - (_avatarColumn && !outgoing ? AVATAR_COLUMN : 0) - (_showsShare ? SHARE_ROOM : 0);
+    CGFloat maxBubble = floor(MIN(room * MAX_BUBBLE_FRACTION, ExteriaIsPad() ? BUBBLE_CAP_PAD : BUBBLE_CAP_PHONE));
+    /* a post of a channel takes the width of the screen, as the wide posts of exteraGram do: a broadcast reads like a feed, not like a chat */
+    if (_message.post && !outgoing) maxBubble = floor(MIN(room - 2 * SIDE_MARGIN, ExteriaIsPad() ? BUBBLE_CAP_PAD * 1.5 : room));
     CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _viewsWidth + _deletedWidth;
     /* a voice message has no words of its own, so what the server heard in it takes their place */
     BOOL ownText = _message.text.length > 0;
@@ -1054,8 +1084,8 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     } else if (file) {
         UIColor *fileTitleColor = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.fileTitle" : "chat.message.incoming.fileTitle") ?: textColor;
         [_fileTitleLayout release];
-        _fileTitleLayout = [[ExteriaTextLayout layoutForText:_fileTitle entities:nil font:ExteriaFontMedium(15) color:textColor
-                                                   linkColor:textColor width:MAX(40, textMax - 54) maxLines:1 flush:0] retain];
+        _fileTitleLayout = [[ExteriaTextLayout layoutForText:_fileTitle entities:nil font:ExteriaFontMedium(15) color:fileTitleColor
+                                                   linkColor:fileTitleColor width:MAX(40, textMax - 54) maxLines:1 flush:0] retain];
         [_fileDetailLayout release];
         _fileDetailLayout = nil;
         if (_message.media.kind == EXTERIA_PREVIEW_AUDIO) {
@@ -1131,7 +1161,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     if (picture && contentWidth + 2 * PAD_X > bubbleWidth) bubbleWidth = contentWidth + 2 * PAD_X;
     bubbleWidth = MAX(bubbleWidth, 56);
     if (!CGRectIsEmpty(_replyFrame)) _replyFrame.size.width = bubbleWidth - 2 * PAD_X;
-    if (_commentsText.length) bubbleWidth = MAX(bubbleWidth, MIN(COMMENTS_MIN_WIDTH, maxBubble));
+    if (_commentsText.length) bubbleWidth = MAX(bubbleWidth, MIN([self commentsRowWidth], maxBubble));
     CGFloat bubbleHeight = timeOverPicture ? y : y + PAD_BOTTOM;
     /* the comments row takes the foot of the bubble, under the line with the time */
     CGFloat commentsRoom = _commentsText.length ? COMMENTS_HEIGHT : 0;
@@ -1246,7 +1276,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     if (_kind != ExteriaChatItemBubble && _kind != ExteriaChatItemPill) {
         if (_commentsText.length) {
             CGFloat available = _message.outgoing ? CGRectGetMaxX(_bubbleFrame) - SIDE_MARGIN : width - SIDE_MARGIN - _bubbleFrame.origin.x;
-            CGFloat rowWidth = MIN(available, MAX(_bubbleFrame.size.width, COMMENTS_MIN_WIDTH));
+            CGFloat rowWidth = MIN(available, MAX(_bubbleFrame.size.width, [self commentsRowWidth]));
             CGFloat rowX = _message.outgoing ? _bubbleFrame.size.width - rowWidth : 0;
             _commentsFrame = CGRectMake(rowX, _height + 4 - _bubbleFrame.origin.y, rowWidth, COMMENTS_HEIGHT);
             _height += COMMENTS_HEIGHT + 4;
