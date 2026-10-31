@@ -37,6 +37,8 @@ void ExteriaGiftAlert(NSString *title, NSString *message);
    fills with this color, a darker one, once the content has scrolled under it, with the title coming in. nil is the ordinary bar. the modern style only */
 @property (nonatomic, retain) UIColor *barTint;
 - (void)setBarShaded:(BOOL)shaded animated:(BOOL)animated;
+/* a photo opened wide runs up under the bar: the bar gives up its plate and its title, and its arrow and dots turn white, so it reads as part of the photo; NO puts the bar back */
+- (void)setBarOverPhoto:(BOOL)over;
 
 /* the action at the right end of the bar; a nil title removes it */
 - (void)setActionTitle:(NSString *)title handler:(void (^)(void))handler;

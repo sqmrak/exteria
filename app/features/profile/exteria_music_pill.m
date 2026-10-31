@@ -129,6 +129,14 @@
     [[ExteriaMusicPlayer sharedPlayer] stop];
 }
 
+- (CGFloat)widthWithin:(CGFloat)maxWidth {
+    BOOL active = [self playerActive];
+    CGFloat left = active ? TOGGLE_SIDE + 10 : 38;
+    CGFloat right = active ? SLOT + 2 : 30;
+    CGFloat text = _line.text.length ? ceil([_line sizeThatFits:CGSizeMake(10000, PILL_HEIGHT)].width) : 0;
+    return MIN(maxWidth, left + text + right);
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width;

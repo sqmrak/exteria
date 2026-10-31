@@ -1,3 +1,4 @@
+#import "exteria_profile_qr_controller.h"
 #import "exteria_developers.h"
 #import "exteria_folders_controller.h"
 #import "exteria_settings_controller.h"
@@ -80,7 +81,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    _identity.frame = CGRectMake(0, _identityTop, self.bounds.size.width, EXTERIA_IDENTITY_HEIGHT);
+    _identity.frame = CGRectMake(0, _identityTop, self.bounds.size.width, EXTERIA_IDENTITY_HEIGHT + [_identity extraHeightForWidth:self.bounds.size.width]);
 }
 
 @end
@@ -95,8 +96,10 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ExteriaPeopleAvatars *_faces;
     BOOL _uploading;
     BOOL _barFilled;
+    CGFloat _headerExtra;
     BOOL _signingOut;
     UIButton *_more;
+    UIButton *_qr;
     void (^_signOutHandler)(void (^)(NSString *));
 }
 @end
@@ -131,6 +134,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     [_faces invalidate];
     [_faces release];
     [_more release];
+    [_qr release];
     [_signOutHandler release];
     [super dealloc];
 }
@@ -145,8 +149,8 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     _header.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     /* the grouped table of the light classic style keeps the system's own background, which the modern ring color is not */
     if (classic && !ExteriaThemeIsDark()) [_header.identity setBadgeRingColor:[UIColor clearColor]];
-    [_header.identity.avatarHit addTarget:self action:@selector(openPhotos) forControlEvents:UIControlEventTouchUpInside];
-    [_header.identity.badge addTarget:self action:@selector(changePhoto) forControlEvents:UIControlEventTouchUpInside];
+    [_header.identity.avatarHit addTarget:self action:@selector(avatarTapped) forControlEvents:UIControlEventTouchUpInside];
+    [_header.identity.badge addTarget:self action:@selector(avatarTapped) forControlEvents:UIControlEventTouchUpInside];
     self.headerView = _header;
     if (classic) {
         /* the same one-row menu as the dots of the modern bar, on the system bar, and the magnifier of its search
@@ -154,6 +158,12 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
         UIBarButtonItem *dots = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolEllipsisVertical, 22, [UIColor whiteColor])
                                                                   style:UIBarButtonItemStyleBordered target:self action:@selector(showMenu)] autorelease];
         dots.accessibilityLabel = NSLocalizedString(@"settings.more", nil);
+        UIButton *code = [UIButton buttonWithType:UIButtonTypeCustom];
+        code.frame = CGRectMake(0, 0, 44, 44);
+        [code setImage:ExteriaSymbolImage(ExteriaSymbolQr, 24, [UIColor whiteColor]) forState:UIControlStateNormal];
+        code.accessibilityLabel = NSLocalizedString(@"profile.qr", nil);
+        [code addTarget:self action:@selector(openQr) forControlEvents:UIControlEventTouchUpInside];
+        self.navigationItem.titleView = code;
         UIBarButtonItem *search = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 22, [UIColor whiteColor])
                                                                     style:UIBarButtonItemStyleBordered target:self action:@selector(focusSearch)] autorelease];
         search.accessibilityLabel = NSLocalizedString(@"settings.search", nil);
@@ -167,9 +177,23 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
         _more.accessibilityLabel = NSLocalizedString(@"settings.more", nil);
         [_more addTarget:self action:@selector(showMenu) forControlEvents:UIControlEventTouchUpInside];
         self.barViews = [NSArray arrayWithObject:_more];
+        /* the word "Settings" gives its place to the code of the profile, one tap from here */
+        self.pageTitle = @"";
+        _qr = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+        _qr.frame = CGRectMake(0, 0, 44, 44);
+        [_qr setImage:ExteriaSymbolImage(ExteriaSymbolQr, 26, ExteriaColorTitle()) forState:UIControlStateNormal];
+        _qr.accessibilityLabel = NSLocalizedString(@"profile.qr", nil);
+        [_qr addTarget:self action:@selector(openQr) forControlEvents:UIControlEventTouchUpInside];
+        self.leadingView = _qr;
     }
     [self rebuildRows];
     [self loadPerson];
+}
+
+- (void)openQr {
+    if (!_person) return;
+    ExteriaProfileQrController *code = [[[ExteriaProfileQrController alloc] initWithSession:_session person:_person avatars:_avatars media:_media] autorelease];
+    [self.navigationController pushViewController:code animated:YES];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -208,6 +232,16 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     identity.avatar.initials = _person.initials;
     identity.avatar.seed = (NSUInteger)(_person.userId % 1000003);
     [identity.avatar setPhoto:_person.photo cache:_avatars];
+    /* a name with many badges runs to more lines, and the head of the page grows by them */
+    CGFloat extra = [identity extraHeightForWidth:_header.bounds.size.width];
+    if (extra != _headerExtra) {
+        _headerExtra = extra;
+        CGRect frame = _header.frame;
+        frame.size.height = (ExteriaThemeIsClassic() ? CLASSIC_HEADER_HEIGHT : HEADER_HEIGHT) + extra;
+        _header.frame = frame;
+        self.headerView = _header;
+        [_header setNeedsLayout];
+    }
 }
 
 - (void)openPhotos {
@@ -222,7 +256,6 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ExteriaWeakReference *weak = _weak;
     [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
         ExteriaSettingsController *me = weak.target;
-        if (!path) return;
         if (!me) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
@@ -277,6 +310,8 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
             ExteriaWeakReference *weak = _weak;
             _faces = [[ExteriaPeopleAvatars alloc] initWithCache:_avatars changed:^{ [(ExteriaSettingsController *)weak.target rebuildRows]; }];
         }
+        NSUInteger seed = (NSUInteger)([[info objectForKey:@"user"] longLongValue] % 1000003);
+        [_faces useStoredPhoto:ExteriaAccountPhoto(name) forKey:[@"account:" stringByAppendingString:name] seed:seed];
         UIImage *face = [_faces imageForKey:[@"account:" stringByAppendingString:name] initials:ExteriaInitialsOfName(title)
                                        seed:(NSUInteger)([[info objectForKey:@"user"] longLongValue] % 1000003) deleted:NO photo:nil];
         [rows addObject:[ExteriaSettingsRow rowWithTileImage:face title:title subtitle:username.length ? [@"@" stringByAppendingString:username] : nil tap:^{
@@ -373,7 +408,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 - (void)updateBarFill {
     if (ExteriaThemeIsClassic()) return;
     CGFloat offset = self.table.contentOffset.y;
-    BOOL filled = HEADER_HEIGHT - offset < 56 + [self statusInset];
+    BOOL filled = HEADER_HEIGHT + _headerExtra - offset < 56 + [self statusInset];
     if (filled == _barFilled) return;
     _barFilled = filled;
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : TITLE_FADE_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState

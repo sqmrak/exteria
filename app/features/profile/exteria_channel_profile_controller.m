@@ -1,3 +1,5 @@
+#import "exteria_platform.h"
+#import "exteria_profile_hero_view.h"
 #import "exteria_channel_profile_controller.h"
 #import "exteria_notifications_chat_controller.h"
 #import "exteria_media_viewer.h"
@@ -114,6 +116,14 @@
     ExteriaGiftGridView *_grid;
     UIView *_head;
     ExteriaAvatarView *_avatar;
+    ExteriaProfileHeroView *_hero;
+    /* the photo opened wide in the head: the frame it was a circle in, the height it grows to, and whether it is open */
+    CGRect _heroCircle;
+    CGFloat _heroHeight;
+    BOOL _heroOpen;
+    /* the list runs under the bar while the wide photo is open, so the photo can reach the top of the screen */
+    BOOL _heroUnderBar;
+    BOOL _heroMoving;
     ExteriaStoryRing *_storyRing;
     ExteriaStoryPeer *_storyPeer;
     BOOL _storiesShown;
@@ -174,7 +184,7 @@
 
 - (void)avatarTapped {
     if (!_storyPeer) {
-        [self openAvatars];
+        [self openHero];
         return;
     }
     ExteriaStoryViewerController *viewer = [[[ExteriaStoryViewerController alloc] initWithSession:self.session peers:[NSArray arrayWithObject:_storyPeer] index:0
@@ -188,9 +198,70 @@
     _storiesShown = YES;
 }
 
-- (void)openAvatars {
-    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
-    [self presentViewController:viewer animated:YES completion:nil];
+/* a tap on the photo opens it wide inside the head, as the profile of a person does; the cards ride up over its lower edge and the rest of the head moves down */
+- (void)openHero {
+    if (_hero || _heroMoving) return;
+    ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
+    hero.name.text = _name.text;
+    hero.name.entities = _name.entities;
+    hero.status.text = _status.text;
+    ExteriaWeakReference *weak = _weak;
+    hero.closeRequestHandler = ^{ [(ExteriaChannelProfileController *)weak.target closeHero]; };
+    _heroCircle = _avatar.frame;
+    _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
+    hero.frame = _heroCircle;
+    hero.stripTop = ExteriaLayoutInsets(self).top + 8;
+    hero.layer.cornerRadius = _heroCircle.size.width / 2;
+    [hero beginMove];
+    _heroUnderBar = YES;
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
+    [_head insertSubview:hero aboveSubview:_avatar];
+    _hero = [hero retain];
+    _heroOpen = YES;
+    _heroMoving = YES;
+    NSArray *cards = [NSArray arrayWithObjects:_joinAction, _messageAction, _addAction, _soundAction, _discussionAction, _linkAction, nil];
+    for (ExteriaUserAction *card in cards) [_head bringSubviewToFront:card];
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        for (ExteriaUserAction *card in cards) [card setInk:[UIColor whiteColor]];
+        _name.alpha = 0;
+        _status.alpha = 0;
+        [self setBarOverPhoto:YES];
+        [self layoutHead];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        _avatar.hidden = YES;
+        [_hero finishOpen];
+    }];
+}
+
+- (void)closeHero {
+    if (!_hero || !_heroOpen || _heroMoving) return;
+    _heroMoving = YES;
+    _heroOpen = NO;
+    _avatar.hidden = NO;
+    [_hero beginClose];
+    NSArray *cards = [NSArray arrayWithObjects:_joinAction, _messageAction, _addAction, _soundAction, _discussionAction, _linkAction, nil];
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        for (ExteriaUserAction *card in cards) [card setInk:nil];
+        _name.alpha = 1;
+        _status.alpha = 1;
+        [self setBarOverPhoto:NO];
+        [self layoutHead];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        [_hero removeFromSuperview];
+        [_hero release];
+        _hero = nil;
+        _heroUnderBar = NO;
+        [self.view setNeedsLayout];
+    }];
 }
 
 - (void)dealloc {
@@ -200,6 +271,8 @@
     [_dialog release];
     [_stickers release];
     [_grid release];
+    _hero.closeRequestHandler = nil;
+    [_hero release];
     [_head release];
     [_avatar release];
     [_storyRing release];
@@ -387,7 +460,9 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     if (full.linked) [_linkedCard configureWithDialog:full.linked avatars:self.avatars];
     [self fillCounts];
     if ((full.megagroup || _dialog.kind == EXTERIA_DIALOG_CHANNEL) && !_groupTabs) {
-        _groupTabs = [[ExteriaGroupTabsView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media];
+        /* the members of a broadcast channel are told to its administrators only, so the tab is not offered to anybody else */
+        BOOL members = full.megagroup || full.creator || full.adminRights != 0;
+        _groupTabs = [[ExteriaGroupTabsView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media forUser:NO hidesMembers:!members];
         _groupTabs.delegate = self;
         [_head addSubview:_groupTabs];
     }
@@ -446,12 +521,21 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
 
 #pragma mark layout
 
+/* a pull of the list down past its top takes the wide photo away */
+- (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
+    (void)grid;
+    if (_heroOpen && !_heroMoving && offset < -_grid.topInset - 44) [self closeHero];
+}
+
 - (void)layoutHead {
     CGFloat width = _grid.bounds.size.width;
     if (width <= 0) return;
     CGFloat contentWidth = MIN(width - 32, 460);
     CGFloat x = (width - contentWidth) / 2;
     CGFloat y = 16;
+    CGFloat wideHeight = _heroOpen ? _heroHeight : 0;
+    /* the photo reaches up under the bar and the status bar: its frame begins above the head by the inset of the list */
+    if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, -_grid.topInset, width, _grid.topInset + wideHeight) : _heroCircle;
     _avatar.frame = CGRectMake((width - AVATAR) / 2, y, AVATAR, AVATAR);
     _storyRing.frame = CGRectInset(_avatar.frame, -[ExteriaStoryRing outset], -[ExteriaStoryRing outset]);
     y += AVATAR + 12;
@@ -464,7 +548,14 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     for (int i = 0; i < 6; ++i) {
         if (!order[i].hidden) [actions addObject:order[i]];
     }
-    if (actions.count) y += ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10) + GAP;
+    CGFloat actionsHeight = actions.count ? ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10) : 0;
+    if (_heroOpen) {
+        /* over the lower edge of the photo, and the rest of the head under it */
+        if (actions.count) ExteriaLayoutActions(actions, x, wideHeight - actionsHeight - 12, contentWidth, ACTION_HEIGHT, 10);
+        y = wideHeight + GAP;
+    } else if (actions.count) {
+        y += actionsHeight + GAP;
+    }
     CGFloat height = [_info heightForWidth:contentWidth];
     _info.hidden = height <= 0;
     if (!_info.hidden) {
@@ -496,12 +587,13 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
         _headHeight = y;
         _headWidth = width;
         _head.frame = CGRectMake(0, 0, width, y);
-        _grid.headerView = _head;
+        if (_heroMoving) [_grid setHeaderViewAnimated:_head];
+        else _grid.headerView = _head;
     }
 }
 
 - (void)layoutBody:(CGRect)body {
-    _grid.frame = body;
+    [_grid setFrame:_heroUnderBar ? CGRectMake(body.origin.x, 0, body.size.width, CGRectGetMaxY(body)) : body topInset:_heroUnderBar ? body.origin.y : 0];
     _toast.frame = CGRectMake(CGRectGetMidX(body) - 80, body.origin.y + 12, 160, 28);
     [self layoutHead];
 }

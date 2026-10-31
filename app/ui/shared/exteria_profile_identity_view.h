@@ -23,6 +23,8 @@
 @property (nonatomic, readonly) UILabel *line;
 
 /* the name, with the hammer of the developers after it when the person is one; a tap on the hammer says why it is there */
+/* how much taller than EXTERIA_IDENTITY_HEIGHT the block is at this width: the badges after a long name move to the next line, and the block grows by those lines */
+- (CGFloat)extraHeightForWidth:(CGFloat)width;
 - (void)setName:(NSString *)name developer:(NSUInteger)marks;
 - (void)setUploading:(BOOL)uploading;
 /* the ring that cuts the camera out of the photo; it has to be the color behind the block (the default is the modern screen color) */

@@ -56,7 +56,7 @@ static ExteriaEmojiLabel *ExteriaInfoLabel(UIColor *color, CGFloat size) {
     return label;
 }
 
-static NSArray *ExteriaInfoMentions(NSString *text) {
+NSArray *ExteriaInfoMentions(NSString *text) {
     static NSRegularExpression *pattern;
     static dispatch_once_t once;
     dispatch_once(&once, ^{

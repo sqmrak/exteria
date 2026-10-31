@@ -2045,16 +2045,24 @@
 "chatset.reclock.10" = "After 10 seconds";
 "chatset.reclock.15" = "After 15 seconds";
 
+"rating.gifts.title" = "Gifts from Telegram";
+"rating.gifts.body" = "100% of the stars spent on gifts from Telegram.";
+"rating.users.title" = "Market and posts";
+"rating.users.body" = "20% of the stars spent on gifts from users, paid messages and posts in channels.";
+"rating.refunds.title" = "Refunds and exchanges";
+"rating.refunds.body" = "Refunded stars multiplied by 10, and 85% of the cost of gifts exchanged for stars.";
+"rating.plus" = "plus";
+"rating.minus" = "minus";
 "rating.title" = "Rating";
 "rating.level" = "Level %d";
 "rating.pending" = "Your pending rating will be applied on %@.";
 "rating.preview" = "Preview";
 "rating.current" = "Current rating";
-"rating.about" = "This rating reflects your activity on Telegram. It is based on:";
+"rating.about" = "Rating reflects your activity on Telegram. It is affected by:";
 "rating.gifts" = "Gifts from Telegram: 100% of the Stars spent on gifts purchased from Telegram are added.";
 "rating.users" = "Gifts and posts from users: 20% of the Stars spent on gifts or posts from users and channels are added.";
 "rating.refunds" = "Refunds and conversions: 10 times the refunded Stars and 85% of purchased gifts converted to Stars are deducted.";
-"rating.ok" = "Understood";
+"rating.ok" = "OK";
 
 "update.page.title" = "Update";
 "update.page.info" = "Semi-automatic Exteria update";

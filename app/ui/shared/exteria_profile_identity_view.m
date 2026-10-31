@@ -73,6 +73,7 @@
     _name.textColor = ExteriaColorTitle();
     _name.textAlignment = ExteriaTextAlignmentCenter;
     _name.dropsUndrawable = YES;
+    _name.numberOfLines = 0;
     [self addSubview:_name];
     UITapGestureRecognizer *hammerTap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(nameTapped:)] autorelease];
     hammerTap.delegate = self;
@@ -143,6 +144,12 @@
     }];
 }
 
+- (CGFloat)extraHeightForWidth:(CGFloat)width {
+    if (width <= 48 || !_name.text.length) return 0;
+    CGFloat height = ceil([_name sizeThatFits:CGSizeMake(width - 48, CGFLOAT_MAX)].height);
+    return height > 34 ? height - 34 : 0;
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width;
@@ -151,7 +158,7 @@
     _progress.frame = _avatar.frame;
     _spinner.center = CGPointMake(EXTERIA_IDENTITY_AVATAR / 2, EXTERIA_IDENTITY_AVATAR / 2);
     _badge.frame = CGRectMake(CGRectGetMaxX(_avatar.frame) - BADGE + 4, CGRectGetMaxY(_avatar.frame) - BADGE + 2, BADGE, BADGE);
-    _name.frame = CGRectMake(24, CGRectGetMaxY(_avatar.frame) + 22, width - 48, 34);
+    _name.frame = CGRectMake(24, CGRectGetMaxY(_avatar.frame) + 22, width - 48, 34 + [self extraHeightForWidth:width]);
     _line.frame = CGRectMake(24, CGRectGetMaxY(_name.frame) + 4, width - 48, 22);
 }
 

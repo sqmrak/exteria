@@ -1,3 +1,4 @@
+#import <QuartzCore/QuartzCore.h>
 #import "exteria_developers.h"
 #import "exteria_classic_profile_controller.h"
 #import "exteria_text_filter.h"
@@ -5,8 +6,11 @@
 #import "exteria_avatar_view.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_avatar_viewer.h"
+#import "exteria_profile_hero_view.h"
 #import "exteria_dialog.h"
 #import "exteria_emoji_label.h"
+#import "exteria_info_card_view.h"
+#import "exteria_link_router.h"
 #import "exteria_name_badge.h"
 #import "exteria_chat_controller.h"
 #import "exteria_gifts_controller.h"
@@ -21,6 +25,7 @@
 #import "exteria_story_feed_controller.h"
 #import "exteria_person.h"
 #import "exteria_platform.h"
+#import "exteria_alert.h"
 #import "exteria_theme.h"
 #import "exteria_sheet.h"
 #import "exteria_weak_reference.h"
@@ -81,8 +86,22 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 
 - (void)setValue:(NSString *)value caption:(NSString *)caption {
     _value.text = value;
+    BOOL bio = [caption isEqualToString:NSLocalizedString(@"profile.about", nil)];
+    _value.entities = bio ? ExteriaInfoMentions(value) : nil;
+    _value.linkColor = bio ? ExteriaColorAccent() : nil;
+    _value.userInteractionEnabled = bio;
+    if (bio && !_value.gestureRecognizers.count) {
+        UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapBio:)] autorelease];
+        [_value addGestureRecognizer:tap];
+    }
     _caption.text = caption;
     [self setNeedsLayout];
+}
+
+- (void)tapBio:(UITapGestureRecognizer *)tap {
+    NSString *link = [_value linkAtPoint:[tap locationInView:_value]];
+    if (link.length) [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaOpenLinkNotification object:self
+                                                                       userInfo:[NSDictionary dictionaryWithObject:link forKey:@"url"]];
 }
 
 - (ExteriaEmojiLabel *)valueLabel { return _value; }
@@ -92,8 +111,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     _row = YES;
     _value.font = [UIFont boldSystemFontOfSize:17];
     _value.numberOfLines = 1;
-    _value.entities = entities;
     [self setValue:title caption:nil];
+    _value.entities = entities;
 }
 
 + (CGFloat)heightForValue:(NSString *)value caption:(NSString *)caption tableWidth:(CGFloat)width hasImage:(BOOL)hasImage {
@@ -136,6 +155,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     NSArray *_infoRows;
     BOOL _uploading;
     ExteriaAvatarView *_avatar;
+    ExteriaProfileHeroView *_hero;
+    CGRect _heroCircle;
+    BOOL _heroOpen;
+    BOOL _heroMoving;
     ExteriaEmojiLabel *_name;
     UILabel *_detail;
     ExteriaRatingBadge *_ratingBadge;
@@ -161,7 +184,76 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     return self;
 }
 
+/* the photo opened wide in the header of the list: the circle grows to the width of the screen and the rows move down, so it scrolls with the list */
 - (void)openAvatars {
+    if (_hero || !_person || _heroMoving) return;
+    UITableView *table = self.tableView;
+    UIView *header = table.tableHeaderView;
+    ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];
+    hero.name.text = _name.text;
+    hero.name.entities = _name.entities;
+    hero.status.text = _detail.text;
+    ExteriaWeakReference *weak = _weak;
+    hero.closeRequestHandler = ^{ [(ExteriaClassicProfileController *)weak.target closeHero]; };
+    _heroCircle = _avatar.frame;
+    hero.frame = _heroCircle;
+    hero.layer.cornerRadius = _heroCircle.size.width / 2;
+    [hero beginMove];
+    [header insertSubview:hero aboveSubview:_avatar];
+    _hero = [hero retain];
+    _heroOpen = YES;
+    _heroMoving = YES;
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        _name.alpha = 0;
+        _detail.alpha = 0;
+        [self layoutHeroHeader];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        _avatar.hidden = YES;
+        [_hero finishOpen];
+    }];
+}
+
+- (void)closeHero {
+    if (!_hero || !_heroOpen || _heroMoving) return;
+    _heroMoving = YES;
+    _heroOpen = NO;
+    _avatar.hidden = NO;
+    [_hero beginClose];
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        _name.alpha = 1;
+        _detail.alpha = 1;
+        [self layoutHeroHeader];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        [_hero removeFromSuperview];
+        [_hero release];
+        _hero = nil;
+    }];
+}
+
+/* the header is as tall as the wide photo while it is open and as it was before; the list under it slides with the change */
+- (void)layoutHeroHeader {
+    UITableView *table = self.tableView;
+    UIView *header = table.tableHeaderView;
+    CGFloat width = table.bounds.size.width;
+    CGFloat wide = [ExteriaProfileHeroView heightForWidth:width screenHeight:self.view.bounds.size.height];
+    if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, 0, width, wide) : _heroCircle;
+    CGRect frame = header.frame;
+    frame.size.height = _heroOpen ? wide + 10 : HEADER_HEIGHT;
+    header.frame = frame;
+    [table beginUpdates];
+    table.tableHeaderView = header;
+    [table endUpdates];
+}
+
+- (void)editProfile {
     if (!_person) return;
     ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person]
                                                                         avatars:_avatars media:_media] autorelease];
@@ -186,6 +278,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [_full release];
     [_starsText release];
     [_infoRows release];
+    _hero.closeRequestHandler = nil;
+    [_hero release];
     [_avatar release];
     [_name release];
     [_detail release];
@@ -230,6 +324,11 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [self loadProfile];
 }
 
+/* a pull of the list down past its top takes the wide photo away */
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (_heroOpen && !_heroMoving && scrollView.contentOffset.y < -scrollView.contentInset.top - 44) [self closeHero];
+}
+
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     CGFloat width = self.tableView.bounds.size.width;
@@ -241,6 +340,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         self.tableView.tableHeaderView = header;
     }
     _avatar.frame = CGRectMake((width - AVATAR) / 2, 14, AVATAR, AVATAR);
+    if (_hero && !_heroMoving) _hero.frame = _heroOpen ? CGRectMake(0, 0, width, [ExteriaProfileHeroView heightForWidth:width screenHeight:self.view.bounds.size.height]) : _avatar.frame;
     _name.frame = CGRectMake(16, 106, MAX(0, width - 32), 24);
     _detail.frame = CGRectMake(16, 130, MAX(0, width - 32), 18);
     CGFloat detailWidth = MIN(width - 70, ceil([_detail sizeThatFits:CGSizeMake(width - 70, 20)].width));
@@ -480,11 +580,9 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
 
 - (void)choosePhoto {
     if (_uploading) return;
-    /* a cancelled picker calls nothing back, so the screen is not held for it */
     ExteriaWeakReference *me = _weak;
     [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
         ExteriaClassicProfileController *profile = me.target;
-        if (!path) return;
         if (!profile) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
@@ -511,7 +609,9 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
             return;
         }
         [self loadProfile];
-    }];
+    };
+    if (video) [_session uploadProfileVideoAtPath:path completion:finished];
+    else [_session uploadProfilePhotoAtPath:path completion:finished];
 }
 
 /* the question is the system alert in the middle of the screen: an action sheet on an ipad is a popover with nothing to point at, and it appeared in the middle of the chat beside the list */

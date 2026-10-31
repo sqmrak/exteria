@@ -20,6 +20,7 @@
 #import "exteria_info_card_view.h"
 #import "exteria_music_list_controller.h"
 #import "exteria_music_pill.h"
+#import "exteria_profile_gifts_view.h"
 #import "exteria_popup_menu.h"
 #import "exteria_profile_action.h"
 #import "exteria_profile_backdrop_view.h"
@@ -39,6 +40,7 @@
 #import "exteria_session_channels.h"
 #import "exteria_session_profile.h"
 #import "exteria_session_actions.h"
+#import "exteria_profile_hero_view.h"
 #import "exteria_star_gift.h"
 #import "exteria_status_label.h"
 #import "exteria_rating_view.h"
@@ -65,6 +67,16 @@
     ExteriaGiftGridView *_grid;
     UIView *_head;
     ExteriaAvatarView *_avatar;
+    ExteriaProfileHeroView *_hero;
+    /* the photo opened wide in the head: the frame it was a circle in, the height it grows to, and whether it is open */
+    CGRect _heroCircle;
+    CGFloat _heroHeight;
+    BOOL _heroOpen;
+    /* the list runs under the bar while the wide photo is open, so the photo can reach the top of the screen */
+    BOOL _heroUnderBar;
+    /* the ink the cards wear on the colored ground of a collectible profile, to put back when the wide photo closes */
+    UIColor *_cardInk;
+    BOOL _heroMoving;
     ExteriaStoryRing *_storyRing;
     BOOL _storiesShown;
     ExteriaEmojiLabel *_name;
@@ -86,6 +98,7 @@
     ExteriaUserAction *_videoAction;
     ExteriaUserAction *_storiesAction;
     ExteriaMusicPill *_music;
+    ExteriaProfileGiftsView *_pinnedGifts;
     ExteriaChannelCard *_channelCard;
     ExteriaInfoCardView *_info;
     /* gifts, Media, Files and Links of the chat with this person */
@@ -126,6 +139,9 @@
     [_stickers release];
     [_grid release];
     [_head release];
+    _hero.closeRequestHandler = nil;
+    [_hero release];
+    [_cardInk release];
     [_avatar release];
     [_storyRing release];
     [_name release];
@@ -140,6 +156,7 @@
     [_videoAction release];
     [_storiesAction release];
     [_music release];
+    [_pinnedGifts release];
     [_channelCard release];
     [_info release];
     _tabs.delegate = nil;
@@ -182,6 +199,8 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     [_avatar setPhoto:_dialog.photo cache:self.avatars];
     _avatar.userInteractionEnabled = YES;
     [_avatar addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(avatarTapped)] autorelease]];
+    _pinnedGifts = [[ExteriaProfileGiftsView alloc] initWithMedia:self.media];
+    [_head addSubview:_pinnedGifts];
     [_head addSubview:_avatar];
     _name = [[ExteriaEmojiLabel alloc] init];
     _name.textColor = ExteriaColorTitle();
@@ -314,7 +333,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 
 - (void)avatarTapped {
     if (_storyPeer) [self openStories];
-    else [self openAvatars];
+    else [self openHero];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -527,6 +546,8 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     /* the bar over the ground is clear, which makes it the ground's continuation, and darkens with the scroll */
     self.barTint = ExteriaDarkenedBackdrop(edge);
     UIColor *ink = ExteriaColorOfRGB(text);
+    [_cardInk release];
+    _cardInk = [ink retain];
     _name.textColor = ink;
     _status.plainColor = [ink colorWithAlphaComponent:0.78f];
     _status.activeColor = ink;
@@ -589,6 +610,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     /* the gifts show under the tabs only while the Gifts tab is chosen; the other tabs bring their own lists */
     BOOL gifts = _tabs.selectedTab == 0;
     [_grid setTiles:gifts ? _feed.tiles : [NSArray array]];
+    [_pinnedGifts setGifts:_feed.items];
     BOOL any = _feed.items.count > 0;
     NSString *text = @"";
     if (gifts && _feed.loaded && !any) text = NSLocalizedString(@"gifts.empty", nil);
@@ -654,7 +676,13 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     CGFloat contentWidth = MIN(width - 32, 460);
     CGFloat x = (width - contentWidth) / 2;
     CGFloat y = 16;
+    CGFloat wideHeight = _heroOpen ? _heroHeight : 0;
+    /* the photo reaches up under the bar and the status bar: its frame begins above the head by the inset of the list */
+    if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, -_grid.topInset, width, _grid.topInset + wideHeight) : _heroCircle;
     _avatar.frame = CGRectMake((width - AVATAR) / 2, y, AVATAR, AVATAR);
+    _pinnedGifts.frame = CGRectMake(0, 0, width, y + AVATAR);
+    _pinnedGifts.focus = CGPointMake(width / 2, CGRectGetMidY(_avatar.frame));
+    _pinnedGifts.hidden = _heroOpen;
     CGFloat outset = [ExteriaStoryRing outset];
     _storyRing.frame = CGRectInset(_avatar.frame, -outset, -outset);
     y += AVATAR + 12;
@@ -673,16 +701,27 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     for (int i = 0; i < 4; ++i) {
         if (!order[i].hidden) [actions addObject:order[i]];
     }
-    y += ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10) + GAP;
+    CGFloat actionsHeight = ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10);
+    if (_heroOpen && actions.count) {
+        /* over the lower edge of the photo, and the rest of the head under it */
+        ExteriaLayoutActions(actions, x, wideHeight - actionsHeight - 12, contentWidth, ACTION_HEIGHT, 10);
+        y = wideHeight + GAP;
+    } else if (_heroOpen) {
+        y = wideHeight + GAP;
+    } else {
+        y += actionsHeight + GAP;
+    }
     if (_backdrop) {
         /* the ground runs up under the bar and down behind the action cards */
         CGFloat above = 600;
-        _backdropBottom = y - GAP + 6;
+        /* the wide photo ends the head itself, so the ground shows no strip under it */
+        _backdropBottom = _heroOpen ? wideHeight : y - GAP + 6;
         _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom);
         _backdrop.focus = CGPointMake(width / 2, above + CGRectGetMidY(_avatar.frame));
     }
     if (_music.hasContent) {
-        _music.frame = CGRectMake(x, y - GAP + 8, contentWidth, [ExteriaMusicPill height]);
+        CGFloat pillWidth = [_music widthWithin:contentWidth];
+        _music.frame = CGRectMake(x + floor((contentWidth - pillWidth) / 2), y - GAP + 8, pillWidth, [ExteriaMusicPill height]);
         y += [ExteriaMusicPill height] + 8;
     }
     if (!_channelCard.hidden) {
@@ -708,15 +747,15 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
         _headHeight = y;
         _headWidth = width;
         _head.frame = CGRectMake(0, 0, width, y);
-        _grid.headerView = _head;
+        if (_heroMoving) [_grid setHeaderViewAnimated:_head];
+        else _grid.headerView = _head;
     }
 }
 
 - (void)layoutBody:(CGRect)body {
     /* the list runs under the bar when the head has a ground of its own, which then shows through the clear bar; the bar's height is the list's top inset */
-    BOOL underBar = _backdrop && !ExteriaThemeIsClassic();
-    _grid.frame = underBar ? CGRectMake(body.origin.x, 0, body.size.width, CGRectGetMaxY(body)) : body;
-    _grid.topInset = underBar ? body.origin.y : 0;
+    BOOL underBar = (_backdrop && !ExteriaThemeIsClassic()) || _heroUnderBar;
+    [_grid setFrame:underBar ? CGRectMake(body.origin.x, 0, body.size.width, CGRectGetMaxY(body)) : body topInset:underBar ? body.origin.y : 0];
     _toast.frame = CGRectMake(CGRectGetMidX(body) - 80, body.origin.y + 12, 160, 28);
     [self layoutHead];
 }
@@ -724,6 +763,8 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 /* the bar fills once the head has moved a little under it, and clears again at the top */
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
+    /* a pull of the list down past its top takes the wide photo away */
+    if (_heroOpen && !_heroMoving && offset < -_grid.topInset - 44) [self closeHero];
     if (!_backdrop || ExteriaThemeIsClassic()) return;
     [self setBarShaded:offset > -_grid.topInset + BAR_SHADE_AFTER animated:YES];
 }
@@ -932,9 +973,74 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     [self.navigationController pushViewController:catalog animated:YES];
 }
 
-- (void)openAvatars {
-    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
-    [self presentViewController:viewer animated:YES completion:nil];
+/* a tap on the photo opens it wide inside the head: the circle grows to the width of the screen, the cards of the profile ride up over its lower edge, and everything under it moves down; the head
+   scrolls with the rest of the screen */
+- (void)openHero {
+    if (_hero || _heroMoving) return;
+    ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
+    hero.name.text = _name.text;
+    hero.name.entities = _name.entities;
+    hero.status.text = _status.text;
+    [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
+    ExteriaWeakReference *weak = _weak;
+    hero.closeRequestHandler = ^{ [(ExteriaUserProfileController *)weak.target closeHero]; };
+    _heroCircle = _avatar.frame;
+    _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
+    hero.frame = _heroCircle;
+    hero.stripTop = ExteriaLayoutInsets(self).top + 8;
+    hero.layer.cornerRadius = _heroCircle.size.width / 2;
+    [hero beginMove];
+    _heroUnderBar = YES;
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
+    [_head insertSubview:hero aboveSubview:_avatar];
+    _hero = [hero retain];
+    _heroOpen = YES;
+    _heroMoving = YES;
+    NSArray *cards = [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil];
+    for (ExteriaUserAction *card in cards) [_head bringSubviewToFront:card];
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        for (ExteriaUserAction *card in cards) [card setInk:[UIColor whiteColor]];
+        _name.alpha = 0;
+        _status.alpha = 0;
+        _ratingBadge.alpha = 0;
+        [self setBarOverPhoto:YES];
+        [self layoutHead];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        _avatar.hidden = YES;
+        [_hero finishOpen];
+    }];
+}
+
+- (void)closeHero {
+    if (!_hero || !_heroOpen || _heroMoving) return;
+    _heroMoving = YES;
+    _heroOpen = NO;
+    _avatar.hidden = NO;
+    [_hero beginClose];
+    NSArray *cards = [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil];
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        for (ExteriaUserAction *card in cards) [card setInk:_cardInk];
+        _name.alpha = 1;
+        _status.alpha = 1;
+        _ratingBadge.alpha = 1;
+        [self setBarOverPhoto:NO];
+        [self layoutHead];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        [_hero removeFromSuperview];
+        [_hero release];
+        _hero = nil;
+        _heroUnderBar = NO;
+        [self.view setNeedsLayout];
+    }];
 }
 
 - (void)openStories {

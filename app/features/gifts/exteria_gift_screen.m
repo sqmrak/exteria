@@ -87,6 +87,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     BOOL _clearBar;
     UIColor *_barTint;
     BOOL _barShaded;
+    BOOL _barOverPhoto;
     BOOL _symbolAction;
 }
 @end
@@ -130,6 +131,13 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
 /* the look of the bar for the tint and the shade it is in; set inside an animation block it moves there */
 - (void)refreshBarLook {
     if (!_header) return;
+    if (_barOverPhoto) {
+        _header.backgroundColor = [UIColor clearColor];
+        _headerLine.hidden = YES;
+        _titleLabel.alpha = 0;
+        _back.inkColor = [UIColor whiteColor];
+        return;
+    }
     BOOL tinted = _barTint != nil;
     UIColor *plain = _clearBar ? [UIColor clearColor] : ExteriaColorBar();
     _header.backgroundColor = tinted ? (_barShaded ? _barTint : [UIColor clearColor]) : plain;
@@ -148,6 +156,14 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     [self refreshBarLook];
     [self refreshActionIcon];
     if (self.isViewLoaded) [self.view setNeedsLayout];
+}
+
+- (void)setBarOverPhoto:(BOOL)over {
+    if (over == _barOverPhoto) return;
+    _barOverPhoto = over;
+    if (ExteriaThemeIsClassic()) return;
+    [self refreshActionIcon];
+    [self refreshBarLook];
 }
 
 - (void)setBarShaded:(BOOL)shaded animated:(BOOL)animated {
@@ -227,7 +243,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
         [_actionIcon addTarget:self action:@selector(actionTapped) forControlEvents:UIControlEventTouchUpInside];
         [_header addSubview:_actionIcon];
     }
-    [_actionIcon setImage:ExteriaSymbolImage(_actionSymbol, 24, _barTint && !_barShaded ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
+    [_actionIcon setImage:ExteriaSymbolImage(_actionSymbol, 24, _barOverPhoto || (_barTint && !_barShaded) ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
     _actionIcon.accessibilityLabel = _actionLabel;
     [self.view setNeedsLayout];
 }

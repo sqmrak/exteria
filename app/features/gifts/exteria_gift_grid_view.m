@@ -1,4 +1,5 @@
 #import "exteria_gift_grid_view.h"
+#include "exteria_gift_grid.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -9,10 +10,8 @@
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 
-#define TILE_TARGET 96.0
 #define TILE_GAP 8.0
 /* a tile never grows past this, so two columns on a phone leave room at the sides instead of filling the screen */
-#define TILE_MAX 128.0
 #define TILE_RADIUS 12.0
 #define PICTURE 76.0
 /* a profile card: the picture takes this share of the width, the corner marks and the hidden mark are shares of it too */
@@ -354,6 +353,7 @@
     UIView *_headerView;
     CGFloat _bottomInset;
     CGFloat _topInset;
+    CGFloat _maximumContentWidth;
 }
 @end
 
@@ -364,6 +364,13 @@
 @synthesize headerView = _headerView;
 @synthesize bottomInset = _bottomInset;
 @synthesize topInset = _topInset;
+
+- (CGFloat)maximumContentWidth { return _maximumContentWidth; }
+- (void)setMaximumContentWidth:(CGFloat)width {
+    if (_maximumContentWidth == width) return;
+    _maximumContentWidth = width;
+    [self setNeedsLayout];
+}
 
 - (id)initWithMedia:(ExteriaMediaCache *)media {
     self = [super initWithFrame:CGRectZero];
@@ -393,6 +400,30 @@
     [_tiles release];
     [_headerView release];
     [super dealloc];
+}
+
+- (void)setFrame:(CGRect)frame topInset:(CGFloat)inset {
+    CGFloat shift = self.frame.origin.y - frame.origin.y;
+    BOOL atTop = _table.contentOffset.y <= -_table.contentInset.top + 0.5;
+    CGFloat offset = _table.contentOffset.y;
+    self.frame = frame;
+    [self setTopInset:inset];
+    if (!atTop && fabs(shift) > 0.5) _table.contentOffset = CGPointMake(_table.contentOffset.x, offset - shift);
+}
+
+- (void)setHeaderViewAnimated:(UIView *)view {
+    if (view != _headerView) {
+        [_headerView release];
+        _headerView = [view retain];
+    }
+    CGPoint offset = _table.contentOffset;
+    [_table beginUpdates];
+    _table.tableHeaderView = view;
+    [_table endUpdates];
+    CGFloat lowest = _table.contentSize.height - _table.bounds.size.height + _table.contentInset.bottom;
+    CGFloat highest = MAX(-_table.contentInset.top, lowest);
+    offset.y = MAX(-_table.contentInset.top, MIN(offset.y, highest));
+    _table.contentOffset = offset;
 }
 
 - (void)setHeaderView:(UIView *)view {
@@ -453,10 +484,12 @@
     CGFloat width = self.bounds.size.width;
     _table.frame = self.bounds;
     [self applyBottomInset];
-    NSInteger columns = MAX(2, (NSInteger)floor((width - TILE_GAP) / (TILE_TARGET + TILE_GAP)));
-    /* a rotation changes the tile width even when the column count stays, and the rows hold frames from the old width */
-    CGFloat tileWidth = MIN(TILE_MAX, (width - TILE_GAP * (CGFloat)(columns + 1)) / (CGFloat)columns);
-    CGFloat margin = floor((width - tileWidth * (CGFloat)columns - TILE_GAP * (CGFloat)(columns - 1)) / 2);
+    int count;
+    double side, left;
+    exteria_gift_grid_layout(width, _maximumContentWidth, &count, &side, &left);
+    NSInteger columns = count;
+    CGFloat tileWidth = (CGFloat)side;
+    CGFloat margin = (CGFloat)left;
     BOOL changed = columns != _columns || tileWidth != _tileWidth || margin != _margin;
     _columns = columns;
     _tileWidth = tileWidth;

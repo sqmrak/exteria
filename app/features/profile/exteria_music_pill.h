@@ -13,5 +13,7 @@
 /* runs when the pill changes between having content and not, so the owner can lay the head out again */
 @property (nonatomic, copy) void (^contentHandler)(void);
 + (CGFloat)height;
+/* the pill hugs its line instead of the whole row: the width the current song or saved one needs, at most maxWidth */
+- (CGFloat)widthWithin:(CGFloat)maxWidth;
 
 @end

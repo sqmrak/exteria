@@ -11,6 +11,7 @@
 
 #import "exteria_avatar_view.h"
 #import "exteria_alert.h"
+#import "exteria_profile_hero_view.h"
 #import "exteria_channel_card.h"
 #import "exteria_chat_controller.h"
 #import "exteria_info_card_view.h"
@@ -42,7 +43,8 @@
 #import "exteria_weak_reference.h"
 
 #define BAR_HEIGHT 44.0
-#define ACTION_HEIGHT 44.0
+#define ACTION_HEIGHT 70.0
+#define ACTION_GAP 8.0
 #define INFO_ROW 62.0
 #define CARD_ROW 52.0
 #define GAP 14.0
@@ -52,8 +54,12 @@
 @interface ExteriaProfileAction : UIControl {
     UIImageView *_icon;
     UILabel *_caption;
+    ExteriaSymbol _symbol;
+    BOOL _onPhoto;
 }
 - (id)initWithSymbol:(ExteriaSymbol)symbol title:(NSString *)title;
+/* the card stands on the wide photo: a dark veil for its plate and white for the symbol and the word; NO puts the colors of the screen back */
+- (void)setOnPhoto:(BOOL)onPhoto;
 @end
 
 @implementation ExteriaProfileAction
@@ -64,6 +70,7 @@
     ExteriaAttachBounce(self, 0.06);
     self.backgroundColor = ExteriaColorCard();
     self.layer.cornerRadius = 14;
+    _symbol = symbol;
     _icon = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(symbol, 24, ExteriaColorAccent())];
     _icon.contentMode = UIViewContentModeCenter;
     [self addSubview:_icon];
@@ -79,6 +86,14 @@
     return self;
 }
 
+- (void)setOnPhoto:(BOOL)onPhoto {
+    if (onPhoto == _onPhoto) return;
+    _onPhoto = onPhoto;
+    self.backgroundColor = onPhoto ? [UIColor colorWithWhite:0 alpha:0.32f] : ExteriaColorCard();
+    _icon.image = ExteriaSymbolImage(_symbol, 24, onPhoto ? [UIColor whiteColor] : ExteriaColorAccent());
+    _caption.textColor = onPhoto ? [UIColor whiteColor] : ExteriaColorTitle();
+}
+
 - (void)dealloc {
     [_icon release];
     [_caption release];
@@ -88,6 +103,12 @@
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGSize size = self.bounds.size;
+    /* a tall button, the icon over its word, as the three buttons under the photo are */
+    if (size.height >= 60) {
+        _icon.frame = CGRectMake(floor((size.width - 28) / 2), 12, 28, 28);
+        _caption.frame = CGRectMake(4, 44, size.width - 8, 18);
+        return;
+    }
     CGFloat text = MIN(MAX(0, size.width - 52), ceil([_caption sizeThatFits:CGSizeMake(size.width, 24)].width));
     CGFloat left = floor((size.width - text - 28) / 2);
     _icon.frame = CGRectMake(left, (size.height - 22) / 2, 22, 22);
@@ -121,6 +142,9 @@
     UILabel *_status;
     ExteriaRatingBadge *_ratingBadge;
     ExteriaProfileAction *_editAction;
+    ExteriaProfileAction *_photoAction;
+    ExteriaProfileHeroView *_hero;
+    ExteriaProfileAction *_settingsAction;
     ExteriaInfoCardView *_info;
     UIView *_signOutCard;
     UIButton *_signOut;
@@ -142,6 +166,11 @@
     ExteriaStickerLibrary *_stickerLibrary;
     ExteriaWeakReference *_weak;
     CGFloat _headHeight;
+    /* the photo opened wide in the head: the frame it was a circle in, the height it grows to, and whether it is open (a closing one is still in the head until its frame has shrunk) */
+    CGRect _heroCircle;
+    CGFloat _heroHeight;
+    BOOL _heroOpen;
+    BOOL _heroMoving;
     CGFloat _headWidth;
     BOOL _working;
     BOOL _uploading;
@@ -165,11 +194,68 @@
     return self;
 }
 
-- (void)openAvatars {
-    if (!_person) return;
-    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person]
-                                                                        avatars:_avatars media:_media] autorelease];
-    [self presentViewController:viewer animated:YES completion:nil];
+/* a tap on the photo opens it wide inside the head: the circle grows to the width of the screen, the buttons ride up over its lower edge, and everything under it moves down; the head scrolls with
+   the rest of the screen */
+- (void)openHero {
+    if (_hero || !_person || _heroMoving) return;
+    ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];
+    hero.name.text = _name.text;
+    hero.name.entities = _name.entities;
+    hero.status.text = _status.text;
+    [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
+    ExteriaWeakReference *weak = _weak;
+    hero.closeRequestHandler = ^{ [(ExteriaProfileController *)weak.target closeHero]; };
+    _heroCircle = [_identity convertRect:_avatar.frame toView:_head];
+    _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
+    hero.frame = _heroCircle;
+    hero.stripTop = ExteriaLayoutInsets(self).top + 8;
+    hero.layer.cornerRadius = _heroCircle.size.width / 2;
+    [hero beginMove];
+    [_head insertSubview:hero belowSubview:_photoAction];
+    _hero = [hero retain];
+    _heroOpen = YES;
+    _heroMoving = YES;
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setOnPhoto:YES];
+        _identity.alpha = 0;
+        _titleLabel.alpha = 0;
+        [self layoutHead];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        _identity.hidden = YES;
+        [_hero finishOpen];
+    }];
+}
+
+/* another tab takes the screen: the photo shrinks back to its circle while the tab slides away, so it is not left wide when the person comes back */
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    if (_heroOpen && !_heroMoving) [self closeHero];
+}
+
+- (void)closeHero {
+    if (!_hero || !_heroOpen || _heroMoving) return;
+    _heroMoving = YES;
+    _heroOpen = NO;
+    _identity.hidden = NO;
+    [_hero beginClose];
+    BOOL motion = !ExteriaReduceMotionEnabled();
+    [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
+    [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setOnPhoto:NO];
+        _identity.alpha = 1;
+        _titleLabel.alpha = 1;
+        [self layoutHead];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        _heroMoving = NO;
+        [_hero removeFromSuperview];
+        [_hero release];
+        _hero = nil;
+    }];
 }
 
 - (void)dealloc {
@@ -200,6 +286,10 @@
     [_status release];
     [_ratingBadge release];
     [_editAction release];
+    [_photoAction release];
+    _hero.closeRequestHandler = nil;
+    [_hero release];
+    [_settingsAction release];
     for (int i = 0; i < 3; ++i) [_feeds[i] release];
     [_info release];
     [_signOutCard release];
@@ -245,7 +335,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _head.backgroundColor = [UIColor clearColor];
     /* the photo, the camera, the name and the line under it are the block that the settings screen shows too, so both lay out the same */
     _identity = [[ExteriaProfileIdentityView alloc] init];
-    [_identity.avatarHit addTarget:self action:@selector(openAvatars) forControlEvents:UIControlEventTouchUpInside];
+    [_identity.avatarHit addTarget:self action:@selector(openHero) forControlEvents:UIControlEventTouchUpInside];
     [_identity.badge addTarget:self action:@selector(choosePhoto) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_identity];
     _avatar = [_identity.avatar retain];
@@ -257,9 +347,17 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
     [_identity addSubview:_ratingBadge];
 
+    /* the photo is picked here, so the camera on the picture that the settings screen keeps is not drawn on this one */
+    _identity.badge.hidden = YES;
+    _photoAction = [[ExteriaProfileAction alloc] initWithSymbol:ExteriaSymbolCameraPlus title:NSLocalizedString(@"profile.choosephoto", nil)];
+    [_photoAction addTarget:self action:@selector(choosePhoto) forControlEvents:UIControlEventTouchUpInside];
+    [_head addSubview:_photoAction];
     _editAction = [[ExteriaProfileAction alloc] initWithSymbol:ExteriaSymbolCompose title:NSLocalizedString(@"profile.edit", nil)];
     [_editAction addTarget:self action:@selector(editProfile) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_editAction];
+    _settingsAction = [[ExteriaProfileAction alloc] initWithSymbol:ExteriaSymbolGear title:NSLocalizedString(@"tab.settings", nil)];
+    [_settingsAction addTarget:self action:@selector(openSettings) forControlEvents:UIControlEventTouchUpInside];
+    [_head addSubview:_settingsAction];
 
     _music = [[ExteriaMusicPill alloc] init];
     [_music addTarget:self action:@selector(openMusic) forControlEvents:UIControlEventTouchUpInside];
@@ -593,15 +691,26 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     CGFloat contentWidth = MIN(width - 32, 460);
     CGFloat x = (width - contentWidth) / 2;
     CGFloat y = EXTERIA_IDENTITY_TOP;
-    _identity.frame = CGRectMake(0, y, width, EXTERIA_IDENTITY_HEIGHT);
+    CGFloat identityExtra = [_identity extraHeightForWidth:width];
+    _identity.frame = CGRectMake(0, y, width, EXTERIA_IDENTITY_HEIGHT + identityExtra);
     [_identity layoutIfNeeded];
+    CGFloat wideHeight = _heroOpen ? _heroHeight : 0;
+    /* the photo reaches up under the bar and the status bar: its frame begins above the head by the inset of the list */
+    if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, -_grid.topInset, width, _grid.topInset + wideHeight) : _heroCircle;
     CGFloat statusWidth = MIN(width - 70, ceil([_status sizeThatFits:CGSizeMake(width - 70, 22)].width));
     _ratingBadge.frame = CGRectMake(floor((width - statusWidth) / 2) - 26, _status.frame.origin.y + 1, 22, 20);
-    y += EXTERIA_IDENTITY_HEIGHT + GAP + 4;
-    _editAction.frame = CGRectMake(x, y, contentWidth, ACTION_HEIGHT);
+    y += EXTERIA_IDENTITY_HEIGHT + identityExtra + GAP + 4;
+    /* open wide, the buttons stand over the lower edge of the photo and the rest of the head starts under it */
+    if (_heroOpen) y = wideHeight - ACTION_HEIGHT - 12;
+    CGFloat slot = floor((contentWidth - 2 * ACTION_GAP) / 3);
+    _photoAction.frame = CGRectMake(x, y, slot, ACTION_HEIGHT);
+    _editAction.frame = CGRectMake(x + slot + ACTION_GAP, y, slot, ACTION_HEIGHT);
+    _settingsAction.frame = CGRectMake(x + 2 * (slot + ACTION_GAP), y, contentWidth - 2 * (slot + ACTION_GAP), ACTION_HEIGHT);
     y += ACTION_HEIGHT + GAP;
+    if (_heroOpen) y = wideHeight + GAP;
     if (_music.hasContent) {
-        _music.frame = CGRectMake(x, y - GAP + 8, contentWidth, [ExteriaMusicPill height]);
+        CGFloat pillWidth = [_music widthWithin:contentWidth];
+        _music.frame = CGRectMake(x + floor((contentWidth - pillWidth) / 2), y - GAP + 8, pillWidth, [ExteriaMusicPill height]);
         y += [ExteriaMusicPill height] + 8;
     }
     if (!_channelCard.hidden) {
@@ -631,7 +740,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         _headHeight = y;
         _headWidth = width;
         _head.frame = CGRectMake(0, 0, width, y);
-        _grid.headerView = _head;
+        if (_heroMoving) [_grid setHeaderViewAnimated:_head];
+        else _grid.headerView = _head;
     }
 }
 
@@ -648,8 +758,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _titleLabel.frame = CGRectMake(left + 60, insets.top, width - 120, BAR_HEIGHT);
     _barName.frame = CGRectMake(left + 60, insets.top + 3, width - 120, 22);
     _barStatus.frame = CGRectMake(left + 60, insets.top + 24, width - 120, 16);
-    _grid.frame = CGRectMake(left, insets.top, width, size.height - insets.top);
-    _grid.topInset = BAR_HEIGHT;
+    /* the list runs under the status bar and the bar, so a photo opened wide in its head can reach the top of the screen; its first row starts under the bar all the same */
+    [_grid setFrame:CGRectMake(left, 0, width, size.height) topInset:insets.top + BAR_HEIGHT];
     _grid.bottomInset = _bottomInset + (_tab == 2 ? SEND_HEIGHT + 24 : 0);
     CGFloat sendWidth = MIN(width - 64, 280);
     _send.frame = CGRectMake(CGRectGetMidX(column) - sendWidth / 2, size.height - _bottomInset - SEND_HEIGHT - 16, sendWidth, SEND_HEIGHT);
@@ -662,8 +772,10 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 /* the plain "profile" title gives way to the name once the head has scrolled up */
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
+    /* a pull of the list down past its top takes the wide photo away */
+    if (_heroOpen && !_heroMoving && offset < -_grid.topInset - 44) [self closeHero];
     CGFloat limit = 140;
-    offset += BAR_HEIGHT;
+    offset += _grid.topInset;
     CGFloat mix = MAX(0, MIN(1, (offset - limit + 40) / 40));
     BOOL filled = offset > 0.5;
     if (filled != _barFilled) {
@@ -671,7 +783,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.42 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
                          animations:^{ _bar.alpha = filled ? 1 : 0; } completion:nil];
     }
-    _titleLabel.alpha = 1 - mix;
+    _titleLabel.alpha = _heroOpen ? 0 : 1 - mix;
     _barName.alpha = mix;
     _barStatus.alpha = mix;
 }
@@ -779,15 +891,15 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [self.navigationController pushViewController:edit animated:YES];
 }
 
+- (void)openSettings {
+    [_delegate profileControllerRequestsSettings:self];
+}
+
 - (void)choosePhoto {
     if (_uploading) return;
     ExteriaWeakReference *me = _weak;
     [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
         ExteriaProfileController *profile = me.target;
-        if (!path) {
-            if (profile) [profile toast:NSLocalizedString(@"attach.failed", nil)];
-            return;
-        }
         if (!profile) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
@@ -818,7 +930,9 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
             return;
         }
         [self loadProfile];
-    }];
+    };
+    if (video) [_session uploadProfileVideoAtPath:path completion:finished];
+    else [_session uploadProfilePhotoAtPath:path completion:finished];
 }
 
 - (void)sendGifts {

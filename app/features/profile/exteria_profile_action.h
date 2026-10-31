@@ -14,6 +14,8 @@
 - (void)setSymbol:(ExteriaSymbol)symbol title:(NSString *)title;
 /* the card stands on a colored ground: a dark veil for its plate and the given ink for the symbol and the caption; nil puts the usual colors back */
 - (void)setInk:(UIColor *)ink;
+@property (nonatomic, readonly) ExteriaSymbol symbol;
+@property (nonatomic, readonly) NSString *captionText;
 @end
 
 /* puts the cards in rows of equal width: at most four to a row, and the rows as even as they can be (five make

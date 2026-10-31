@@ -1,5 +1,7 @@
 #import <UIKit/UIKit.h>
 
+NSArray *ExteriaInfoMentions(NSString *text);
+
 /* a card of rows, each a value over a smaller caption, such as a phone number, a bio or a username; a tap on a row
    copies its value */
 @interface ExteriaInfoCardView : UIView

@@ -29,6 +29,9 @@
     return self;
 }
 
+- (ExteriaSymbol)symbol { return _symbol; }
+- (NSString *)captionText { return _caption.text; }
+
 - (void)setSymbol:(ExteriaSymbol)symbol title:(NSString *)title {
     _symbol = symbol;
     _icon.image = ExteriaSymbolImage(symbol, 24, _ink ? _ink : ExteriaColorAccent());

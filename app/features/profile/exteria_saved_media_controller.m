@@ -58,7 +58,8 @@
     _scroll.frame = body;
     CGFloat top = 0;
     if (_music.hasContent) {
-        _music.frame = CGRectMake(14, 12, MAX(0, body.size.width - 28), [ExteriaMusicPill height]);
+        CGFloat pillWidth = [_music widthWithin:MAX(0, body.size.width - 28)];
+        _music.frame = CGRectMake(floor((body.size.width - pillWidth) / 2), 12, pillWidth, [ExteriaMusicPill height]);
         top = CGRectGetMaxY(_music.frame) + 12;
     }
     CGFloat height = [_tabs heightForWidth:body.size.width];

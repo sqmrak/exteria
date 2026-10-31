@@ -11,6 +11,7 @@
 /* the user confirmed; the answer arrives once the server has ended the session */
 - (void)profileController:(ExteriaProfileController *)controller requestsSignOut:(void (^)(NSString *errorName))completion;
 /* the settings button: the app shows its settings tab */
+- (void)profileControllerRequestsSettings:(ExteriaProfileController *)controller;
 @end
 
 /* who is signed in: photo, name and status, the buttons for a photo, the profile and the settings, the phone, the
