@@ -43,23 +43,26 @@ static const char *plain_word(int russian) {
     return russian ? "\xD0\x9D\xD0\xBE\xD0\xB2\xD0\xBE\xD0\xB5 \xD1\x81\xD0\xBE\xD0\xBE\xD0\xB1\xD1\x89\xD0\xB5\xD0\xBD\xD0\xB8\xD0\xB5" : "New message";
 }
 
-static void write_event(exteria_notify_event *event, const exteria_dialog_row *row, const exteria_notify_settings *settings, const exteria_notify_decision *decision) {
-    /* room for a sender, the text and the separator whole; copy_clean then cuts to the field */
-    char body[EXTERIA_DIALOG_SENDER_MAX + EXTERIA_DIALOG_TEXT_MAX + 8];
+static void write_event(exteria_notify_event *event, const exteria_dialog_row *row, const exteria_notify_settings *settings, const exteria_notify_decision *decision, int32_t fresh_count) {
+    char lead[16] = "";
+    /* room for the count, a sender, the text and the separator whole; copy_clean then cuts to the field */
+    char body[sizeof(lead) + EXTERIA_DIALOG_SENDER_MAX + EXTERIA_DIALOG_TEXT_MAX + 8];
     const char *text;
     memset(event, 0, sizeof(*event));
     event->peer_kind = row->peer_kind;
     event->peer_id = row->peer_id;
     event->message_id = row->top_message;
+    event->count = fresh_count > 0 ? fresh_count : 1;
     copy_clean(event->title, sizeof(event->title), row->title[0] ? row->title : "Telegram");
     event->sound = decision->sound;
+    if (event->count > 1) snprintf(lead, sizeof(lead), "(%d) ", (int)event->count);
     if (decision->previews) {
         text = row->text[0] ? row->text : media_word(row->preview, settings->russian);
         if (!text[0]) text = plain_word(settings->russian);
-        if (row->sender[0] && (row->kind == EXTERIA_DIALOG_GROUP || row->kind == EXTERIA_DIALOG_CHANNEL)) snprintf(body, sizeof(body), "%s: %s", row->sender, text);
-        else snprintf(body, sizeof(body), "%s", text);
+        if (row->sender[0] && (row->kind == EXTERIA_DIALOG_GROUP || row->kind == EXTERIA_DIALOG_CHANNEL)) snprintf(body, sizeof(body), "%s%s: %s", lead, row->sender, text);
+        else snprintf(body, sizeof(body), "%s%s", lead, text);
     } else {
-        snprintf(body, sizeof(body), "%s", plain_word(settings->russian));
+        snprintf(body, sizeof(body), "%s%s", lead, plain_word(settings->russian));
     }
     copy_clean(event->body, sizeof(event->body), body);
 }
@@ -82,7 +85,7 @@ static int find_seen(const exteria_notify_state *state, int32_t kind, int64_t id
     return -1;
 }
 
-static void remember(exteria_notify_state *state, int32_t kind, int64_t id, int32_t top) {
+static void remember(exteria_notify_state *state, int32_t kind, int64_t id, int32_t top, int32_t unread) {
     int at = find_seen(state, kind, id);
     if (at < 0) {
         if (state->count == EXTERIA_NOTIFY_SEEN_MAX) {
@@ -95,6 +98,8 @@ static void remember(exteria_notify_state *state, int32_t kind, int64_t id, int3
         state->seen[at].peer_id = id;
     }
     state->seen[at].top_message = top;
+    state->seen[at].unread = unread;
+    state->seen[at].unread_known = 1;
 }
 
 exteria_status exteria_notify_diff(exteria_notify_state *state, const exteria_notify_settings *settings, const exteria_dialog_row *rows, size_t row_count,
@@ -104,6 +109,7 @@ exteria_status exteria_notify_diff(exteria_notify_state *state, const exteria_no
     /* candidates newest first, as the server lists them; only their rows are kept, so the cap can drop the oldest */
     const exteria_dialog_row *candidates[EXTERIA_DIALOGS_MAX];
     exteria_notify_decision decisions[EXTERIA_DIALOGS_MAX];
+    int32_t fresh_counts[EXTERIA_DIALOGS_MAX];
     int baselining;
     if (!state || !settings || !count || !more_suppressed || (!rows && row_count) || (!events && cap)) return EXTERIA_E_ARG;
     *count = 0;
@@ -113,23 +119,27 @@ exteria_status exteria_notify_diff(exteria_notify_state *state, const exteria_no
     for (i = 0; i < row_count; ++i) {
         const exteria_dialog_row *row = &rows[i];
         int at, fresh;
+        int32_t fresh_count = 1;
         if (row->folder || row->deleted || row->peer_id == 0) continue;
         at = find_seen(state, row->peer_kind, row->peer_id);
         fresh = at < 0 ? row->top_message > 0 : row->top_message > state->seen[at].top_message;
-        remember(state, row->peer_kind, row->peer_id, at >= 0 && state->seen[at].top_message > row->top_message ? state->seen[at].top_message : row->top_message);
+        if (at >= 0 && state->seen[at].unread_known && row->unread_count > state->seen[at].unread) fresh_count = row->unread_count - state->seen[at].unread;
+        if (fresh_count > 99) fresh_count = 99;
+        remember(state, row->peer_kind, row->peer_id, at >= 0 && state->seen[at].top_message > row->top_message ? state->seen[at].top_message : row->top_message, row->unread_count);
         if (baselining || !fresh || !settings->enabled) continue;
         if (row->saved || row->outgoing || row->unread_count <= 0 || row->top_message <= row->read_inbox_max_id) continue;
         if (!wanted(row, settings, now, &decisions[found])) continue;
         if (active_peer_id != 0 && row->peer_kind == active_peer_kind && row->peer_id == active_peer_id) continue;
         /* a chat that was not seen before and whose message is old is old news, not a new message */
         if (now > row->date && now - row->date > EXTERIA_NOTIFY_CATCHUP_SECONDS) continue;
+        fresh_counts[found] = fresh_count;
         candidates[found++] = row;
     }
     state->baselined = 1;
     kept = found < cap ? found : cap;
     skip = found - kept;
     /* the newest kept chats go out, oldest of them first */
-    for (i = 0; i < kept; ++i) write_event(&events[i], candidates[kept - 1 - i], settings, &decisions[kept - 1 - i]);
+    for (i = 0; i < kept; ++i) write_event(&events[i], candidates[kept - 1 - i], settings, &decisions[kept - 1 - i], fresh_counts[kept - 1 - i]);
     *count = kept;
     *more_suppressed = skip;
     return EXTERIA_OK;

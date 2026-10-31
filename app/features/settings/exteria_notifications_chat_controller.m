@@ -177,6 +177,13 @@
             }];
         }]];
     }
+    /* the shake of the phone for this chat alone, a setting of this phone: the server has none, so it is kept here */
+    int32_t peerKind = _peerKind;
+    long long peerId = _peerId;
+    [rows addObject:[ExteriaSettingsRow switchRowWithSymbol:ExteriaSymbolPhone tone:ExteriaSettingsToneGreen title:NSLocalizedString(@"notif.chat.vibrate", nil)
+                                                   subtitle:NSLocalizedString(@"notif.chat.vibrate.info", nil) on:ExteriaNotifyChatVibrates(peerKind, peerId) toggle:^(BOOL on) {
+        ExteriaNotifySetChatVibrates(peerKind, peerId, on);
+    }]];
     exteria_notify_sound shown = decision.sound;
     [rows addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolSettingsSounds tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"notif.sound", nil) subtitle:nil
                                                 value:ExteriaNotifySoundText(_settings.has_sound || decision.sound.kind != EXTERIA_SOUND_DEFAULT, &shown)

@@ -13,7 +13,7 @@
 #define EXTERIA_NOTIFY_SEEN_MAX 256
 #define EXTERIA_NOTIFY_EVENTS_MAX 8
 #define EXTERIA_NOTIFY_TITLE_MAX 128
-#define EXTERIA_NOTIFY_BODY_MAX 200
+#define EXTERIA_NOTIFY_BODY_MAX (EXTERIA_DIALOG_SENDER_MAX + EXTERIA_DIALOG_TEXT_MAX + 8)
 /* a chat whose newest message is older than this is not announced after the daemon was down, so a reboot does not bring a day of old banners */
 #define EXTERIA_NOTIFY_CATCHUP_SECONDS (6 * 3600)
 #define EXTERIA_NOTIFY_STATE_BYTES (8 + EXTERIA_NOTIFY_SEEN_MAX * 16)
@@ -34,6 +34,9 @@ typedef struct exteria_notify_state {
         int32_t peer_kind;
         int64_t peer_id;
         int32_t top_message;
+        /* kept in memory only: the unread count at the last look, so two messages between looks are told as two */
+        int32_t unread;
+        uint8_t unread_known;
     } seen[EXTERIA_NOTIFY_SEEN_MAX];
 } exteria_notify_state;
 
@@ -45,6 +48,8 @@ typedef struct exteria_notify_event {
     char body[EXTERIA_NOTIFY_BODY_MAX];
     /* the tone the chat asks for; kind NONE is a banner without a sound */
     exteria_notify_sound sound;
+    /* how many messages came in the chat since the last look, at least one */
+    int32_t count;
 } exteria_notify_event;
 
 void exteria_notify_state_init(exteria_notify_state *state);

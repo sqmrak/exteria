@@ -2250,6 +2250,8 @@
 "profile.choosephoto" = "Выбрать фото";
 "attach.pick.profile" = "Выберите фотографию или видео";
 "profile.video.unsupported" = "Видео пока нельзя поставить на аватарку.";
+"notif.chat.vibrate" = "Вибрация";
+"notif.chat.vibrate.info" = "Встряхивает телефон при сообщении этого чата, пока приложение открыто. Настройка этого телефона.";
 "developer.badges" = "Мои бейджи";
 "developer.badges.header" = "Бейджи";
 "developer.badges.row.info" = "Выставить себе любые бейджи команды, только на этом телефоне";

@@ -132,6 +132,21 @@ void ExteriaNotifyRulesSnapshot(exteria_notify_rules *out) {
 
 BOOL ExteriaNotifyInAppSounds(void) { return ExteriaNotifyFlag(KEY_IN_APP_SOUNDS, YES); }
 void ExteriaNotifySetInAppSounds(BOOL on) { ExteriaNotifySetFlag(KEY_IN_APP_SOUNDS, on); }
+#define KEY_CHAT_NO_VIBRATION @"exteria.notify.chat.novibration"
+
+BOOL ExteriaNotifyChatVibrates(int32_t peerKind, long long peerId) {
+    NSArray *off = [[NSUserDefaults standardUserDefaults] arrayForKey:KEY_CHAT_NO_VIBRATION];
+    return ![off containsObject:[NSString stringWithFormat:@"%d:%lld", (int)peerKind, peerId]];
+}
+
+void ExteriaNotifySetChatVibrates(int32_t peerKind, long long peerId, BOOL on) {
+    NSMutableArray *off = [NSMutableArray arrayWithArray:[[NSUserDefaults standardUserDefaults] arrayForKey:KEY_CHAT_NO_VIBRATION]];
+    NSString *key = [NSString stringWithFormat:@"%d:%lld", (int)peerKind, peerId];
+    if (on) [off removeObject:key];
+    else if (![off containsObject:key]) [off addObject:key];
+    [[NSUserDefaults standardUserDefaults] setObject:off forKey:KEY_CHAT_NO_VIBRATION];
+}
+
 BOOL ExteriaNotifyInAppVibrate(void) { return ExteriaNotifyFlag(KEY_IN_APP_VIBRATE, YES); }
 void ExteriaNotifySetInAppVibrate(BOOL on) { ExteriaNotifySetFlag(KEY_IN_APP_VIBRATE, on); }
 BOOL ExteriaNotifyInAppPreview(void) { return ExteriaNotifyFlag(KEY_IN_APP_PREVIEW, YES); }

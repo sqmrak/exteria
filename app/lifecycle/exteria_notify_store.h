@@ -21,6 +21,9 @@ void ExteriaNotifyRulesSnapshot(exteria_notify_rules *out);
 BOOL ExteriaNotifyInAppSounds(void);
 void ExteriaNotifySetInAppSounds(BOOL on);
 BOOL ExteriaNotifyInAppVibrate(void);
+/* whether a message of this chat shakes the phone while the app is on screen: on unless the person turned it off for the chat; a setting of this phone, since the server keeps no such thing */
+BOOL ExteriaNotifyChatVibrates(int32_t peerKind, long long peerId);
+void ExteriaNotifySetChatVibrates(int32_t peerKind, long long peerId, BOOL on);
 void ExteriaNotifySetInAppVibrate(BOOL on);
 BOOL ExteriaNotifyInAppPreview(void);
 void ExteriaNotifySetInAppPreview(BOOL on);

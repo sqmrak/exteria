@@ -67,6 +67,24 @@ static void test_baseline_and_new(void) {
     CHECK_EQ_INT(events[0].peer_id, 12);
 }
 
+static void test_long_body(void) {
+    exteria_notify_state state;
+    exteria_notify_settings s = settings();
+    exteria_dialog_row rows[1];
+    exteria_notify_event events[2];
+    char text[3001];
+    size_t more;
+    memset(text, 'x', sizeof(text) - 1);
+    text[sizeof(text) - 1] = 0;
+    exteria_notify_state_init(&state);
+    rows[0] = row(10, 100, "Ann", "hello");
+    CHECK_EQ_INT(run(&state, &s, rows, 1, events, 2, &more), 0);
+    rows[0] = row(10, 101, "Ann", text);
+    CHECK_EQ_INT(run(&state, &s, rows, 1, events, 2, &more), 1);
+    /* a message of three thousand characters reaches the banner whole */
+    CHECK_EQ_INT(strlen(events[0].body), 3000);
+}
+
 static void test_filters(void) {
     exteria_notify_state state;
     exteria_notify_settings s = settings();
@@ -410,6 +428,7 @@ static void test_rules(void) {
 
 int main(void) {
     test_baseline_and_new();
+    test_long_body();
     test_filters();
     test_words();
     test_cap_and_order();

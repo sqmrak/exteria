@@ -27,7 +27,7 @@ static NSString *const ExteriaNotifyAskedKey = @"exteria.notify.asked";
 #define FOREGROUND_LOOK_SECONDS 6.0
 /* the chat list is read at most this often from the background, so a chat that writes all day is not a request for
    each message */
-#define BACKGROUND_LOOK_SECONDS 8.0
+#define BACKGROUND_LOOK_SECONDS 3.0
 #define FLOOD_WAIT_DEFAULT_SECONDS 30.0
 #define FLOOD_WAIT_MAX_SECONDS 900.0
 /* a quiet link in the background pings this rarely, since every ping wakes the radio; the disconnect delay sent with it follows the interval */
@@ -513,7 +513,7 @@ static NSString *ExteriaBannerSoundFile(const exteria_notify_sound *sound) {
         NSString *file = ExteriaBannerSoundFile(&tone);
         ExteriaPlayAppSound(file.length ? file : @"sound_in.caf");
     }
-    ExteriaVibrateOnce();
+    if (ExteriaNotifyChatVibrates(event.peerKind, event.peerId)) ExteriaVibrateOnce();
     if (!ExteriaNotifyInAppPreview()) return;
     NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:event.peerKind], @"kind", [NSNumber numberWithLongLong:event.peerId], @"peer", nil];
     [ExteriaInAppBanner showTitle:event.title body:event.body dialog:event.dialog avatars:[self bannerAvatars] tap:^{ [self openChatWithInfo:info]; }];

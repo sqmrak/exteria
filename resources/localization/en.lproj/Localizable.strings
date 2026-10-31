@@ -2245,6 +2245,8 @@
 "profile.choosephoto" = "Choose photo";
 "attach.pick.profile" = "Choose a photo or a video";
 "profile.video.unsupported" = "A video cannot be a profile picture yet.";
+"notif.chat.vibrate" = "Vibration";
+"notif.chat.vibrate.info" = "Shakes the phone for a message of this chat while the app is open. A setting of this phone.";
 "developer.badges" = "My badges";
 "developer.badges.header" = "Badges";
 "developer.badges.row.info" = "Put any badge of the team on your name, on this phone only";
