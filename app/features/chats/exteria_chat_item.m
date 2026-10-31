@@ -576,6 +576,12 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
         break;
     case EXTERIA_PREVIEW_NONE:
     case EXTERIA_PREVIEW_TEXT:
+        /* a message of a kind the client does not read arrives with no text and no media; an empty bubble with only a clock says nothing */
+        if (!message.text.length && !message.markup && !message.poll && !message.gift && !message.service) {
+            item->_content = ExteriaChatItemContentFile;
+            item->_fileTitle = [NSLocalizedString(@"chat.unsupported", nil) copy];
+        }
+        break;
     case EXTERIA_PREVIEW_SERVICE:
         break;
     }
