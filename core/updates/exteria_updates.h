@@ -40,5 +40,7 @@ exteria_status exteria_updates_cache_message(exteria_updates *u, const exteria_t
 /* whether the container only carries presence, typing, draft and outbox-read updates, which cannot add a message
    or change an unread count */
 int exteria_updates_quiet(const exteria_tl_value *updates);
+/* 1 when the container holds an update that changes what the chat list shows although it is quiet for the notifier: the other side read our messages */
+int exteria_updates_list_visible(const exteria_tl_value *updates);
 
 #endif

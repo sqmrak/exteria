@@ -70,6 +70,7 @@
     BOOL _floodRetried;
     BOOL _archiveHidden;
     BOOL _archiveRevealed;
+    BOOL _dragFromTop;
     NSUInteger _generation;
     /* keys of the chats picked after a long press; nil outside selection */
     NSMutableSet *_selection;
@@ -289,7 +290,7 @@
     if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
     _liveRefreshScheduled = YES;
     uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
-    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 15000, 500);
+    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 2500, 200);
     [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
 }
 
@@ -618,8 +619,12 @@
 #pragma mark archive
 
 /* pulling the list down past the top brings a hidden archive back, as in the modern list; scrolling away from it or leaving the screen hides it again */
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    _dragFromTop = scrollView.contentOffset.y + scrollView.contentInset.top <= 2;
+}
+
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
-    if (scrollView.contentOffset.y + scrollView.contentInset.top <= -ARCHIVE_PULL_DISTANCE && ExteriaArchiveHidden() && !_archiveRevealed) {
+    if (_dragFromTop && scrollView.contentOffset.y + scrollView.contentInset.top <= -ARCHIVE_PULL_DISTANCE && ExteriaArchiveHidden() && !_archiveRevealed) {
         BOOL hasArchive = NO;
         for (ExteriaDialog *dialog in _dialogs) hasArchive = hasArchive || dialog.folder;
         if (hasArchive) {
@@ -657,6 +662,36 @@
     offset.y -= row.size.height;
     self.tableView.contentOffset = offset;
     [self refreshStatus];
+}
+
+/* the edit button of the list shows the plate of the official client with "read all" while the rows are open for editing */
+/* the badges a developer gave himself on this phone: the names in the rows are drawn again */
+- (void)localMarksChanged {
+    if (self.isViewLoaded) [self.tableView reloadData];
+}
+
+- (void)setEditing:(BOOL)editing animated:(BOOL)animated {
+    [super setEditing:editing animated:animated];
+    if (_folderId) return;
+    UINavigationController *navigation = self.navigationController;
+    if (editing) {
+        UIBarButtonItem *space = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:NULL] autorelease];
+        UIBarButtonItem *all = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"chats.readall", nil) style:UIBarButtonItemStyleBordered target:self
+                                                                action:@selector(readAllChats)] autorelease];
+        self.toolbarItems = [NSArray arrayWithObjects:space, all, space, nil];
+        if (navigation) ExteriaClassicStyleToolbar(navigation.toolbar);
+    }
+    [navigation setToolbarHidden:!editing animated:animated];
+}
+
+- (void)readAllChats {
+    NSMutableArray *unread = [NSMutableArray array];
+    for (ExteriaDialog *dialog in _dialogs) if (!dialog.folder && !dialog.community && dialog.unread) [unread addObject:dialog];
+    [self setEditing:NO animated:YES];
+    if (!unread.count) return;
+    [self applyToDialogs:unread perform:^(ExteriaDialog *dialog, void (^finished)(NSString *)) {
+        [_session performAction:dialog.unreadCount > 0 ? ExteriaChatCommandMarkRead : ExteriaChatCommandClearUnreadMark onDialog:dialog completion:finished];
+    }];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {

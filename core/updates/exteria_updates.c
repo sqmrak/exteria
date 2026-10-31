@@ -619,3 +619,20 @@ int exteria_updates_quiet(const exteria_tl_value *updates) {
     }
     return 1;
 }
+
+static int list_visible_update(const exteria_tl_value *item) {
+    return exteria_tl_is(item, EXTERIA_TL_ID_updateReadHistoryOutbox) || exteria_tl_is(item, EXTERIA_TL_ID_updateReadChannelOutbox);
+}
+
+int exteria_updates_list_visible(const exteria_tl_value *updates) {
+    const exteria_tl_value *vec;
+    uint32_t i;
+    if (!updates) return 0;
+    if (exteria_tl_is(updates, EXTERIA_TL_ID_updateShort)) return list_visible_update(exteria_tl_get(updates, "update"));
+    vec = exteria_tl_get(updates, "updates");
+    if (!vec || vec->kind != EXTERIA_TL_V_VEC) return 0;
+    for (i = 0; i < vec->u.vec.count; ++i) {
+        if (list_visible_update(vec->u.vec.items[i])) return 1;
+    }
+    return 0;
+}

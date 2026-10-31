@@ -684,9 +684,10 @@ static NSString *ExteriaMachineName(void) {
         for (void (^observer)(void) in observers) observer();
         [observers release];
     }
-    /* presence and typing change nothing a notification could say, and a contact list sends them all day */
-    if (_changeHook && _store && !(_clientLive && _client.change_quiet)) _changeHook();
-    if (_clientLive && !_client.change_quiet && !_client.change_rpc_cache) {
+    /* presence and typing change nothing a notification could say, and a contact list sends them all day; the answer to the notifier's own look at the
+       chat list is not news either, or each look would start the next one and the list would be asked for until the server answers with a wait */
+    if (_changeHook && _store && !(_clientLive && (_client.change_quiet || _client.change_rpc_cache))) _changeHook();
+    if (_clientLive && (!_client.change_quiet || _client.change_list) && !_client.change_rpc_cache) {
         [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaSessionDialogsUpdatedNotification object:self]; }];
     }
 }

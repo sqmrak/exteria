@@ -59,6 +59,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     UIView *_leavingRows;
     /* a pull on the list shows the hidden archive until the screen is left */
     BOOL _archiveRevealed;
+    /* the drag that is running began with the list at its top: only such a pull asks for a hidden archive, and not a long drag down through the rows that ends past the top */
+    BOOL _dragFromTop;
     BOOL _archiveHidden;
     BOOL _vpnHidden;
     ExteriaDialogCell *_openCell;
@@ -130,7 +132,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
     _liveRefreshScheduled = YES;
     uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
-    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 15000, 500);
+    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 2500, 200);
     [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
 }
 
@@ -1030,6 +1032,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
     [super scrollViewWillBeginDragging:scrollView];
+    _dragFromTop = scrollView.contentOffset.y + scrollView.contentInset.top <= 2;
     [self closeOpenCell];
 }
 
@@ -1064,7 +1067,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
     [super scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
     if (!decelerate) [self hideRevealedArchiveIfScrolledAway];
-    if (scrollView.contentOffset.y + scrollView.contentInset.top > -ARCHIVE_PULL_DISTANCE || !ExteriaArchiveHidden() || _archiveRevealed) return;
+    if (!_dragFromTop || scrollView.contentOffset.y + scrollView.contentInset.top > -ARCHIVE_PULL_DISTANCE || !ExteriaArchiveHidden() || _archiveRevealed) return;
     BOOL hasArchive = NO;
     for (ExteriaDialog *dialog in _dialogs) hasArchive = hasArchive || dialog.folder;
     if (!hasArchive) return;

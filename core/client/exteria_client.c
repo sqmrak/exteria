@@ -144,10 +144,12 @@ static void notify_changed(exteria_client *c) {
     if (c->events.changed && !c->closing) c->events.changed(c->events.ctx);
 }
 
-static void notify_changed_quiet(exteria_client *c, int quiet) {
+static void notify_changed_quiet(exteria_client *c, int quiet, int list) {
     c->change_quiet = quiet;
+    c->change_list = list;
     notify_changed(c);
     c->change_quiet = 0;
+    c->change_list = 0;
 }
 
 static void rpc_result(void *ctx, uint64_t id, const exteria_mt_rpc_result *r) {
@@ -218,7 +220,7 @@ static void update(void *ctx, const exteria_tl_value *v) {
     if (c->sync_id) c->sync_again = 1;
     status = exteria_updates_apply(&c->updates, v);
     if (status != EXTERIA_E_RETRY) report(c, status, "updates transaction");
-    if (status == EXTERIA_OK) notify_changed_quiet(c, exteria_updates_quiet(v));
+    if (status == EXTERIA_OK) notify_changed_quiet(c, exteria_updates_quiet(v), exteria_updates_list_visible(v));
     dispatch_live_updates(c, v);
 }
 
