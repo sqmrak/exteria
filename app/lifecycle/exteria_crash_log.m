@@ -2,6 +2,7 @@
 
 #import <UIKit/UIKit.h>
 
+#import <objc/runtime.h>
 #include <execinfo.h>
 #include <fcntl.h>
 #include <mach/mach.h>
@@ -55,6 +56,57 @@ static void ExteriaPutHex(int fd, unsigned long long value) {
     ExteriaPut(fd, " 0x");
     ExteriaPutNumber(fd, value, 16);
 }
+
+/* the last actions that controls sent, kept as plain text the crash handler only reads: when a target is gone the crash says so inside UIKit with none of
+   this app's frames, and what the control was and who owned it is then the only way to the screen */
+#define ACTIONS_KEPT 4
+#define ACTION_TEXT 160
+static char sActions[ACTIONS_KEPT][ACTION_TEXT];
+static unsigned sActionCount;
+static uintptr_t sActionTargets[ACTIONS_KEPT];
+static IMP sSendAction;
+
+static void ExteriaAppendText(char *to, size_t cap, const char *text) {
+    size_t length = strlen(to);
+    if (length + 1 >= cap) return;
+    strncpy(to + length, text, cap - length - 1);
+    to[cap - 1] = 0;
+}
+
+static BOOL ExteriaSendActionNoted(id application, SEL command, SEL action, id target, id sender, id event) {
+    unsigned slot = sActionCount++ % ACTIONS_KEPT;
+    char *text = sActions[slot];
+    text[0] = 0;
+    ExteriaAppendText(text, ACTION_TEXT, action ? sel_getName(action) : "?");
+    ExteriaAppendText(text, ACTION_TEXT, " from ");
+    int depth = 0;
+    for (id view = sender; view && depth < 4; ++depth) {
+        ExteriaAppendText(text, ACTION_TEXT, object_getClassName(view));
+        ExteriaAppendText(text, ACTION_TEXT, depth < 3 ? "<" : "");
+        view = [view respondsToSelector:@selector(superview)] ? [(UIView *)view superview] : nil;
+    }
+    sActionTargets[slot] = (uintptr_t)target;
+    return ((BOOL (*)(id, SEL, SEL, id, id, id))sSendAction)(application, command, action, target, sender, event);
+}
+
+static void ExteriaWatchActions(void) {
+    Method method = class_getInstanceMethod([UIApplication class], @selector(sendAction:to:from:forEvent:));
+    if (!method || sSendAction) return;
+    sSendAction = method_getImplementation(method);
+    method_setImplementation(method, (IMP)ExteriaSendActionNoted);
+}
+
+static void ExteriaPutActions(int fd) {
+    unsigned shown = sActionCount < ACTIONS_KEPT ? sActionCount : ACTIONS_KEPT;
+    for (unsigned i = 0; i < shown; ++i) {
+        unsigned slot = (sActionCount - 1 - i) % ACTIONS_KEPT;
+        ExteriaPut(fd, "\naction ");
+        ExteriaPut(fd, sActions[slot]);
+        ExteriaPut(fd, " target");
+        ExteriaPutHex(fd, sActionTargets[slot]);
+    }
+}
+
 
 static void ExteriaPutImage(int fd) {
     ExteriaPut(fd, " slide");
@@ -180,6 +232,30 @@ static BOOL ExteriaFindSignalFrame(int signal_number, siginfo_t *info, void *con
     return NO;
 }
 
+/* the name a selector points at, when the memory is readable and printable: a few bytes at a time, so a name at the end of a page is still read */
+static void ExteriaPutMessageName(int fd, uintptr_t selector) {
+    char name[65];
+    size_t length = 0;
+    while (length < sizeof(name) - 1) {
+        char byte;
+        if (!ExteriaCopyCrashMemory(selector + length, &byte, 1) || !byte) break;
+        if (byte < 32 || byte > 126) { length = 0; break; }
+        name[length++] = byte;
+    }
+    if (!length) return;
+    name[length] = 0;
+    ExteriaPut(fd, " selector ");
+    ExteriaPut(fd, name);
+}
+
+/* the first words at the receiver, if they can be read */
+static void ExteriaPutReceiverWords(int fd, uintptr_t receiver) {
+    uintptr_t words[4];
+    if (!ExteriaCopyCrashMemory(receiver, words, sizeof(words))) return;
+    ExteriaPut(fd, " words");
+    for (int i = 0; i < 4; ++i) ExteriaPutHex(fd, words[i]);
+}
+
 static void ExteriaFaultSignal(int signal_number, siginfo_t *info, void *context) {
     int fd = open(sPath, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd >= 0) {
@@ -210,6 +286,21 @@ static void ExteriaFaultSignal(int signal_number, siginfo_t *info, void *context
             ExteriaPut(fd, " pc"); ExteriaPutHex(fd, pc);
             ExteriaPut(fd, " lr"); ExteriaPutHex(fd, lr);
             ExteriaPut(fd, " sp"); ExteriaPutHex(fd, sp);
+            /* a fault inside objc_msgSend names the receiver (first register), the message (second) and what the receiver's memory holds now: a freed
+               object shows as a pointer to a free list or as foreign data, and the message says which caller sent it */
+            uintptr_t receiver, message;
+#if defined(__LP64__)
+            receiver = (uintptr_t)machine.__ss.__x[0];
+            message = (uintptr_t)machine.__ss.__x[1];
+#else
+            receiver = machine.__ss.__r[0];
+            message = machine.__ss.__r[1];
+#endif
+            ExteriaPut(fd, " receiver"); ExteriaPutHex(fd, receiver);
+            ExteriaPut(fd, " message"); ExteriaPutHex(fd, message);
+            ExteriaPutMessageName(fd, message);
+            ExteriaPutReceiverWords(fd, receiver);
+            ExteriaPutActions(fd);
             uintptr_t addresses[FRAMES_MAX + 2] = {pc, lr};
             int count = 2;
             /* the handler runs on an alternate stack; only the interrupted thread's frame chain holds its callers */
@@ -280,6 +371,7 @@ void ExteriaCrashLogStart(void) {
     alternate.ss_flags = 0;
     if (!alternate.ss_sp || sigaltstack(&alternate, NULL) != 0) NSLog(@"exteria: no alternate stack for the crash record");
     ExteriaFindImage();
+    ExteriaWatchActions();
 
     struct sigaction action;
     memset(&action, 0, sizeof(action));

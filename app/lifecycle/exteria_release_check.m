@@ -385,6 +385,13 @@ void ExteriaFetchLatestRelease(void (^completion)(NSDictionary *, NSString *)) {
     });
 }
 
+void ExteriaShowReleasePreview(UIView *host) {
+    if (!host) return;
+    ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:@"v9.9.9-preview" notes:@"- the notice as the person sees it\n- no file behind it, so nothing is installed" ipaURL:nil digestURL:nil size:0] autorelease];
+    notice.frame = host.bounds;
+    [host addSubview:notice];
+}
+
 void ExteriaReleaseCheckStart(UIWindow *window) {
     static ExteriaReleaseCheck *check;
     if (check || !window) return;

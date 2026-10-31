@@ -9,6 +9,13 @@
 
 BOOL ExteriaIsDeveloperId(long long userId);
 NSUInteger ExteriaMarksOfId(long long userId);
+/* the marks a developer gave himself on this phone: they take the place of the real ones of that account wherever its name is drawn, and nothing leaves the phone. The bits are the ExteriaMark values */
+BOOL ExteriaHasLocalMarks(long long userId);
+NSUInteger ExteriaLocalMarks(long long userId);
+void ExteriaSetLocalMarks(long long userId, NSUInteger marks);
+void ExteriaClearLocalMarks(long long userId);
+/* posted on the main thread when the marks of an account were set or cleared, so lists draw their names again */
+extern NSString *const ExteriaLocalMarksDidChangeNotification;
 NSArray *ExteriaOfficialTesterIds(void);
 NSString *ExteriaTeamUsername(long long userId);
 extern NSString *const ExteriaOpenTeamPersonNotification;

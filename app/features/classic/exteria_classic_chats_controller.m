@@ -98,6 +98,7 @@
     _dialogs = [[NSArray alloc] init];
     _shown = [[NSArray alloc] init];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(timesChanged) name:ExteriaTimeDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(localMarksChanged) name:ExteriaLocalMarksDidChangeNotification object:nil];
     self.navigationItem.title = folderId > 0 ? NSLocalizedString(@"chats.archive", nil) : NSLocalizedString(@"chats.title", nil);
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(archiveSummaryChanged:)
         name:ExteriaArchiveSummaryDidChangeNotification object:_session];

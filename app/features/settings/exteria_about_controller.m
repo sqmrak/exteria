@@ -7,6 +7,8 @@
 
 #import "exteria_chat_extras_controller.h"
 #import "exteria_developers.h"
+#import "exteria_developer_settings.h"
+#import "exteria_alert.h"
 #import "exteria_gift_screen.h"
 #import "exteria_custom_emoji.h"
 #import "exteria_pill_tabs_view.h"
@@ -228,6 +230,10 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     NSMutableDictionary *_people;
     NSMutableSet *_requested;
     NSUInteger _teamTab;
+    /* presses of the lead's picture in a row; the fifth opens the developer settings */
+    NSUInteger _leadTaps;
+    BOOL _rebuildScheduled;
+    NSTimeInterval _leadTapTime;
 }
 @end
 
@@ -243,6 +249,7 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     _requested = [[NSMutableSet alloc] init];
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     self.pageTitle = NSLocalizedString(@"settings.exteria", nil);
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(developerModeChanged:) name:ExteriaDeveloperModeDidChangeNotification object:nil];
     return self;
 }
 
@@ -384,8 +391,42 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     return [ExteriaSettingsRow viewRowWithView:view height:^CGFloat(CGFloat width) { (void)width; return made ? 80 : 62; }];
 }
 
+- (void)developerModeChanged:(NSNotification *)note {
+    (void)note;
+    [self rebuildSections];
+}
+
+/* the lead's row opens the profile after a short wait, which a second press in a row cancels: five presses are the way to the developer settings, and the
+   profile is for the single one */
 - (void)creditTapped:(ExteriaCreditView *)view {
-    ExteriaPerson *person = [_people objectForKey:[NSNumber numberWithLongLong:view.userId]];
+    if (view.userId != EXTERIA_TEAM_LEAD_ID) {
+        [self openCredit:view.userId];
+        return;
+    }
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(openLead) object:nil];
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - _leadTapTime > 1.5) _leadTaps = 0;
+    _leadTapTime = now;
+    if (++_leadTaps >= 5) {
+        _leadTaps = 0;
+        if (ExteriaDeveloperModeEnabled()) {
+            ExteriaShowNotice(nil, NSLocalizedString(@"developer.already", nil));
+            return;
+        }
+        ExteriaDeveloperModeSet(YES);
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDeveloperModeDidChangeNotification object:nil];
+        ExteriaShowNotice(nil, NSLocalizedString(@"developer.unlocked", nil));
+        return;
+    }
+    [self performSelector:@selector(openLead) withObject:nil afterDelay:0.45];
+}
+
+- (void)openLead {
+    [self openCredit:EXTERIA_TEAM_LEAD_ID];
+}
+
+- (void)openCredit:(long long)userId {
+    ExteriaPerson *person = [_people objectForKey:[NSNumber numberWithLongLong:userId]];
     if (!person || !person.accessHash) {
         ExteriaGiftAlert(nil, NSLocalizedString(@"about.person.unavailable", nil));
         return;
@@ -417,6 +458,12 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
         [self categoryRow:ExteriaSymbolEllipsis tone:ExteriaSettingsToneGray key:@"about.more" page:^UIViewController *{
             return [[[ExteriaMoreSettingsController alloc] initWithSession:session] autorelease];
         }], nil];
+    /* what only the developers see: a black tile with a hammer, after the others */
+    if (ExteriaDeveloperModeEnabled()) {
+        categories = [categories arrayByAddingObject:[self categoryRow:ExteriaSymbolHammer tone:ExteriaSettingsToneBlack key:@"developer.settings" page:^UIViewController *{
+            return [[[ExteriaDeveloperSettingsController alloc] initWithSession:session] autorelease];
+        }]];
+    }
 
     ExteriaSettingsRow *channel = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolMegaphone tone:ExteriaSettingsToneCyan title:NSLocalizedString(@"about.channel", nil)
                                                            subtitle:@"@sqmrakdev" value:nil tap:^{ [(ExteriaAboutController *)weak.target open:ExteriaChannelAddress]; }];

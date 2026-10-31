@@ -46,7 +46,37 @@ void ExteriaLoadTeamPerson(ExteriaSession *session, long long userId, void (^com
 }
 
 BOOL ExteriaIsDeveloperId(long long userId) { return exteria_team_is_developer(userId) != 0; }
-NSUInteger ExteriaMarksOfId(long long userId) { return exteria_team_marks(userId); }
+NSString *const ExteriaLocalMarksDidChangeNotification = @"ExteriaLocalMarksDidChange";
+static NSString *const ExteriaLocalMarksKey = @"exteria.developer.localmarks";
+
+static NSString *ExteriaLocalMarksName(long long userId) { return [NSString stringWithFormat:@"%lld", userId]; }
+
+BOOL ExteriaHasLocalMarks(long long userId) {
+    return userId > 0 && [[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaLocalMarksKey] objectForKey:ExteriaLocalMarksName(userId)] != nil;
+}
+
+NSUInteger ExteriaLocalMarks(long long userId) {
+    return (NSUInteger)[[[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaLocalMarksKey] objectForKey:ExteriaLocalMarksName(userId)] unsignedIntegerValue];
+}
+
+void ExteriaSetLocalMarks(long long userId, NSUInteger marks) {
+    if (userId <= 0) return;
+    NSMutableDictionary *all = [NSMutableDictionary dictionaryWithDictionary:[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaLocalMarksKey]];
+    [all setObject:[NSNumber numberWithUnsignedInteger:marks] forKey:ExteriaLocalMarksName(userId)];
+    [[NSUserDefaults standardUserDefaults] setObject:all forKey:ExteriaLocalMarksKey];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaLocalMarksDidChangeNotification object:nil];
+}
+
+void ExteriaClearLocalMarks(long long userId) {
+    NSMutableDictionary *all = [NSMutableDictionary dictionaryWithDictionary:[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaLocalMarksKey]];
+    [all removeObjectForKey:ExteriaLocalMarksName(userId)];
+    [[NSUserDefaults standardUserDefaults] setObject:all forKey:ExteriaLocalMarksKey];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaLocalMarksDidChangeNotification object:nil];
+}
+
+NSUInteger ExteriaMarksOfId(long long userId) {
+    return ExteriaHasLocalMarks(userId) ? ExteriaLocalMarks(userId) : exteria_team_marks(userId);
+}
 NSString *ExteriaTeamUsername(long long userId) {
     const exteria_team_member *member = exteria_team_member_for_id(userId);
     return member ? [NSString stringWithUTF8String:member->username] : nil;

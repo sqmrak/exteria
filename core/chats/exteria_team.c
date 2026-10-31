@@ -28,6 +28,7 @@ static const exteria_team_member members[] = {
     {INT64_C(1448306214), "illyagif", DEV, 0},
     {INT64_C(940506028), "Maks_097", ExteriaMarkTester, 0},
     {INT64_C(7801631734), "QuaIcomm", ExteriaMarkTester, 0},
+    {INT64_C(7752146730), "nowme77", ExteriaMarkTester, 0},
     {INT64_C(8221692135), "cmp_73", ExteriaMarkCaution, 0},
     {INT64_C(7073807722), "Radickdz", PROMO, 0},
     {INT64_C(5850832376), "Xmas_UnrealKot", PROMO, 0}

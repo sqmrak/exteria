@@ -33,7 +33,6 @@ NSString *ExteriaNameWithBadge(NSString *name, long long document, NSArray **ent
 
 NSString *ExteriaNameWithBadges(NSString *name, long long document, NSUInteger marks, NSArray **entities) {
     if (entities) *entities = nil;
-    if (marks & ExteriaMarkBugHunter) { document = 0; marks &= ExteriaMarkBugHunter | ExteriaMarkOfficialTester; }
     if ((!document && !marks) || !name.length) return name;
     NSMutableString *text = [NSMutableString stringWithString:name];
     NSMutableArray *list = [NSMutableArray array];

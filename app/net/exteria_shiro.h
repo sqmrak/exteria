@@ -87,3 +87,5 @@ exteria_status ExteriaShiroConnectSocket(ExteriaShiro *shiro, exteria_mt_socket 
 /* the VPN that the call library and the other code without an object reach through exteria_shiro_network.h; nil
    clears it */
 void ExteriaShiroSetActive(ExteriaShiro *shiro);
+/* the one the app runs, or nil; for the developer settings, which show the card of its failure */
+ExteriaShiro *ExteriaShiroActive(void);

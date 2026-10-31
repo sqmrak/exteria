@@ -3,6 +3,7 @@
 #import "exteria_lite_mode.h"
 #import "exteria_status_label.h"
 #import "exteria_chats_controller.h"
+#import "exteria_developers.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -101,6 +102,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     self.contentUnderBar = YES;
     _badgeWeak = [[ExteriaWeakReference referenceTo:self] retain];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(localMarksChanged) name:ExteriaLocalMarksDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
     self.heading = [self titleForMode:ExteriaChatListTitleStored() person:nil];
     _dialogs = [[NSArray alloc] init];

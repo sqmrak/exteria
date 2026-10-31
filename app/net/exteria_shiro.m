@@ -663,6 +663,10 @@ void ExteriaShiroSetActive(ExteriaShiro *shiro) {
     @synchronized([ExteriaShiro class]) { ExteriaShiroActiveInstance = shiro; }
 }
 
+ExteriaShiro *ExteriaShiroActive(void) {
+    @synchronized([ExteriaShiro class]) { return ExteriaShiroActiveInstance; }
+}
+
 int ExteriaShiroNetworkRoute(void) {
     ExteriaShiro *shiro = ExteriaShiroActiveInstance;
     return shiro ? (int)shiro.route : (int)ExteriaShiroRouteDirect;
