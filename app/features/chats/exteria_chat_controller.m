@@ -244,6 +244,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     NSMutableDictionary *_server;
     NSMutableArray *_local;
     NSMutableDictionary *_people;
+    /* the messages whose sender is not known yet and was asked for, so each is asked for once */
+    NSMutableSet *_senderLookups;
     NSDictionary *_senderRoles;
     NSArray *_items;
     NSMutableDictionary *_itemCache;
@@ -569,6 +571,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_server release];
     [_local release];
     [_people release];
+    [_senderLookups release];
     [_selfPerson release];
     [_accountId release];
     [_senderRoles release];
@@ -3436,6 +3439,7 @@ static void ExteriaRedrawTree(UIView *view) {
     [self loadCustomEmoji];
     BOOL group = _dialog.kind == EXTERIA_DIALOG_GROUP;
     NSArray *messages = [self orderedMessages];
+    if (group) [self fetchMissingSendersOf:messages];
     NSTimeInterval serverNow = [[NSDate date] timeIntervalSince1970] + _sharingOffsetMilliseconds / 1000.0;
     NSTimeInterval nextExpiry = 0;
     NSMutableArray *items = [NSMutableArray arrayWithCapacity:messages.count + 8];
