@@ -307,6 +307,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     int32_t _onceVoiceId;
     BOOL _onceVoiceOpened;
     BOOL _stickToBottom;
+    BOOL _restoringScroll;
     /* the chat is still settling on its newest message: the kept page and the first fresh page land without a scroll animation, so the list never visibly travels */
     BOOL _opening;
     BOOL _panelShown;
@@ -1628,7 +1629,9 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         if (!found) {
             NSLog(@"exteria: the history around message %d of chat %lld did not hold it: %@", (int)target, chat->_dialog.peerId, errorName);
             chat->_scrollTarget = 0;
-            ExteriaShowNotice(nil, NSLocalizedString(@"chat.reply.unavailable", nil));
+            /* a position kept from the last visit may point at a message that is gone since, and that opens the chat at its end without a word */
+            if (!chat->_restoringScroll) ExteriaShowNotice(nil, NSLocalizedString(@"chat.reply.unavailable", nil));
+            chat->_restoringScroll = NO;
             return;
         }
         [chat enterWindowWithMessages:messages people:people page:page];
@@ -2072,6 +2075,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 }
 
 - (void)jumpToMessageId:(int32_t)messageId {
+    _restoringScroll = NO;
     _scrollTarget = messageId;
     _scrollPages = 0;
     [self scrollToTargetOrLoadMore];
@@ -2443,6 +2447,48 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [_foxes start];
 }
 
+static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
+#define CHAT_SCROLL_KEPT_MAX 200
+
+- (NSString *)scrollKey {
+    return [NSString stringWithFormat:@"%d:%lld:%d", (int)_dialog.peerKind, _dialog.peerId, (int)_dialog.topicId];
+}
+
+- (int32_t)keptScrollMessageId {
+    NSDictionary *entry = [[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaChatScrollKey] objectForKey:[self scrollKey]];
+    return [[entry objectForKey:@"id"] intValue];
+}
+
+/* leaving a chat that is not at its end keeps the newest message on screen, and leaving it at the end forgets any place; only the most recent chats are kept */
+- (void)keepScrollPosition {
+    if (_pinnedList || !_items.count || !_table.window) return;
+    NSMutableDictionary *all = [NSMutableDictionary dictionaryWithDictionary:[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaChatScrollKey]];
+    NSString *key = [self scrollKey];
+    int32_t shown = 0;
+    if (!_stickToBottom) {
+        for (NSIndexPath *path in _table.indexPathsForVisibleRows) {
+            if ((NSUInteger)path.row >= _items.count) continue;
+            ExteriaMessage *message = ((ExteriaChatItem *)[_items objectAtIndex:(NSUInteger)path.row]).message;
+            if (message.messageId > shown && !message.deletedLocally) shown = message.messageId;
+        }
+    }
+    if (shown > 0) {
+        [all setObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:shown], @"id", [NSNumber numberWithDouble:[[NSDate date] timeIntervalSince1970]], @"at", nil] forKey:key];
+        while (all.count > CHAT_SCROLL_KEPT_MAX) {
+            NSString *oldest = nil;
+            double oldestAt = 0;
+            for (NSString *candidate in all) {
+                double at = [[[all objectForKey:candidate] objectForKey:@"at"] doubleValue];
+                if (!oldest || at < oldestAt) { oldest = candidate; oldestAt = at; }
+            }
+            [all removeObjectForKey:oldest];
+        }
+    } else {
+        [all removeObjectForKey:key];
+    }
+    [[NSUserDefaults standardUserDefaults] setObject:all forKey:ExteriaChatScrollKey];
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     ++_codeCopyToken;
@@ -2463,6 +2509,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [self closeReactionPicker];
     [self stopAnimations];
     [self saveDraftNow];
+    [self keepScrollPosition];
     if ([self isMovingFromParentViewController]) {
         [_session stopWatchingForOwner:self];
         if (_closeHandler) _closeHandler();
@@ -2757,6 +2804,14 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _loading = YES;
     [self showStatus:nil retry:NO];
     ExteriaWeakReference *weak = _weak;
+    /* the place the person left the chat at comes back, as in the official clients; unread messages, a link and a bookmark take the opening first */
+    if (_startMessageId <= 0 && !_openUnread && !_pinnedList && _dialog.unreadCount <= 0) {
+        int32_t kept = [self keptScrollMessageId];
+        if (kept > 0) {
+            _startMessageId = kept;
+            _restoringScroll = YES;
+        }
+    }
     if (_openUnread && !_pinnedList && _startMessageId <= 0) {
         _opening = YES;
         int32_t anchor = _unreadAnchor;
