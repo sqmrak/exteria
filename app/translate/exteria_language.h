@@ -4,6 +4,19 @@
 
 extern NSString *const ExteriaLanguageDidChangeNotification;
 
+/* a language the person added from a .strings file: the keys are the keys of the English texts of the app, and what a file does not translate stays English. its code is
+   "x-" and the name of the file (letters, digits, - and _), which keeps it apart from the codes of real languages; the file may carry "language.name" (its own name),
+   "language.english" (the name in English) and "language.base" (the real language it is written in, such as "de", which dates, plurals and the translator follow) */
+NSArray *ExteriaCustomLanguageCodes(void);
+BOOL ExteriaIsCustomLanguage(NSString *code);
+/* reads, checks and stores the file; nil on success and the words for the person when it is refused: unreadable, too large, a name that is taken, no text of the app in it.
+   texts whose placeholders differ from the English ones are left out, since a wrong one would crash the screen that shows it */
+NSString *ExteriaInstallCustomLanguage(NSString *path, NSUInteger *accepted, NSUInteger *skipped);
+/* forgets a custom language; when it was the one in force, the system language comes back */
+void ExteriaRemoveCustomLanguage(NSString *code);
+/* the English texts as a .strings file the person can translate, copied to a temporary file; nil when the bundle has none */
+NSString *ExteriaCustomLanguageTemplatePath(void);
+
 /* the lproj codes the app has texts for, in the order the language screen lists them */
 NSArray *ExteriaInterfaceLanguageCodes(void);
 /* what the person chose: a code from that list, or an empty string for the system */

@@ -7,6 +7,8 @@
 #include "exteria_status.h"
 
 #define EXTERIA_LINK_URL_MAX 2048
+/* the longest code of a language pack the links accept, such as "pt-br" or "classic-zh-cn" */
+#define EXTERIA_LINK_LANGUAGE_MAX 32
 #define EXTERIA_LINK_NAME_MAX 33
 #define EXTERIA_LINK_PARAM_MAX 65
 #define EXTERIA_LINK_SLUG_MAX 129

@@ -165,6 +165,16 @@ static int copy_slug(char *dst, size_t cap, const char *s, size_t len) {
     return 1;
 }
 
+/* the code of a language pack: letters, digits, dash and underscore, at most EXTERIA_LINK_LANGUAGE_MAX of them */
+static int copy_language(char *dst, size_t cap, const char *s, size_t len) {
+    if (!copy_slug(dst, cap, s, len)) return 0;
+    if (strlen(dst) > EXTERIA_LINK_LANGUAGE_MAX) {
+        dst[0] = 0;
+        return 0;
+    }
+    return 1;
+}
+
 /* an invite hash; t.me/+digits is a phone number link and not an invite */
 static int copy_invite(char *dst, size_t cap, const char *s, size_t len) {
     size_t i;

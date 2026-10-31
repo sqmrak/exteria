@@ -328,6 +328,12 @@ static NSString *ExteriaCloudThemePath(void) {
         });
         return;
     }
+    case EXTERIA_LINK_LANGUAGE:
+        [self openLanguageOfCode:[NSString stringWithUTF8String:link.slug]];
+        return;
+    case EXTERIA_LINK_THEME:
+        [self openThemeOfSlug:[NSString stringWithUTF8String:link.slug]];
+        return;
     case EXTERIA_LINK_CALL:
         /* a conference call is end-to-end encrypted with a protocol this app does not have, so its link is told apart from a person's */
         ExteriaShowNotice(NSLocalizedString(@"group.title", nil), NSLocalizedString(@"group.notice.unsupported", nil));
