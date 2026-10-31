@@ -121,17 +121,20 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     /* the most the card may take of the screen; the picture is never dropped, and a card that does not fit scrolls, since a small phone has no room for the picture, the words and the buttons together */
     CGFloat room = window.bounds.size.height - 2 * CARD_MARGIN - ExteriaStatusBarHeight();
     CGFloat side = MIN(inner, room - rest - 14);
+    /* a tall card makes room by taking from the picture, which is shown whole in what is left; below the least it scrolls */
     BOOL scrolls = side < PICTURE_MIN;
     if (scrolls) side = PICTURE_MIN;
     UIScrollView *content = [[[UIScrollView alloc] init] autorelease];
     content.showsVerticalScrollIndicator = NO;
+    /* a clip with rounded corners makes the card draw off screen at every frame of its move; the card already has its corners, and only a card that scrolls needs the clip */
     content.layer.cornerRadius = 26;
-    content.clipsToBounds = YES;
+    content.clipsToBounds = scrolls;
     [card addSubview:content];
     CGFloat top = 22;
     {
         UIImageView *picture = [[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"crash_meme.jpg"]] autorelease];
-        picture.contentMode = UIViewContentModeScaleAspectFill;
+        /* the whole meme, whatever room the screen leaves: a cut of it showed only a middle of the picture */
+        picture.contentMode = UIViewContentModeScaleAspectFit;
         picture.clipsToBounds = YES;
         picture.layer.cornerRadius = 14;
         picture.frame = CGRectMake(20, 20, inner, floor(side));
@@ -157,6 +160,10 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     card.bounds = CGRectMake(0, 0, width, MIN(height, room));
     card.center = CGPointMake(CGRectGetMidX(window.bounds), CGRectGetMidY(window.bounds));
     card.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    /* the shadow follows a path and the card is drawn once into a picture that then moves, so the spring of its entry costs nothing on a slow phone */
+    card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:26].CGPath;
+    card.layer.shouldRasterize = YES;
+    card.layer.rasterizationScale = [UIScreen mainScreen].scale;
 
     [window addSubview:dim];
     [window addSubview:card];

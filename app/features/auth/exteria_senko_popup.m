@@ -129,6 +129,7 @@
         CGAffineTransform held = _card.transform;
         _card.transform = CGAffineTransformIdentity;
         _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - y) / 2), width, y);
+        _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:22].CGPath;
         _card.transform = held;
     }
 }
