@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <spawn.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -148,9 +149,23 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     return roots;
 }
 
-/* the same test the icon change makes: the folder is replaced file by file by this process, which only an owner of it can do */
+/* a signed user app must not be replaced with the jailbreak release executable */
 + (BOOL)canInstallInPlace {
-    return access([[[NSBundle mainBundle] bundlePath] fileSystemRepresentation], W_OK | X_OK) == 0;
+    NSString *bundle = [[[NSBundle mainBundle] bundlePath] stringByResolvingSymlinksInPath];
+    if (![bundle hasPrefix:@"/Applications/"] && ![bundle hasPrefix:@"/var/jb/Applications/"] &&
+        ![bundle hasPrefix:@"/private/var/jb/Applications/"]) return NO;
+    if (access("/usr/bin/uicache", X_OK) != 0 && access("/var/jb/usr/bin/uicache", X_OK) != 0) return NO;
+    NSString *template = [bundle stringByAppendingPathComponent:@".exteria-update-probe-XXXXXX"];
+    char *path = strdup([template fileSystemRepresentation]);
+    if (!path) return NO;
+    int fd = mkstemp(path);
+    BOOL writable = fd >= 0;
+    if (fd >= 0) {
+        if (close(fd) != 0) writable = NO;
+        if (unlink(path) != 0) writable = NO;
+    }
+    free(path);
+    return writable;
 }
 
 - (id)initWithIpaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size {
@@ -256,8 +271,8 @@ static void refresh_home_screen(void) {
     char *argv[] = {"uicache", NULL};
     pid_t pid = 0;
     int status = 0;
-    if (access("/usr/bin/uicache", X_OK) != 0) return;
-    if (posix_spawn(&pid, "/usr/bin/uicache", NULL, NULL, argv, environ) != 0) {
+    const char *path = access("/usr/bin/uicache", X_OK) == 0 ? "/usr/bin/uicache" : "/var/jb/usr/bin/uicache";
+    if (posix_spawn(&pid, path, NULL, NULL, argv, environ) != 0) {
         NSLog(@"exteria: uicache did not start after the update");
         return;
     }

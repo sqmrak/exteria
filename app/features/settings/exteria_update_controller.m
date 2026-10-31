@@ -145,6 +145,11 @@
         NSMutableArray *actions = [NSMutableArray array];
         if (_newer && [[_release objectForKey:@"ipa"] length] && [[_release objectForKey:@"digest"] length] && [ExteriaUpdater canInstallInPlace])
             [actions addObject:[ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolArrowDown title:NSLocalizedString(@"release.update", nil) destructive:NO tap:^{ [(ExteriaUpdateController *)weak.target startUpdate]; }]];
+        else if (_newer)
+            [actions addObject:[ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolArrowDown title:NSLocalizedString(@"release.open", nil) destructive:NO tap:^{
+                if (![[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"https://github.com/sqmrak/exteria/releases/latest"]])
+                    NSLog(@"exteria: cannot open the releases page");
+            }]];
         [actions addObject:[ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolRotate title:NSLocalizedString(@"update.page.check", nil) destructive:NO tap:^{ [(ExteriaUpdateController *)weak.target check]; }]];
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:actions]];
     }

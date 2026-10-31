@@ -16,7 +16,7 @@ typedef enum {
 
 /* the roots GitHub's api, its pages and its download hosts chain to: the shared pem files of the bundle, nil when one is missing */
 + (NSData *)trustedRoots;
-/* NO, with the reason in the text of the notice, when this process cannot write the app folder (an app installed by root) */
+/* in-place updates require a writable jailbreak installation and uicache */
 + (BOOL)canInstallInPlace;
 
 - (id)initWithIpaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size;

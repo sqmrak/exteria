@@ -122,7 +122,7 @@ on start the app asks `api.github.com` for the latest release and shows a notice
 - a release needs two assets: `Exteria-v<version>.ipa` and `Exteria-v<version>.ipa.sha256` (`sha256sum` output). the tag is `v<version>`. without both, the notice only opens the release page
 - the download follows at most four redirects, each one https to `github.com` or a single label under `githubusercontent.com`, checked against the roots in the bundle. the ipa must match the digest, or nothing is installed
 - only files that differ are written. they are inflated into `Exteria.app/.update` first and moved over the old ones when all of them check out, the executable and `Info.plist` last. files the new ipa no longer has stay where they are
-- the app folder must be writable by the app (`mobile:wheel`, see install). otherwise the notice says so and opens the release page
+- in-place updates require a writable jailbreak installation in `/Applications` or `/var/jb/Applications` and `uicache`. other installations open the release page so the ipa can be downloaded and installed with the original installer
 - after the last file the app runs `uicache` if it is there, and asks for a restart
 - limits: 128 MiB for the ipa, 4096 entries, no zip64, no links, no encryption
 

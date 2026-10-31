@@ -395,7 +395,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ExteriaSettingsRow *language = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolSettingsLanguage tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"language.title", nil)
                                                             subtitle:nil value:ExteriaNativeLanguageName(ExteriaInterfaceLanguageVariant())
                                                                  tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaLanguageSettingsController alloc] init] autorelease]]; }];
-    ExteriaSettingsRow *update = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolArrowDown tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"update.page.title", nil)
+    ExteriaSettingsRow *update = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"update.page.title", nil)
                                                          subtitle:NSLocalizedString(@"update.page.info", nil) value:nil tap:^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; }];
     NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
 #if defined(__arm64__)
@@ -539,7 +539,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ENTRY(NSLocalizedString(@"settings.power", nil), nil, ExteriaSymbolSettingsPower, ExteriaSettingsToneOrangeDeep, openPower);
     NSString *lite[] = {@"lite.battery.title", @"lite.options", @"lite.stickers", @"lite.emoji", @"lite.background", @"lite.calls", @"lite.smooth", @"lite.class"};
     for (size_t i = 0; i < sizeof(lite) / sizeof(lite[0]); ++i) ENTRY(NSLocalizedString(lite[i], nil), [NSArray arrayWithObject:power], ExteriaSymbolSettingsPower, ExteriaSettingsToneOrangeDeep, openPower);
-    ENTRY(NSLocalizedString(@"update.page.title", nil), nil, ExteriaSymbolArrowDown, blue, ^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; });
+    ENTRY(NSLocalizedString(@"update.page.title", nil), nil, ExteriaSymbolDocument, blue, ^{ [(ExteriaSettingsController *)weak.target push:[[[ExteriaUpdateController alloc] init] autorelease]]; });
     ENTRY(language, nil, ExteriaSymbolSettingsLanguage, ExteriaSettingsTonePurple, openLanguage);
     ENTRY(translator, [NSArray arrayWithObject:language], ExteriaSymbolTranslate, ExteriaSettingsTonePurple, openTranslator);
     NSArray *translatorPath = [NSArray arrayWithObjects:language, translator, nil];
