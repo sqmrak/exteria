@@ -1,6 +1,7 @@
 #import "exteria_about_controller.h"
 #import "exteria_general_settings_controller.h"
 #import "exteria_more_settings_controller.h"
+#import "exteria_plugins_controller.h"
 #import "exteria_link_router.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -84,16 +85,85 @@ static UIImage *ExteriaShapedPicture(UIImage *source, int lobes, CGFloat depth, 
     return image;
 }
 
+/* the pictures of the people of the credits are kept: in memory for the next time the page opens, and on disk for the next launch, so the page shows them at once and
+   the server only corrects them; a picture was drawn into its wavy outline again at every arrival of a name or a photo, a dozen times for a page */
+static NSMutableDictionary *ExteriaTeamImageMemory(void) {
+    static NSMutableDictionary *images;
+    if (!images) images = [[NSMutableDictionary alloc] init];
+    return images;
+}
+
+static NSString *ExteriaTeamImageDirectory(void) {
+    NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+    return [caches stringByAppendingPathComponent:@"exteria-team"];
+}
+
+static UIImage *ExteriaStoredTeamImage(NSNumber *identifier) {
+    UIImage *image = [ExteriaTeamImageMemory() objectForKey:identifier];
+    if (image) return image;
+    NSString *path = [ExteriaTeamImageDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.png", identifier.longLongValue]];
+    image = [UIImage imageWithContentsOfFile:path];
+    if (image) [ExteriaTeamImageMemory() setObject:image forKey:identifier];
+    return image;
+}
+
+static void ExteriaKeepTeamImage(NSNumber *identifier, UIImage *image) {
+    if (!image) return;
+    [ExteriaTeamImageMemory() setObject:image forKey:identifier];
+    NSString *directory = ExteriaTeamImageDirectory();
+    NSString *path = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.png", identifier.longLongValue]];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        @autoreleasepool {
+            [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
+            NSData *data = UIImagePNGRepresentation(image);
+            if (data) [data writeToFile:path atomically:YES];
+        }
+    });
+}
+
+/* the people that were loaded in this run, with the time, so a page opened again does not ask the server for all of them once more */
+static NSMutableDictionary *ExteriaTeamPeopleMemory(void) {
+    static NSMutableDictionary *people;
+    if (!people) people = [[NSMutableDictionary alloc] init];
+    return people;
+}
+#define TEAM_PERSON_FRESH_SECONDS 900.0
+
+/* the wavy picture of a person, made once for a source picture and kept with it: the source is held, so its address cannot come back for another picture */
+static UIImage *ExteriaCachedShapedPicture(NSNumber *identifier, UIImage *source, int lobes, CGFloat depth, CGFloat side) {
+    static NSCache *cache;
+    if (!cache) {
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 64;
+    }
+    NSString *key = [NSString stringWithFormat:@"%@/%d/%g/%g", identifier, lobes, (double)depth, (double)side];
+    NSArray *kept = [cache objectForKey:key];
+    if (kept && [kept objectAtIndex:0] == source) return [kept objectAtIndex:1];
+    UIImage *shaped = ExteriaShapedPicture(source, lobes, depth, side);
+    if (shaped) [cache setObject:[NSArray arrayWithObjects:source, shaped, nil] forKey:key];
+    return shaped;
+}
+
 static UIImage *ExteriaBundledPicture(NSString *name) {
+    static NSMutableDictionary *kept;
+    if (!kept) kept = [[NSMutableDictionary alloc] init];
+    UIImage *cached = [kept objectForKey:name];
+    if (cached) return cached;
     NSString *path = [[NSBundle mainBundle] pathForResource:name ofType:@"png"];
     UIImage *image = path ? [UIImage imageWithContentsOfFile:path] : nil;
     if (!image) NSLog(@"exteria: about picture %@ is missing from the bundle", name);
+    else [kept setObject:image forKey:name];
     return image;
 }
 
 /* the picture a person stands behind until the server's one arrives: a colored square with the first letter of the name, drawn here, since no picture of a person
    is kept in the app */
 static UIImage *ExteriaInitialPicture(NSString *name, CGFloat side) {
+    static NSMutableDictionary *kept;
+    if (!kept) kept = [[NSMutableDictionary alloc] init];
+    NSString *key = [NSString stringWithFormat:@"%@/%g", name, (double)side];
+    UIImage *cached = [kept objectForKey:key];
+    if (cached) return cached;
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), YES, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGFloat hue = (CGFloat)(name.hash % 360) / 360;
@@ -106,6 +176,7 @@ static UIImage *ExteriaInitialPicture(NSString *name, CGFloat side) {
     ExteriaDrawStringIn(letter, font, CGRectMake(0, (side - size.height) / 2, side, size.height), ExteriaStringTailTruncate, ExteriaTextAlignmentCenter);
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
+    if (image) [kept setObject:image forKey:key];
     return image;
 }
 
@@ -254,6 +325,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
     [_weak clear];
     [_weak release];
     [_fresh release];
@@ -279,6 +352,12 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     for (NSNumber *identifier in ids) {
         if ([_requested containsObject:identifier]) continue;
         [_requested addObject:identifier];
+        /* a person loaded a moment ago is taken as it was, with the picture kept for it */
+        NSDictionary *held = [ExteriaTeamPeopleMemory() objectForKey:identifier];
+        if (held && -[[held objectForKey:@"date"] timeIntervalSinceNow] < TEAM_PERSON_FRESH_SECONDS) {
+            [_people setObject:[held objectForKey:@"person"] forKey:identifier];
+            continue;
+        }
         ExteriaWeakReference *weak = _weak;
         ExteriaLoadTeamPerson(_session, identifier.longLongValue, ^(ExteriaPerson *person, NSString *error) {
             ExteriaAboutController *me = weak.target;
@@ -287,17 +366,34 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
                 NSLog(@"exteria: team user %@ could not be loaded: %@", identifier, error);
                 return;
             }
+            [ExteriaTeamPeopleMemory() setObject:[NSDictionary dictionaryWithObjectsAndKeys:person, @"person", [NSDate date], @"date", nil] forKey:identifier];
             [me->_people setObject:person forKey:identifier];
-            [me rebuildSections];
+            [me scheduleRebuild];
             if (!person.photo) return;
             [me->_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) {
+                if (!image) return;
+                /* kept even when the page is gone: the next one opens with it */
+                ExteriaKeepTeamImage(identifier, image);
                 ExteriaAboutController *again = weak.target;
-                if (!again || !image) return;
+                if (!again) return;
                 [again->_fresh setObject:image forKey:identifier];
-                [again rebuildSections];
+                [again scheduleRebuild];
             }];
         });
     }
+    [self scheduleRebuild];
+}
+
+/* the names and the photos arrive one by one, and a page of the whole team was built again at each; one build after a short wait takes them all */
+- (void)scheduleRebuild {
+    if (_rebuildScheduled) return;
+    _rebuildScheduled = YES;
+    [self performSelector:@selector(runScheduledRebuild) withObject:nil afterDelay:0.12];
+}
+
+- (void)runScheduledRebuild {
+    _rebuildScheduled = NO;
+    [self rebuildSections];
 }
 
 - (void)themeDidChange {
@@ -382,9 +478,9 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     NSString *role = person->role ? NSLocalizedString(person->role, nil) : nil;
     BOOL lead = person == &ExteriaCredits[0];
     NSString *made = lead && person->app ? [NSString stringWithFormat:NSLocalizedString(@"about.made", nil), person->app] : nil;
-    UIImage *picture = [_fresh objectForKey:identifier] ?: ExteriaInitialPicture(name, 2 * LEAD_TILE);
+    UIImage *picture = [_fresh objectForKey:identifier] ?: ExteriaStoredTeamImage(identifier) ?: ExteriaInitialPicture(name, 2 * LEAD_TILE);
     UIImage *icon = lead && person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
-    ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaShapedPicture(picture, person->lobes, person->depth, LEAD_TILE)
+    ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaCachedShapedPicture(identifier, picture, person->lobes, person->depth, LEAD_TILE)
                                                                   appIcon:icon marks:ExteriaMarksOfId(person->userId)] autorelease];
     [view addTarget:self action:@selector(creditTapped:) forControlEvents:UIControlEventTouchUpInside];
     view.userId = person->userId;
