@@ -190,6 +190,17 @@
         ExteriaChatFlagSet(ExteriaChatFlagSenderAvatars, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.hidewaves", nil) subtitle:NSLocalizedString(@"look.hidewaves.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagHideWaves) toggle:^(BOOL on) {
+        ExteriaChatFlagSet(ExteriaChatFlagHideWaves, on);
+        [(ExteriaAppearanceSettingsController *)weak.target apply];
+    }]];
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.chatlist.header", nil) footer:nil rows:rows];
+}
+
+/* what falls over the lists and the chats: snowflakes, the foxes of Senko, and the boykissers that take the place of the waves of the background */
+- (ExteriaSettingsSection *)effectsSection {
+    ExteriaWeakReference *weak = _weak;
+    NSMutableArray *rows = [NSMutableArray array];
     [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.snow", nil) subtitle:NSLocalizedString(@"look.snow.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagSnow) toggle:^(BOOL on) {
         ExteriaChatFlagSet(ExteriaChatFlagSnow, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
@@ -198,11 +209,11 @@
         ExteriaChatFlagSet(ExteriaChatFlagFoxes, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
-    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.hidewaves", nil) subtitle:NSLocalizedString(@"look.hidewaves.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagHideWaves) toggle:^(BOOL on) {
-        ExteriaChatFlagSet(ExteriaChatFlagHideWaves, on);
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"more.boykisser", nil) subtitle:NSLocalizedString(@"more.boykisser.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagBoykisser) toggle:^(BOOL on) {
+        ExteriaChatFlagSet(ExteriaChatFlagBoykisser, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
-    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.chatlist.header", nil) footer:nil rows:rows];
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.effects.header", nil) footer:nil rows:rows];
 }
 
 - (ExteriaSettingsSection *)foldersSection {
@@ -226,7 +237,7 @@
 }
 
 - (void)rebuild {
-    self.sections = [NSArray arrayWithObjects:[self layoutSection], [self avatarSection], [self chatListSection], [self foldersSection], [self cardsSection], nil];
+    self.sections = [NSArray arrayWithObjects:[self layoutSection], [self avatarSection], [self chatListSection], [self effectsSection], [self foldersSection], [self cardsSection], nil];
     [self reloadSettings];
 }
 
