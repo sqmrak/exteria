@@ -32,7 +32,8 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolGallery: return @"symbol_gallery";
     case ExteriaSymbolMapPin: return @"symbol_mappin";
     case ExteriaSymbolLock: return @"symbol_lock";
-    case ExteriaSymbolEllipsis: return @"symbol_ellipsis";
+    /* one shape of the dots in the whole app: the vertical one, whatever name a screen asks for */
+    case ExteriaSymbolEllipsis: return @"symbol_ellipsisvertical";
     case ExteriaSymbolSun: return @"symbol_sun";
     case ExteriaSymbolMoon: return @"symbol_moon";
     case ExteriaSymbolMegaphone: return @"symbol_megaphone";
