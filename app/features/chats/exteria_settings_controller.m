@@ -244,43 +244,56 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     }
 }
 
-- (void)openPhotos {
-    if (!_person) return;
-    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars
-                                                                          media:_media] autorelease];
-    [self presentViewController:viewer animated:YES completion:nil];
+/* a tap on the photo: it jumps, as the photo of exteraGram does when it is pressed, and the sheet of the library comes up under it */
+- (void)avatarTapped {
+    if (_uploading || !_person) return;
+    CALayer *layer = _header.identity.avatar.layer;
+    CAKeyframeAnimation *jump = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+    jump.values = [NSArray arrayWithObjects:[NSNumber numberWithDouble:1], [NSNumber numberWithDouble:0.86], [NSNumber numberWithDouble:1.1], [NSNumber numberWithDouble:0.97],
+                   [NSNumber numberWithDouble:1], nil];
+    jump.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithDouble:0], [NSNumber numberWithDouble:0.25], [NSNumber numberWithDouble:0.6], [NSNumber numberWithDouble:0.85],
+                     [NSNumber numberWithDouble:1], nil];
+    jump.duration = 0.42;
+    jump.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+    [layer addAnimation:jump forKey:@"exteria.jump"];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showPhotoSheet) object:nil];
+    [self performSelector:@selector(showPhotoSheet) withObject:nil afterDelay:ExteriaReduceMotionEnabled() ? 0 : 0.3];
 }
 
-- (void)changePhoto {
+- (void)showPhotoSheet {
     if (_uploading) return;
     ExteriaWeakReference *weak = _weak;
-    [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
+    [ExteriaProfilePhotoPicker pickWithSheetIn:ExteriaOverlayHost() picked:^(NSString *path, BOOL video) {
         ExteriaSettingsController *me = weak.target;
         if (!me) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
         }
-        me->_uploading = YES;
-        [me->_header.identity setUploading:YES];
-        [me->_session uploadProfilePhotoAtPath:path completion:^(NSString *errorName) {
-            [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
-            ExteriaSettingsController *again = weak.target;
-            if (!again) return;
-            again->_uploading = NO;
-            [again->_header.identity setUploading:NO];
-            if (errorName) {
-                NSLog(@"exteria: the profile photo was not set: %@", errorName);
-                return;
-            }
-            [again loadPerson];
-        }];
-    } unavailable:^{
-        Class alertClass = NSClassFromString(@"UIAlertView");
-        id alert = [[alertClass alloc] initWithTitle:nil message:NSLocalizedString(@"attach.gallery.unavailable", nil) delegate:nil
-                                   cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
-        [alert show];
-        [alert release];
+        [me uploadPickedPath:path video:video];
+    } failed:^{
+        ExteriaShowNotice(nil, NSLocalizedString(@"attach.failed", nil));
     }];
+}
+
+- (void)uploadPickedPath:(NSString *)path video:(BOOL)video {
+    ExteriaWeakReference *weak = _weak;
+    _uploading = YES;
+    [_header.identity setUploading:YES];
+    void (^finished)(NSString *) = ^(NSString *errorName) {
+        [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+        ExteriaSettingsController *again = weak.target;
+        if (!again) return;
+        again->_uploading = NO;
+        [again->_header.identity setUploading:NO];
+        if (errorName) {
+            NSLog(@"exteria: the profile %@ was not set: %@", video ? @"video" : @"photo", errorName);
+            ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName]);
+            return;
+        }
+        [again loadPerson];
+    };
+    if (video) [_session uploadProfileVideoAtPath:path completion:finished];
+    else [_session uploadProfilePhotoAtPath:path completion:finished];
 }
 
 #pragma mark rows

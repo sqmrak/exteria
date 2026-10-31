@@ -90,6 +90,7 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
 @implementation ExteriaAttachSheet
 @synthesize delegate = _delegate;
 @synthesize offersGift = _offersGift;
+@synthesize profilePicker = _profilePicker;
 
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -300,7 +301,7 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
     _title.frame = CGRectMake(20, 16, width - 20 - 56, 40);
     CGFloat bottom = _keyboard > 0 ? 0 : safe.bottom;
     BOOL picking = _selected.count > 0;
-    CGFloat barHeight = (picking ? CAPTION_HEIGHT : BAR_HEIGHT) + bottom;
+    CGFloat barHeight = _profilePicker ? bottom : (picking ? CAPTION_HEIGHT : BAR_HEIGHT) + bottom;
     _bar.frame = CGRectMake(0, height - BAR_HEIGHT - bottom, width, BAR_HEIGHT + bottom);
     _captionBar.frame = CGRectMake(0, height - barHeight, width, barHeight);
     _line.frame = CGRectMake(0, 0, width, 1 / ExteriaScreenScale());
@@ -399,6 +400,7 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
             time.frame = CGRectMake(_cellSide - 1 - 5 - width, _cellSide - 1 - 5 - height, width, height);
             [image addSubview:time];
         }
+        if (_profilePicker) continue;
         /* the button is a larger target than the ring it shows, which is small so that the picture stays in view */
         UIButton *check = [UIButton buttonWithType:UIButtonTypeCustom];
         check.frame = CGRectMake((col + 1) * _cellSide - CHECK_TARGET, 0, CHECK_TARGET, CHECK_TARGET);
@@ -445,6 +447,7 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
 
 /* the first cell of the grid is the camera, unless the setting leaves it out */
 - (NSInteger)tileCount {
+    if (_profilePicker) return 0;
     return ExteriaChatFlagGet(ExteriaChatFlagHideCameraTile) ? 0 : 1;
 }
 
@@ -453,11 +456,16 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
 }
 
 - (void)updateSelection {
-    BOOL picking = _selected.count > 0;
-    _bar.hidden = picking;
+    BOOL picking = _selected.count > 0 && !_profilePicker;
+    _bar.hidden = picking || _profilePicker;
     _captionBar.hidden = !picking;
     _more.hidden = !picking;
-    if (picking) {
+    if (_profilePicker) {
+        /* the line is long for the width of the title, and it is shrunk before it is cut */
+        _title.text = NSLocalizedString(@"attach.pick.profile", nil);
+        _title.adjustsFontSizeToFitWidth = YES;
+        _title.minimumFontSize = 14;
+    } else if (picking) {
         NSString *form = [@"attach.selected." stringByAppendingString:ExteriaPluralForm((NSInteger)_selected.count)];
         _title.text = [NSString stringWithFormat:NSLocalizedString(form, nil), (long)_selected.count];
     } else {

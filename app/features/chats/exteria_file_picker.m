@@ -19,10 +19,17 @@
     void (^_handler)(NSString *);
     void (^_cancel)(void);
     BOOL _loading;
+    NSArray *_extensions;
+    NSString *_rootTitle;
+    NSString *_searchPlaceholder;
+    NSString *_emptyText;
+    ExteriaSymbol _fileSymbol;
 }
 @end
 
 @implementation ExteriaFilePicker
+
+@synthesize extensions = _extensions, rootTitle = _rootTitle, searchPlaceholder = _searchPlaceholder, emptyText = _emptyText, fileSymbol = _fileSymbol;
 
 - (id)initWithDirectory:(NSString *)directory handler:(void (^)(NSString *))handler cancel:(void (^)(void))cancel {
     self = [super initWithStyle:UITableViewStylePlain];
@@ -30,6 +37,7 @@
     _directory = [directory copy];
     _handler = [handler copy];
     _cancel = [cancel copy];
+    _fileSymbol = ExteriaSymbolDocument;
     self.title = directory ? ([directory isEqualToString:@"/"] ? @"/" : directory.lastPathComponent) : NSLocalizedString(@"attach.file.title", nil);
     return self;
 }
@@ -38,6 +46,7 @@
     _search.delegate = nil;
     [_directory release]; [_entries release]; [_shown release]; [_failure release];
     [_search release]; [_spinner release]; [_handler release]; [_cancel release];
+    [_extensions release]; [_rootTitle release]; [_searchPlaceholder release]; [_emptyText release];
     [super dealloc];
 }
 
@@ -48,6 +57,7 @@
         self.tableView.backgroundColor = ExteriaColorScreen();
         self.tableView.separatorColor = ExteriaColorHairline();
     }
+    if (!_directory && _rootTitle.length) self.title = _rootTitle;
     self.tableView.rowHeight = 64;
     if (self.navigationController.viewControllers.count == 1) {
         self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"attach.cancel", nil)
@@ -55,7 +65,7 @@
     }
     if (_directory) {
         _search = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, self.tableView.bounds.size.width, 44)];
-        _search.placeholder = NSLocalizedString(@"attach.file.search", nil);
+        _search.placeholder = _searchPlaceholder.length ? _searchPlaceholder : NSLocalizedString(@"attach.file.search", nil);
         _search.delegate = self;
         _search.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         if (ExteriaThemeIsClassic()) ExteriaClassicStyleSearchBar(_search);
@@ -70,6 +80,7 @@
     _loading = YES;
     [_spinner startAnimating];
     NSString *directory = [_directory copy];
+    NSArray *extensions = [_extensions copy];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         NSMutableArray *entries = [NSMutableArray array];
@@ -91,6 +102,11 @@
                 NSString *path = [directory stringByAppendingPathComponent:name];
                 struct stat info;
                 if (stat(path.fileSystemRepresentation, &info) != 0 || (!S_ISDIR(info.st_mode) && !S_ISREG(info.st_mode))) continue;
+                if (extensions.count && S_ISREG(info.st_mode)) {
+                    BOOL wanted = NO;
+                    for (NSString *extension in extensions) if ([[name pathExtension] caseInsensitiveCompare:extension] == NSOrderedSame) wanted = YES;
+                    if (!wanted) continue;
+                }
                 [entries addObject:[NSDictionary dictionaryWithObjectsAndKeys:path, @"path", name, @"name",
                                     [NSNumber numberWithBool:S_ISDIR(info.st_mode)], @"directory",
                                     [NSNumber numberWithLongLong:(long long)info.st_size], @"size", nil]];
@@ -111,6 +127,7 @@
             [self filterEntries];
         });
         [directory release];
+        [extensions release];
         [pool drain];
     });
 }
@@ -128,7 +145,7 @@
         message.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         message.backgroundColor = [UIColor clearColor]; message.textColor = ExteriaColorSecondary();
         message.textAlignment = ExteriaTextAlignmentCenter; message.numberOfLines = 0;
-        message.text = _failure ? [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(@"attach.file.read.failed", nil), _failure] : NSLocalizedString(@"attach.file.empty", nil);
+        message.text = _failure ? [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(@"attach.file.read.failed", nil), _failure] : (_emptyText.length ? _emptyText : NSLocalizedString(@"attach.file.empty", nil));
     }
     self.tableView.backgroundView = message;
     [self.tableView reloadData];
@@ -153,7 +170,7 @@
     BOOL directory = [[entry objectForKey:@"directory"] boolValue];
     cell.textLabel.text = [entry objectForKey:@"name"];
     cell.detailTextLabel.text = !_directory ? [entry objectForKey:@"path"] : (directory ? NSLocalizedString(@"attach.file.folder", nil) : ExteriaFileSizeText([[entry objectForKey:@"size"] longLongValue]));
-    cell.imageView.image = ExteriaSymbolImage(directory ? ExteriaSymbolSettingsFolders : ExteriaSymbolDocument, 28, ExteriaColorAccent());
+    cell.imageView.image = ExteriaSymbolImage(directory ? ExteriaSymbolSettingsFolders : _fileSymbol, 28, ExteriaColorAccent());
     cell.accessoryType = directory ? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
     if (ExteriaThemeIsClassic()) ExteriaClassicStyleCell(cell);
     else { cell.backgroundColor = ExteriaColorCard(); cell.textLabel.textColor = ExteriaColorTitle(); cell.detailTextLabel.textColor = ExteriaColorSecondary(); }
@@ -171,6 +188,10 @@
     }
     if (S_ISDIR(info.st_mode)) {
         ExteriaFilePicker *inner = [[[ExteriaFilePicker alloc] initWithDirectory:path handler:_handler cancel:_cancel] autorelease];
+        inner.extensions = _extensions;
+        inner.searchPlaceholder = _searchPlaceholder;
+        inner.emptyText = _emptyText;
+        inner.fileSymbol = _fileSymbol;
         [self.navigationController pushViewController:inner animated:YES];
     } else if (S_ISREG(info.st_mode)) {
         void (^handler)(NSString *) = [_handler retain];

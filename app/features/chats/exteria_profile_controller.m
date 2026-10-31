@@ -898,28 +898,25 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 - (void)choosePhoto {
     if (_uploading) return;
     ExteriaWeakReference *me = _weak;
-    [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
+    [ExteriaProfilePhotoPicker pickWithSheetIn:ExteriaOverlayHost() picked:^(NSString *path, BOOL video) {
         ExteriaProfileController *profile = me.target;
         if (!profile) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
         }
-        [profile uploadPhotoAtPath:path];
-    } unavailable:^{
-        Class alertClass = NSClassFromString(@"UIAlertView");
-        id alert = [[alertClass alloc] initWithTitle:nil message:NSLocalizedString(@"attach.gallery.unavailable", nil) delegate:nil
-                                   cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
-        [alert show];
-        [alert release];
+        [profile uploadPhotoAtPath:path video:video];
+    } failed:^{
+        ExteriaProfileController *profile = me.target;
+        if (profile) [profile toast:NSLocalizedString(@"attach.failed", nil)];
     }];
 }
 
-- (void)uploadPhotoAtPath:(NSString *)path {
+- (void)uploadPhotoAtPath:(NSString *)path video:(BOOL)video {
     _uploading = YES;
     [_identity setUploading:YES];
     [self toast:NSLocalizedString(@"profile.photo.uploading", nil)];
     [self retain];
-    [_session uploadProfilePhotoAtPath:path completion:^(NSString *errorName) {
+    void (^finished)(NSString *) = ^(NSString *errorName) {
         [self autorelease];
         _uploading = NO;
         [_identity setUploading:NO];

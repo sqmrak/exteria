@@ -2174,6 +2174,9 @@
 "theme.import.preview.day" = "Дневная тема. Применить её для просмотра цветов в чатах и настройках?";
 "theme.import.preview.night" = "Ночная тема. Применить её для просмотра цветов в чатах и настройках?";
 "theme.import.apply" = "Применить";
+"profile.choosephoto" = "Выбрать фото";
+"attach.pick.profile" = "Выберите фотографию или видео";
+"profile.video.unsupported" = "Видео пока нельзя поставить на аватарку.";
 "theme.pick.title" = "Выберите тему";
 "theme.pick.search" = "Поиск тем";
 "language.custom.header" = "Свои языки";

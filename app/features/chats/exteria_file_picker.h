@@ -1,5 +1,7 @@
 #import <UIKit/UIKit.h>
 
+#import "exteria_symbol.h"
+
 /* a plain browser of the folders the phone lets the app read, for choosing one file to send: iOS 5 has no document
    picker */
 @interface ExteriaFilePicker : UITableViewController

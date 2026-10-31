@@ -2175,6 +2175,9 @@
 "theme.import.preview.day" = "дневная тема";
 "theme.import.preview.night" = "ночная тема";
 "theme.import.apply" = "применить";
+"profile.choosephoto" = "выбрать фото";
+"attach.pick.profile" = "выберите фотографию или видео";
+"profile.video.unsupported" = "видео пока нельзя поставить на аватарку.";
 "theme.pick.title" = "выберите тему";
 "theme.pick.search" = "поиск тем";
 "language.custom.header" = "свои языки";

@@ -2169,6 +2169,9 @@
 "theme.import.preview.day" = "Day theme. Apply it to preview its colors in chats and settings?";
 "theme.import.preview.night" = "Night theme. Apply it to preview its colors in chats and settings?";
 "theme.import.apply" = "Apply";
+"profile.choosephoto" = "Choose photo";
+"attach.pick.profile" = "Choose a photo or a video";
+"profile.video.unsupported" = "A video cannot be a profile picture yet.";
 "theme.pick.title" = "Choose a theme";
 "theme.pick.search" = "Search themes";
 "language.custom.header" = "Custom languages";

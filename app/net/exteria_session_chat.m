@@ -599,7 +599,11 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
 }
 
 - (void)uploadProfilePhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
-    [self uploadJobAtPath:path story:NO completion:completion];
+    [self uploadJobAtPath:path story:NO video:NO completion:completion];
+}
+
+- (void)uploadProfileVideoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
+    [self uploadJobAtPath:path story:NO video:YES completion:completion];
 }
 
 - (void)postStoryPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {

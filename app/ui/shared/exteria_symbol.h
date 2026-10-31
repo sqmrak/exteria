@@ -130,7 +130,11 @@ typedef enum {
     ExteriaSymbolSettingsOld,
     ExteriaSymbolFave,
     ExteriaSymbolPinLine,
-    ExteriaSymbolGhost
+    ExteriaSymbolGhost,
+    /* drawn by code, not cut from a bitmap: the hammer of the developer settings */
+    ExteriaSymbolHammer,
+    /* a camera with a plus at its corner, drawn by code: the button that picks a photo for the profile */
+    ExteriaSymbolCameraPlus
 } ExteriaSymbol;
 
 /* the glyph in one color, a square of pointSize points; every symbol is a mask cut drawables, so the look is the

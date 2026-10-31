@@ -255,9 +255,11 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 
 - (void)editProfile {
     if (!_person) return;
-    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person]
-                                                                        avatars:_avatars media:_media] autorelease];
-    [self presentViewController:viewer animated:YES completion:nil];
+    ExteriaProfileEditController *edit = [[[ExteriaProfileEditController alloc] initWithSession:_session person:_person fullUser:_full avatars:_avatars media:_media] autorelease];
+    ExteriaWeakReference *weak = _weak;
+    edit.changedHandler = ^{ [(ExteriaClassicProfileController *)weak.target loadProfile]; };
+    edit.logoutHandler = ^{ [(ExteriaClassicProfileController *)weak.target confirmSignOut]; };
+    [self.navigationController pushViewController:edit animated:YES];
 }
 
 - (void)dealloc {
@@ -581,31 +583,27 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
 - (void)choosePhoto {
     if (_uploading) return;
     ExteriaWeakReference *me = _weak;
-    [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
+    [ExteriaProfilePhotoPicker pickWithSheetIn:ExteriaOverlayHost() picked:^(NSString *path, BOOL video) {
         ExteriaClassicProfileController *profile = me.target;
         if (!profile) {
             [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
             return;
         }
-        [profile uploadPhotoAtPath:path];
-    } unavailable:^{
-        Class alertClass = NSClassFromString(@"UIAlertView");
-        id alert = [[alertClass alloc] initWithTitle:nil message:NSLocalizedString(@"attach.gallery.unavailable", nil) delegate:nil
-                                   cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
-        [alert show];
-        [alert release];
+        [profile uploadPhotoAtPath:path video:video];
+    } failed:^{
+        ExteriaShowNotice(nil, NSLocalizedString(@"attach.failed", nil));
     }];
 }
 
-- (void)uploadPhotoAtPath:(NSString *)path {
+- (void)uploadPhotoAtPath:(NSString *)path video:(BOOL)video {
     _uploading = YES;
     [self retain];
-    [_session uploadProfilePhotoAtPath:path completion:^(NSString *errorName) {
+    void (^finished)(NSString *) = ^(NSString *errorName) {
         [self autorelease];
         _uploading = NO;
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         if (errorName) {
-            NSLog(@"exteria: profile photo not set: %@", errorName);
+            NSLog(@"exteria: profile %@ not set: %@", video ? @"video" : @"photo", errorName);
             return;
         }
         [self loadProfile];
