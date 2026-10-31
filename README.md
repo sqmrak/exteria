@@ -26,6 +26,7 @@
 - translator: telegram, services and ai
 - passcode lock: four digits or a password, auto-lock
 - keeps deleted and edited messages on the phone, if you ask for it
+- ayumoments can send copies of protected text and media from chats the account can read; files over 150 MiB, polls and timed media are not copied, and copies do not keep the original sender or album
 - several accounts, login by phone or qr
 - two looks: modern, and classic with the glossy ios 5 and 6 style and a hue of your own (classic is available on ios 5 through 10)
 - local Telegram iOS `.tgios-theme` files in the modern look

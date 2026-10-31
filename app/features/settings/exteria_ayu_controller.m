@@ -206,7 +206,7 @@ static ExteriaSettingsRow *ExteriaAyuSwitch(NSString *titleKey, NSString *infoKe
 
 - (void)disableAll {
     static const ExteriaChatFlag flags[] = {ExteriaChatFlagGhostNoRead, ExteriaChatFlagGhostNoStories, ExteriaChatFlagGhostOffline, ExteriaChatFlagAyuRegex,
-                                            ExteriaChatFlagAyuSaveDeleted, ExteriaChatFlagAyuSaveEdits};
+                                            ExteriaChatFlagAyuSaveDeleted, ExteriaChatFlagAyuSaveEdits, ExteriaChatFlagAyuCopyProtected};
     for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i) ExteriaChatFlagSet(flags[i], NO);
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaChatSettingsDidChangeNotification object:nil];
     [self savingChanged];
@@ -235,6 +235,7 @@ static ExteriaSettingsRow *ExteriaAyuSwitch(NSString *titleKey, NSString *infoKe
         [[(ExteriaAyuController *)weak.target navigationController] pushViewController:[[[ExteriaGhostController alloc] init] autorelease] animated:YES];
     }];
     NSMutableArray *main = [NSMutableArray arrayWithObject:ghost];
+    [main addObject:ExteriaAyuSwitch(@"ayu.copyprotected", @"ayu.copyprotected.info", ExteriaChatFlagAyuCopyProtected, nil)];
     [main addObject:ExteriaAyuSwitch(@"ayu.regex.switch", nil, ExteriaChatFlagAyuRegex, ^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaChatSettingsDidChangeNotification object:nil]; })];
     NSUInteger count = ExteriaAyuRegexList().count;
     [main addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"ayu.regex.title", nil) value:count ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : nil tap:^{

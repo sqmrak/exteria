@@ -302,6 +302,7 @@ static const struct { NSString *key; BOOL fallback; } ExteriaChatFlagTable[Exter
     [ExteriaChatFlagHideWaves] = {@"exteria.chat.hidewaves", NO},
     [ExteriaChatFlagShowMessageEmojiStatus] = {@"exteria.chat.messageemojistatus", YES},
     [ExteriaChatFlagShowReplyCustomEmoji] = {@"exteria.chat.replycustomemoji", YES},
+    [ExteriaChatFlagAyuCopyProtected] = {@"exteria.ayu.copyprotected", NO},
     [ExteriaChatFlagSenderAvatars] = {@"exteria.chat.senderavatars", NO},
     [ExteriaChatFlagHideSearchBar] = {@"exteria.chat.hidesearch", NO},
     [ExteriaChatFlagHideStories] = {@"exteria.chat.hidestories", NO},

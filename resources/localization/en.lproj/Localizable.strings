@@ -1801,6 +1801,10 @@
 "ayu.ghost.offline" = "Always offline";
 "ayu.ghost.offline.info" = "Every half minute the app says that you are offline.";
 "ayu.regex.switch" = "Regular expression filters";
+"ayu.copyprotected" = "Copy protected messages";
+"ayu.copyprotected.info" = "Send a copy when forwarding is restricted. The copy has no original sender; formatting or albums may differ.";
+"ayu.copyprotected.failed" = "Could not copy this message. Some message types or files over 150 MB are not supported.";
+"ayu.copyprotected.partial" = "%ld messages were sent before the copy failed: %@";
 "ayu.regex.title" = "Filters";
 "ayu.regex.add" = "Add a filter";
 "ayu.regex.change" = "Change";

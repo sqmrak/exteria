@@ -5,6 +5,17 @@
 
 static exteria_arena arena;
 
+static void test_copy_forward(void) {
+    CHECK(exteria_copy_forward_allowed(EXTERIA_PREVIEW_TEXT, 1, 0, 0, 0, 0));
+    CHECK(!exteria_copy_forward_allowed(EXTERIA_PREVIEW_TEXT, 0, 0, 0, 0, 0));
+    CHECK(exteria_copy_forward_allowed(EXTERIA_PREVIEW_PHOTO, 0, 1, 0, 150LL * 1024 * 1024, 0));
+    CHECK(!exteria_copy_forward_allowed(EXTERIA_PREVIEW_PHOTO, 0, 1, 0, 150LL * 1024 * 1024 + 1, 0));
+    CHECK(!exteria_copy_forward_allowed(EXTERIA_PREVIEW_PHOTO, 0, 1, 1, 100, 0));
+    CHECK(!exteria_copy_forward_allowed(EXTERIA_PREVIEW_FILE, 0, 0, 0, 100, 0));
+    CHECK(!exteria_copy_forward_allowed(EXTERIA_PREVIEW_VIDEO, 0, 1, 0, 100, INT32_MAX));
+    CHECK(!exteria_copy_forward_allowed(EXTERIA_PREVIEW_POLL, 1, 0, 0, 0, 0));
+}
+
 static void test_code_spoilers(void) {
     exteria_entity entities[2];
     memset(entities, 0, sizeof(entities));
@@ -695,6 +706,7 @@ static void test_schedule(void) {
 }
 
 int main(void) {
+    test_copy_forward();
     test_code_spoilers();
     test_ghost_read_policy();
     exteria_arena_init(&arena, 4u * 1024u * 1024u);

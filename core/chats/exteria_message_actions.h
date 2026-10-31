@@ -111,6 +111,8 @@ exteria_status exteria_group_read_dates_parse(const exteria_tl_value *answer, ex
    request fail */
 uint32_t exteria_selection_actions(const uint32_t *masks, size_t count);
 
+int exteria_copy_forward_allowed(exteria_preview_kind kind, int has_text, int has_file, int view_once, int64_t size, int32_t duration);
+
 /* at most EXTERIA_MESSAGES_MAX messages in one request */
 
 /* messages.deleteMessages for a user or basic chat, channels.deleteMessages for a channel. revoke deletes for the other side too,

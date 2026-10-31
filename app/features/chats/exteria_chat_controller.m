@@ -1344,6 +1344,21 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }];
 }
 
+/* the post the comments belong to heads them: the bar names it, so a long thread need not be scrolled back to its start to read it, and a tap goes to it */
+- (void)loadCommentsPost {
+    ExteriaWeakReference *weak = _weak;
+    _pinnedTitle.text = NSLocalizedString(@"chat.comments.post", nil);
+    [_session loadMessage:_dialog.topicId ofChannelDialog:_dialog completion:^(ExteriaMessage *message, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (!message) {
+            NSLog(@"exteria: the post of the comments %d did not load: %@", (int)chat->_dialog.topicId, errorName);
+            return;
+        }
+        [chat showPinnedMessage:message];
+    }];
+}
+
 /* the full channel names a pin of the whole group, not the pins of the open topic */
 - (void)loadTopicPinned {
     NSUInteger generation = ++_topicPinnedGeneration;
@@ -2080,7 +2095,9 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         chat->_openingComments = NO;
         if (!thread) {
             NSLog(@"exteria: post discussion did not load: %@", errorName);
-            ExteriaGiftAlert(nil, NSLocalizedString(@"chat.comments.unavailable", nil));
+            /* the server answers a post that was deleted, or whose discussion message was, with an invalid message id */
+            BOOL gone = [errorName isEqualToString:@"MSG_ID_INVALID"] || [errorName isEqualToString:@"MESSAGE_ID_INVALID"];
+            ExteriaGiftAlert(nil, NSLocalizedString(gone ? @"chat.comments.deleted" : @"chat.comments.unavailable", nil));
             return;
         }
         if (!chat->_visible) return;
@@ -2528,6 +2545,25 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         [self showStatus:@"" retry:NO];
         return;
     }
+    /* the saved messages show what the storage is for, and the duck is only looked at, not sent */
+    if (_dialog.saved && !_pinnedList) {
+        [self showStatus:@"" retry:NO];
+        [self ensureGreetingCard];
+        if (_greetingAsked) return;
+        _greetingAsked = YES;
+        [_greeting showSavedCard];
+        ExteriaWeakReference *weak = _weak;
+        [_session loadStickersWithEmoticon:"\xf0\x9f\xa6\x86" completion:^(NSArray *stickers, NSString *errorName) {
+            ExteriaChatController *chat = weak.target;
+            if (!chat) return;
+            if (!stickers) {
+                NSLog(@"exteria: saved sticker did not load: %@", errorName);
+                return;
+            }
+            [chat->_greeting showStickers:stickers];
+        }];
+        return;
+    }
     if (!person) {
         [self showStatus:NSLocalizedString(@"chat.empty", nil) retry:NO];
         return;
@@ -2553,6 +2589,18 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
             return;
         }
         [chat->_greeting showStickers:stickers];
+    }];
+    /* a person who wrote their own message for new chats shows it instead of the stock words */
+    [_session loadFullUserOfDialog:_dialog completion:^(ExteriaFullUser *user, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (!user) {
+            NSLog(@"exteria: chat intro did not load: %@", errorName);
+            return;
+        }
+        if (!user.hasIntro) return;
+        [chat->_greeting showIntroTitle:user.introTitle text:user.introText sticker:user.introSticker author:chat->_dialog.title];
+        [chat.view setNeedsLayout];
     }];
 }
 
@@ -3229,6 +3277,32 @@ static void ExteriaRedrawTree(UIView *view) {
     while (size && size < utf8.length && (((const uint8_t *)utf8.bytes)[size] & 0xc0u) == 0x80u) --size;
     memcpy(row.title, utf8.bytes, size);
     return [[[ExteriaDialog alloc] initWithRow:&row] autorelease];
+}
+
+/* a message of a group whose sender the list does not know has no name over it; the server is asked for the messages once, which brings their people */
+- (void)fetchMissingSendersOf:(NSArray *)messages {
+    NSMutableArray *ids = [NSMutableArray array];
+    for (ExteriaMessage *message in messages) {
+        if (message.outgoing || message.post || message.service || message.messageId <= 0 || message.senderKey == 0) continue;
+        if ([_people objectForKey:[NSNumber numberWithLongLong:message.senderKey]]) continue;
+        NSNumber *key = [NSNumber numberWithInt:message.messageId];
+        if ([_senderLookups containsObject:key]) continue;
+        [ids addObject:key];
+        if (ids.count == EXTERIA_MESSAGES_MAX) break;
+    }
+    if (!ids.count) return;
+    if (!_senderLookups) _senderLookups = [[NSMutableSet alloc] init];
+    [_senderLookups addObjectsFromArray:ids];
+    ExteriaWeakReference *weak = _weak;
+    [_session loadMessagesWithIds:ids ofDialog:_dialog withPeople:^(NSArray *fetched, NSDictionary *people, NSString *errorName) {
+        (void)fetched;
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) NSLog(@"exteria: the senders of %lu messages did not load: %@", (unsigned long)ids.count, errorName);
+        if (!people.count) return;
+        [chat->_people addEntriesFromDictionary:people];
+        [chat rebuildItems];
+    }];
 }
 
 - (void)rebuildItems {
@@ -5038,6 +5112,75 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
     }];
 }
 
+static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
+    ExteriaMedia *media = message.media;
+    BOOL fullPhoto = media.kind == EXTERIA_PREVIEW_PHOTO && media.fullPhotoFile != nil;
+    return !message.service && exteria_copy_forward_allowed(media.kind, message.text.length > 0,
+        fullPhoto || media.file != nil, media.viewOnce, fullPhoto ? media.fullPhotoSize : media.size, media.duration);
+}
+
+- (void)copyForwardMessages:(NSArray *)messages index:(NSUInteger)index toDialog:(ExteriaDialog *)target completion:(void (^)(NSUInteger, NSString *))completion {
+    if (index >= messages.count) { completion(index, nil); return; }
+    ExteriaMessage *message = [messages objectAtIndex:index];
+    ExteriaMedia *media = message.media;
+    long long randomId = [self newRandomId];
+    ExteriaSendCompletion done = ^(int32_t messageId, NSString *error) {
+        (void)messageId;
+        if (error) { completion(index, error); return; }
+        [self copyForwardMessages:messages index:index + 1 toDialog:target completion:completion];
+    };
+    if (media.kind == EXTERIA_PREVIEW_NONE || media.kind == EXTERIA_PREVIEW_TEXT) {
+        [_session sendText:message.text entities:message.entities toDialog:target randomId:randomId completion:done];
+        return;
+    }
+    if (media.kind == EXTERIA_PREVIEW_STICKER) {
+        [_session sendSticker:media toDialog:target randomId:randomId completion:done];
+        return;
+    }
+    ExteriaRemoteFile *file = media.kind == EXTERIA_PREVIEW_PHOTO && media.fullPhotoFile ? media.fullPhotoFile : media.file;
+    long long size = media.kind == EXTERIA_PREVIEW_PHOTO && media.fullPhotoFile ? media.fullPhotoSize : media.size;
+    [_media loadPathForFile:file size:size progress:nil completion:^(NSString *path) {
+        if (!path) { completion(index, @"DOWNLOAD_FAILED"); return; }
+        int32_t duration = media.duration * 1000;
+        switch (media.kind) {
+        case EXTERIA_PREVIEW_PHOTO:
+            [_session sendPhotoAtPath:path caption:message.text spoiler:media.spoiler toDialog:target randomId:randomId completion:done]; break;
+        case EXTERIA_PREVIEW_VIDEO:
+            [_session sendVideoAtPath:path durationMs:duration width:media.width height:media.height caption:message.text spoiler:media.spoiler toDialog:target randomId:randomId completion:done]; break;
+        case EXTERIA_PREVIEW_VIDEO_MESSAGE:
+            [_session sendRoundVideoAtPath:path durationMs:duration side:media.width toDialog:target randomId:randomId completion:done]; break;
+        case EXTERIA_PREVIEW_VOICE:
+            [_session sendVoiceAtPath:path durationMs:duration waveform:media.waveformBars toDialog:target randomId:randomId completion:done]; break;
+        default:
+            [_session sendDocumentAtPath:path name:media.name mime:media.mime caption:message.text toDialog:target randomId:randomId completion:done]; break;
+        }
+    }];
+}
+
+- (void)forwardMessages:(NSArray *)messages toDialog:(ExteriaDialog *)target hideAuthor:(BOOL)hideAuthor completion:(void (^)(NSString *))completion {
+    NSMutableArray *ids = [NSMutableArray arrayWithCapacity:messages.count];
+    BOOL restricted = _dialog.noForwards || _channelFull.dialog.noForwards;
+    for (ExteriaMessage *message in messages) {
+        [ids addObject:[NSNumber numberWithInt:message.messageId]];
+        restricted = restricted || message.noForwards;
+    }
+    BOOL allowCopy = ExteriaChatFlagGet(ExteriaChatFlagAyuCopyProtected);
+    void (^copy)(void) = ^{
+        for (ExteriaMessage *message in messages) {
+            if (!ExteriaCanCopyForward(message)) { completion(NSLocalizedString(@"ayu.copyprotected.failed", nil)); return; }
+        }
+        [self copyForwardMessages:messages index:0 toDialog:target completion:^(NSUInteger sent, NSString *error) {
+            if (error && sent) completion([NSString stringWithFormat:NSLocalizedString(@"ayu.copyprotected.partial", nil), (long)sent, ExteriaGiftErrorText(error)]);
+            else completion(error ? ExteriaGiftErrorText(error) : nil);
+        }];
+    };
+    if (allowCopy && restricted) { copy(); return; }
+    [_session forwardMessageIds:ids fromDialog:_dialog toDialog:target hideAuthor:hideAuthor completion:^(NSString *error) {
+        if (allowCopy && ([error isEqualToString:@"CHAT_FORWARDS_RESTRICTED"] || [error isEqualToString:@"MESSAGE_COPYRIGHTED"])) copy();
+        else completion(error ? ExteriaGiftErrorText(error) : nil);
+    }];
+}
+
 - (void)forwardMessage:(ExteriaMessage *)message hideAuthor:(BOOL)hideAuthor {
     ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
     picker.screenTitle = NSLocalizedString(@"chat.msg.forward.to", nil);
@@ -5051,11 +5194,11 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
         ExteriaChatController *chat = weak.target;
         ExteriaDialog *target = [dialogs lastObject];
         if (!chat || !target) return;
-        [chat->_session forwardMessageIds:[NSArray arrayWithObject:messageId] fromDialog:chat->_dialog toDialog:target hideAuthor:hideAuthor completion:^(NSString *errorName) {
+        [chat forwardMessages:[NSArray arrayWithObject:message] toDialog:target hideAuthor:hideAuthor completion:^(NSString *errorName) {
             ExteriaChatController *again = weak.target;
             if (errorName) {
                 NSLog(@"exteria: forward of message %@ failed: %@", messageId, errorName);
-                ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+                ExteriaGiftAlert(nil, errorName);
                 return;
             }
             [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
@@ -5295,8 +5438,9 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
 }
 
 - (void)forwardSelected {
+    NSArray *messages = [self selectedMessages];
     NSMutableArray *ids = [NSMutableArray array];
-    for (ExteriaMessage *message in [self selectedMessages]) [ids addObject:[NSNumber numberWithInt:message.messageId]];
+    for (ExteriaMessage *message in messages) [ids addObject:[NSNumber numberWithInt:message.messageId]];
     if (!ids.count) return;
     ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
     picker.screenTitle = NSLocalizedString(@"chat.msg.forward.to", nil);
@@ -5309,11 +5453,11 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
         ExteriaChatController *chat = weak.target;
         ExteriaDialog *target = [dialogs lastObject];
         if (!chat || !target) return;
-        [chat->_session forwardMessageIds:ids fromDialog:chat->_dialog toDialog:target hideAuthor:NO completion:^(NSString *errorName) {
+        [chat forwardMessages:messages toDialog:target hideAuthor:NO completion:^(NSString *errorName) {
             ExteriaChatController *again = weak.target;
             if (errorName) {
                 NSLog(@"exteria: forward of %lu messages failed: %@", (unsigned long)ids.count, errorName);
-                ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+                ExteriaGiftAlert(nil, errorName);
                 return;
             }
             [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
@@ -5468,13 +5612,13 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
             ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
             return;
         }
-        [chat->_session forwardMessageIds:[NSArray arrayWithObject:messageId] fromDialog:chat->_dialog toDialog:[ExteriaDialog savedMessagesOfUserId:me.userId] hideAuthor:NO
-                               completion:^(NSString *forwardError) {
+        [chat forwardMessages:[NSArray arrayWithObject:message] toDialog:[ExteriaDialog savedMessagesOfUserId:me.userId] hideAuthor:NO
+                   completion:^(NSString *forwardError) {
             ExteriaChatController *again = weak.target;
             if (!again) return;
             if (forwardError) {
                 NSLog(@"exteria: saving message %@ failed: %@", messageId, forwardError);
-                ExteriaGiftAlert(nil, ExteriaGiftErrorText(forwardError));
+                ExteriaGiftAlert(nil, forwardError);
                 return;
             }
             [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
@@ -6126,6 +6270,24 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 
 - (void)didSend:(ExteriaMessage *)message messageId:(int32_t)messageId error:(NSString *)errorName {
     if (![_local containsObject:message]) return;
+    if ([errorName hasPrefix:@"ALLOW_PAYMENT_REQUIRED_"]) {
+        /* the chat charges for each message: the server names the price, and the message goes again with it once the person agrees */
+        long long stars = [[errorName substringFromIndex:[@"ALLOW_PAYMENT_REQUIRED_" length]] longLongValue];
+        message.state = ExteriaMessageStateFailed;
+        [self rebuildItems];
+        if (stars <= 0) return;
+        ExteriaWeakReference *weak = _weak;
+        ExteriaShowAlert(nil, [NSString stringWithFormat:NSLocalizedString(@"chat.paidmessage.confirm", nil), stars],
+                         [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"chat.paidmessage.button", nil), nil], 0, NO,
+                         ^(NSInteger index, NSString *text) {
+            (void)text;
+            ExteriaChatController *chat = weak.target;
+            if (!chat || index != 1 || ![chat->_local containsObject:message]) return;
+            [chat->_session approvePaidMessages:stars ofDialog:chat->_dialog];
+            [chat dispatchLocal:message];
+        });
+        return;
+    }
     if (errorName) {
         NSLog(@"exteria: sending to chat %lld failed: %@", _dialog.peerId, errorName);
         message.state = ExteriaMessageStateFailed;
@@ -6276,6 +6438,56 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         [chat rebuildItems];
     }] autorelease];
     [self presentViewController:viewer animated:YES completion:nil];
+}
+
+/* paid media opens only after the stars are paid: the server quotes the price, the person confirms it, and the message is read again with its real media */
+- (void)messageCellDidTapPaid:(ExteriaMessageCell *)cell {
+    ExteriaMessage *message = cell.item.message;
+    int32_t messageId = message.messageId;
+    if (messageId <= 0 || message.media.kind != EXTERIA_PREVIEW_PAID || _paidBusy) return;
+    _paidBusy = YES;
+    ExteriaWeakReference *weak = _weak;
+    [_session quoteUnlockingMediaOfMessageId:messageId inDialog:_dialog completion:^(ExteriaPaymentQuote *quote, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (!quote) {
+            chat->_paidBusy = NO;
+            ExteriaShowNotice(nil, ExteriaGiftErrorText(errorName));
+            return;
+        }
+        /* the flag holds until the payment ends or the question is turned down, so a second tap cannot ask for a second payment */
+        ExteriaShowAlert(nil, [NSString stringWithFormat:NSLocalizedString(@"chat.paid.confirm", nil), quote.stars],
+                         [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"chat.paid.confirm.button", nil), nil], 0, NO,
+                         ^(NSInteger index, NSString *text) {
+            (void)text;
+            ExteriaChatController *current = weak.target;
+            if (!current) return;
+            if (index != 1) {
+                current->_paidBusy = NO;
+                return;
+            }
+            [current->_session payQuote:quote completion:^(NSString *payError) {
+                ExteriaChatController *paid = weak.target;
+                if (!paid) return;
+                if (payError) {
+                    paid->_paidBusy = NO;
+                    ExteriaShowNotice(nil, ExteriaGiftErrorText(payError));
+                    return;
+                }
+                [paid->_session loadMessagesWithIds:[NSArray arrayWithObject:[NSNumber numberWithInt:messageId]] ofDialog:paid->_dialog
+                                         completion:^(NSArray *messages, NSString *loadError) {
+                    ExteriaChatController *reloaded = weak.target;
+                    if (!reloaded) return;
+                    reloaded->_paidBusy = NO;
+                    if (!messages) {
+                        NSLog(@"exteria: paid media %d was bought but did not reload: %@", (int)messageId, loadError);
+                        return;
+                    }
+                    [reloaded mergeMessages:messages];
+                }];
+            }];
+        });
+    }];
 }
 
 - (void)messageCellDidTapMedia:(ExteriaMessageCell *)cell {

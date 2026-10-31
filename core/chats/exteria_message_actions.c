@@ -48,6 +48,24 @@ exteria_status exteria_sharing_request(exteria_arena *arena, const exteria_peer_
     return status;
 }
 
+int exteria_copy_forward_allowed(exteria_preview_kind kind, int has_text, int has_file, int view_once, int64_t size, int32_t duration) {
+    if (view_once) return 0;
+    switch (kind) {
+    case EXTERIA_PREVIEW_NONE:
+    case EXTERIA_PREVIEW_TEXT: return has_text != 0;
+    case EXTERIA_PREVIEW_STICKER: return has_file != 0;
+    case EXTERIA_PREVIEW_PHOTO:
+    case EXTERIA_PREVIEW_VIDEO:
+    case EXTERIA_PREVIEW_VIDEO_MESSAGE:
+    case EXTERIA_PREVIEW_VOICE:
+    case EXTERIA_PREVIEW_AUDIO:
+    case EXTERIA_PREVIEW_GIF:
+    case EXTERIA_PREVIEW_FILE:
+        return has_file && size >= 0 && size <= 150LL * 1024 * 1024 && duration >= 0 && duration <= INT32_MAX / 1000;
+    default: return 0;
+    }
+}
+
 uint32_t exteria_message_actions_for(const exteria_action_context *c) {
     uint32_t mask = 0;
     int sent, words_only, may_write;

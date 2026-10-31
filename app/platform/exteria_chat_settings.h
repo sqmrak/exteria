@@ -202,6 +202,7 @@ typedef enum {
     ExteriaChatFlagHideWaves,                   /* the modern look draws no waves in the corners of the screens */
     ExteriaChatFlagShowMessageEmojiStatus,
     ExteriaChatFlagShowReplyCustomEmoji,
+    ExteriaChatFlagAyuCopyProtected,
     ExteriaChatFlagCount
 } ExteriaChatFlag;
 /* the archive entry of the chat list is hidden on this device, and a pull on the list shows it; the server keeps no such state */
