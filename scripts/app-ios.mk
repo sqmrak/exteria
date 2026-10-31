@@ -18,6 +18,8 @@ CREDENTIALS := $(EXTERIA_IOS_BUILD)/generated/exteria_credentials.h
 WEBP_C := $(sort $(wildcard third_party/libwebp/src/*/*.c))
 OPUS_C := $(addprefix third_party/opus/,$(shell cat third_party/opus/SOURCES))
 OGG_C := $(sort $(wildcard third_party/ogg/src/*.c))
+# lua runs the plugins of core/plugins, vendored with one local patch, see third_party/lua/PATCHES
+LUA_C := $(addprefix third_party/lua/src/,$(shell cat third_party/lua/SOURCES))
 # the QR reader of the devices screen: the listed files of zbar are its QR-only build
 ZBAR_C := $(addprefix third_party/zbar/zbar/,config.c error.c symbol.c image.c refcnt.c img_scanner.c scanner.c decoder.c misc.c decoder/qr_finder.c \
   qrcode/qrdec.c qrcode/qrdectxt.c qrcode/rs.c qrcode/isaac.c qrcode/bch15_5.c qrcode/binarize.c qrcode/util.c)
@@ -32,7 +34,8 @@ STRINGS := $(sort $(wildcard resources/localization/*.lproj/Localizable.strings)
 
 APP_INC := $(addprefix -I,$(sort $(dir $(APP_M)))) $(addprefix -I,$(wildcard core/*)) -Icore/tl/generated \
            -I$(dir $(CREDENTIALS)) -Ithird_party/rlottie/inc -Ithird_party/libwebp \
-           -Ithird_party/opus/include -Ithird_party/ogg/include -Ithird_party/libtgvoip -Ithird_party/zbar/include
+           -Ithird_party/opus/include -Ithird_party/ogg/include -Ithird_party/libtgvoip -Ithird_party/zbar/include \
+           -isystem third_party/lua/src
 RL_INC := -Ithird_party/rlottie/config -Ithird_party/rlottie/inc -Ithird_party/rlottie/src/vector \
           -Ithird_party/rlottie/src/vector/freetype -Ithird_party/rlottie/src/vector/pixman \
           -Ithird_party/rlottie/src/lottie -Ithird_party/rlottie/src/binding/c
@@ -50,6 +53,9 @@ V7_CXX_FLAGS := -D_LIBCPP_DISABLE_AVAILABILITY
 WEBP_FLAGS := -std=c99 -O2 -g -w -Ithird_party/libwebp -MMD -MP
 # zbar is vendored as upstream ships it, so it builds without the project's strict warnings; SENKO_ZBAR_IOS keeps its timer off the POSIX timers ios lacks
 ZBAR_FLAGS := -std=gnu99 -O2 -g -w -DSENKO_ZBAR_IOS -Ithird_party/zbar/include -Ithird_party/zbar/zbar -Ithird_party/zbar/zbar/decoder -Ithird_party/zbar/zbar/qrcode -MMD -MP
+
+# lua is vendored as upstream ships it, so it builds without the project's strict warnings
+LUA_FLAGS := -std=c99 -O2 -g -w -Ithird_party/lua/src -MMD -MP
 
 # opus is the fixed point build without asm, so both slices run the same portable code; ogg needs no flags
 OPUS_FLAGS := -std=c99 -O2 -g -w -DOPUS_BUILD -DFIXED_POINT -DDISABLE_FLOAT_API -DVAR_ARRAYS -DPACKAGE_VERSION=\"1.5.2\" \
@@ -71,12 +77,12 @@ VIDEO_LIB_NAMES := libavformat.a libavcodec.a libswresample.a libavutil.a libvpx
 VIDEO_V7_LIBS := $(addprefix $(EXTERIA_VIDEO_V7)/lib/,$(VIDEO_LIB_NAMES))
 VIDEO_V64_LIBS := $(addprefix $(EXTERIA_VIDEO_V64)/lib/,$(VIDEO_LIB_NAMES))
 SLICES := armv7 arm64
-OBJ_SRC := $(APP_M) $(APP_C) $(RL_CPP) $(WEBP_C) $(OPUS_C) $(OGG_C) $(ZBAR_C) $(TGV_CPP)
+OBJ_SRC := $(APP_M) $(APP_C) $(RL_CPP) $(WEBP_C) $(OPUS_C) $(OGG_C) $(LUA_C) $(ZBAR_C) $(TGV_CPP)
 # every object lives under its slice: $(B)/armv7/app/ui/shared/x.m.o
 objects = $(addprefix $(EXTERIA_IOS_BUILD)/$(1)/,$(addsuffix .o,$(OBJ_SRC)))
 
 STAMP := $(EXTERIA_IOS_BUILD)/flags.stamp
-FLAGS_TEXT := $(EXTERIA_TC) $(V7_CC) $(V64_CC) $(EXTERIA_CRT_V7) $(OBJC_FLAGS) $(C_FLAGS) $(CXX_FLAGS) $(V7_CXX_FLAGS) $(WEBP_FLAGS) $(OPUS_FLAGS) $(ZBAR_FLAGS) $(TGV_FLAGS)
+FLAGS_TEXT := $(EXTERIA_TC) $(V7_CC) $(V64_CC) $(EXTERIA_CRT_V7) $(OBJC_FLAGS) $(C_FLAGS) $(CXX_FLAGS) $(V7_CXX_FLAGS) $(WEBP_FLAGS) $(OPUS_FLAGS) $(LUA_FLAGS) $(ZBAR_FLAGS) $(TGV_FLAGS)
 
 .PHONY: app app-unsigned inspect-unsigned inputs force inspect-app check-legacy-symbols check-legacy-api
 app: $(EXTERIA_IOS_BUILD)/app-signed.stamp
@@ -122,6 +128,9 @@ $(EXTERIA_IOS_BUILD)/$(1)/third_party/opus/%.c.o: third_party/opus/%.c $(STAMP)
 $(EXTERIA_IOS_BUILD)/$(1)/third_party/ogg/%.c.o: third_party/ogg/%.c $(STAMP)
 	@mkdir -p $$(dir $$@)
 	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $$(OPUS_FLAGS) $(2) -c $$< -o $$@
+$(EXTERIA_IOS_BUILD)/$(1)/third_party/lua/%.c.o: third_party/lua/%.c $(STAMP)
+	@mkdir -p $$(dir $$@)
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $$(LUA_FLAGS) $(2) -c $$< -o $$@
 $(EXTERIA_IOS_BUILD)/$(1)/third_party/libtgvoip/%.cpp.o: third_party/libtgvoip/%.cpp $(STAMP)
 	@mkdir -p $$(dir $$@)
 	"$(EXTERIA_TC)/clang++" -B"$(EXTERIA_TC)" $$(TGV_FLAGS) $(3) $(2) -c $$< -o $$@

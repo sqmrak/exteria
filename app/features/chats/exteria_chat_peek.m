@@ -6,6 +6,7 @@
 #import "exteria_emoji_label.h"
 #import "exteria_name_badge.h"
 #import "exteria_ayu.h"
+#import "exteria_plugins.h"
 #import "exteria_chat_item.h"
 #import "exteria_message_cell.h"
 #import "exteria_platform.h"
@@ -173,7 +174,7 @@ static NSArray *ExteriaPeekOrdered(NSArray *messages) {
 - (NSArray *)itemsForMessages:(NSArray *)ordered people:(NSDictionary *)people {
     NSMutableArray *items = [NSMutableArray array];
     for (ExteriaMessage *message in ordered) {
-        if (!message.outgoing && ExteriaAyuHidesText(message.text)) continue;
+        if (!message.outgoing && (ExteriaAyuHidesText(message.text) || ExteriaPluginsHidesMessage(message, _dialog.peerId))) continue;
         ExteriaChatItem *item = [ExteriaChatItem itemForMessage:message group:_dialog.kind == EXTERIA_DIALOG_GROUP people:people];
         if (item) [items addObject:item];
     }

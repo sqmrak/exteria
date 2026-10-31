@@ -52,6 +52,36 @@ add a `tg://proxy`, `tg://socks`, `t.me/proxy` or `t.me/socks` link on the welco
 - after sign in the lists stand on the left and what they open on the right
 - one column of content, clear of the notch and the home indicator
 
+## plugins
+
+plugins are lua 5.4 scripts in `Documents/Plugins` (file sharing), listed in settings under plugins. a script runs only after the person turns it on and confirms the permissions it names. the switch is tied to the sha-256 of the file, so a changed file stays off until it is turned on again. three failed calls in a row switch a plugin off and show the last error. a script returns a table:
+
+```lua
+return {
+  name = "no-spam",
+  permissions = { "messages.read", "messages.modify" },
+  on_message = function(m)
+    if m.text:find("spam", 1, true) then return false end
+  end,
+  on_send = function(m)
+    return (m.text:gsub("teh", "the"))
+  end,
+  on_event = function(name)
+    log("app " .. name)
+  end,
+}
+```
+
+- `on_message(m)`: a message of someone else before it is drawn, in the chat and in the preview. `m` has `id`, `chat`, `sender`, `outgoing` and, with `messages.read`, `text`. the answer is nil to leave it, false to hide it, or a string to show another text. the stored message is not changed, and notifications and the chat list still show the original
+- `on_send(m)`: a text of the person before it goes out. `m` has `chat`, `reply_to` and, with `messages.read`, `text`. same answers: false stops the send and the person is told, a string is sent instead. a replaced text is sent without formatting
+- `on_event(name)`: `start`, `stop`, `pause` or `resume` of the app, no answer
+- `messages.modify` is needed for false and for a string, otherwise the call fails and nothing changes
+- `log(text)` writes a line to the device log, 16 lines per call, 200 bytes per line
+
+the sandbox has base functions, string, table, math and utf8: no io, os, load or require, and only text chunks. limits: a script of 64 KiB, 200000 vm instructions per call, 2 MiB of memory per plugin, a text of 16 KiB (longer texts skip the plugins), a pattern call of one million steps. plugins run in file name order, each one sees the output of the one before. calls come from the main thread only.
+
+lua is vendored with one patch, see `third_party/lua/PATCHES`. the host is `core/plugins`, the list of plugins and the hooks into the chat are `app/platform/exteria_plugins.m`.
+
 ## build
 
 ```bash

@@ -85,6 +85,7 @@
 #import "exteria_translate_sheet.h"
 #import "exteria_translator.h"
 #import "exteria_ayu.h"
+#import "exteria_plugins.h"
 #import "exteria_edit_history_controller.h"
 #import "exteria_session_saved.h"
 #import "exteria_falling_view.h"
@@ -2996,7 +2997,7 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
     for (NSUInteger i = 0; i < count; ++i) {
         ExteriaMessage *message = [all objectAtIndex:order[i].index];
         /* a message of someone else whose text a filter of the person matches is not shown */
-        if (message.messageId > 0 && !message.outgoing && ExteriaAyuHidesText(message.text)) continue;
+        if (message.messageId > 0 && !message.outgoing && (ExteriaAyuHidesText(message.text) || ExteriaPluginsHidesMessage(message, _dialog.peerId))) continue;
         [sorted addObject:message];
     }
     free(order);
@@ -6063,6 +6064,17 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)sendText:(NSString *)text entities:(NSArray *)entities replyTo:(int32_t)replyTo {
+    NSString *planned = text;
+    if (ExteriaPluginsStopsSend(&planned, _dialog.peerId, replyTo)) {
+        /* the input bar is cleared already, so the person is told the words went nowhere */
+        ExteriaShowNotice(nil, NSLocalizedString(@"plugins.send.stopped", nil));
+        return;
+    }
+    /* the runs of a replaced text would point into the old words */
+    if (![planned isEqualToString:text]) {
+        text = planned;
+        entities = nil;
+    }
     ExteriaMessage *message = [ExteriaMessage pendingText:text entities:entities randomId:[self newRandomId] date:(int32_t)[[NSDate date] timeIntervalSince1970]];
     message.sendReplyTo = replyTo;
     [self afterAppendingLocal:message];

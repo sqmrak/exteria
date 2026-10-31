@@ -208,6 +208,9 @@ typedef enum {
     ExteriaMessageState _state;
     float _uploadProgress;
     NSString *_text;
+    /* what the message said before a plugin changed the shown text, nil while the text is the original */
+    NSString *_sourceText;
+    NSArray *_sourceEntities;
     NSString *_forwardName;
     int32_t _forwardDate;
     long long _groupedId;
@@ -302,6 +305,13 @@ typedef enum {
 - (void)placeInSavedMessagesOfUser:(long long)userId;
 /* the words the server accepted for an edit of this message, shown at once with the mark of an edited one, before the copy it sends back is read */
 - (void)noteEditedToText:(NSString *)text;
+/* the text the hooks of the plugins start from: the original, also after a hook replaced the shown one, so a rebuild of the
+   list never feeds a plugin its own output */
+- (NSString *)sourceText;
+/* shows the text a plugin chose; its runs would point into the old words, so the bubble draws it plain */
+- (void)showPluginText:(NSString *)text;
+/* the original text and runs again; nothing happens when no plugin changed them */
+- (void)restoreSourceText;
 /* in the favorites, the chat the message came from: kind 1 user, 2 group, 3 channel, zero when the answer did not say */
 @property (nonatomic, readonly) int32_t savedPeerKind;
 @property (nonatomic, readonly) long long savedPeerId;

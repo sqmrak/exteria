@@ -219,7 +219,39 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
     NSString *copy = [text copy];
     [_text release];
     _text = copy;
+    /* the edit is the new original */
+    [_sourceText release];
+    _sourceText = nil;
+    [_sourceEntities release];
+    _sourceEntities = nil;
     _edited = YES;
+}
+
+- (NSString *)sourceText {
+    return _sourceText ? _sourceText : _text;
+}
+
+- (void)showPluginText:(NSString *)text {
+    if (!text) return;
+    if (!_sourceText) {
+        _sourceText = [_text retain];
+        _sourceEntities = [_entities retain];
+    }
+    NSString *copy = [text copy];
+    [_text release];
+    _text = copy;
+    [_entities release];
+    _entities = nil;
+}
+
+- (void)restoreSourceText {
+    if (!_sourceText) return;
+    [_text release];
+    _text = _sourceText;
+    _sourceText = nil;
+    [_entities release];
+    _entities = _sourceEntities;
+    _sourceEntities = nil;
 }
 
 - (void)placeInSavedMessagesOfUser:(long long)userId {
@@ -446,6 +478,8 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     [_pendingSend release];
     [_replyQuote release];
     [_text release];
+    [_sourceText release];
+    [_sourceEntities release];
     [_forwardName release];
     [_senderRank release];
     [_commenters release];

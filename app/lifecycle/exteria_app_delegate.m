@@ -1,3 +1,4 @@
+#import "exteria_plugins.h"
 #import "exteria_power_notice.h"
 #import "exteria_app_delegate.h"
 #import "exteria_crash_log.h"
@@ -101,6 +102,7 @@ static NSString *ExteriaSupportDirectory(void) {
     ExteriaNightCheck(NO);
     /* and before the splash, the window and the tab bar, which draw with the colors of the tone that is current, light until it is applied */
     ExteriaThemeApplyStored();
+    ExteriaPluginsStart();
     NSString *directory = ExteriaSupportDirectory();
     _activeAccount = [ExteriaAccountActive() copy];
     NSString *accountDirectory = ExteriaAccountDirectory(_activeAccount);
@@ -228,6 +230,7 @@ static NSString *ExteriaSupportDirectory(void) {
 
 - (void)applicationWillResignActive:(UIApplication *)application {
     (void)application;
+    ExteriaPluginsEvent("pause");
     [_passcodeLock cover];
 }
 
@@ -248,6 +251,7 @@ static NSString *ExteriaSupportDirectory(void) {
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
+    ExteriaPluginsEvent("resume");
     [_passcodeLock evaluateReturn];
     [_notifier applicationDidBecomeActive:application];
     ExteriaPowerNoticeStart();
@@ -302,6 +306,11 @@ static NSString *ExteriaSupportDirectory(void) {
     UIViewController *top = _navigation.topViewController;
     if ([top isKindOfClass:[ExteriaSplitController class]]) return [(ExteriaSplitController *)top canRebuildForTheme];
     return [top isKindOfClass:[ExteriaMainController class]];
+}
+
+- (void)applicationWillTerminate:(UIApplication *)application {
+    (void)application;
+    ExteriaPluginsEvent("stop");
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
