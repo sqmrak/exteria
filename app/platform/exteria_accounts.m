@@ -64,10 +64,15 @@ static NSDictionary *ExteriaAccountInfos(void) {
     return infos ? infos : [NSDictionary dictionary];
 }
 
+static NSString *ExteriaAccountPhotoPath(NSString *name) {
+    return [ExteriaAccountDirectory(name) stringByAppendingPathComponent:@"account_photo.png"];
+}
+
 void ExteriaAccountRemove(NSString *name) {
     NSMutableDictionary *infos = [NSMutableDictionary dictionaryWithDictionary:ExteriaAccountInfos()];
     [infos removeObjectForKey:name];
     [[NSUserDefaults standardUserDefaults] setObject:infos forKey:ExteriaAccountInfoKey];
+    [[NSFileManager defaultManager] removeItemAtPath:ExteriaAccountPhotoPath(name) error:NULL];
     if (!name.length) return;
     NSError *error = nil;
     if (![[NSFileManager defaultManager] removeItemAtPath:ExteriaAccountDirectory(name) error:&error]) NSLog(@"exteria: the account directory %@ stays: %@", name, error);
@@ -83,6 +88,26 @@ void ExteriaAccountSetInfo(NSString *name, NSString *title, NSString *username, 
                           [NSNumber numberWithLongLong:userId], @"user", nil];
     [infos setObject:info forKey:name];
     [[NSUserDefaults standardUserDefaults] setObject:infos forKey:ExteriaAccountInfoKey];
+}
+
+UIImage *ExteriaAccountPhoto(NSString *name) {
+    return [UIImage imageWithContentsOfFile:ExteriaAccountPhotoPath(name)];
+}
+
+void ExteriaAccountSetPhoto(NSString *name, UIImage *image) {
+    if (!image || image.size.width < 1 || image.size.height < 1) return;
+    /* the list draws it at 48 points, so a picture of 128 pixels is enough for any screen scale */
+    CGFloat scale = MIN(1, 128.0 / MAX(image.size.width, image.size.height));
+    CGSize size = CGSizeMake(MAX(1, floor(image.size.width * scale)), MAX(1, floor(image.size.height * scale)));
+    UIGraphicsBeginImageContextWithOptions(size, NO, 1);
+    [image drawInRect:CGRectMake(0, 0, size.width, size.height)];
+    UIImage *small = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    /* a photo with see-through parts keeps them, which a jpeg would turn black */
+    NSData *data = UIImagePNGRepresentation(small);
+    NSString *path = ExteriaAccountPhotoPath(name);
+    NSError *error = nil;
+    if (!data || ![data writeToFile:path options:NSDataWritingAtomic error:&error]) NSLog(@"exteria: the photo of the account %@ was not kept: %@", name, error);
 }
 
 NSString *ExteriaAccountNameOfUser(long long userId, NSString *except) {

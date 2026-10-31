@@ -292,6 +292,7 @@ static NSString *ExteriaAccountErrorText(NSString *errorName) {
     }
     NSDictionary *info = ExteriaAccountInfo(name);
     long long user = active ? _person.userId : [[info objectForKey:@"user"] longLongValue];
+    if (!active) [_faces useStoredPhoto:ExteriaAccountPhoto(name) forKey:[@"account:" stringByAppendingString:name] seed:(NSUInteger)(user % 1000003)];
     return [_faces imageForKey:[@"account:" stringByAppendingString:name] initials:ExteriaInitialsOfName(title) seed:(NSUInteger)(user % 1000003) deleted:NO
                          photo:active ? _person.photo : nil];
 }

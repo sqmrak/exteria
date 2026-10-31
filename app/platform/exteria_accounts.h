@@ -1,4 +1,4 @@
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 /* the accounts signed in on this phone; one of them is active, and only that one has a connection */
 
@@ -18,6 +18,9 @@ void ExteriaAccountRemove(NSString *name);
 /* what the list of accounts shows for an account that is not connected: the name, the username, and the user id to tell the same person twice */
 NSDictionary *ExteriaAccountInfo(NSString *name);
 void ExteriaAccountSetInfo(NSString *name, NSString *title, NSString *username, long long userId);
+/* the profile photo of an account, kept on the phone so the list can show it while the account has no connection; nil when it has none or none was kept */
+UIImage *ExteriaAccountPhoto(NSString *name);
+void ExteriaAccountSetPhoto(NSString *name, UIImage *image);
 /* the name of another account that is signed in as the same user, or nil */
 NSString *ExteriaAccountNameOfUser(long long userId, NSString *except);
 

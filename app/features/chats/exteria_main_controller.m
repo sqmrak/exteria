@@ -1,4 +1,6 @@
 #import "exteria_main_controller.h"
+#import "exteria_accounts.h"
+#import "exteria_popup_menu.h"
 #import "exteria_chat_settings.h"
 
 #import "exteria_calls_controller.h"
@@ -327,6 +329,9 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         }
         ExteriaPerson *person = [items objectAtIndex:0];
         [_avatars pinPhoto:person.photo];
+        /* the account list shows this face when the account is not the one in use, and then has no connection to ask for it */
+        NSString *accountName = [[ExteriaAccountActive() copy] autorelease];
+        if (person.photo) [_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) { if (image) ExteriaAccountSetPhoto(accountName, image); }];
         ExteriaLiteSetPremium(ExteriaPremiumEffective(person.premium));
         if (!person.photo) return;
         [_avatars loadImageForPhoto:person.photo completion:^(UIImage *photo) {
@@ -607,6 +612,8 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
         }
         ExteriaPerson *person = [items objectAtIndex:0];
         [_avatars pinPhoto:person.photo];
+        NSString *accountName = [[ExteriaAccountActive() copy] autorelease];
+        if (person.photo) [_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) { if (image) ExteriaAccountSetPhoto(accountName, image); }];
         ExteriaLiteSetPremium(ExteriaPremiumEffective(person.premium));
         if (profileIndex >= 0) [_tabBar setAvatarInitials:person.initials seed:(NSUInteger)(person.userId % 1000003) photo:person.photo cache:_avatars
                                                  forIndex:profileIndex];
@@ -787,10 +794,56 @@ static BOOL ExteriaSwipeTabKind(NSInteger kind) {
     [self showTab:index];
 }
 
+/* the tab of the chats pressed again takes the list back to its top */
+- (void)tabBar:(ExteriaTabBar *)tabBar didReselectIndex:(NSInteger)index {
+    (void)tabBar;
+    if (index < 0 || index >= ExteriaTabCount || _kinds[index] != ExteriaTabChats) return;
+    if ([_current isKindOfClass:[ExteriaChatsController class]]) [(ExteriaChatsController *)_current scrollToTopAnimated];
+}
+
+/* a finger held on the profile tab offers the accounts of the phone, as the official client does */
+- (void)tabBar:(ExteriaTabBar *)tabBar didLongPressIndex:(NSInteger)index frame:(CGRect)frame {
+    if (index < 0 || index >= ExteriaTabCount || _kinds[index] != ExteriaTabProfile) return;
+    NSString *active = ExteriaAccountActive();
+    NSMutableArray *titles = [NSMutableArray array], *names = [NSMutableArray array];
+    NSMutableData *symbols = [NSMutableData data];
+    for (NSString *name in ExteriaAccountNames()) {
+        NSString *title = [ExteriaAccountInfo(name) objectForKey:@"title"];
+        [titles addObject:title.length ? title : NSLocalizedString(@"account.title", nil)];
+        [names addObject:name];
+        ExteriaSymbol symbol = [name isEqualToString:active] ? ExteriaSymbolCheck : ExteriaSymbolPerson;
+        [symbols appendBytes:&symbol length:sizeof(symbol)];
+    }
+    [titles addObject:NSLocalizedString(@"account.add", nil)];
+    ExteriaSymbol plus = ExteriaSymbolPlusCircle;
+    [symbols appendBytes:&plus length:sizeof(plus)];
+    NSUInteger accounts = names.count;
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:(const ExteriaSymbol *)symbols.bytes handler:^(NSUInteger picked) {
+        if (picked >= accounts) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaAccountAddNotification object:nil];
+            return;
+        }
+        NSString *name = [names objectAtIndex:picked];
+        if ([name isEqualToString:active]) return;
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaAccountSwitchNotification object:nil userInfo:[NSDictionary dictionaryWithObject:name forKey:@"name"]];
+    }] autorelease];
+    CGRect area = [tabBar convertRect:frame toView:self.view];
+    menu.bottomInset = self.view.bounds.size.height - area.origin.y;
+    [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(area), area.origin.y - 8)];
+}
+
 - (void)chatsController:(ExteriaChatsController *)controller didChangeUnreadTotal:(NSInteger)total {
     (void)controller;
     NSInteger chatsIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabChats);
     if (chatsIndex >= 0) [_tabBar setBadge:total forIndex:chatsIndex];
+}
+
+- (void)profileControllerRequestsSettings:(ExteriaProfileController *)controller {
+    (void)controller;
+    NSInteger index = ExteriaTabIndexOfKind(_kinds, ExteriaTabSettings);
+    if (index < 0 || !_tabBar) return;
+    _tabBar.selectedIndex = index;
+    [self showTab:index];
 }
 
 - (void)profileController:(ExteriaProfileController *)controller requestsSignOut:(void (^)(NSString *errorName))completion {

@@ -73,6 +73,12 @@ static UIImage *ExteriaRoundImage(UIImage *photo, NSUInteger seed) {
     return image;
 }
 
+- (void)useStoredPhoto:(UIImage *)photo forKey:(NSString *)key seed:(NSUInteger)seed {
+    if (!photo || [_asked containsObject:key]) return;
+    [_asked addObject:key];
+    [_images setObject:ExteriaRoundImage(photo, seed) forKey:key];
+}
+
 - (UIImage *)imageForKey:(NSString *)key initials:(NSString *)initials seed:(NSUInteger)seed deleted:(BOOL)deleted photo:(ExteriaPhoto *)photo {
     UIImage *image = [_images objectForKey:key];
     if (!image) {
