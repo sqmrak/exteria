@@ -696,6 +696,7 @@
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    if (self.editing) [self setEditing:NO animated:animated];
     if (_archiveRevealed) {
         _archiveRevealed = NO;
         [self applyFilters];

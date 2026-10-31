@@ -132,7 +132,7 @@
 "release.installing" = "устанавливаем...";
 "release.updated" = "%@ установлена";
 "release.restart.note" = "перезапусти приложение, чтобы запустить новую версию.";
-"release.readonly" = "нет доступа к папке приложения. проверь джейлбрейк и права записи.";
+"release.readonly" = "открой релиз на github, скачай и установи ipa. для обновления внутри приложения нужна доступная для записи установка с джейлбрейком.";
 "release.noasset" = "в этом релизе нет файла, который приложение может поставить само.";
 "release.fail.title" = "обновление не завершилось";
 "release.fail.network" = "не удалось скачать. проверь соединение и попробуй ещё раз.";
@@ -1056,7 +1056,7 @@
 "channel.error.banned" = "этот человек в чёрном списке канала.";
 "channel.error.unknown" = "не получилось: %@";
 "welcome.senko.title" = "спасииибо, что выбрали senko :3";
-"welcome.senko.message" = "мы заметили senko на вашем телефоне. хорошего интернета!\nby sqmrak :3 :3";
+"welcome.senko.message" = "мы заметили senko на вашем телефоне. хорошего интернета!\nby sqmrak :3";
 "welcome.network.title" = "плохая связь";
 "welcome.network.message" = "telegram не отвечает. рекомендуем включить vpn: во встроенном shiro это одно нажатие.";
 "welcome.network.enable" = "включить shiro";
@@ -1793,8 +1793,8 @@
 "look.senderavatars" = "мини-аватарки отправителей";
 "look.snow" = "снежинки";
 "look.snow.info" = "снежинки падают в списке чатов и на фоне чата. не идут при экономии энергии и при включённом «уменьшении движения».";
-"look.foxes" = "падающие лисицы";
-"look.foxes.info" = "лисицы падают в списке чатов и на фоне чата. не идут при экономии энергии и при включённом «уменьшении движения».";
+"look.foxes" = "senko";
+"look.foxes.info" = "лисицы senko падают в списке чатов и на фоне чата. не идут при экономии энергии и при включённом «уменьшении движения».";
 "look.hidewaves" = "убрать material эффект";
 "look.hidewaves.info" = "фиолетовые волны в углах современной темы не рисуются :3";
 "chat.msg.edithistory" = "история изменений";
@@ -2256,6 +2256,7 @@
 "developer.mark.manager" = "менеджер";
 "developer.mark.promotion" = "реклама";
 "developer.mark.caution" = "осторожно";
+"look.effects.header" = "эффекты";
 "profile.choosephoto" = "выбрать фото";
 "attach.pick.profile" = "выберите фотографию или видео";
 "profile.video.unsupported" = "видео пока нельзя поставить на аватарку.";

@@ -131,7 +131,7 @@
 "release.installing" = "Installing...";
 "release.updated" = "%@ is installed";
 "release.restart.note" = "Restart the app to run the new version.";
-"release.readonly" = "The app folder is not writable. Check the jailbreak and write access.";
+"release.readonly" = "Open the GitHub release to download and install the IPA. In-place updates require a writable jailbreak installation.";
 "release.noasset" = "This release has no file the app can install by itself.";
 "release.fail.title" = "The update did not finish";
 "release.fail.network" = "The download failed. Check the connection and try again.";
@@ -1787,8 +1787,8 @@
 "look.senderavatars" = "Sender mini avatars";
 "look.snow" = "Snowflakes";
 "look.snow.info" = "Snowflakes fall over the chat list and the background of a chat. They stop under the power saver and with Reduce Motion on.";
-"look.foxes" = "Falling foxes";
-"look.foxes.info" = "Foxes fall over the chat list and the background of a chat. They stop under the power saver and with Reduce Motion on.";
+"look.foxes" = "Senko";
+"look.foxes.info" = "The foxes of Senko fall in the list of chats and behind a chat. They do not fall with the power saver and with “Reduce Motion” on.";
 "look.hidewaves" = "Hide background waves";
 "look.hidewaves.info" = "The purple waves in the corners of the modern look are not drawn.";
 "chat.msg.edithistory" = "Edit history";
@@ -2250,6 +2250,7 @@
 "developer.mark.manager" = "Manager";
 "developer.mark.promotion" = "Promotion";
 "developer.mark.caution" = "Caution";
+"look.effects.header" = "Effects";
 "profile.choosephoto" = "Choose photo";
 "attach.pick.profile" = "Choose a photo or a video";
 "profile.video.unsupported" = "A video cannot be a profile picture yet.";

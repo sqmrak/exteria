@@ -3,6 +3,7 @@
 #import "exteria_service_line.h"
 
 #import "exteria_person.h"
+#import "exteria_message.h"
 #import "exteria_photo.h"
 #import "exteria_remote_file.h"
 
