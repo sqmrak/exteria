@@ -59,6 +59,7 @@
 @synthesize participantsCount = _participantsCount;
 @synthesize title = _title;
 @synthesize preview = _preview;
+@synthesize previewEntities = _previewEntities;
 @synthesize previewFile = _previewFile;
 @synthesize initials = _initials;
 @synthesize photo = _photo;
@@ -161,6 +162,20 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
         _senderPhoto = [[ExteriaPhoto photoWithRef:&row->sender_photo] retain];
     }
     _preview = [body copy];
+    /* the emoji positions belong to the message text as the core cut it, so they hold only while the line still carries that text unchanged */
+    if (row->emoji_count && row->preview == EXTERIA_PREVIEW_TEXT && [body hasSuffix:ExteriaUtf8(row->text)]) {
+        NSString *own = ExteriaUtf8(row->text);
+        NSUInteger shift = body.length - own.length;
+        NSMutableArray *entities = [NSMutableArray arrayWithCapacity:row->emoji_count];
+        for (uint8_t i = 0; i < row->emoji_count; ++i) {
+            if (row->emoji[i].offset + row->emoji[i].length > own.length) continue;
+            ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
+                range:NSMakeRange(shift + row->emoji[i].offset, row->emoji[i].length) url:nil] autorelease];
+            entity.documentId = row->emoji[i].document;
+            [entities addObject:entity];
+        }
+        if (entities.count) _previewEntities = [entities copy];
+    }
     _previewFile = [[ExteriaRemoteFile fileForMedia:&row->thumb] retain];
     return self;
 }
@@ -254,6 +269,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     [_senderInitials release];
     [_senderPhoto release];
     [_preview release];
+    [_previewEntities release];
     [_previewFile release];
     [_initials release];
     [_photo release];

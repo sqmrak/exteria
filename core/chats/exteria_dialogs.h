@@ -13,7 +13,8 @@
 #define EXTERIA_DIALOGS_MAX 200
 #define EXTERIA_DIALOG_TITLE_MAX 128
 #define EXTERIA_DIALOG_SENDER_MAX 64
-#define EXTERIA_DIALOG_TEXT_MAX 160
+#define EXTERIA_DIALOG_TEXT_MAX 4096
+#define EXTERIA_DIALOG_EMOJI_MAX 8
 
 typedef enum exteria_dialog_kind {
     EXTERIA_DIALOG_USER = 1,
@@ -42,6 +43,13 @@ typedef enum exteria_preview_kind {
 } exteria_preview_kind;
 
 /* one chat list row; text is UTF-8 cut at a character boundary with line breaks turned into spaces */
+/* a custom emoji of the preview text: where it stands in UTF-16 units of the text field, and the document that draws it */
+typedef struct exteria_dialog_emoji {
+    uint16_t offset;
+    uint16_t length;
+    int64_t document;
+} exteria_dialog_emoji;
+
 typedef struct exteria_dialog_row {
     uint8_t noforwards;
     int32_t peer_kind;      /* 1 user, 2 chat, 3 channel, as exteria_peer */
@@ -106,6 +114,9 @@ typedef struct exteria_dialog_row {
     exteria_photo_ref sender_photo;
     /* the message text, a caption, a sticker emoji or a file name; empty when the kind says it all */
     char text[EXTERIA_DIALOG_TEXT_MAX];
+    /* the custom emoji inside text, in order; none for a text that is not the message itself */
+    uint8_t emoji_count;
+    exteria_dialog_emoji emoji[EXTERIA_DIALOG_EMOJI_MAX];
 } exteria_dialog_row;
 
 /* fills the title, photo, hash and kind of a row whose peer_kind and peer_id are set, from the users and chats of an answer;

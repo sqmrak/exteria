@@ -16,6 +16,65 @@
 
 /* a text field copied into a fixed buffer: line breaks become spaces, runs of spaces collapse,
    and the cut never lands inside a multi byte sequence */
+static size_t utf16_before(const char *text, size_t bytes) {
+    size_t units = 0, i;
+    for (i = 0; i < bytes; ++i) {
+        uint8_t c = (uint8_t)text[i];
+        if ((c & 0xC0u) == 0x80u) continue;
+        units += c >= 0xF0u ? 2 : 1;
+    }
+    return units;
+}
+
+/* finds the custom emoji of the message where copy_text left them: it collapses runs of spaces, trims the end and cuts at the field size, so the offsets
+   of the server (UTF-16 units of the original) are replayed through the same steps; an emoji that the cut or the trim touched is dropped */
+static void read_text_emoji(exteria_dialog_row *row, const exteria_tl_value *message) {
+    exteria_entity entities[EXTERIA_MESSAGE_ENTITIES_MAX];
+    size_t start_byte[EXTERIA_MESSAGE_ENTITIES_MAX], end_byte[EXTERIA_MESSAGE_ENTITIES_MAX];
+    char urls[1];
+    uint8_t found = 0;
+    const uint8_t *data;
+    size_t len, i, k, out = 0, units = 0, text_len = strlen(row->text);
+    int space = 1;
+    row->emoji_count = 0;
+    if (!text_len || exteria_tl_get_bytes(message, "message", &data, &len) != EXTERIA_OK) return;
+    exteria_entities_read(message, entities, EXTERIA_MESSAGE_ENTITIES_MAX, urls, 0, &found);
+    for (k = 0; k < found; ++k) start_byte[k] = end_byte[k] = SIZE_MAX;
+    for (i = 0; i <= len; ++i) {
+        uint8_t c = i < len ? data[i] : 0;
+        int lead = i == len || (c & 0xC0u) != 0x80u;
+        if (lead) {
+            for (k = 0; k < found; ++k) {
+                if (entities[k].kind != EXTERIA_ENTITY_CUSTOM_EMOJI) continue;
+                if (start_byte[k] == SIZE_MAX && units >= (size_t)entities[k].offset) start_byte[k] = out;
+                if (end_byte[k] == SIZE_MAX && units >= (size_t)entities[k].offset + (size_t)entities[k].length) end_byte[k] = out;
+            }
+            if (i == len) break;
+            units += c >= 0xF0u ? 2 : 1;
+        }
+        if (out + 1 >= sizeof(row->text)) break;
+        if (c == '\n' || c == '\r' || c == '\t') c = ' ';
+        if (c == ' ') {
+            if (space) continue;
+            space = 1;
+        } else {
+            space = 0;
+        }
+        ++out;
+    }
+    for (k = 0; k < found && row->emoji_count < EXTERIA_DIALOG_EMOJI_MAX; ++k) {
+        size_t first, last;
+        if (entities[k].kind != EXTERIA_ENTITY_CUSTOM_EMOJI || start_byte[k] == SIZE_MAX || end_byte[k] == SIZE_MAX || end_byte[k] > text_len) continue;
+        first = utf16_before(row->text, start_byte[k]);
+        last = utf16_before(row->text, end_byte[k]);
+        if (last <= first) continue;
+        row->emoji[row->emoji_count].offset = (uint16_t)first;
+        row->emoji[row->emoji_count].length = (uint16_t)(last - first);
+        row->emoji[row->emoji_count].document = entities[k].document_id;
+        ++row->emoji_count;
+    }
+}
+
 static void copy_text(char *dst, size_t cap, const exteria_tl_value *object, const char *field) {
     const uint8_t *data;
     size_t len, i, out = 0;
@@ -215,6 +274,7 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
     if (exteria_tl_is(m, EXTERIA_TL_ID_messageService)) {
         int64_t target = 0;
         row->preview = EXTERIA_PREVIEW_SERVICE;
+        row->emoji_count = 0;
         row->service = exteria_service_summary(exteria_tl_get(m, "action"), row->text, sizeof(row->text), &row->service_value, &target);
         row->service_actor_is_target = target > 0 && exteria_peer_from_tl(from, &sender) == EXTERIA_OK && sender.kind == 1 && sender.id == target;
         if (target > 0) {
@@ -224,6 +284,7 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
         return;
     }
     copy_text(row->text, sizeof(row->text), m, "message");
+    read_text_emoji(row, m);
     exteria_media_classify_sized(exteria_tl_get(m, "media"), DIALOG_THUMB_TARGET, &media);
     row->preview = media.kind;
     /* a photo is its own picture; a video, gif or round video shows the thumbnail the server keeps beside it */
@@ -486,6 +547,7 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
         row->read_inbox_max_id = row->read_outbox_max_id = 0;
         row->preview = EXTERIA_PREVIEW_NONE;
         row->sender[0] = row->text[0] = 0;
+        row->emoji_count = 0;
         row->muted = 0;
         copy_text(row->title, sizeof(row->title), t, "title");
         if (exteria_tl_get_i32(t, "icon_color", &value) == EXTERIA_OK) row->topic_icon_color = value & 0xFFFFFF;
@@ -588,6 +650,8 @@ exteria_status exteria_community_previews_apply(const exteria_tl_value *answer, 
             row->sender_photo = source->sender_photo;
             memcpy(row->sender, source->sender, sizeof(row->sender));
             memcpy(row->text, source->text, sizeof(row->text));
+            row->emoji_count = source->emoji_count;
+            memcpy(row->emoji, source->emoji, sizeof(row->emoji));
             break;
         }
     }

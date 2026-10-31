@@ -38,4 +38,13 @@ extern NSString *const ExteriaCustomEmojiDidLoadNotification;
 /* the side in points an emoji is drawn at, times the screen scale, is what a loader should decode to */
 + (CGFloat)pictureSide;
 
+/* animated emoji: a document with frames keeps its frames here, and imageForDocument: answers with the frame the clock names. only the frames of a few dozen documents are held
+   (a bounded cache, cost counted in bytes); a document without frames is still the one picture it was */
++ (void)setAnimationFrames:(NSArray *)frames duration:(NSTimeInterval)duration forDocument:(long long)document;
++ (BOOL)hasAnimationForDocument:(long long)document;
+/* a view that has just drawn an animated emoji asks to be drawn again on the next tick; it is forgotten after the tick, and draws itself in again only while it still shows one */
++ (void)keepAnimatingView:(UIView *)view;
 @end
+
+/* counts the animated pictures handed out: a view compares the count before and after it draws to know it showed one */
+NSUInteger ExteriaCustomEmojiAnimatedDraws(void);

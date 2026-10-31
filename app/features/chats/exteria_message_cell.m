@@ -1,3 +1,4 @@
+#import "exteria_custom_emoji.h"
 #import "exteria_message_cell.h"
 #import "exteria_map_view.h"
 
@@ -570,6 +571,7 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
     if (!_item) return;
     CGContextRef context = UIGraphicsGetCurrentContext();
     NSUInteger misses = ExteriaEmojiMissCount();
+    NSUInteger animated = ExteriaCustomEmojiAnimatedDraws();
     if (_layerKind == ExteriaBubbleLayerReply) [self drawReply];
     else if (_layerKind == ExteriaBubbleLayerOverlay) [self drawOverlay:context];
     else if (_item.kind == ExteriaChatItemPill && !_item.giftCard) [self drawPill:context];
@@ -581,6 +583,7 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
         [self drawCommentsRow:context];
     }
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(self);
+    if (ExteriaCustomEmojiAnimatedDraws() != animated) [ExteriaCustomEmoji keepAnimatingView:self];
     /* a sticker has no bubble, its picture and the time capsule over it are other views */
 }
 

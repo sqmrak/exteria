@@ -456,6 +456,7 @@
     NSMutableArray *documents = [NSMutableArray array];
     for (ExteriaDialog *dialog in _dialogs) {
         if (dialog.emojiStatus && !dialog.saved) [documents addObject:[NSNumber numberWithLongLong:dialog.emojiStatus]];
+        for (ExteriaTextEntity *entity in dialog.previewEntities) [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
     }
     ExteriaWeakReference *weak = _badgeWeak;
     ExteriaLoadBadgePictures(documents, _session, _media, ^{

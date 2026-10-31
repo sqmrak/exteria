@@ -58,6 +58,7 @@
     NSString *_senderInitials;
     ExteriaPhoto *_senderPhoto;
     NSString *_preview;
+    NSArray *_previewEntities;
     ExteriaRemoteFile *_previewFile;
     NSString *_initials;
     ExteriaPhoto *_photo;
@@ -136,6 +137,8 @@
 @property (nonatomic, readonly, copy) NSString *title;
 /* the last message ready to show, with a "You:" or sender prefix where that helps */
 @property (nonatomic, readonly, copy) NSString *preview;
+/* the custom emoji inside preview as ExteriaTextEntity items, offsets already past the sender prefix; nil when the line has none */
+@property (nonatomic, readonly, copy) NSArray *previewEntities;
 /* the small picture of a photo or video last message, shown before the preview text; nil for any other last message */
 @property (nonatomic, readonly, retain) ExteriaRemoteFile *previewFile;
 @property (nonatomic, readonly, copy) NSString *initials;

@@ -1,3 +1,4 @@
+#import "exteria_custom_emoji.h"
 #import "exteria_emoji_label.h"
 
 #import "exteria_emoji_store.h"
@@ -205,6 +206,7 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     if (!_text.length) return;
     ExteriaTextLayout *layout = [self layoutForWidth:self.bounds.size.width];
     NSUInteger misses = ExteriaEmojiMissCount();
+    NSUInteger animated = ExteriaCustomEmojiAnimatedDraws();
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGContextSaveGState(context);
     if (_shadowColor) CGContextSetShadowWithColor(context, _shadowOffset, 0, _shadowColor.CGColor);
@@ -212,6 +214,7 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     [layout drawAtPoint:CGPointMake(0, floor((self.bounds.size.height - layout.size.height) / 2)) hidingCustomEmoji:_hiddenCustomEmoji];
     CGContextRestoreGState(context);
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(self);
+    if (ExteriaCustomEmojiAnimatedDraws() != animated) [ExteriaCustomEmoji keepAnimatingView:self];
 }
 
 @end

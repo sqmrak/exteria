@@ -86,6 +86,40 @@ static exteria_tl_value *answer(const char *ctor, exteria_tl_value **dialogs, ui
     return a;
 }
 
+static exteria_tl_value *custom_emoji(int32_t offset, int32_t length, int64_t document) {
+    exteria_tl_value *e = obj("messageEntityCustomEmoji");
+    set_i32(e, "offset", offset);
+    set_i32(e, "length", length);
+    set_i64(e, "document_id", document);
+    return e;
+}
+
+static void test_preview_emoji(void) {
+    exteria_dialog_row rows[2];
+    size_t count;
+    exteria_tl_value *d[1], *m[1], *u[1], *e[3];
+    d[0] = dialog(peer("peerUser", "user_id", 5), 9, 1);
+    u[0] = user(5, "Ann", NULL);
+    /* the double space after "hi" collapses, so the emoji (UTF-16 units 4 and 5 of the message) moves to unit 3 of the preview */
+    m[0] = message(peer("peerUser", "user_id", 5), 9, 1500, "hi  \xF0\x9F\x98\x80 ok \xF0\x9F\x98\x80");
+    e[0] = custom_emoji(4, 2, 111);
+    e[1] = custom_emoji(10, 2, 222);
+    /* one that starts past the end of the text is dropped */
+    e[2] = custom_emoji(40, 2, 333);
+    set(m[0], "entities", vec_of(e, 3));
+    CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 1, m, 1, NULL, 0, u, 1), SELF, 1000, rows, 2, &count), EXTERIA_OK);
+    CHECK_EQ_INT(rows[0].emoji_count, 2);
+    CHECK_EQ_INT(rows[0].emoji[0].offset, 3);
+    CHECK_EQ_INT(rows[0].emoji[0].length, 2);
+    CHECK_EQ_INT(rows[0].emoji[0].document, 111);
+    CHECK_EQ_INT(rows[0].emoji[1].offset, 9);
+    CHECK_EQ_INT(rows[0].emoji[1].document, 222);
+    /* a message without entities has none */
+    m[0] = message(peer("peerUser", "user_id", 5), 9, 1500, "plain");
+    CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 1, m, 1, NULL, 0, u, 1), SELF, 1000, rows, 2, &count), EXTERIA_OK);
+    CHECK_EQ_INT(rows[0].emoji_count, 0);
+}
+
 static void test_user_and_saved(void) {
     exteria_dialog_row rows[4];
     size_t count;
@@ -1081,8 +1115,9 @@ static void test_archive_summary(void) {
     set_str(u[1], "first_name", name);
     set_str(u[2], "first_name", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀");
     CHECK_EQ_INT(exteria_archive_summary_parse(info, contents, SELF, 0, &summary), EXTERIA_OK);
-    CHECK_EQ_INT(strlen(summary.text), 158);
-    CHECK_EQ_INT((unsigned char)summary.text[157], 0x80);
+    /* both names fit whole now that a text field holds a full message: nothing is cut, and the last emoji keeps its final byte */
+    CHECK_EQ_INT(strlen(summary.text), 190);
+    CHECK_EQ_INT((unsigned char)summary.text[189], 0x80);
     exteria_tl_value *empty = answer("messages.dialogs", NULL, 0, NULL, 0, NULL, 0, NULL, 0);
     CHECK_EQ_INT(exteria_archive_summary_parse(info, empty, SELF, 0, &summary), EXTERIA_OK);
     CHECK_EQ_INT(summary.preview, EXTERIA_PREVIEW_NONE);
@@ -1171,6 +1206,7 @@ int main(void) {
     test_noforwards_peer();
     test_archive_shortcut();
     test_archive_summary();
+    test_preview_emoji();
     test_user_and_saved();
     test_forwarded_last_message();
     test_mute_expired_and_unread();

@@ -2,6 +2,8 @@
 
 #import "exteria_platform.h"
 #import "exteria_image_decoder.h"
+#import "exteria_animation.h"
+#import <QuartzCore/QuartzCore.h>
 
 #define PICTURE_POINTS 24.0
 #define PICTURE_COUNT_MAX 400
@@ -113,7 +115,108 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
     return *slot;
 }
 
+#pragma mark animation
+
+#define ANIMATION_COST_LIMIT (12 * 1024 * 1024)
+#define ANIMATION_FPS 15
+
+@interface ExteriaEmojiFrames : NSObject {
+@public
+    NSArray *frames;
+    NSTimeInterval duration;
+}
+@end
+
+@implementation ExteriaEmojiFrames
+- (void)dealloc {
+    [frames release];
+    [super dealloc];
+}
+@end
+
+static NSCache *ExteriaAnimations(void) {
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.totalCostLimit = ANIMATION_COST_LIMIT;
+    });
+    return cache;
+}
+
+static NSUInteger sAnimatedDraws;
+
+NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
+
+/* one display link for every animated emoji on screen: it runs while views are waiting for a tick and stops when none is */
+@interface ExteriaEmojiClock : NSObject {
+    CADisplayLink *_link;
+    NSMutableSet *_views;
+}
++ (ExteriaEmojiClock *)shared;
+- (void)keep:(UIView *)view;
+@end
+
+@implementation ExteriaEmojiClock
+
++ (ExteriaEmojiClock *)shared {
+    static ExteriaEmojiClock *clock;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ clock = [[ExteriaEmojiClock alloc] init]; });
+    return clock;
+}
+
+- (id)init {
+    self = [super init];
+    if (!self) return nil;
+    _views = [[NSMutableSet alloc] init];
+    return self;
+}
+
+- (void)keep:(UIView *)view {
+    [_views addObject:view];
+    if (_link) return;
+    _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
+    ExteriaSetFrameRate(_link, ANIMATION_FPS);
+    [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+}
+
+- (void)tick:(CADisplayLink *)link {
+    (void)link;
+    NSSet *waiting = [[_views copy] autorelease];
+    [_views removeAllObjects];
+    for (UIView *view in waiting) {
+        if (view.window && !view.hidden && view.alpha > 0.01) [view setNeedsDisplay];
+    }
+    /* a view that drew an emoji again has put itself back by now only if it was drawn, which happens after this tick; the link stays for the next one and ends when nobody came back */
+    if (!waiting.count) {
+        [_link invalidate];
+        [_link release];
+        _link = nil;
+    }
+}
+
+@end
+
 @implementation ExteriaCustomEmoji
+
++ (void)setAnimationFrames:(NSArray *)frames duration:(NSTimeInterval)duration forDocument:(long long)document {
+    if (frames.count < 2 || duration <= 0) return;
+    ExteriaEmojiFrames *holder = [[[ExteriaEmojiFrames alloc] init] autorelease];
+    holder->frames = [frames copy];
+    holder->duration = duration;
+    NSUInteger cost = 0;
+    for (UIImage *frame in frames) cost += CGImageGetBytesPerRow(frame.CGImage) * CGImageGetHeight(frame.CGImage);
+    [ExteriaAnimations() setObject:holder forKey:[NSNumber numberWithLongLong:document] cost:cost];
+}
+
++ (BOOL)hasAnimationForDocument:(long long)document {
+    return [ExteriaAnimations() objectForKey:[NSNumber numberWithLongLong:document]] != nil;
+}
+
++ (void)keepAnimatingView:(UIView *)view {
+    [[ExteriaEmojiClock shared] keep:view];
+}
 
 + (UIImage *)imageForDocument:(long long)document {
     if (document == EXTERIA_TELEGRAM_VERIFIED_DOCUMENT) return ExteriaTelegramVerifiedImage();
@@ -143,6 +246,14 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
     if (document == EXTERIA_LEAD_DOCUMENT) return ExteriaBundledBadge(@"badge_lead", &hammers);
     if (document == EXTERIA_TESTER_DOCUMENT) return ExteriaBundledBadge(@"badge_tester", &net);
     if (document == EXTERIA_SENKO_DOCUMENT) return ExteriaBundledBadge(@"badge_senko", &fox);
+    ExteriaEmojiFrames *animated = [ExteriaAnimations() objectForKey:[NSNumber numberWithLongLong:document]];
+    if (animated && !ExteriaReduceMotionEnabled()) {
+        /* every emoji of a document shows the same frame at the same moment, which is what the clock of the process gives */
+        double phase = fmod(CACurrentMediaTime(), animated->duration) / animated->duration;
+        NSUInteger index = MIN(animated->frames.count - 1, (NSUInteger)(phase * (double)animated->frames.count));
+        ++sAnimatedDraws;
+        return [animated->frames objectAtIndex:index];
+    }
     return [ExteriaCustomPictures() objectForKey:[NSNumber numberWithLongLong:document]];
 }
 
