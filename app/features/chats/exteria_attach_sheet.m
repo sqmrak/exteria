@@ -10,6 +10,7 @@
 #import "exteria_popup_menu.h"
 #import "exteria_photo_library.h"
 #import "exteria_symbol.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
 
@@ -92,6 +93,14 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
 @synthesize offersGift = _offersGift;
 @synthesize profilePicker = _profilePicker;
 
+/* the glossy purple of the navigation bar under the five buttons and under the caption field */
+static void ExteriaAttachClassicBackdrop(UIView *strip) {
+    UIImageView *plate = ExteriaClassicStripBackdrop();
+    plate.frame = strip.bounds;
+    plate.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [strip addSubview:plate];
+}
+
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
@@ -135,11 +144,13 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
     [_panel addSubview:_more];
     [_panel addSubview:_grabber];
     _bar = [[UIView alloc] init];
-    _bar.backgroundColor = ExteriaColorCard();
+    BOOL classic = ExteriaThemeIsClassic();
+    if (classic) ExteriaAttachClassicBackdrop(_bar);
+    else _bar.backgroundColor = ExteriaColorCard();
     [_panel addSubview:_bar];
     _line = [[UIView alloc] init];
-    _line.backgroundColor = ExteriaColorSecondary();
-    _line.alpha = 0.25;
+    _line.backgroundColor = classic ? [UIColor blackColor] : ExteriaColorSecondary();
+    _line.alpha = classic ? 0.55 : 0.25;
     [_bar addSubview:_line];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"attach.gallery", nil), NSLocalizedString(@"attach.file", nil),
         NSLocalizedString(@"attach.location", nil), NSLocalizedString(@"attach.gift", nil), NSLocalizedString(@"attach.contact", nil), nil];
@@ -147,15 +158,19 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
     NSMutableArray *buttons = [NSMutableArray array], *labels = [NSMutableArray array];
     for (NSUInteger i = 0; i < titles.count; ++i) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-        [button setImage:ExteriaSymbolImage(symbols[i], 25, i == 0 ? ExteriaColorAccent() : ExteriaColorSecondary()) forState:UIControlStateNormal];
+        [button setImage:ExteriaSymbolImage(symbols[i], 25, classic ? [UIColor whiteColor] : (i == 0 ? ExteriaColorAccent() : ExteriaColorSecondary())) forState:UIControlStateNormal];
         button.tag = (NSInteger)i;
         button.accessibilityLabel = [titles objectAtIndex:i];
         [button addTarget:self action:@selector(chosen:) forControlEvents:UIControlEventTouchUpInside];
         [_bar addSubview:button]; [buttons addObject:button];
         UILabel *label = [[[UILabel alloc] init] autorelease];
         label.backgroundColor = [UIColor clearColor];
-        label.font = ExteriaFontRegular(11);
-        label.textColor = i == 0 ? ExteriaColorAccent() : ExteriaColorTitle();
+        label.font = classic ? [UIFont boldSystemFontOfSize:11] : ExteriaFontRegular(11);
+        label.textColor = classic ? [UIColor whiteColor] : (i == 0 ? ExteriaColorAccent() : ExteriaColorTitle());
+        if (classic) {
+            label.shadowColor = [UIColor colorWithWhite:0 alpha:0.5];
+            label.shadowOffset = CGSizeMake(0, -1);
+        }
         label.textAlignment = ExteriaTextAlignmentCenter;
         /* the five labels keep one size, and one that is too long for its column is cut instead of shrunk */
         label.lineBreakMode = UILineBreakModeTailTruncation;
@@ -166,7 +181,8 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
 
     /* once something is picked the bar of five buttons gives way to the words for the pictures and the round button that sends them */
     _captionBar = [[UIView alloc] init];
-    _captionBar.backgroundColor = ExteriaColorCard();
+    if (classic) ExteriaAttachClassicBackdrop(_captionBar);
+    else _captionBar.backgroundColor = ExteriaColorCard();
     _captionBar.hidden = YES;
     [_panel addSubview:_captionBar];
     UIView *field = [[[UIView alloc] init] autorelease];
@@ -185,9 +201,14 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
     _caption.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     [field addSubview:_caption];
     _send = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    _send.backgroundColor = ExteriaColorAccent();
-    _send.layer.cornerRadius = SEND_SIDE / 2;
-    [_send setImage:ExteriaSymbolImage(ExteriaSymbolSendArrow, 20, [UIColor whiteColor]) forState:UIControlStateNormal];
+    if (classic) {
+        [_send setImage:ExteriaClassicRoundButtonImage(ExteriaSymbolSendArrow, SEND_SIDE, NO) forState:UIControlStateNormal];
+        [_send setImage:ExteriaClassicRoundButtonImage(ExteriaSymbolSendArrow, SEND_SIDE, YES) forState:UIControlStateHighlighted];
+    } else {
+        _send.backgroundColor = ExteriaColorAccent();
+        _send.layer.cornerRadius = SEND_SIDE / 2;
+        [_send setImage:ExteriaSymbolImage(ExteriaSymbolSendArrow, 20, [UIColor whiteColor]) forState:UIControlStateNormal];
+    }
     _send.accessibilityLabel = NSLocalizedString(@"attach.send", nil);
     [_send addTarget:self action:@selector(sendSelected) forControlEvents:UIControlEventTouchUpInside];
     [_captionBar addSubview:_send];
@@ -311,8 +332,11 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
     field.frame = CGRectMake(12, (CAPTION_HEIGHT - SEND_SIDE) / 2, width - 24, SEND_SIDE);
     _caption.frame = CGRectMake(18, 0, field.frame.size.width - 18 - SEND_SIDE - 6, SEND_SIDE);
     _send.frame = CGRectMake(width - 12 - SEND_SIDE, (CAPTION_HEIGHT - SEND_SIDE) / 2, SEND_SIDE, SEND_SIDE);
-    _send.layer.borderWidth = 3;
-    _send.layer.borderColor = ExteriaColorField().CGColor;
+    /* the classic button is a picture with its own rim, a layer border would draw a square around it */
+    if (!ExteriaThemeIsClassic()) {
+        _send.layer.borderWidth = 3;
+        _send.layer.borderColor = ExteriaColorField().CGColor;
+    }
     _count.frame = CGRectMake(CGRectGetMaxX(_send.frame) - 14, CGRectGetMinY(_send.frame) - 4, MAX(18, ceil([_count.text sizeWithFont:_count.font].width) + 8), 18);
     NSInteger columns = MAX(3, (NSInteger)(width / 120));
     CGFloat cellSide = floor(width / columns);
