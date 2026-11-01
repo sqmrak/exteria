@@ -15,6 +15,10 @@ static UIColor *ExteriaRingRGB(int r, int g, int b) {
 void ExteriaStoryRingColors(BOOL unseen, BOOL closeFriends, UIColor **from, UIColor **to) {
     if (!unseen) {
         *from = *to = ExteriaThemeIsDark() ? [UIColor colorWithWhite:1 alpha:0.28] : [UIColor colorWithWhite:0 alpha:0.2];
+    } else if (ExteriaThemeIsClassic()) {
+        /* the system blue and green of ios 5 and 6 badges, from a lit top edge to a deep one */
+        *from = closeFriends ? ExteriaRingRGB(0x8c, 0xd8, 0x4a) : ExteriaRingRGB(0x6f, 0xa8, 0xf0);
+        *to = closeFriends ? ExteriaRingRGB(0x2e, 0x8a, 0x1c) : ExteriaRingRGB(0x1c, 0x4f, 0xb8);
     } else if (closeFriends) {
         *from = ExteriaRingRGB(0x81, 0xce, 0x2d);
         *to = ExteriaRingRGB(0x18, 0xbd, 0x36);
