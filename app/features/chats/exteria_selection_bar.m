@@ -1,5 +1,6 @@
 #import "exteria_selection_bar.h"
 
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -16,6 +17,7 @@
     UIButton *_delete;
     UIButton *_range;
     UIView *_line;
+    UIImageView *_backdrop;
     void (^_cancelHandler)(void);
     void (^_forwardHandler)(void);
     void (^_copyHandler)(void);
@@ -38,8 +40,9 @@
 
 - (UIButton *)iconButton:(ExteriaSymbol)symbol label:(NSString *)label action:(SEL)action {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    [button setImage:ExteriaSymbolImage(symbol, 24, ExteriaColorAccent()) forState:UIControlStateNormal];
-    [button setImage:ExteriaSymbolImage(symbol, 24, ExteriaColorMuted()) forState:UIControlStateDisabled];
+    BOOL classic = ExteriaThemeIsClassic();
+    [button setImage:ExteriaSymbolImage(symbol, 24, classic ? [UIColor whiteColor] : ExteriaColorAccent()) forState:UIControlStateNormal];
+    [button setImage:ExteriaSymbolImage(symbol, 24, classic ? [UIColor colorWithWhite:1 alpha:0.35] : ExteriaColorMuted()) forState:UIControlStateDisabled];
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     button.accessibilityLabel = label;
     [self addSubview:button];
@@ -49,17 +52,31 @@
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorBar();
+    BOOL classic = ExteriaThemeIsClassic();
+    if (classic) {
+        _backdrop = [ExteriaClassicStripBackdrop() retain];
+        [self addSubview:_backdrop];
+    } else {
+        self.backgroundColor = ExteriaColorBar();
+    }
     _cancel = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     [_cancel setTitle:NSLocalizedString(@"chat.msg.cancel", nil) forState:UIControlStateNormal];
-    [_cancel setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
-    _cancel.titleLabel.font = ExteriaFontMedium(16);
+    [_cancel setTitleColor:classic ? [UIColor whiteColor] : ExteriaColorAccent() forState:UIControlStateNormal];
+    _cancel.titleLabel.font = classic ? [UIFont boldSystemFontOfSize:16] : ExteriaFontMedium(16);
+    if (classic) {
+        [_cancel setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+        [_cancel setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+    }
     [_cancel addTarget:self action:@selector(cancelTapped) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:_cancel];
     _count = [[UILabel alloc] init];
     _count.backgroundColor = [UIColor clearColor];
-    _count.textColor = ExteriaColorTitle();
-    _count.font = ExteriaFontSemibold(15);
+    _count.textColor = classic ? [UIColor whiteColor] : ExteriaColorTitle();
+    _count.font = classic ? [UIFont boldSystemFontOfSize:15] : ExteriaFontSemibold(15);
+    if (classic) {
+        _count.shadowColor = [UIColor colorWithWhite:0 alpha:0.5];
+        _count.shadowOffset = CGSizeMake(0, -1);
+    }
     _count.textAlignment = ExteriaTextAlignmentCenter;
     _count.adjustsFontSizeToFitWidth = YES;
     [self addSubview:_count];
@@ -68,7 +85,7 @@
     _delete = [[self iconButton:ExteriaSymbolTrash label:NSLocalizedString(@"chat.msg.delete", nil) action:@selector(deleteTapped)] retain];
     _range = [[self iconButton:ExteriaSymbolCheckDouble label:NSLocalizedString(@"chat.select.range", nil) action:@selector(rangeTapped)] retain];
     _line = [[UIView alloc] init];
-    _line.backgroundColor = ExteriaColorHairline();
+    _line.backgroundColor = classic ? [UIColor colorWithWhite:0 alpha:0.55] : ExteriaColorHairline();
     [self addSubview:_line];
     return self;
 }
@@ -81,6 +98,7 @@
     [_delete release];
     [_range release];
     [_line release];
+    [_backdrop release];
     [_cancelHandler release];
     [_forwardHandler release];
     [_copyHandler release];
@@ -108,8 +126,9 @@
     CGSize size = self.bounds.size;
     /* the bar may be taller than its content by the bottom safe area, which the buttons stay above */
     CGFloat row = MIN(HEIGHT, size.height);
+    _backdrop.frame = self.bounds;
     _line.frame = CGRectMake(0, 0, size.width, 1.0 / ExteriaScreenScale());
-    _cancel.frame = CGRectMake(4, 0, CANCEL_WIDTH, row);
+    _cancel.frame = ExteriaThemeIsClassic() ? CGRectMake(8, (row - 30) / 2, CANCEL_WIDTH - 8, 30) : CGRectMake(4, 0, CANCEL_WIDTH, row);
     CGFloat right = size.width - 4;
     _delete.frame = CGRectMake(right - BUTTON_WIDTH, 0, BUTTON_WIDTH, row);
     _copy.frame = CGRectMake(right - 2 * BUTTON_WIDTH, 0, BUTTON_WIDTH, row);
