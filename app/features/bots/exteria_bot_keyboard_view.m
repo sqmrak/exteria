@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_classic_chrome.h"
 #import "exteria_emoji_title_button.h"
 #import "exteria_theme.h"
 
@@ -17,7 +18,15 @@
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorBar();
+    if (ExteriaThemeIsClassic()) {
+        /* the keys of a bot sit on the same glossy purple as the bars, as the keys of the old keyboards sat on their plate */
+        UIImageView *plate = ExteriaClassicStripBackdrop();
+        plate.frame = self.bounds;
+        plate.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self addSubview:plate];
+    } else {
+        self.backgroundColor = ExteriaColorBar();
+    }
     _scroll = [[UIScrollView alloc] init];
     _scroll.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _scroll.alwaysBounceVertical = NO;
@@ -42,9 +51,15 @@
     for (NSArray *row in markup.rows) {
         for (ExteriaMarkupButton *button in row) {
             ExteriaEmojiTitleButton *key = [[[ExteriaEmojiTitleButton alloc] initWithFrame:CGRectZero] autorelease];
-            key.backgroundColor = ExteriaColorCard();
-            key.layer.cornerRadius = 8;
-            [key setFaceText:button.text font:ExteriaFontRegular(16) color:ExteriaColorTitle()];
+            if (ExteriaThemeIsClassic()) {
+                [key setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+                [key setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+                [key setFaceText:button.text font:[UIFont boldSystemFontOfSize:16] color:[UIColor whiteColor]];
+            } else {
+                key.backgroundColor = ExteriaColorCard();
+                key.layer.cornerRadius = 8;
+                [key setFaceText:button.text font:ExteriaFontRegular(16) color:ExteriaColorTitle()];
+            }
             key.contentEdgeInsets = UIEdgeInsetsMake(0, 8, 0, 8);
             key.enabled = button.enabled;
             key.alpha = button.enabled ? 1 : 0.5;
