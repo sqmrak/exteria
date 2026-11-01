@@ -2265,7 +2265,7 @@
 "avatar.saved" = "Saved to the gallery";
 "avatar.save.failed" = "Could not be saved";
 "avatar.save.wait" = "The photo is still loading";
-"avatar.date" = "Set on %@";
+"avatar.counter" = "%ld of %ld";
 "notif.chat.vibrate" = "Vibration";
 "notif.chat.vibrate.info" = "Shakes the phone for a message of this chat while the app is open. A setting of this phone.";
 "chat.comments.post" = "Post";

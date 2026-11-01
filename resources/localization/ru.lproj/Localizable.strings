@@ -2270,7 +2270,7 @@
 "avatar.saved" = "Сохранено в галерею";
 "avatar.save.failed" = "Не удалось сохранить";
 "avatar.save.wait" = "Фото ещё грузится";
-"avatar.date" = "Поставлено: %@";
+"avatar.counter" = "%ld из %ld";
 "notif.chat.vibrate" = "Вибрация";
 "notif.chat.vibrate.info" = "Встряхивает телефон при сообщении этого чата, пока приложение открыто. Настройка этого телефона.";
 "chat.comments.post" = "Пост";
