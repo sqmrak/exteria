@@ -797,7 +797,7 @@
 "about.chats" = "Chats";
 "about.more" = "More";
 "plugins.title" = "Plugins";
-"plugins.hint" = "Lua scripts that read or change messages. Each one shows its permissions.";
+"plugins.hint" = "User extensions and scripts that expand the standard features of Exteria. Each one shows its permissions.";
 "plugins.empty" = "No plugins yet. Copy .lua files into the Plugins folder with file sharing.";
 "plugins.installed" = "Installed";
 "plugins.footer" = "Delete a file from the Plugins folder to remove its plugin.";
