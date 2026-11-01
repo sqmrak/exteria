@@ -2198,11 +2198,6 @@
 "developer.popups.info" = "Each window comes up by a tap, as people see it. Those that need data (the rating, the preview of a chat) will come later.";
 "developer.system" = "System windows";
 "developer.hide" = "Hide the developer settings";
-"developer.unlocked" = "The developer settings are open. They are now in the settings of Exteria.";
-"developer.already" = "The developer settings are already open.";
-"developer.popup.crash" = "Crash report";
-"developer.popup.crash.info" = "The question whether to send the report to the lead developer";
-"developer.popup.busy" = "This window is already on screen.";
 "developer.readall.header" = "Chats";
 "developer.readall" = "Mark everything as read";
 "developer.readall.info" = "Reads every chat of the list and the archive";
@@ -2215,6 +2210,11 @@
 "developer.popup.noshiro" = "No tunnel was made in this run.";
 "developer.popup.senko" = "Thanks for Senko";
 "developer.popup.senko.info" = "The window with the fox over the login";
+"developer.unlocked" = "The developer settings are open. They are now in the settings of Exteria.";
+"developer.already" = "The developer settings are already open.";
+"developer.popup.crash" = "Crash report";
+"developer.popup.crash.info" = "The question whether to send the report to the lead developer";
+"developer.popup.busy" = "This window is already on screen.";
 "developer.popup.release" = "New version";
 "developer.popup.release.info" = "The update window with made up notes, nothing is installed";
 "developer.popup.mark" = "Mark plate";

@@ -2204,11 +2204,6 @@
 "developer.popups.info" = "каждое окно вызывается нажатием, как его видит человек. те, что нужны данных (рейтинг, превью чата), появятся позже.";
 "developer.system" = "системные окна";
 "developer.hide" = "скрыть настройки разработчика";
-"developer.unlocked" = "настройки разработчика открыты. они появились в настройках exteria.";
-"developer.already" = "настройки разработчика уже открыты.";
-"developer.popup.crash" = "отчёт о падении";
-"developer.popup.crash.info" = "вопрос, отправить ли отчёт главному разработчику";
-"developer.popup.busy" = "это окно уже на экране.";
 "developer.readall.header" = "чаты";
 "developer.readall" = "пометить всё как прочитанное";
 "developer.readall.info" = "читает все чаты списка и архива";
@@ -2221,6 +2216,11 @@
 "developer.popup.noshiro" = "туннель в этом запуске не создан.";
 "developer.popup.senko" = "спасибо за senko";
 "developer.popup.senko.info" = "окно с лисой над входом";
+"developer.unlocked" = "настройки разработчика открыты. они появились в настройках exteria.";
+"developer.already" = "настройки разработчика уже открыты.";
+"developer.popup.crash" = "отчёт о падении";
+"developer.popup.crash.info" = "вопрос, отправить ли отчёт главному разработчику";
+"developer.popup.busy" = "это окно уже на экране.";
 "developer.popup.release" = "новая версия";
 "developer.popup.release.info" = "окно обновления с выдуманными заметками, без установки";
 "developer.popup.mark" = "плашка метки";
