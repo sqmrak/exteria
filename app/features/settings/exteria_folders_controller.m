@@ -538,6 +538,8 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     _headerWidth = width;
     if (!_sticker) {
         _sticker = [[ExteriaLottieView alloc] initWithAnimationNamed:@"folders_hint"];
+        /* the first frame of the visit before stands in while the animation parses */
+        _sticker.cachesPoster = YES;
         [_sticker setLoaded:YES];
         _sticker.userInteractionEnabled = YES;
         [_sticker addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(replaySticker)] autorelease]];
