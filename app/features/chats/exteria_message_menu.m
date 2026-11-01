@@ -5,6 +5,7 @@
 #import "exteria_animation.h"
 #import "exteria_dismiss_pan.h"
 #import "exteria_blur.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
@@ -115,8 +116,8 @@ static BOOL ExteriaMenuClassic(void) { return ExteriaThemeIsClassic(); }
 /* the classic plate is charcoal on the dark tone, and a pale glossy one on the white tone, where a black plate sat on the light list like a hole */
 static BOOL ExteriaMenuCharcoal(void) { return ExteriaMenuClassic() && ExteriaThemeIsDark(); }
 
-static UIColor *ExteriaMenuText(void) { return ExteriaMenuCharcoal() ? [UIColor whiteColor] : ExteriaColorTitle(); }
-static UIColor *ExteriaMenuRed(void) { return ExteriaMenuCharcoal() ? [UIColor colorWithRed:1 green:0.45 blue:0.40 alpha:1] : ExteriaColorBadgeRed(); }
+static UIColor *ExteriaMenuText(void) { return ExteriaMenuCharcoal() ? ExteriaClassicMenuTextColor() : ExteriaColorTitle(); }
+static UIColor *ExteriaMenuRed(void) { return ExteriaMenuCharcoal() ? ExteriaClassicMenuRedColor() : ExteriaColorBadgeRed(); }
 static UIColor *ExteriaMenuBand(void) {
     if (ExteriaMenuCharcoal()) return [UIColor colorWithWhite:0 alpha:0.35];
     return ExteriaThemeIsDark() ? [UIColor colorWithWhite:1 alpha:0.07] : [UIColor colorWithWhite:0 alpha:0.06];
@@ -124,30 +125,16 @@ static UIColor *ExteriaMenuBand(void) {
 
 /* the plate behind the rows: a flat card in the modern style, a glossy charcoal plate with a lit edge in the classic one */
 static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
+    if (ExteriaMenuClassic()) {
+        ExteriaClassicApplyMenuPlate(view, radius);
+        return;
+    }
     view.layer.cornerRadius = radius;
     view.layer.shadowColor = [UIColor blackColor].CGColor;
-    view.layer.shadowOpacity = ExteriaMenuCharcoal() ? 0.6 : (ExteriaMenuClassic() ? 0.35 : (ExteriaThemeIsDark() ? 0.5 : 0.22));
-    view.layer.shadowRadius = ExteriaMenuClassic() ? 10 : 14;
-    view.layer.shadowOffset = CGSizeMake(0, ExteriaMenuClassic() ? 4 : 5);
-    if (ExteriaMenuClassic()) {
-        CAGradientLayer *gloss = [CAGradientLayer layer];
-        if (ExteriaMenuCharcoal()) {
-            gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0.30 alpha:1].CGColor, (id)[UIColor colorWithWhite:0.15 alpha:1].CGColor,
-                            (id)[UIColor colorWithWhite:0.10 alpha:1].CGColor, nil];
-        } else {
-            gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:1.0 alpha:1].CGColor, (id)[UIColor colorWithWhite:0.95 alpha:1].CGColor,
-                            (id)[UIColor colorWithWhite:0.90 alpha:1].CGColor, nil];
-        }
-        gloss.locations = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.5], [NSNumber numberWithFloat:1], nil];
-        gloss.cornerRadius = radius;
-        gloss.borderColor = [UIColor colorWithWhite:ExteriaMenuCharcoal() ? 0.52 : 0.68 alpha:1].CGColor;
-        gloss.borderWidth = 1;
-        gloss.name = @"plate";
-        gloss.frame = view.bounds;
-        [view.layer insertSublayer:gloss atIndex:0];
-    } else {
-        view.backgroundColor = ExteriaColorCard();
-    }
+    view.layer.shadowOpacity = ExteriaThemeIsDark() ? 0.5 : 0.22;
+    view.layer.shadowRadius = 14;
+    view.layer.shadowOffset = CGSizeMake(0, 5);
+    view.backgroundColor = ExteriaColorCard();
 }
 
 #pragma mark content
@@ -224,23 +211,17 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     [row addSubview:icon];
     UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(58, 0, width - 70, ROW_HEIGHT)] autorelease];
     label.backgroundColor = [UIColor clearColor];
-    label.font = ExteriaMenuClassic() ? [UIFont boldSystemFontOfSize:16] : ExteriaFontMedium(16.5);
     label.textColor = color;
     label.text = item.title;
     label.userInteractionEnabled = NO;
-    if (ExteriaMenuCharcoal()) {
-        label.shadowColor = [UIColor colorWithWhite:0 alpha:0.7];
-        label.shadowOffset = CGSizeMake(0, -1);
-    } else if (ExteriaMenuClassic()) {
-        label.shadowColor = [UIColor colorWithWhite:1 alpha:0.8];
-        label.shadowOffset = CGSizeMake(0, 1);
-    }
+    if (ExteriaMenuClassic()) ExteriaClassicStyleMenuLabel(label, 16);
+    else label.font = ExteriaFontMedium(16.5);
     [row addSubview:label];
     return row;
 }
 
 - (void)rowDown:(UIButton *)row {
-    row.backgroundColor = ExteriaMenuCharcoal() ? [UIColor colorWithWhite:1 alpha:0.14] : (ExteriaMenuClassic() ? [UIColor colorWithWhite:0 alpha:0.08] : ExteriaColorField());
+    row.backgroundColor = ExteriaMenuClassic() ? ExteriaClassicMenuPressColor() : ExteriaColorField();
 }
 
 - (void)rowUp:(UIButton *)row { row.backgroundColor = [UIColor clearColor]; }

@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
@@ -66,23 +67,29 @@
     if (_rowHeight * (CGFloat)count > room) _rowHeight = MAX(ROW_HEIGHT_MIN, floor(room / (CGFloat)count));
     CGFloat content = _rowHeight * (CGFloat)_titles.count;
     CGFloat height = MIN(content, room);
+    BOOL classic = ExteriaThemeIsClassic();
+    CGFloat radius = classic ? 10 : 14;
     _card = [[UIView alloc] initWithFrame:CGRectMake(0, 0, CARD_WIDTH, height)];
     UIView *rows = _card;
     if (content > height) {
         UIScrollView *scroll = [[[UIScrollView alloc] initWithFrame:_card.bounds] autorelease];
         scroll.contentSize = CGSizeMake(CARD_WIDTH, content);
-        scroll.layer.cornerRadius = 14;
+        scroll.layer.cornerRadius = radius;
         scroll.clipsToBounds = YES;
         scroll.showsVerticalScrollIndicator = NO;
         [_card addSubview:scroll];
         rows = scroll;
     }
-    _card.backgroundColor = ExteriaColorCard();
-    _card.layer.cornerRadius = 14;
-    _card.layer.shadowColor = [UIColor blackColor].CGColor;
-    _card.layer.shadowOpacity = ExteriaThemeIsDark() ? 0.5 : 0.22;
-    _card.layer.shadowRadius = 12;
-    _card.layer.shadowOffset = CGSizeMake(0, 4);
+    if (classic) {
+        ExteriaClassicApplyMenuPlate(_card, radius);
+    } else {
+        _card.backgroundColor = ExteriaColorCard();
+        _card.layer.cornerRadius = radius;
+        _card.layer.shadowColor = [UIColor blackColor].CGColor;
+        _card.layer.shadowOpacity = ExteriaThemeIsDark() ? 0.5 : 0.22;
+        _card.layer.shadowRadius = 12;
+        _card.layer.shadowOffset = CGSizeMake(0, 4);
+    }
     for (NSUInteger i = 0; i < _titles.count; ++i) {
         UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
         row.frame = CGRectMake(0, _rowHeight * (CGFloat)i, CARD_WIDTH, _rowHeight);
@@ -90,26 +97,44 @@
         [row addTarget:self action:@selector(picked:) forControlEvents:UIControlEventTouchUpInside];
         [row addTarget:self action:@selector(rowDown:) forControlEvents:UIControlEventTouchDown];
         [row addTarget:self action:@selector(rowUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
-        UIImageView *icon = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(_symbols[i], ICON_SIDE, ExteriaColorSecondary())] autorelease];
+        UIImageView *icon = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(_symbols[i], ICON_SIDE, classic ? ExteriaClassicMenuTextColor() : ExteriaColorSecondary())] autorelease];
         icon.contentMode = UIViewContentModeCenter;
         icon.frame = CGRectMake(16, (_rowHeight - ICON_SIDE) / 2, ICON_SIDE + 4, ICON_SIDE);
         icon.userInteractionEnabled = NO;
         [row addSubview:icon];
         UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(56, 0, CARD_WIDTH - 70, _rowHeight)] autorelease];
         label.backgroundColor = [UIColor clearColor];
-        label.font = ExteriaFontMedium(16);
-        label.textColor = ExteriaColorTitle();
         label.text = [_titles objectAtIndex:i];
         label.userInteractionEnabled = NO;
+        if (classic) {
+            label.textColor = ExteriaClassicMenuTextColor();
+            ExteriaClassicStyleMenuLabel(label, 16);
+        } else {
+            label.font = ExteriaFontMedium(16);
+            label.textColor = ExteriaColorTitle();
+        }
         [row addSubview:label];
         [rows addSubview:row];
+        if (classic && i > 0) {
+            /* a dark groove over a lit line, the way the old menus split their rows */
+            CGFloat y = _rowHeight * (CGFloat)i;
+            BOOL charcoal = ExteriaThemeIsDark();
+            UIView *groove = [[[UIView alloc] initWithFrame:CGRectMake(0, y - 1, CARD_WIDTH, 1)] autorelease];
+            groove.backgroundColor = [UIColor colorWithWhite:0 alpha:charcoal ? 0.45 : 0.12];
+            groove.userInteractionEnabled = NO;
+            [rows addSubview:groove];
+            UIView *lit = [[[UIView alloc] initWithFrame:CGRectMake(0, y, CARD_WIDTH, 1)] autorelease];
+            lit.backgroundColor = [UIColor colorWithWhite:1 alpha:charcoal ? 0.08 : 0.8];
+            lit.userInteractionEnabled = NO;
+            [rows addSubview:lit];
+        }
     }
     [self addSubview:_card];
     ExteriaAddDismissPan(_card, self, @selector(dismiss));
 }
 
 - (void)rowDown:(UIButton *)row {
-    row.backgroundColor = ExteriaColorField();
+    row.backgroundColor = ExteriaThemeIsClassic() ? ExteriaClassicMenuPressColor() : ExteriaColorField();
 }
 
 - (void)rowUp:(UIButton *)row {
