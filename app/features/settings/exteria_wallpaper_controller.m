@@ -32,6 +32,7 @@
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_weak clear];
     [_weak release];
     [_preview release];
@@ -40,8 +41,25 @@
     [super dealloc];
 }
 
+/* the settings table does not move for the keyboard of the hex field, which stands low on this page: the table gets room under it and brings the field up */
+- (void)keyboardWillChange:(NSNotification *)note {
+    NSValue *end = [note.userInfo objectForKey:UIKeyboardFrameEndUserInfoKey];
+    if (![end isKindOfClass:[NSValue class]]) return;
+    CGRect keyboard = [self.view convertRect:[end CGRectValue] fromView:nil];
+    CGFloat covered = MAX(0, CGRectGetMaxY(self.table.frame) - keyboard.origin.y);
+    UIEdgeInsets insets = self.table.contentInset;
+    insets.bottom = covered;
+    self.table.contentInset = insets;
+    self.table.scrollIndicatorInsets = insets;
+    if (covered > 0 && _picker.window) {
+        [self.table scrollRectToVisible:[self.table convertRect:_picker.bounds fromView:_picker] animated:YES];
+    }
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillHideNotification object:nil];
     [self buildThemedViews];
     [self rebuild];
 }
