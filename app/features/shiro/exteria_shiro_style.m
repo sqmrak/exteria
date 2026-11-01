@@ -10,12 +10,10 @@ static UIColor *ExteriaShiroFixedHex(unsigned int light, unsigned int dark) {
 /* the hue of the raspberry seed of the palette (the primary of the day, 0xBC0F52) */
 #define SHIRO_SEED_HUE 337.0
 
-/* the palette follows the hue the wallpaper gives the app: its seed goes to the hue of the accent, and every tone
-   turns the same way, so the primary of this screen is the accent of the rest */
+/* the palette follows the accent of the app (wallpaper, color of your own, neutral tones, imported theme): its seed goes to the hue of the accent, and every
+   tone turns the same way, so the primary of this screen is the accent of the rest */
 static UIColor *ExteriaShiroHex(unsigned int light, unsigned int dark) {
-    CGFloat accent = 0;
-    UIColor *color = ExteriaShiroFixedHex(light, dark);
-    return ExteriaThemeAccentHue(&accent) ? ExteriaThemeRotated(color, accent - SHIRO_SEED_HUE) : color;
+    return ExteriaThemeFollowAccent(ExteriaShiroFixedHex(light, dark), SHIRO_SEED_HUE);
 }
 
 UIColor *ExteriaShiroColorSurface(void) { return ExteriaShiroHex(0xFFF8F8, 0x1A1113); }

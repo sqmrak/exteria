@@ -18,9 +18,13 @@
 #define ORBIT_FADE_SECONDS 0.45
 #define ORBIT_DOT_REST 0.2f
 
+/* the hue of the raspberry pinks of the palette below */
+#define CLASSIC_SHIRO_SEED_HUE 337.0
+
 /* the palette of the ios 6 theme of shiro 1.0.0, light and dark */
 static UIColor *ExteriaClassicShiroRGB(CGFloat lightR, CGFloat lightG, CGFloat lightB, CGFloat darkR, CGFloat darkG, CGFloat darkB) {
-    return ExteriaThemeIsDark() ? [UIColor colorWithRed:darkR green:darkG blue:darkB alpha:1] : [UIColor colorWithRed:lightR green:lightG blue:lightB alpha:1];
+    /* the pinks of the screen go to the accent of the theme, from the raspberry seed hue; its greys stay as they are */
+    return ExteriaThemeFollowAccent(ExteriaThemeIsDark() ? [UIColor colorWithRed:darkR green:darkG blue:darkB alpha:1] : [UIColor colorWithRed:lightR green:lightG blue:lightB alpha:1], CLASSIC_SHIRO_SEED_HUE);
 }
 
 static UIColor *ExteriaClassicShiroBackdropTop(void) { return ExteriaClassicShiroRGB(0.97, 0.90, 0.93, 0.24, 0.13, 0.19); }
@@ -30,7 +34,7 @@ static UIColor *ExteriaClassicShiroInkMuted(void) { return ExteriaClassicShiroRG
 static UIColor *ExteriaClassicShiroAccent(void) { return ExteriaClassicShiroRGB(0.78, 0.03, 0.38, 0.96, 0.16, 0.50); }
 static UIColor *ExteriaClassicShiroCellHigh(void) { return ExteriaClassicShiroRGB(0.99, 0.99, 1.00, 0.33, 0.33, 0.36); }
 static UIColor *ExteriaClassicShiroCellLow(void) { return ExteriaClassicShiroRGB(0.93, 0.93, 0.95, 0.22, 0.22, 0.25); }
-static UIColor *ExteriaClassicShiroConnected(void) { return [UIColor colorWithRed:1.0 green:0.06 blue:0.39 alpha:1]; }
+static UIColor *ExteriaClassicShiroConnected(void) { return ExteriaThemeFollowAccent([UIColor colorWithRed:1.0 green:0.06 blue:0.39 alpha:1], CLASSIC_SHIRO_SEED_HUE); }
 static UIColor *ExteriaClassicShiroError(void) { return [UIColor colorWithRed:0.95 green:0.30 blue:0.26 alpha:1]; }
 
 /* a color moved toward white (amount above 0) or black (below 0) */

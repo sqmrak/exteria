@@ -6,6 +6,7 @@
 #include <string.h>
 
 #import "exteria_platform.h"
+#import "exteria_theme.h"
 
 #define MAX_FLAKES 16
 #define PHONE_FLAKES 10
@@ -36,7 +37,9 @@ static CGFloat ExteriaShiroRandom(CGFloat low, CGFloat high) {
 /* one scaled copy per idiom, so a flake never decodes the png itself: the file is already small, and the copy keeps a soft shadow under the sprite */
 static UIImage *ExteriaShiroSprite(NSString *name, BOOL pad) {
     static NSMutableDictionary *cache;
-    NSString *key = [name stringByAppendingString:pad ? @"~pad" : @"~phone"];
+    /* the shadow follows the accent, so a copy made under another color is not reused */
+    UIColor *shadow = ExteriaThemeFollowAccent([UIColor colorWithRed:0.55 green:0.12 blue:0.35 alpha:0.3], 337);
+    NSString *key = [NSString stringWithFormat:@"%@~%@~%@", name, pad ? @"pad" : @"phone", shadow];
     UIImage *hit = [cache objectForKey:key];
     if (hit) return hit;
     NSString *path = [[NSBundle mainBundle] pathForResource:name ofType:@"png"];
@@ -46,7 +49,7 @@ static UIImage *ExteriaShiroSprite(NSString *name, BOOL pad) {
     CGFloat scale = side / MAX(source.size.width, source.size.height);
     CGSize size = CGSizeMake(source.size.width * scale + 10, source.size.height * scale + 10);
     UIGraphicsBeginImageContextWithOptions(size, NO, 1);
-    CGContextSetShadowWithColor(UIGraphicsGetCurrentContext(), CGSizeMake(0, 1.5), pad ? 3 : 2, [UIColor colorWithRed:0.55 green:0.12 blue:0.35 alpha:0.3].CGColor);
+    CGContextSetShadowWithColor(UIGraphicsGetCurrentContext(), CGSizeMake(0, 1.5), pad ? 3 : 2, shadow.CGColor);
     [source drawInRect:CGRectMake(5, 5, source.size.width * scale, source.size.height * scale)];
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
