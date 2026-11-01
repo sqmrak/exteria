@@ -3,6 +3,8 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#include <ctype.h>
+
 #import "exteria_lottie.h"
 #import "exteria_video_sticker.h"
 #import "exteria_image_decoder.h"
@@ -24,6 +26,9 @@
     BOOL _needsPoster;
     BOOL _posterRequested;
     BOOL _loadFailed;
+    BOOL _cachesPoster;
+    /* the frame in flight is the first one, not a frame of the play that follows */
+    BOOL _posterFrameInFlight;
     void (^_firstFrameHandler)(void);
 }
 @end
@@ -32,6 +37,57 @@
 
 @synthesize lastFrame = _lastFrame;
 @synthesize firstFrameHandler = _firstFrameHandler;
+@synthesize cachesPoster = _cachesPoster;
+
+static NSMutableDictionary *ExteriaPosterMemory(void) {
+    static NSMutableDictionary *memory;
+    if (!memory) memory = [[NSMutableDictionary alloc] init];
+    return memory;
+}
+
+/* the name is a file key or an animation name, so only letters and digits are kept in the file name */
+- (NSString *)posterKey {
+    NSMutableString *key = [NSMutableString string];
+    for (NSUInteger i = 0; i < _name.length && key.length < 80; ++i) {
+        unichar c = [_name characterAtIndex:i];
+        [key appendFormat:@"%C", (unichar)(isalnum(c) ? c : '_')];
+    }
+    return [NSString stringWithFormat:@"%@@%lu", key, (unsigned long)_side];
+}
+
+- (NSString *)posterPath {
+    NSArray *roots = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    if (!roots.count) return nil;
+    return [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria/posters"] stringByAppendingPathComponent:[[self posterKey] stringByAppendingString:@".png"]];
+}
+
+/* the first frame of an earlier visit, on the layer before the animation has parsed; the real frame replaces it */
+- (void)showCachedPoster {
+    if (!_cachesPoster || !_side || self.layer.contents) return;
+    NSString *key = [self posterKey];
+    UIImage *poster = [ExteriaPosterMemory() objectForKey:key];
+    if (!poster) {
+        NSString *path = [self posterPath];
+        poster = path ? [UIImage imageWithContentsOfFile:path] : nil;
+        if (poster) [ExteriaPosterMemory() setObject:poster forKey:key];
+    }
+    if (poster) self.layer.contents = (id)poster.CGImage;
+}
+
+- (void)storePoster:(CGImageRef)image {
+    NSString *key = [self posterKey];
+    if ([ExteriaPosterMemory() objectForKey:key]) return;
+    UIImage *poster = [UIImage imageWithCGImage:image];
+    [ExteriaPosterMemory() setObject:poster forKey:key];
+    NSString *path = [self posterPath];
+    if (!path) return;
+    NSData *png = UIImagePNGRepresentation(poster);
+    NSError *error = nil;
+    if (![[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:&error] ||
+        !png || ![png writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        NSLog(@"exteria: the first frame of %@ was not kept: %@", _name, error);
+    }
+}
 
 - (id)initWithAnimationNamed:(NSString *)name {
     self = [super initWithFrame:CGRectZero];
@@ -69,6 +125,7 @@
         _needsPoster = _animation != nil;
         _posterRequested = NO;
         _requestedFrame = NSUIntegerMax;
+        [self showCachedPoster];
     } else if (!loaded && _animation) {
         _playing = NO;
         [_animation invalidate];
@@ -88,6 +145,7 @@
     _needsPoster = _animation != nil;
     _posterRequested = NO;
     _requestedFrame = NSUIntegerMax;
+    [self showCachedPoster];
     [self updateLink];
 }
 
@@ -115,6 +173,7 @@
     playing = playing && !ExteriaReduceMotionEnabled();
     if (playing) [self setLoaded:YES];
     playing = playing && _animation;
+    if (playing) _posterFrameInFlight = NO;
     if (playing == _playing) return;
     _playing = playing;
     _clockStarted = NO;
@@ -159,6 +218,8 @@
     CGImageRef image = [_animation copyFinishedFrame];
     if (image) {
         self.layer.contents = (id)image;
+        if (_cachesPoster && _posterFrameInFlight && !_playing) [self storePoster:image];
+        _posterFrameInFlight = NO;
         CGImageRelease(image);
         _needsPoster = NO;
         if (_firstFrameHandler) {
@@ -193,6 +254,7 @@
         [self updateLink];
     } else if (!_posterRequested) {
         _posterRequested = [_animation requestFrame:0 side:_side];
+        _posterFrameInFlight = _posterRequested;
     }
 }
 

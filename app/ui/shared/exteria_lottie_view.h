@@ -4,6 +4,10 @@
 /* consumed after the first rendered frame, so a caller can remove its thumbnail */
 @property (nonatomic, copy) void (^firstFrameHandler)(void);
 
+/* keeps the first frame of the animation, by name and size, in memory and in Caches/Exteria/posters, and shows it the moment the view is loaded and laid out, before
+   the animation is parsed; for the few animations a screen shows on every visit, not for the stickers of a chat. Set before the view is loaded */
+@property (nonatomic, assign) BOOL cachesPoster;
+
 - (id)initWithAnimationNamed:(NSString *)name;
 /* a packed sticker held in memory; key only names it in the log */
 - (id)initWithPackedData:(NSData *)packed key:(NSString *)key;
