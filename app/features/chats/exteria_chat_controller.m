@@ -3797,7 +3797,7 @@ static void ExteriaRedrawTree(UIView *view) {
 
     /* the rows that stay slide to their new places while the removed one turns to dust, as the item animator of exteraless moves them, and
        the sizes they start from are those of the screen before the rows change */
-    BOOL slide = NO;
+    BOOL slide = NO, slideDust = NO;
     NSMutableDictionary *slideFrom = nil;
     /* ios 6 sorts the index paths of a batch of row updates and measures every row for each step, so hundreds of rows at once (a long list of pinned messages
        that gets its reply previews) held the main thread until the watchdog ended the app; one reload goes through the rows once */
@@ -3817,11 +3817,14 @@ static void ExteriaRedrawTree(UIView *view) {
             if (removed) {
                 /* fading rows below an anchor would slide while the offset jumps */
                 BOOL dust = animate && removed <= DUST_ROWS_MAX && ExteriaLiteEnabled(EXTERIA_LITE_CHAT_THANOS);
-                NSMutableArray *pictures = dust ? [NSMutableArray array] : nil, *frames = dust ? [NSMutableArray array] : nil;
+                /* without the dust the item animator fades the removed row out in 120 ms and slides the others in 250 ms; the table's own fade would
+                   not move them together */
+                BOOL snap = dust || (animate && !anchor && removed <= DUST_ROWS_MAX);
+                NSMutableArray *pictures = snap ? [NSMutableArray array] : nil, *frames = snap ? [NSMutableArray array] : nil;
                 for (NSIndexPath *path in paths) {
                     ExteriaChatItem *gone = [oldItems objectAtIndex:(NSUInteger)path.row];
                     UITableViewCell *cell = [_table cellForRowAtIndexPath:path];
-                    if (dust && cell && gone.kind != ExteriaChatItemPill) {
+                    if (snap && cell && gone.kind != ExteriaChatItemPill) {
                         UIImage *picture = ExteriaDustSnapshot(cell);
                         if (picture) {
                             [pictures addObject:picture];
@@ -3841,7 +3844,13 @@ static void ExteriaRedrawTree(UIView *view) {
                 [_table beginUpdates];
                 [_table deleteRowsAtIndexPaths:paths withRowAnimation:pictures.count || !animate || anchor ? UITableViewRowAnimationNone : UITableViewRowAnimationFade];
                 [_table endUpdates];
-                for (NSUInteger i = 0; i < pictures.count; ++i) ExteriaDustDisperse([pictures objectAtIndex:i], [[frames objectAtIndex:i] CGRectValue], self.view);
+                for (NSUInteger i = 0; i < pictures.count; ++i) {
+                    UIImage *picture = [pictures objectAtIndex:i];
+                    CGRect frame = [[frames objectAtIndex:i] CGRectValue];
+                    if (dust) ExteriaDustDisperse(picture, frame, self.view);
+                    else [self fadeAwayPicture:picture frame:frame];
+                }
+                slideDust = dust;
             } else {
                 [_table beginUpdates];
                 [_table insertRowsAtIndexPaths:paths withRowAnimation:UITableViewRowAnimationNone];
@@ -3889,9 +3898,15 @@ static void ExteriaRedrawTree(UIView *view) {
             CABasicAnimation *move = [CABasicAnimation animationWithKeyPath:@"transform.translation.y"];
             move.fromValue = [NSNumber numberWithDouble:dy];
             move.toValue = [NSNumber numberWithDouble:0];
-            /* the move of the item animator with the effect on: 250 ms times 1.9, easing out */
-            move.duration = 0.475;
-            move.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0 :0 :0.58f :1];
+            if (slideDust) {
+                /* the move of the item animator with the effect on: 250 ms times 1.9, easing out */
+                move.duration = 0.475;
+                move.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0 :0 :0.58f :1];
+            } else {
+                /* ChatListItemAnimator.DEFAULT_DURATION and DEFAULT_INTERPOLATOR */
+                move.duration = 0.25;
+                move.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.19919473f :0.010644531f :0.27920937f :0.91025391f];
+            }
             [cell.layer addAnimation:move forKey:@"exteria.dust.slide"];
         }
     }
@@ -3906,6 +3921,20 @@ static void ExteriaRedrawTree(UIView *view) {
 }
 
 /* rows added away from the end fade in from their tail; following the end belongs to the scroll driver */
+/* the removed row of the item animator with the dust off: its alpha goes to zero over RecyclerView's default remove duration, 120 ms, on the
+   default ease in and out of an ObjectAnimator */
+- (void)fadeAwayPicture:(UIImage *)picture frame:(CGRect)frame {
+    UIImageView *ghost = [[[UIImageView alloc] initWithImage:picture] autorelease];
+    ghost.frame = frame;
+    ghost.userInteractionEnabled = NO;
+    [self.view addSubview:ghost];
+    [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{ ghost.alpha = 0; }
+                     completion:^(BOOL finished) {
+        (void)finished;
+        [ghost removeFromSuperview];
+    }];
+}
+
 - (void)animateEnterOfRows:(NSArray *)paths items:(NSArray *)items {
     BOOL zoom = ExteriaLiteEnabled(EXTERIA_LITE_CHAT_SCALE);
     if (_stickToBottom) return;
