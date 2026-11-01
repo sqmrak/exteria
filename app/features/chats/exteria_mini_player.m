@@ -1,5 +1,6 @@
 #import "exteria_mini_player.h"
 
+#import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_music_player.h"
 #import "exteria_music_sheet.h"
@@ -17,6 +18,7 @@
     UIButton *_next;
     UIButton *_close;
     UIView *_line;
+    UIImageView *_backdrop;
     BOOL _showing;
     void (^_changeHandler)(void);
 }
@@ -31,7 +33,7 @@
 
 static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action, NSString *label) {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    [button setImage:ExteriaSymbolImage(symbol, 20, ExteriaColorTitle()) forState:UIControlStateNormal];
+    [button setImage:ExteriaSymbolImage(symbol, 20, ExteriaThemeIsClassic() ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     button.accessibilityLabel = NSLocalizedString(label, nil);
     return button;
@@ -40,11 +42,21 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorCard();
+    BOOL classic = ExteriaThemeIsClassic();
     self.clipsToBounds = YES;
+    if (classic) {
+        _backdrop = [ExteriaClassicStripBackdrop() retain];
+        [self addSubview:_backdrop];
+    } else {
+        self.backgroundColor = ExteriaColorCard();
+    }
     _title = [[ExteriaEmojiLabel alloc] init];
-    _title.font = ExteriaFontSemibold(14);
-    _title.textColor = ExteriaColorTitle();
+    _title.font = classic ? [UIFont boldSystemFontOfSize:14] : ExteriaFontSemibold(14);
+    _title.textColor = classic ? [UIColor whiteColor] : ExteriaColorTitle();
+    if (classic) {
+        _title.shadowColor = [UIColor colorWithWhite:0 alpha:0.5];
+        _title.shadowOffset = CGSizeMake(0, -1);
+    }
     _title.dropsUndrawable = YES;
     [self addSubview:_title];
     _title.userInteractionEnabled = YES;
@@ -55,7 +67,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _close = [ExteriaStripButton(ExteriaSymbolClose, self, @selector(closeTapped), @"music.stop") retain];
     for (UIView *view in [NSArray arrayWithObjects:_previous, _toggle, _next, _close, nil]) [self addSubview:view];
     _line = [[UIView alloc] init];
-    _line.backgroundColor = ExteriaColorHairline();
+    _line.backgroundColor = classic ? [UIColor colorWithWhite:0 alpha:0.55] : ExteriaColorHairline();
     [self addSubview:_line];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged:) name:ExteriaMusicPlayerDidChangeNotification object:nil];
     [self refresh];
@@ -70,6 +82,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [_next release];
     [_close release];
     [_line release];
+    [_backdrop release];
     [_changeHandler release];
     [super dealloc];
 }
@@ -85,7 +98,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     if (showing) {
         BOOL playing = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading;
         _title.text = ExteriaTrackLine(player.track);
-        [_toggle setImage:ExteriaSymbolImage(playing ? ExteriaSymbolPause : ExteriaSymbolPlay, 22, ExteriaColorTitle()) forState:UIControlStateNormal];
+        [_toggle setImage:ExteriaSymbolImage(playing ? ExteriaSymbolPause : ExteriaSymbolPlay, 22, ExteriaThemeIsClassic() ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
         _toggle.accessibilityLabel = NSLocalizedString(playing ? @"music.pause" : @"music.play", nil);
     }
     if (showing != _showing) {
@@ -117,6 +130,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width, height = self.bounds.size.height;
+    _backdrop.frame = self.bounds;
     _line.frame = CGRectMake(0, height - 1.0 / ExteriaScreenScale(), width, 1.0 / ExteriaScreenScale());
     CGFloat x = width - 4 - BUTTON_WIDTH;
     _close.frame = CGRectMake(x, 0, BUTTON_WIDTH, STRIP_HEIGHT);
