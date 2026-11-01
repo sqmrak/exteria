@@ -47,15 +47,6 @@ UIImage *ExteriaWallpaperImage(ExteriaWallpaperSetting setting, CGSize size);
 /* the same for a style picked by the caller, for the screens that offer both whatever theme the app wears */
 void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark);
 
-/* the wallpaper gives the whole client its hue; a gradient takes the middle of its two colors and a photo its
-   strongest color, and a wallpaper without a color of its own (the standard one, greys, black and white) leaves
-   the purple of the app */
-void ExteriaWallpaperRetintTheme(CGPoint origin);
-
-/* the hue of the client is that of the wallpaper of the tone it wears: stores the hue of the wallpaper of the day or the night theme, without a notification, for
-   the change of tone that posts its own */
-void ExteriaWallpaperSyncTintForTone(BOOL dark);
-
 #include "exteria_channel.h"
 
 /* the background the admins gave a channel, at the size of the screen: its gradient with the pattern over it, or the picture of its file; nil when there is

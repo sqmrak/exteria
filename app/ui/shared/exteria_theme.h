@@ -20,22 +20,17 @@ void ExteriaThemeApply(BOOL dark);
 UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark);
 void ExteriaThemeApplyStored(void);
 
-/* the wallpaper of the chat gives the whole modern palette its hue; -1 selects neutral tones */
-BOOL ExteriaThemeStoredTint(float *hue);
-void ExteriaThemeStoreTint(BOOL on, float hue);
-/* a hue (degrees) and a saturation (0 to 1, of the accent) chosen by the person; while it is stored the wallpaper no longer gives the palette its hue.
+/* a hue (degrees) and a saturation (0 to 1, of the accent) chosen by the person; while none is stored the palette is the purple of the app.
    Storing is silent: the caller posts ExteriaThemeDidChangeNotification */
 BOOL ExteriaThemeStoredCustomTint(float *hue, float *saturation);
-void ExteriaThemeStoreCustomTint(BOOL on, float hue, float saturation);
+void ExteriaThemeStoreCustomTint(float hue, float saturation);
 /* the accent of the light palette for such a pair, for a swatch that shows it before it is stored */
 UIColor *ExteriaThemeCustomTintColor(float hue, float saturation);
 /* a color of the palette of the app, or any other color built from fixed numbers, turned the same way; other colors than RGB come back as they are */
 UIColor *ExteriaThemeTinted(UIColor *color);
 /* a color of a palette with a seed hue of its own (the Shiro screens), moved to the accent of the app: the seed hue goes to the hue of the accent, the saturation
-   follows a color of your own, neutral tones stay grey. With nothing tinting the app the color comes back as it is */
+   follows a color of your own, a grey accent makes the palette grey. With no color of your own stored the color comes back as it is */
 UIColor *ExteriaThemeFollowAccent(UIColor *color, CGFloat seedHue);
-/* the hue of the accent in degrees when a wallpaper or a color of your own has turned it, NO while the palette is the purple of the app */
-BOOL ExteriaThemeAccentHue(CGFloat *degrees);
 /* hue in degrees, saturation and value from 0 to 1 */
 void ExteriaRGBToHSV(CGFloat red, CGFloat green, CGFloat blue, CGFloat *hue, CGFloat *saturation, CGFloat *value);
 void ExteriaHSVToRGB(CGFloat hue, CGFloat saturation, CGFloat value, CGFloat *red, CGFloat *green, CGFloat *blue);

@@ -6,7 +6,6 @@
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 #import "exteria_imported_theme.h"
-#include "exteria_wallpaper_tint.h"
 #import "exteria_wave.h"
 #import <Accelerate/Accelerate.h>
 
@@ -500,82 +499,4 @@ UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIIma
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return image;
-}
-
-#pragma mark tint
-
-/* the hue the picture of a photo wallpaper leans to; NO for a picture without a clear color */
-static BOOL ExteriaPhotoHue(UIImage *image, float *hue) {
-    enum { Side = 24, Bins = 36 };
-    uint8_t pixels[Side * Side * 4];
-    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(pixels, Side, Side, 8, Side * 4, space, kCGImageAlphaPremultipliedLast);
-    CGColorSpaceRelease(space);
-    if (!context || !image.CGImage) {
-        if (context) CGContextRelease(context);
-        return NO;
-    }
-    CGContextDrawImage(context, CGRectMake(0, 0, Side, Side), image.CGImage);
-    CGContextRelease(context);
-    double weight[Bins] = {0};
-    double total = 0;
-    for (int i = 0; i < Side * Side; ++i) {
-        CGFloat h, s, v;
-        ExteriaRGBToHSV(pixels[i * 4] / 255.0, pixels[i * 4 + 1] / 255.0, pixels[i * 4 + 2] / 255.0, &h, &s, &v);
-        if (s < 0.2 || v < 0.2) continue;
-        weight[(int)(h / (360.0 / Bins)) % Bins] += s * v;
-        total += s * v;
-    }
-    int best = 0;
-    for (int i = 1; i < Bins; ++i) {
-        if (weight[i] + weight[(i + 1) % Bins] > weight[best] + weight[(best + 1) % Bins]) best = i;
-    }
-    if (total < Side * Side * 0.05) return NO;
-    /* the strongest bin and the one after it, at the middle of each */
-    double a = weight[best], b = weight[(best + 1) % Bins];
-    double step = 360.0 / Bins;
-    double center = (best + 0.5) * step;
-    double next = (best + 1.5) * step;
-    *hue = (float)fmod((center * a + next * b) / (a + b) , 360);
-    return YES;
-}
-
-/* the hue of a wallpaper, in degrees, when it has one */
-static BOOL ExteriaWallpaperHue(ExteriaWallpaperSetting setting, BOOL dark, float *hue) {
-    if (setting.kind == ExteriaWallpaperStandard) return NO;
-    if (setting.kind == ExteriaWallpaperPhoto) {
-        UIImage *photo = [UIImage imageWithContentsOfFile:ExteriaWallpaperPhotoPathForTone(dark)];
-        if (!photo) return NO;
-        if (!ExteriaPhotoHue(photo, hue)) *hue = EXTERIA_WALLPAPER_NEUTRAL_HUE;
-        return YES;
-    }
-    CGFloat r = (((setting.top >> 16) & 0xFF) + ((setting.bottom >> 16) & 0xFF)) / 510.0;
-    CGFloat g = (((setting.top >> 8) & 0xFF) + ((setting.bottom >> 8) & 0xFF)) / 510.0;
-    CGFloat b = ((setting.top & 0xFF) + (setting.bottom & 0xFF)) / 510.0;
-    CGFloat h, s, v;
-    ExteriaRGBToHSV(r, g, b, &h, &s, &v);
-    *hue = exteria_wallpaper_tint((float)h, (float)s, (float)v);
-    return YES;
-}
-
-void ExteriaWallpaperRetintTheme(CGPoint origin) {
-    /* a color of your own stays whatever the wallpaper leans to */
-    if (ExteriaThemeStoredCustomTint(NULL, NULL)) return;
-    float hue = 0, was = 0;
-    BOOL tinted = ExteriaWallpaperHue(ExteriaWallpaperStored(), ExteriaThemeIsDark(), &hue);
-    BOOL wasTinted = ExteriaThemeStoredTint(&was);
-    /* a few degrees are not worth a new coat on every screen */
-    if (tinted == wasTinted && (!tinted || ((hue < 0) == (was < 0) && fabsf(hue - was) < 2))) return;
-    ExteriaThemeStoreTint(tinted, hue);
-    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
-                                                      userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:origin] forKey:ExteriaThemeOriginKey]];
-}
-
-void ExteriaWallpaperSyncTintForTone(BOOL dark) {
-    float hue = 0;
-    BOOL tinted = ExteriaWallpaperHue(ExteriaWallpaperStoredForTone(dark), dark, &hue);
-    float was = 0;
-    BOOL wasTinted = ExteriaThemeStoredTint(&was);
-    if (tinted == wasTinted && (!tinted || ((hue < 0) == (was < 0) && fabsf(hue - was) < 0.5f))) return;
-    ExteriaThemeStoreTint(tinted, hue);
 }

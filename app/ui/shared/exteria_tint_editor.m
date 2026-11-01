@@ -10,7 +10,6 @@
 #define MARGIN 16.0
 #define CARD_HEIGHT 112.0
 #define CARD_RADIUS 30.0
-#define CARD_DRAG_RADIUS 46.0
 #define TRACK_HEIGHT 28.0
 #define THUMB_SIDE 38.0
 #define SLIDER_ROW 40.0
@@ -190,7 +189,6 @@ static void ExteriaSpring(void (^changes)(void)) {
     CAShapeLayer *_cookie;
     UILabel *_hash;
     UITextField *_field;
-    UILabel *_hint;
     UILabel *_hueName;
     UILabel *_saturationName;
     ExteriaTintTrack *_hueTrack;
@@ -254,12 +252,6 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     _field.accessibilityLabel = NSLocalizedString(@"chatset.tint.hex", nil);
     [_field addTarget:self action:@selector(hexEdited) forControlEvents:UIControlEventEditingChanged];
     [_card addSubview:_field];
-    _hint = [[UILabel alloc] init];
-    _hint.text = NSLocalizedString(@"chatset.tint.hint", nil);
-    _hint.font = ExteriaFontMedium(13);
-    _hint.backgroundColor = [UIColor clearColor];
-    [_card addSubview:_hint];
-
     UIColor *secondary = ExteriaColorSecondary();
     _hueName = [[UILabel alloc] init];
     _hueName.text = NSLocalizedString(@"chatset.tint.hue", nil);
@@ -312,7 +304,6 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     [_cookie release];
     [_hash release];
     [_field release];
-    [_hint release];
     [_hueName release];
     [_saturationName release];
     [_hueTrack release];
@@ -339,7 +330,6 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     CGFloat hashWidth = _hash.frame.size.width;
     _hash.frame = CGRectMake(24, 18, hashWidth, 44);
     _field.frame = CGRectMake(24 + hashWidth + 1, 18, ceil(digits) + 6, 44);
-    _hint.frame = CGRectMake(24, CARD_HEIGHT - 18 - 22, inner - 48 - 80, 22);
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _cookie.position = CGPointMake(inner - 24 - 34 - 6, CARD_HEIGHT / 2);
@@ -370,7 +360,6 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     _field.textColor = ink;
     /* the caret takes the ink on ios 7 and later; the older runtimes have no tintColor on a field and draw a plain caret */
     if ([_field respondsToSelector:@selector(setTintColor:)]) [_field performSelector:@selector(setTintColor:) withObject:ink];
-    _hint.textColor = [ink colorWithAlphaComponent:0.75f];
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _cookie.fillColor = [ink colorWithAlphaComponent:0.16f].CGColor;
@@ -422,35 +411,19 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     [self refresh];
 }
 
-/* the card swells its corners while a color is being dragged */
-- (void)roundCard:(BOOL)dragging {
-    CGFloat radius = dragging ? CARD_DRAG_RADIUS : CARD_RADIUS;
-    if (_card.layer.cornerRadius == radius) return;
-    CABasicAnimation *morph = [CABasicAnimation animationWithKeyPath:@"cornerRadius"];
-    morph.fromValue = [NSNumber numberWithDouble:_card.layer.cornerRadius];
-    morph.toValue = [NSNumber numberWithDouble:radius];
-    morph.duration = ExteriaReduceMotionEnabled() ? 0 : 0.3;
-    morph.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.34f:1.45f:0.64f:1.0f];
-    _card.layer.cornerRadius = radius;
-    [_card.layer addAnimation:morph forKey:@"cornerRadius"];
-}
-
 - (void)hueMoved {
     _hue = _hueTrack.fraction * 360.0f;
-    [self roundCard:YES];
     [self refresh];
     [self sendActionsForControlEvents:UIControlEventValueChanged];
 }
 
 - (void)saturationMoved {
     _saturation = _saturationTrack.fraction;
-    [self roundCard:YES];
     [self refresh];
     [self sendActionsForControlEvents:UIControlEventValueChanged];
 }
 
 - (void)released {
-    [self roundCard:NO];
     [self sendActionsForControlEvents:UIControlEventTouchUpInside];
 }
 
@@ -481,10 +454,6 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     return NO;
 }
 
-- (void)textFieldDidBeginEditing:(UITextField *)field {
-    _hint.hidden = YES;
-}
-
 /* the color is taken when the field is done; a short or broken entry goes back to the color on the card */
 - (void)textFieldDidEndEditing:(UITextField *)field {
     float hue = _hue, saturation = _saturation;
@@ -493,12 +462,11 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
         _hue = hue;
         _saturation = saturation;
     }
-    _hint.hidden = NO;
     [self refresh];
     if (valid) [self sendActionsForControlEvents:UIControlEventTouchUpInside];
 }
 
-/* a tap on the card brings the keyboard, as the hint says */
+/* a tap on the card brings the keyboard */
 - (BOOL)beginTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
     return CGRectContainsPoint(_card.frame, [touch locationInView:self]);
 }

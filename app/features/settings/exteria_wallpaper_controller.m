@@ -11,7 +11,6 @@
 #import "exteria_wallpaper_grid_view.h"
 #import "exteria_weak_reference.h"
 
-#include "exteria_wallpaper_tint.h"
 
 @interface ExteriaWallpaperController () {
     ExteriaWeakReference *_weak;
@@ -102,7 +101,6 @@
     [_grid release];
     _grid = [[ExteriaWallpaperGridView alloc] init];
     ExteriaWeakReference *weak = _weak;
-    ExteriaWeakReference *shown = [ExteriaWeakReference referenceTo:_grid];
     _grid.galleryHandler = ^{ [(ExteriaWallpaperController *)weak.target pickPhoto]; };
     _grid.standardHandler = ^{
         ExteriaWallpaperController *me = weak.target;
@@ -110,29 +108,17 @@
         ExteriaWallpaperSetting standard = ExteriaWallpaperStored();
         standard.kind = ExteriaWallpaperStandard;
         ExteriaWallpaperStore(standard);
-        ExteriaWallpaperRetintTheme(((ExteriaWallpaperGridView *)shown.target).tapPoint);
         [me rebuild];
     };
     _grid.chooseHandler = ^(NSUInteger index) {
         ExteriaWallpaperSetting preset = ExteriaWallpaperPreset(index);
         ExteriaWallpaperStore(preset);
-        /* the wallpaper gives the whole client its hue, which spreads from the tile */
-        ExteriaWallpaperRetintTheme(((ExteriaWallpaperGridView *)shown.target).tapPoint);
         [(ExteriaWallpaperController *)weak.target rebuild];
     };
 }
 
-/* the tint the switch starts from: what the app wears now, so turning it on changes nothing until the color is moved */
-static void ExteriaCurrentTint(float *hue, float *saturation) {
-    CGFloat accent = 0;
-    float wallpaperHue = 0;
-    BOOL neutral = ExteriaThemeStoredTint(&wallpaperHue) && wallpaperHue == EXTERIA_WALLPAPER_NEUTRAL_HUE;
-    *hue = ExteriaThemeAccentHue(&accent) ? (float)accent : 286;
-    *saturation = neutral ? 0 : 0.6f;
-}
-
 - (void)tintCommitted:(UIControl<ExteriaTintControl> *)picker {
-    ExteriaThemeStoreCustomTint(YES, picker.hue, picker.saturation);
+    ExteriaThemeStoreCustomTint(picker.hue, picker.saturation);
     CGPoint origin = [picker convertPoint:CGPointMake(CGRectGetMidX(picker.bounds), CGRectGetMidY(picker.bounds)) toView:nil];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
                                                       userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:origin] forKey:ExteriaThemeOriginKey]];
@@ -163,25 +149,14 @@ static NSUInteger ExteriaChosenPreset(void) {
     ExteriaSettingsRow *picture = [ExteriaSettingsRow viewRowWithView:preview height:^CGFloat(CGFloat width) { return [preview heightForWidth:width]; }];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:picture]]];
 
-    float customHue = 0, customSaturation = 0;
-    BOOL custom = ExteriaThemeStoredCustomTint(&customHue, &customSaturation);
-    NSMutableArray *tintRows = [NSMutableArray array];
-    [tintRows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.tint.custom", nil) subtitle:NSLocalizedString(@"chatset.tint.custom.line", nil) on:custom toggle:^(BOOL on) {
-        ExteriaWallpaperController *me = weak.target;
-        if (!me) return;
-        float hue = 0, saturation = 0;
-        ExteriaCurrentTint(&hue, &saturation);
-        ExteriaThemeStoreCustomTint(on, hue, saturation);
-        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
-                                                          userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:CGPointMake(CGRectGetMidX([[UIScreen mainScreen] bounds]), 0)] forKey:ExteriaThemeOriginKey]];
-    }]];
-    if (custom) {
-        _picker.hue = customHue;
-        _picker.saturation = customSaturation;
-        UIControl<ExteriaTintControl> *picker = _picker;
-        [tintRows addObject:[ExteriaSettingsRow viewRowWithView:picker height:^CGFloat(CGFloat width) { (void)width; return picker.preferredHeight; }]];
-    }
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.tint.header", nil) footer:custom ? NSLocalizedString(@"chatset.tint.footer", nil) : nil rows:tintRows]];
+    /* the purple of the app until a color is picked; the wallpaper does not give the app its color */
+    float hue = 286, saturation = 0.6f;
+    ExteriaThemeStoredCustomTint(&hue, &saturation);
+    _picker.hue = hue;
+    _picker.saturation = saturation;
+    UIControl<ExteriaTintControl> *picker = _picker;
+    ExteriaSettingsRow *tint = [ExteriaSettingsRow viewRowWithView:picker height:^CGFloat(CGFloat width) { (void)width; return picker.preferredHeight; }];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.tint.header", nil) footer:nil rows:[NSArray arrayWithObject:tint]]];
 
     ExteriaWallpaperGridView *grid = _grid;
     grid.chosenIndex = ExteriaChosenPreset();
@@ -241,7 +216,6 @@ static NSUInteger ExteriaChosenPreset(void) {
             ExteriaGiftAlert(nil, NSLocalizedString(@"chatset.wallpaper.failed", nil));
             return;
         }
-        ExteriaWallpaperRetintTheme(CGPointMake(CGRectGetMidX([[UIScreen mainScreen] bounds]), CGRectGetMidY([[UIScreen mainScreen] bounds])));
         [me rebuild];
     } unavailable:^{
         ExteriaGiftAlert(nil, NSLocalizedString(@"attach.gallery.unavailable", nil));
