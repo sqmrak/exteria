@@ -3,12 +3,14 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_dust_effect.h"
 #import "exteria_avatar_view.h"
 #import "exteria_chat_settings.h"
 #import "exteria_platform.h"
 #import "exteria_emoji_label.h"
 #import "exteria_person.h"
 #import "exteria_text_layout.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_theme.h"
 #import "exteria_imported_theme.h"
 #include "exteria_reaction_layout.h"
@@ -79,6 +81,7 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
     /* where the chips that stay stood before this change, by key; the next layout moves them from there */
     NSMutableDictionary *_moveFrom;
     NSUInteger _ghosts;
+    NSMutableDictionary *_labelFrom;
 }
 @end
 
@@ -96,6 +99,7 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
 
 - (void)dealloc {
     [_moveFrom release];
+    [_labelFrom release];
     [_reactions release];
     [_buttons release];
     [_pickHandler release];
@@ -131,50 +135,85 @@ static BOOL ExteriaReactionStill(void) {
     return ExteriaReduceMotionEnabled() || ![UIView areAnimationsEnabled];
 }
 
-/* a chip that comes swells past its size and settles, while it fades in over the first part of the swell; a plain growth from half read as a jump */
+/* ChatListItemAnimator runs the whole change of a cell on one progress, 250 ms on DEFAULT_INTERPOLATOR */
+#define CHANGE_SECONDS 0.25
+
+static CAMediaTimingFunction *ExteriaReactionCurve(void) {
+    return [CAMediaTimingFunction functionWithControlPoints:0.19919473f :0.010644531f :0.27920937f :0.91025391f];
+}
+
+/* ReactionsLayoutInBubble.draw, ANIMATION_TYPE_IN: a chip that comes scales from half its size to its size while its alpha goes from 0 to 1 */
 - (void)growButton:(UIView *)button {
     if (ExteriaReactionStill()) return;
-    CAKeyframeAnimation *swell = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
-    swell.values = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0.25f], [NSNumber numberWithFloat:1.14f], [NSNumber numberWithFloat:0.97f], [NSNumber numberWithFloat:1], nil];
-    swell.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.55f], [NSNumber numberWithFloat:0.8f], [NSNumber numberWithFloat:1], nil];
-    swell.timingFunctions = [NSArray arrayWithObjects:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut],
-                             [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut], [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut], nil];
+    CABasicAnimation *scale = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    scale.fromValue = [NSNumber numberWithFloat:0.5f];
+    scale.toValue = [NSNumber numberWithFloat:1];
     CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
     fade.fromValue = [NSNumber numberWithFloat:0];
     fade.toValue = [NSNumber numberWithFloat:1];
-    fade.duration = 0.14;
     CAAnimationGroup *group = [CAAnimationGroup animation];
-    group.animations = [NSArray arrayWithObjects:swell, fade, nil];
-    group.duration = 0.34;
+    group.animations = [NSArray arrayWithObjects:scale, fade, nil];
+    group.duration = CHANGE_SECONDS;
+    group.timingFunction = ExteriaReactionCurve();
     [button.layer addAnimation:group forKey:@"exteria.reaction.grow"];
 }
 
-/* a chip that stays and whose count changed gives a small bump, and its number rolls in from the side the count moved to */
-- (void)bumpButton:(UIView *)button up:(BOOL)up {
+/* the count of a chip is an AnimatedTextDrawable with moveAmplitude 0.4, 320 ms, EASE_OUT_QUINT: the old words leave and the new ones come in from the
+   side the count moved to, each by 0.4 of the line height, while they fade */
+- (void)rollLabelOfButton:(UIView *)button from:(UIImage *)old up:(BOOL)up {
     if (ExteriaReactionStill()) return;
-    CAKeyframeAnimation *bump = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
-    bump.values = [NSArray arrayWithObjects:[NSNumber numberWithFloat:1], [NSNumber numberWithFloat:1.12f], [NSNumber numberWithFloat:1], nil];
-    bump.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.4f], [NSNumber numberWithFloat:1], nil];
-    bump.duration = 0.26;
-    [button.layer addAnimation:bump forKey:@"exteria.reaction.bump"];
     UIView *label = button.subviews.count ? [button.subviews objectAtIndex:0] : nil;
     if (!label) return;
-    label.alpha = 0;
-    label.transform = CGAffineTransformMakeTranslation(0, up ? 9 : -9);
-    [UIView animateWithDuration:0.22 delay:0.03 options:UIViewAnimationOptionCurveEaseOut animations:^{
-        label.alpha = 1;
-        label.transform = CGAffineTransformIdentity;
-    } completion:nil];
+    CGFloat amplitude = 0.4f * ((ExteriaEmojiLabel *)label).font.lineHeight;
+    CAMediaTimingFunction *quint = [CAMediaTimingFunction functionWithControlPoints:0.22f :1 :0.36f :1];
+    CGFloat sign = up ? 1 : -1;
+    CABasicAnimation *fadeIn = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fadeIn.fromValue = [NSNumber numberWithFloat:0];
+    fadeIn.toValue = [NSNumber numberWithFloat:1];
+    CABasicAnimation *moveIn = [CABasicAnimation animationWithKeyPath:@"transform.translation.y"];
+    moveIn.fromValue = [NSNumber numberWithFloat:(float)(sign * amplitude)];
+    moveIn.toValue = [NSNumber numberWithFloat:0];
+    CAAnimationGroup *enter = [CAAnimationGroup animation];
+    enter.animations = [NSArray arrayWithObjects:fadeIn, moveIn, nil];
+    enter.duration = 0.32;
+    enter.timingFunction = quint;
+    [label.layer addAnimation:enter forKey:@"exteria.reaction.roll"];
+    if (!old) return;
+    UIImageView *gone = [[[UIImageView alloc] initWithImage:old] autorelease];
+    gone.frame = label.frame;
+    gone.userInteractionEnabled = NO;
+    [button insertSubview:gone aboveSubview:label];
+    CABasicAnimation *fadeOut = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fadeOut.fromValue = [NSNumber numberWithFloat:1];
+    fadeOut.toValue = [NSNumber numberWithFloat:0];
+    CABasicAnimation *moveOut = [CABasicAnimation animationWithKeyPath:@"transform.translation.y"];
+    moveOut.fromValue = [NSNumber numberWithFloat:0];
+    moveOut.toValue = [NSNumber numberWithFloat:(float)(-sign * amplitude)];
+    CAAnimationGroup *leave = [CAAnimationGroup animation];
+    leave.animations = [NSArray arrayWithObjects:fadeOut, moveOut, nil];
+    leave.duration = 0.32;
+    leave.timingFunction = quint;
+    leave.fillMode = kCAFillModeForwards;
+    leave.removedOnCompletion = NO;
+    [CATransaction begin];
+    [CATransaction setCompletionBlock:^{ [gone removeFromSuperview]; }];
+    [gone.layer addAnimation:leave forKey:@"exteria.reaction.roll.out"];
+    [CATransaction commit];
 }
 
-/* a chip whose own mark changed takes the new color in a moment, not at once */
+/* updateColors(progress): the colors blend on the same progress as the move */
 - (void)blendButton:(UIView *)button from:(UIColor *)old {
-    if (ExteriaReactionStill()) return;
-    UIColor *target = button.backgroundColor;
-    button.backgroundColor = old;
-    [UIView animateWithDuration:0.2 animations:^{ button.backgroundColor = target; }];
+    /* a classic chip is a picture, its backing color is clear and has nothing to blend */
+    if (ExteriaReactionStill() || !button.backgroundColor) return;
+    CABasicAnimation *blend = [CABasicAnimation animationWithKeyPath:@"backgroundColor"];
+    blend.fromValue = (id)old.CGColor;
+    blend.toValue = (id)button.backgroundColor.CGColor;
+    blend.duration = CHANGE_SECONDS;
+    blend.timingFunction = ExteriaReactionCurve();
+    [button.layer addAnimation:blend forKey:@"exteria.reaction.blend"];
 }
 
+/* outButtons: the chip of a reaction that went stays where it was and scales from its size to half of it while its alpha goes from 1 to 0 */
 - (void)shrinkAwayButton:(UIView *)button {
     if (ExteriaReactionStill()) {
         [button removeFromSuperview];
@@ -182,16 +221,27 @@ static BOOL ExteriaReactionStill(void) {
     }
     button.userInteractionEnabled = NO;
     ++_ghosts;
-    [UIView animateWithDuration:0.2 delay:0 options:UIViewAnimationOptionCurveEaseIn animations:^{
-        button.alpha = 0;
-        button.transform = CGAffineTransformMakeScale(0.3f, 0.3f);
-    } completion:^(BOOL finished) {
-        (void)finished;
+    CABasicAnimation *scale = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    scale.fromValue = [NSNumber numberWithFloat:1];
+    scale.toValue = [NSNumber numberWithFloat:0.5f];
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = [NSNumber numberWithFloat:1];
+    fade.toValue = [NSNumber numberWithFloat:0];
+    CAAnimationGroup *group = [CAAnimationGroup animation];
+    group.animations = [NSArray arrayWithObjects:scale, fade, nil];
+    group.duration = CHANGE_SECONDS;
+    group.timingFunction = ExteriaReactionCurve();
+    group.fillMode = kCAFillModeForwards;
+    group.removedOnCompletion = NO;
+    [CATransaction begin];
+    [CATransaction setCompletionBlock:^{
         [button removeFromSuperview];
         if (_ghosts) --_ghosts;
         /* an empty view that kept its old frame while the last chip shrank must not catch touches meant for the bubble */
         if (!_ghosts && !_buttons.count) self.hidden = YES;
     }];
+    [button.layer addAnimation:group forKey:@"exteria.reaction.out"];
+    [CATransaction commit];
 }
 
 - (void)setReactions:(NSArray *)reactions counts:(BOOL)counts animated:(BOOL)animated {
@@ -209,6 +259,8 @@ static BOOL ExteriaReactionStill(void) {
     for (ExteriaReaction *next in reactions) if (next.key) [kept addObject:next.key];
     [_moveFrom release];
     _moveFrom = animated ? [[NSMutableDictionary alloc] init] : nil;
+    [_labelFrom release];
+    _labelFrom = animated ? [[NSMutableDictionary alloc] init] : nil;
     for (NSUInteger i = 0; i < _buttons.count; ++i) {
         UIView *button = [_buttons objectAtIndex:i];
         NSString *key = i < _reactions.count ? [(ExteriaReaction *)[_reactions objectAtIndex:i] key] : nil;
@@ -216,7 +268,12 @@ static BOOL ExteriaReactionStill(void) {
             /* the chip of a reaction that went stays on screen until it has shrunk away */
             [self shrinkAwayButton:button];
         } else {
-            if (animated && key) [_moveFrom setObject:[NSValue valueWithCGRect:button.frame] forKey:key];
+            if (animated && key) {
+                [_moveFrom setObject:[NSValue valueWithCGRect:button.frame] forKey:key];
+                UIView *oldLabel = button.subviews.count ? [button.subviews objectAtIndex:0] : nil;
+                UIImage *oldWords = oldLabel ? ExteriaDustSnapshot(oldLabel) : nil;
+                if (oldWords) [_labelFrom setObject:oldWords forKey:key];
+            }
             [button removeFromSuperview];
         }
     }
@@ -231,10 +288,16 @@ static BOOL ExteriaReactionStill(void) {
         ExteriaReaction *r = [reactions objectAtIndex:i];
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.tag = (NSInteger)i;
-        button.backgroundColor = [self chipColorChosen:r.chosen];
-        button.layer.cornerRadius = 16 * ExteriaReactionScale();
-        button.layer.borderColor = ExteriaColorHairline().CGColor;
-        button.layer.borderWidth = r.chosen || _inBubble ? 0 : 0.5;
+        if (ExteriaThemeIsClassic() && (r.chosen || !_inBubble)) {
+            /* a lit button for the chip you picked and a plate for the others, as the old chrome draws them */
+            UIImage *face = r.chosen ? ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) : ExteriaClassicPlateImage();
+            [button setBackgroundImage:face forState:UIControlStateNormal];
+        } else {
+            button.backgroundColor = [self chipColorChosen:r.chosen];
+            button.layer.cornerRadius = 16 * ExteriaReactionScale();
+            button.layer.borderColor = ExteriaColorHairline().CGColor;
+            button.layer.borderWidth = r.chosen || _inBubble ? 0 : 0.5;
+        }
         [button addTarget:self action:@selector(picked:) forControlEvents:UIControlEventTouchUpInside];
         button.accessibilityLabel = ExteriaReactionText(r, counts);
         button.accessibilityTraits = UIAccessibilityTraitButton | (r.chosen ? UIAccessibilityTraitSelected : 0);
@@ -266,7 +329,7 @@ static BOOL ExteriaReactionStill(void) {
         if (animated && !was) {
             [self growButton:button];
         } else if (animated && was) {
-            if (was.intValue != r.count) [self bumpButton:button up:r.count > was.intValue];
+            if (was.intValue != r.count) [self rollLabelOfButton:button from:[_labelFrom objectForKey:r.key] up:r.count > was.intValue];
             NSNumber *wasChosen = [beforeChosen objectForKey:r.key];
             if (wasChosen && wasChosen.boolValue != r.chosen) [self blendButton:button from:[self chipColorChosen:wasChosen.boolValue]];
         }
@@ -312,9 +375,18 @@ static BOOL ExteriaReactionStill(void) {
             CABasicAnimation *glide = [CABasicAnimation animationWithKeyPath:@"position"];
             glide.fromValue = [NSValue valueWithCGPoint:CGPointMake(CGRectGetMidX(old), CGRectGetMidY(old))];
             glide.toValue = [NSValue valueWithCGPoint:CGPointMake(CGRectGetMidX(target), CGRectGetMidY(target))];
-            glide.duration = exteria_motion_duration(EXTERIA_MOTION_LIST_MOVE);
-            glide.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.2f:0.01f:0.28f:0.91f];
+            glide.duration = CHANGE_SECONDS;
+            glide.timingFunction = ExteriaReactionCurve();
             [button.layer addAnimation:glide forKey:@"exteria.reaction.glide"];
+            if (old.size.width != target.size.width) {
+                /* the width runs on the same progress, as w in ReactionButton.draw */
+                CABasicAnimation *widen = [CABasicAnimation animationWithKeyPath:@"bounds"];
+                widen.fromValue = [NSValue valueWithCGRect:CGRectMake(0, 0, old.size.width, old.size.height)];
+                widen.toValue = [NSValue valueWithCGRect:CGRectMake(0, 0, target.size.width, target.size.height)];
+                widen.duration = CHANGE_SECONDS;
+                widen.timingFunction = ExteriaReactionCurve();
+                [button.layer addAnimation:widen forKey:@"exteria.reaction.widen"];
+            }
         }
         UIView *label = [button.subviews objectAtIndex:0];
         ExteriaReaction *reaction = i < _reactions.count ? [_reactions objectAtIndex:i] : nil;
@@ -329,6 +401,8 @@ static BOOL ExteriaReactionStill(void) {
     /* the glide is asked for once, by the layout that follows the change */
     [_moveFrom release];
     _moveFrom = nil;
+    [_labelFrom release];
+    _labelFrom = nil;
 }
 
 @end
