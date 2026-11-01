@@ -18,7 +18,7 @@
 #include "exteria_mention.h"
 
 #define INLINE_DELAY 0.4
-#define PANEL_MAX_FRACTION 0.6
+#define PANEL_MAX_FRACTION 0.7
 #define CARD_WIDTH_MAX 300.0
 #define MENTION_ROWS_MAX 30
 /* the typing pauses this long before the members of a supergroup are searched for the name */

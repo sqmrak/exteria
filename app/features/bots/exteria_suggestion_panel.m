@@ -8,9 +8,9 @@
 #import "exteria_session_bots.h"
 #import "exteria_theme.h"
 
-#define LIST_ROW 54.0
-#define HEADER_ROW 46.0
-#define THUMB 40.0
+#define LIST_ROW 60.0
+#define HEADER_ROW 50.0
+#define THUMB 46.0
 #define GALLERY_COLUMNS 3
 #define GALLERY_GAP 2.0
 /* a bot hosts its pictures wherever it likes, so one that answers with more than this is not fetched */
@@ -114,11 +114,11 @@ static void ExteriaLoadWebPicture(ExteriaSession *session, ExteriaWebFile *file,
     thumb.layer.cornerRadius = 6;
     [self.contentView addSubview:thumb];
     title = [[ExteriaEmojiLabel alloc] init];
-    title.font = ExteriaFontMedium(16);
+    title.font = ExteriaFontMedium(17);
     title.textColor = ExteriaColorTitle();
     [self.contentView addSubview:title];
     subtitle = [[ExteriaEmojiLabel alloc] init];
-    subtitle.font = ExteriaFontRegular(13);
+    subtitle.font = ExteriaFontRegular(14);
     subtitle.textColor = ExteriaColorSecondary();
     [self.contentView addSubview:subtitle];
     return self;
@@ -323,10 +323,10 @@ static void ExteriaLoadWebPicture(ExteriaSession *session, ExteriaWebFile *file,
     cell->title.hidden = NO;
     cell->title.text = suggestion.title;
     cell->title.textColor = ExteriaColorTitle();
-    cell->title.frame = CGRectMake(left, hasSubtitle ? 8 : 0, width - left - 12, hasSubtitle ? 20 : LIST_ROW);
+    cell->title.frame = CGRectMake(left, hasSubtitle ? 10 : 0, width - left - 12, hasSubtitle ? 21 : LIST_ROW);
     cell->subtitle.hidden = !hasSubtitle;
     cell->subtitle.text = suggestion.subtitle;
-    cell->subtitle.frame = CGRectMake(left, 29, width - left - 12, 17);
+    cell->subtitle.frame = CGRectMake(left, 32, width - left - 12, 18);
     return cell;
 }
 
