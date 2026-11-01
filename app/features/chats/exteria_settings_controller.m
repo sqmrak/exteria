@@ -1,3 +1,4 @@
+#import "exteria_classic_chrome.h"
 #import "exteria_profile_qr_controller.h"
 #import "exteria_developers.h"
 #import "exteria_folders_controller.h"
@@ -158,12 +159,8 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
         UIBarButtonItem *dots = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolEllipsisVertical, 22, [UIColor whiteColor])
                                                                   style:UIBarButtonItemStyleBordered target:self action:@selector(showMenu)] autorelease];
         dots.accessibilityLabel = NSLocalizedString(@"settings.more", nil);
-        UIButton *code = [UIButton buttonWithType:UIButtonTypeCustom];
-        code.frame = CGRectMake(0, 0, 44, 44);
-        [code setImage:ExteriaSymbolImage(ExteriaSymbolQr, 24, [UIColor whiteColor]) forState:UIControlStateNormal];
-        code.accessibilityLabel = NSLocalizedString(@"profile.qr", nil);
-        [code addTarget:self action:@selector(openQr) forControlEvents:UIControlEventTouchUpInside];
-        self.navigationItem.titleView = code;
+        /* the username of the account stands in the middle of the bar; the code of the profile is one tap away in the modern look and in the profile */
+        self.navigationItem.titleView = ExteriaClassicTitleView(@"", nil);
         UIBarButtonItem *search = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 22, [UIColor whiteColor])
                                                                     style:UIBarButtonItemStyleBordered target:self action:@selector(focusSearch)] autorelease];
         search.accessibilityLabel = NSLocalizedString(@"settings.search", nil);
@@ -229,6 +226,10 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     ExteriaProfileIdentityView *identity = _header.identity;
     [identity setName:_person.name developer:ExteriaPersonIsDeveloper(_person)];
     identity.line.text = _person.username.length ? [@"@" stringByAppendingString:_person.username] : ExteriaOwnPhoneText(_person.phone);
+    if (ExteriaThemeIsClassic()) {
+        NSString *handle = _person.username.length ? [@"@" stringByAppendingString:_person.username] : _person.name;
+        self.navigationItem.titleView = ExteriaClassicTitleView(handle, nil);
+    }
     identity.avatar.initials = _person.initials;
     identity.avatar.seed = (NSUInteger)(_person.userId % 1000003);
     [identity.avatar setPhoto:_person.photo cache:_avatars];
