@@ -34,6 +34,8 @@ UIColor *ExteriaThemeTinted(UIColor *color);
 /* a color of a palette with a seed hue of its own (the Shiro screens), moved to the accent of the app: the seed hue goes to the hue of the accent, the saturation
    follows a color of your own, neutral tones stay grey. With nothing tinting the app the color comes back as it is */
 UIColor *ExteriaThemeFollowAccent(UIColor *color, CGFloat seedHue);
+/* the hue of the accent in degrees when a wallpaper or a color of your own has turned it, NO while the palette is the purple of the app */
+BOOL ExteriaThemeAccentHue(CGFloat *degrees);
 /* hue in degrees, saturation and value from 0 to 1 */
 void ExteriaRGBToHSV(CGFloat red, CGFloat green, CGFloat blue, CGFloat *hue, CGFloat *saturation, CGFloat *value);
 void ExteriaHSVToRGB(CGFloat hue, CGFloat saturation, CGFloat value, CGFloat *red, CGFloat *green, CGFloat *blue);
