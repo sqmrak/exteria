@@ -81,6 +81,8 @@
     self.action = @selector(open);
     self.accessibilityLabel = NSLocalizedString(@"shiro.button.accessibility", nil);
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:ExteriaShiroStateDidChangeNotification object:shiro];
+    /* the lit button wears the accent, which changes with the theme and the color of your own */
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:ExteriaThemeDidChangeNotification object:nil];
     [self refresh];
     return self;
 }
@@ -95,7 +97,7 @@
 
 - (void)refresh {
     switch (_shiro.state) {
-    case ExteriaShiroStateUp: self.tintColor = [UIColor colorWithRed:0.20f green:0.52f blue:0.24f alpha:1]; break;
+    case ExteriaShiroStateUp: self.tintColor = ExteriaColorAccent(); break;
     case ExteriaShiroStateRegistering:
     case ExteriaShiroStateConnecting: self.tintColor = [UIColor colorWithRed:0.80f green:0.55f blue:0.08f alpha:1]; break;
     default: self.tintColor = nil; break;
