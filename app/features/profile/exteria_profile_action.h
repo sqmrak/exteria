@@ -8,12 +8,17 @@
     UILabel *_caption;
     ExteriaSymbol _symbol;
     UIColor *_ink;
+    UIView *_blur;
+    BOOL _blurred;
 }
 - (id)initWithSymbol:(ExteriaSymbol)symbol title:(NSString *)title;
 /* the symbol and the caption of the same card, for one that flips between two states such as sound on and off */
 - (void)setSymbol:(ExteriaSymbol)symbol title:(NSString *)title;
 /* the card stands on a colored ground: a dark veil for its plate and the given ink for the symbol and the caption; nil puts the usual colors back */
 - (void)setInk:(UIColor *)ink;
+/* the card over a wide photo: a dark blur of what is behind it where the system has one (ios 8 and later, found by class so the older slices never link it),
+   and a darker veil elsewhere */
+- (void)setBlurred:(BOOL)blurred;
 @property (nonatomic, readonly) ExteriaSymbol symbol;
 @property (nonatomic, readonly) NSString *captionText;
 @end

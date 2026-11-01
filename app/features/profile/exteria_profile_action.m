@@ -2,6 +2,7 @@
 #import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 
 #import "exteria_theme.h"
 
@@ -43,12 +44,46 @@
     if (ink == _ink) return;
     [_ink release];
     _ink = [ink retain];
-    self.backgroundColor = ink ? [UIColor colorWithWhite:0 alpha:0.18f] : ExteriaColorCard();
+    [self applyPlate];
     _icon.image = ExteriaSymbolImage(_symbol, 24, ink ? ink : ExteriaColorAccent());
     _caption.textColor = ink ? ink : ExteriaColorTitle();
 }
 
+/* the plate under the symbol: the card color, a dark veil on a colored ground, and almost clear over a blur */
+- (void)applyPlate {
+    if (_blurred) {
+        self.backgroundColor = [UIColor colorWithWhite:0 alpha:_blur ? 0.06f : 0.42f];
+        return;
+    }
+    self.backgroundColor = _ink ? [UIColor colorWithWhite:0 alpha:0.18f] : ExteriaColorCard();
+}
+
+- (void)setBlurred:(BOOL)blurred {
+    if (blurred == _blurred) return;
+    _blurred = blurred;
+    if (blurred && !_blur) {
+        Class effectClass = NSClassFromString(@"UIBlurEffect");
+        Class viewClass = NSClassFromString(@"UIVisualEffectView");
+        /* UIBlurEffectStyleDark */
+        id effect = effectClass ? ((id (*)(Class, SEL, NSInteger))objc_msgSend)(effectClass, NSSelectorFromString(@"effectWithStyle:"), 2) : nil;
+        if (effect && viewClass) {
+            UIView *view = [[viewClass alloc] performSelector:NSSelectorFromString(@"initWithEffect:") withObject:effect];
+            view.frame = self.bounds;
+            view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            view.userInteractionEnabled = NO;
+            view.clipsToBounds = YES;
+            view.layer.cornerRadius = self.layer.cornerRadius;
+            view.alpha = 0;
+            [self insertSubview:view atIndex:0];
+            _blur = view;
+        }
+    }
+    [self applyPlate];
+    _blur.alpha = blurred ? 1 : 0;
+}
+
 - (void)dealloc {
+    [_blur release];
     [_ink release];
     [_icon release];
     [_caption release];
