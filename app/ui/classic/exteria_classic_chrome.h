@@ -49,6 +49,10 @@ void ExteriaClassicStyleTabItem(UITabBarItem *item, ExteriaSymbol symbol);
 /* the round record or send button of the message bar: a glossy purple dome with its glyph, drawn whole so it needs no layers */
 UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed);
 
+/* the face in a chrome rim, as the logo of the QR code wears it: a brushed metal gradient outside, a darker bevel before the face, an inner shadow and a gloss over the
+   upper half; side is in points, the face is cropped round and may be nil */
+UIImage *ExteriaClassicMetalDisc(UIImage *face, CGFloat side);
+
 /* the profile photo as a tab bar picture: a 30 point rounded square, drawn in its own colors */
 UIImage *ExteriaClassicProfileTabImage(UIImage *photo);
 

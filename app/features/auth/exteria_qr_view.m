@@ -3,6 +3,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #include "exteria_qr.h"
 
@@ -18,75 +19,6 @@ static CGFloat ExteriaEaseOutBack(CGFloat t) {
     CGFloat c1 = 1.9, c3 = c1 + 1;
     CGFloat u = t - 1;
     return 1 + c3 * u * u * u + c1 * u * u;
-}
-
-/* the face of the disc in a chrome rim: a brushed metal gradient on the outside, a darker bevel before the face,
-   an inner shadow where the face sits low and a soft gloss over the upper half */
-static UIImage *ExteriaMetalDisc(UIImage *face, CGFloat side) {
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGFloat rim = side * 0.1;
-    CGRect outer = CGRectMake(0.5, 0.5, side - 1, side - 1);
-    CGRect bevel = CGRectInset(outer, rim * 0.8, rim * 0.8);
-    CGRect inner = CGRectInset(outer, rim, rim);
-    CGPoint topLeft = CGPointMake(0, 0), bottomRight = CGPointMake(side, side);
-
-    static const CGFloat chrome[] = {0.96, 0.96, 0.97, 1,  0.72, 0.73, 0.76, 1,  0.43, 0.44, 0.48, 1,  0.82, 0.83, 0.86, 1,
-                                     0.55, 0.56, 0.60, 1,  0.94, 0.95, 0.96, 1};
-    static const CGFloat chromeAt[] = {0, 0.22, 0.45, 0.62, 0.82, 1};
-    CGGradientRef metal = CGGradientCreateWithColorComponents(space, chrome, chromeAt, 6);
-    CGContextSaveGState(context);
-    CGContextAddEllipseInRect(context, outer);
-    CGContextClip(context);
-    CGContextDrawLinearGradient(context, metal, topLeft, bottomRight, 0);
-    CGContextRestoreGState(context);
-    CGGradientRelease(metal);
-
-    /* the bevel runs the other way, so the rim looks turned in towards the face */
-    static const CGFloat turned[] = {0.35, 0.36, 0.40, 1,  0.93, 0.94, 0.96, 1};
-    CGGradientRef bevelGradient = CGGradientCreateWithColorComponents(space, turned, NULL, 2);
-    CGContextSaveGState(context);
-    CGContextAddEllipseInRect(context, bevel);
-    CGContextClip(context);
-    CGContextDrawLinearGradient(context, bevelGradient, topLeft, bottomRight, 0);
-    CGContextRestoreGState(context);
-    CGGradientRelease(bevelGradient);
-
-    CGContextSetRGBStrokeColor(context, 0.25, 0.26, 0.30, 0.85);
-    CGContextSetLineWidth(context, 1);
-    CGContextStrokeEllipseInRect(context, outer);
-
-    CGContextSaveGState(context);
-    CGContextAddEllipseInRect(context, inner);
-    CGContextClip(context);
-    if (face) {
-        CGFloat scale = MAX(inner.size.width / face.size.width, inner.size.height / face.size.height);
-        CGSize drawn = CGSizeMake(face.size.width * scale, face.size.height * scale);
-        [face drawInRect:CGRectMake(CGRectGetMidX(inner) - drawn.width / 2, CGRectGetMidY(inner) - drawn.height / 2, drawn.width, drawn.height)];
-    }
-    /* a soft shadow on the upper edge of the face, where the rim stands over it */
-    static const CGFloat shade[] = {0, 0, 0, 0.35,  0, 0, 0, 0};
-    CGGradientRef shadow = CGGradientCreateWithColorComponents(space, shade, NULL, 2);
-    CGContextDrawLinearGradient(context, shadow, CGPointMake(0, inner.origin.y), CGPointMake(0, inner.origin.y + inner.size.height * 0.28), 0);
-    CGGradientRelease(shadow);
-    CGContextRestoreGState(context);
-    CGContextSetRGBStrokeColor(context, 0.12, 0.12, 0.16, 0.7);
-    CGContextStrokeEllipseInRect(context, inner);
-
-    /* the gloss: white fading out over the upper half of the whole disc */
-    static const CGFloat gloss[] = {1, 1, 1, 0.34,  1, 1, 1, 0};
-    CGGradientRef shine = CGGradientCreateWithColorComponents(space, gloss, NULL, 2);
-    CGContextSaveGState(context);
-    CGContextAddEllipseInRect(context, CGRectMake(side * 0.06, side * 0.02, side * 0.88, side * 0.55));
-    CGContextClip(context);
-    CGContextDrawLinearGradient(context, shine, CGPointMake(0, side * 0.02), CGPointMake(0, side * 0.57), 0);
-    CGContextRestoreGState(context);
-    CGGradientRelease(shine);
-    CGColorSpaceRelease(space);
-    UIImage *disc = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    return disc;
 }
 
 @interface ExteriaQrView () {
@@ -158,7 +90,7 @@ static UIImage *ExteriaMetalDisc(UIImage *face, CGFloat side) {
     _discSide = side;
     UIImage *face = _centerImage ? _centerImage : [UIImage imageNamed:@"qr_logo"];
     if (!face) NSLog(@"exteria: qr_logo.png is missing from the bundle");
-    _logo.image = _metallic ? ExteriaMetalDisc(face, side) : face;
+    _logo.image = _metallic ? ExteriaClassicMetalDisc(face, side) : face;
 }
 
 #pragma mark modules
