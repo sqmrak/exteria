@@ -1307,6 +1307,9 @@
 "chatset.tint.footer" = "Проведите по квадрату (слева направо меняется оттенок, снизу вверх насыщенность) или введите цвет в hex; яркость остаётся как в палитре. Выключите переключатель, и цвет снова будет зависеть от обоев.";
 "chatset.tint.picker" = "Цвет приложения";
 "chatset.tint.hex" = "Цвет в hex";
+"chatset.tint.hue" = "Оттенок";
+"chatset.tint.saturation" = "Насыщенность";
+"chatset.tint.hint" = "Нажмите, чтобы ввести hex";
 "chatset.wallpaper.failed" = "Не удалось подготовить фотографию.";
 "chatset.namecolor" = "Изменить цвет имени";
 "chatset.namecolor.header" = "Цвет имени";

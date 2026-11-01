@@ -5,6 +5,7 @@
 #import "exteria_profile_photo_picker.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_tint_editor.h"
 #import "exteria_tint_picker.h"
 #import "exteria_wallpaper.h"
 #import "exteria_wallpaper_grid_view.h"
@@ -16,7 +17,10 @@
     ExteriaWeakReference *_weak;
     ExteriaChatPreviewView *_preview;
     ExteriaWallpaperGridView *_grid;
-    ExteriaTintPicker *_picker;
+    UIControl<ExteriaTintControl> *_picker;
+    /* the classic style makes every page again after a change of the color, and the new table starts at the top; the offset of the old one is brought back */
+    CGFloat _restoreOffset;
+    BOOL _restoresOffset;
 }
 @end
 
@@ -52,7 +56,7 @@
     self.table.contentInset = insets;
     self.table.scrollIndicatorInsets = insets;
     if (covered > 0 && _picker.window) {
-        [self.table scrollRectToVisible:[self.table convertRect:_picker.bounds fromView:_picker] animated:YES];
+        [self.table scrollRectToVisible:[self.table convertRect:_picker.editingRect fromView:_picker] animated:YES];
     }
 }
 
@@ -66,7 +70,23 @@
 
 - (UIViewController *)controllerAfterThemeChange {
     ExteriaWallpaperController *again = [[[ExteriaWallpaperController alloc] init] autorelease];
+    if ([self isViewLoaded]) {
+        again->_restoreOffset = self.table.contentOffset.y;
+        again->_restoresOffset = YES;
+    }
     return again;
+}
+
+/* the offset is set once the new table has its size and its rows, clamped to what the page can scroll now */
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (!_restoresOffset) return;
+    UITableView *table = self.table;
+    if (table.bounds.size.height <= 0 || table.contentSize.height <= 0) return;
+    _restoresOffset = NO;
+    CGFloat low = -table.contentInset.top;
+    CGFloat high = MAX(low, table.contentSize.height - table.bounds.size.height + table.contentInset.bottom);
+    table.contentOffset = CGPointMake(0, MIN(high, MAX(low, _restoreOffset)));
 }
 
 /* the preview and the tiles read their colors when they are made */
@@ -76,7 +96,8 @@
     ExteriaWeakReference *previewWeak = _weak;
     _preview.heightHandler = ^{ [(ExteriaWallpaperController *)previewWeak.target updateRowHeights]; };
     [_picker release];
-    _picker = [[ExteriaTintPicker alloc] init];
+    /* the classic look keeps the square with metal discs; the modern one has the expressive editor */
+    _picker = ExteriaThemeIsClassic() ? (UIControl<ExteriaTintControl> *)[[ExteriaTintPicker alloc] init] : (UIControl<ExteriaTintControl> *)[[ExteriaTintEditor alloc] init];
     [_picker addTarget:self action:@selector(tintCommitted:) forControlEvents:UIControlEventTouchUpInside];
     [_grid release];
     _grid = [[ExteriaWallpaperGridView alloc] init];
@@ -110,7 +131,7 @@ static void ExteriaCurrentTint(float *hue, float *saturation) {
     *saturation = neutral ? 0 : 0.6f;
 }
 
-- (void)tintCommitted:(ExteriaTintPicker *)picker {
+- (void)tintCommitted:(UIControl<ExteriaTintControl> *)picker {
     ExteriaThemeStoreCustomTint(YES, picker.hue, picker.saturation);
     CGPoint origin = [picker convertPoint:CGPointMake(CGRectGetMidX(picker.bounds), CGRectGetMidY(picker.bounds)) toView:nil];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
@@ -157,8 +178,8 @@ static NSUInteger ExteriaChosenPreset(void) {
     if (custom) {
         _picker.hue = customHue;
         _picker.saturation = customSaturation;
-        ExteriaTintPicker *picker = _picker;
-        [tintRows addObject:[ExteriaSettingsRow viewRowWithView:picker height:^CGFloat(CGFloat width) { (void)width; return [ExteriaTintPicker height]; }]];
+        UIControl<ExteriaTintControl> *picker = _picker;
+        [tintRows addObject:[ExteriaSettingsRow viewRowWithView:picker height:^CGFloat(CGFloat width) { (void)width; return picker.preferredHeight; }]];
     }
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.tint.header", nil) footer:custom ? NSLocalizedString(@"chatset.tint.footer", nil) : nil rows:tintRows]];
 

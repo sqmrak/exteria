@@ -2,22 +2,34 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_classic_chrome.h"
 #import "exteria_theme.h"
 
 #define PICKER_HEIGHT 256.0
 #define HEX_STRIP 56.0
 #define PICKER_INSET 16.0
-#define THUMB_SIDE 30.0
+#define THUMB_SIDE 36.0
+#define SWATCH_SIDE 34.0
 /* the square is drawn this coarse and the layer smooths it up; a pixel per point would be 60 thousand colors on every layout */
 #define RENDER_WIDTH 120
 #define RENDER_HEIGHT 60
 
 @implementation ExteriaTintPicker
 
+/* the color alone, as the face of a disc */
+static UIImage *ExteriaSolidImage(UIColor *color) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(4, 4), YES, 1);
+    [color setFill];
+    UIRectFill(CGRectMake(0, 0, 4, 4));
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
 @synthesize hue = _hue;
 @synthesize saturation = _saturation;
 
-+ (CGFloat)height { return PICKER_HEIGHT; }
+- (CGFloat)preferredHeight { return PICKER_HEIGHT; }
 
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -25,45 +37,43 @@
     self.backgroundColor = [UIColor clearColor];
     self.isAccessibilityElement = YES;
     self.accessibilityTraits = UIAccessibilityTraitAdjustable;
-    _thumb = [[UIView alloc] init];
+    /* both discs are the chrome rim of the QR logo around the color, drawn again whenever the color moves */
+    _thumb = [[UIImageView alloc] init];
     _thumb.userInteractionEnabled = NO;
-    _thumb.layer.cornerRadius = THUMB_SIDE / 2;
-    _thumb.layer.borderWidth = 3;
-    _thumb.layer.borderColor = [UIColor whiteColor].CGColor;
     _thumb.layer.shadowColor = [UIColor blackColor].CGColor;
-    _thumb.layer.shadowOpacity = 0.35;
+    _thumb.layer.shadowOpacity = 0.45;
     _thumb.layer.shadowRadius = 3;
-    _thumb.layer.shadowOffset = CGSizeMake(0, 1);
+    _thumb.layer.shadowOffset = CGSizeMake(0, 2);
     [self addSubview:_thumb];
-    _swatch = [[UIView alloc] init];
+    _swatch = [[UIImageView alloc] init];
     _swatch.userInteractionEnabled = NO;
-    _swatch.layer.cornerRadius = 15;
-    _swatch.layer.borderWidth = 1;
-    _swatch.layer.borderColor = ExteriaColorHairline().CGColor;
     [self addSubview:_swatch];
+    /* the plate holds the # and the digits as two neighbours on one line, so they share a center and stand side by side whatever the font */
+    _plate = [[UIView alloc] init];
+    _plate.backgroundColor = ExteriaColorField();
+    _plate.layer.cornerRadius = 10;
+    [self addSubview:_plate];
+    _hash = [[UILabel alloc] init];
+    _hash.text = @"#";
+    _hash.font = ExteriaFontSemibold(17);
+    _hash.textColor = ExteriaColorSecondary();
+    _hash.backgroundColor = [UIColor clearColor];
+    [_plate addSubview:_hash];
     _field = [[UITextField alloc] init];
     _field.delegate = self;
-    _field.backgroundColor = ExteriaColorField();
-    _field.layer.cornerRadius = 10;
+    _field.backgroundColor = [UIColor clearColor];
+    _field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
     _field.font = ExteriaFontSemibold(17);
     _field.textColor = ExteriaColorTitle();
-    _field.textAlignment = (NSTextAlignment)ExteriaTextAlignmentCenter;
+    _field.textAlignment = (NSTextAlignment)ExteriaTextAlignmentLeft;
     _field.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
     _field.autocorrectionType = UITextAutocorrectionTypeNo;
     _field.keyboardType = UIKeyboardTypeASCIICapable;
     _field.returnKeyType = UIReturnKeyDone;
     _field.clearButtonMode = UITextFieldViewModeNever;
     _field.accessibilityLabel = NSLocalizedString(@"chatset.tint.hex", nil);
-    UILabel *hash = [[[UILabel alloc] initWithFrame:CGRectMake(0, 0, 26, 36)] autorelease];
-    hash.text = @"#";
-    hash.textAlignment = (NSTextAlignment)ExteriaTextAlignmentRight;
-    hash.font = ExteriaFontSemibold(17);
-    hash.textColor = ExteriaColorSecondary();
-    hash.backgroundColor = [UIColor clearColor];
-    _field.leftView = hash;
-    _field.leftViewMode = UITextFieldViewModeAlways;
     [_field addTarget:self action:@selector(hexEdited) forControlEvents:UIControlEventEditingChanged];
-    [self addSubview:_field];
+    [_plate addSubview:_field];
     return self;
 }
 
@@ -72,6 +82,8 @@
     [_thumb release];
     [_swatch release];
     [_field release];
+    [_hash release];
+    [_plate release];
     [super dealloc];
 }
 
@@ -128,31 +140,45 @@
 
 - (void)placeThumb {
     CGRect square = [self squareRect];
-    _thumb.frame = CGRectMake(0, 0, THUMB_SIDE, THUMB_SIDE);
+    _thumb.bounds = CGRectMake(0, 0, THUMB_SIDE, THUMB_SIDE);
     _thumb.center = CGPointMake(square.origin.x + square.size.width * _hue / 360.0, square.origin.y + square.size.height * (1 - _saturation));
-    _thumb.backgroundColor = ExteriaThemeCustomTintColor(_hue, _saturation);
+    _thumb.image = ExteriaClassicMetalDisc(ExteriaSolidImage(ExteriaThemeCustomTintColor(_hue, _saturation)), THUMB_SIDE);
     [self showHex];
 }
 
-/* the swatch and the field stand in the middle of the strip under the square */
+/* the swatch and the plate stand in the middle of the strip under the square; inside the plate the # and the digits are measured and set next to each other */
 - (void)layoutSubviews {
     [super layoutSubviews];
     [self renderSquare];
     [self placeThumb];
-    CGFloat fieldWidth = 128, group = 30 + 12 + fieldWidth;
-    CGFloat left = floor((self.bounds.size.width - group) / 2), top = self.bounds.size.height - HEX_STRIP + (HEX_STRIP - 36) / 2 - 4;
-    _swatch.frame = CGRectMake(left, top + 3, 30, 30);
-    _field.frame = CGRectMake(left + 42, top, fieldWidth, 36);
+    static const CGFloat plateHeight = 36, gap = 2;
+    CGFloat digits = 0;
+    for (NSString *sample in [NSArray arrayWithObjects:@"000000", @"888888", @"FFFFFF", @"BBBBBB", nil]) {
+        UILabel *probe = [[[UILabel alloc] init] autorelease];
+        probe.font = _field.font;
+        probe.text = sample;
+        [probe sizeToFit];
+        digits = MAX(digits, probe.frame.size.width);
+    }
+    [_hash sizeToFit];
+    CGFloat hashWidth = _hash.frame.size.width, fieldWidth = ceil(digits) + 4;
+    CGFloat plateWidth = 16 + hashWidth + gap + fieldWidth + 16;
+    CGFloat group = SWATCH_SIDE + 12 + plateWidth;
+    CGFloat left = floor((self.bounds.size.width - group) / 2), top = self.bounds.size.height - HEX_STRIP + (HEX_STRIP - plateHeight) / 2 - 4;
+    _swatch.frame = CGRectMake(left, top + (plateHeight - SWATCH_SIDE) / 2, SWATCH_SIDE, SWATCH_SIDE);
+    _plate.frame = CGRectMake(left + SWATCH_SIDE + 12, top, plateWidth, plateHeight);
+    _hash.frame = CGRectMake(16, 0, hashWidth, plateHeight);
+    _field.frame = CGRectMake(16 + hashWidth + gap, 0, fieldWidth, plateHeight);
 }
 
-static NSString *ExteriaHexOfTint(float hue, float saturation) {
+NSString *ExteriaHexOfTint(float hue, float saturation) {
     CGFloat red, green, blue;
     ExteriaHSVToRGB(hue, saturation, 0.745, &red, &green, &blue);
     return [NSString stringWithFormat:@"%02X%02X%02X", (unsigned)(red * 255 + 0.5), (unsigned)(green * 255 + 0.5), (unsigned)(blue * 255 + 0.5)];
 }
 
 /* three digits are the short form of six; anything else that is not six hex digits is no color */
-static BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation) {
+BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation) {
     if (text.length == 3) {
         unichar c[3];
         [text getCharacters:c range:NSMakeRange(0, 3)];
@@ -170,8 +196,16 @@ static BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation) {
     return YES;
 }
 
+BOOL ExteriaTintHexAllowed(NSString *text) {
+    if (text.length > 6) return NO;
+    NSCharacterSet *bad = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789ABCDEFabcdef"] invertedSet];
+    return [text rangeOfCharacterFromSet:bad].location == NSNotFound;
+}
+
+- (CGRect)editingRect { return _plate.frame; }
+
 - (void)showHex {
-    _swatch.backgroundColor = ExteriaThemeCustomTintColor(_hue, _saturation);
+    _swatch.image = ExteriaClassicMetalDisc(ExteriaSolidImage(ExteriaThemeCustomTintColor(_hue, _saturation)), SWATCH_SIDE);
     if (!_field.isFirstResponder) _field.text = ExteriaHexOfTint(_hue, _saturation);
 }
 
@@ -185,10 +219,7 @@ static BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation) {
 }
 
 - (BOOL)textField:(UITextField *)field shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
-    NSString *next = [[field.text stringByReplacingCharactersInRange:range withString:[string uppercaseString]] uppercaseString];
-    if (next.length > 6) return NO;
-    NSCharacterSet *bad = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789ABCDEF"] invertedSet];
-    return [next rangeOfCharacterFromSet:bad].location == NSNotFound;
+    return ExteriaTintHexAllowed([field.text stringByReplacingCharactersInRange:range withString:[string uppercaseString]]);
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField *)field {
