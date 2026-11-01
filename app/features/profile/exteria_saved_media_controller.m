@@ -46,6 +46,7 @@
     ExteriaScrollViewOwnsInsets(_scroll);
     [root addSubview:_scroll];
     _music = [[ExteriaMusicPill alloc] init];
+    _music.media = self.media;
     [_music addTarget:self action:@selector(openMusic) forControlEvents:UIControlEventTouchUpInside];
     ExteriaWeakReference *weak = _weak;
     _music.contentHandler = ^{ [[(ExteriaSavedMediaController *)weak.target view] setNeedsLayout]; };
