@@ -548,7 +548,8 @@ UILabel *ExteriaClassicBadge(NSString *text, BOOL muted) {
     label.font = font;
     label.textColor = [UIColor whiteColor];
     label.textAlignment = ExteriaTextAlignmentCenter;
-    label.backgroundColor = muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : [UIColor colorWithRed:0.20 green:0.50 blue:0.92 alpha:1];
+    /* the blue turns with the hue of the theme, as the purple of the bars does; a muted chat keeps its grey */
+    label.backgroundColor = muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : ExteriaThemeTinted([UIColor colorWithRed:0.20 green:0.50 blue:0.92 alpha:1]);
     label.layer.cornerRadius = 11;
     label.layer.masksToBounds = YES;
     return label;
@@ -647,4 +648,58 @@ UIImage *ExteriaClassicPlateImage(void) {
                       r * 0.92, g * 0.92, b * 0.92, 1};
     CGFloat outline[] = {r * 0.65, g * 0.65, b * 0.65};
     return ExteriaClassicGlossImage(fill, outline, 12, 0, ExteriaThemeIsDark() ? 0.15 : 0.55);
+}
+
+void ExteriaClassicApplyMenuPlate(UIView *view, CGFloat radius) {
+    BOOL charcoal = ExteriaThemeIsDark();
+    view.layer.cornerRadius = radius;
+    view.layer.shadowColor = [UIColor blackColor].CGColor;
+    view.layer.shadowOpacity = charcoal ? 0.6 : 0.35;
+    view.layer.shadowRadius = 10;
+    view.layer.shadowOffset = CGSizeMake(0, 4);
+    CAGradientLayer *gloss = [CAGradientLayer layer];
+    if (charcoal) {
+        gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0.30 alpha:1].CGColor, (id)[UIColor colorWithWhite:0.15 alpha:1].CGColor,
+                        (id)[UIColor colorWithWhite:0.10 alpha:1].CGColor, nil];
+    } else {
+        gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:1.0 alpha:1].CGColor, (id)[UIColor colorWithWhite:0.95 alpha:1].CGColor,
+                        (id)[UIColor colorWithWhite:0.90 alpha:1].CGColor, nil];
+    }
+    gloss.locations = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.5], [NSNumber numberWithFloat:1], nil];
+    gloss.cornerRadius = radius;
+    gloss.borderColor = [UIColor colorWithWhite:charcoal ? 0.52 : 0.68 alpha:1].CGColor;
+    gloss.borderWidth = 1;
+    gloss.name = @"plate";
+    gloss.frame = view.bounds;
+    [view.layer insertSublayer:gloss atIndex:0];
+}
+
+UIColor *ExteriaClassicMenuTextColor(void) {
+    return ExteriaThemeIsDark() ? [UIColor whiteColor] : ExteriaColorTitle();
+}
+
+UIColor *ExteriaClassicMenuRedColor(void) {
+    return ExteriaThemeIsDark() ? [UIColor colorWithRed:1 green:0.45 blue:0.40 alpha:1] : ExteriaColorBadgeRed();
+}
+
+UIColor *ExteriaClassicMenuPressColor(void) {
+    return ExteriaThemeIsDark() ? [UIColor colorWithWhite:1 alpha:0.14] : [UIColor colorWithWhite:0 alpha:0.08];
+}
+
+void ExteriaClassicStyleMenuLabel(UILabel *label, CGFloat size) {
+    label.font = [UIFont boldSystemFontOfSize:size];
+    if (ExteriaThemeIsDark()) {
+        label.shadowColor = [UIColor colorWithWhite:0 alpha:0.7];
+        label.shadowOffset = CGSizeMake(0, -1);
+    } else {
+        label.shadowColor = [UIColor colorWithWhite:1 alpha:0.8];
+        label.shadowOffset = CGSizeMake(0, 1);
+    }
+}
+
+UIImageView *ExteriaClassicStripBackdrop(void) {
+    UIImageView *view = [[[UIImageView alloc] initWithImage:ExteriaClassicBarImage()] autorelease];
+    view.contentMode = UIViewContentModeScaleToFill;
+    view.userInteractionEnabled = NO;
+    return view;
 }

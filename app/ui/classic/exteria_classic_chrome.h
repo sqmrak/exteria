@@ -76,3 +76,16 @@ UIImage *ExteriaClassicGlossButtonImage(ExteriaClassicGloss color, BOOL pressed)
 
 /* a plate in the card color of the theme, with a lit rim and a thin outline */
 UIImage *ExteriaClassicPlateImage(void);
+
+/* the menu plate of the classic style: a charcoal plate in the dark tone and a pale glossy one in the white tone, each with a lit edge
+   and a soft shadow; the layer is named "plate" and sized to the bounds of the view */
+void ExteriaClassicApplyMenuPlate(UIView *view, CGFloat radius);
+/* the colors of the rows on that plate */
+UIColor *ExteriaClassicMenuTextColor(void);
+UIColor *ExteriaClassicMenuRedColor(void);
+UIColor *ExteriaClassicMenuPressColor(void);
+/* a bold row title with the stamped shadow of the old menus */
+void ExteriaClassicStyleMenuLabel(UILabel *label, CGFloat size);
+
+/* the glossy purple of the navigation bar, stretched to fill a strip such as the mini player or the selection bar */
+UIImageView *ExteriaClassicStripBackdrop(void);
