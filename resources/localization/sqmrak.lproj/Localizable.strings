@@ -2211,11 +2211,6 @@
 "developer.readall.none" = "непрочитанного нет.";
 "developer.readall.done" = "помечено прочитанными: %lu, не удалось: %lu.";
 "developer.readall.failed" = "список не загрузился: %@";
-"developer.popup.shiro" = "ошибка туннеля";
-"developer.popup.shiro.info" = "карточка, когда встроенный туннель не открылся";
-"developer.popup.noshiro" = "туннель в этом запуске не создан.";
-"developer.popup.senko" = "спасибо за senko";
-"developer.popup.senko.info" = "окно с лисой над входом";
 "developer.unlocked" = "настройки разработчика открыты. они появились в настройках exteria.";
 "developer.already" = "настройки разработчика уже открыты.";
 "developer.popup.crash" = "отчёт о падении";
@@ -2226,6 +2221,11 @@
 "developer.popup.mark" = "плашка метки";
 "developer.popup.mark.info" = "объяснение метки у имени, на выбор";
 "developer.popup.someone" = "имя фамилия";
+"developer.popup.shiro" = "ошибка туннеля";
+"developer.popup.shiro.info" = "карточка, когда встроенный туннель не открылся";
+"developer.popup.noshiro" = "туннель в этом запуске не создан.";
+"developer.popup.senko" = "спасибо за senko";
+"developer.popup.senko.info" = "окно с лисой над входом";
 "developer.popup.toast" = "приветственная карточка";
 "developer.popup.toast.info" = "карточка, что падает сверху";
 "developer.popup.toast.text" = "так выглядит карточка с двумя кнопками. она уйдёт сама через несколько секунд.";

@@ -2205,11 +2205,6 @@
 "developer.readall.none" = "Nothing is unread.";
 "developer.readall.done" = "Marked as read: %lu, failed: %lu.";
 "developer.readall.failed" = "The list did not load: %@";
-"developer.popup.shiro" = "Tunnel failure";
-"developer.popup.shiro.info" = "The card shown when the built-in tunnel did not open";
-"developer.popup.noshiro" = "No tunnel was made in this run.";
-"developer.popup.senko" = "Thanks for Senko";
-"developer.popup.senko.info" = "The window with the fox over the login";
 "developer.unlocked" = "The developer settings are open. They are now in the settings of Exteria.";
 "developer.already" = "The developer settings are already open.";
 "developer.popup.crash" = "Crash report";
@@ -2220,6 +2215,11 @@
 "developer.popup.mark" = "Mark plate";
 "developer.popup.mark.info" = "The explanation of a mark by a name, to choose from";
 "developer.popup.someone" = "Name Surname";
+"developer.popup.shiro" = "Tunnel failure";
+"developer.popup.shiro.info" = "The card shown when the built-in tunnel did not open";
+"developer.popup.noshiro" = "No tunnel was made in this run.";
+"developer.popup.senko" = "Thanks for Senko";
+"developer.popup.senko.info" = "The window with the fox over the login";
 "developer.popup.toast" = "Welcome card";
 "developer.popup.toast.info" = "The card that drops from the top";
 "developer.popup.toast.text" = "This is a card with two buttons. It leaves by itself in a few seconds.";
