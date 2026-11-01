@@ -11,6 +11,7 @@
 
 #import "exteria_avatar_view.h"
 #import "exteria_alert.h"
+#import "exteria_avatar_viewer.h"
 #import "exteria_profile_hero_view.h"
 #import "exteria_channel_card.h"
 #import "exteria_chat_controller.h"
@@ -203,8 +204,6 @@
     hero.name.entities = _name.entities;
     hero.status.text = _status.text;
     [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
-    ExteriaWeakReference *weak = _weak;
-    hero.closeRequestHandler = ^{ [(ExteriaProfileController *)weak.target closeHero]; };
     _heroCircle = [_identity convertRect:_avatar.frame toView:_head];
     _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
     hero.frame = _heroCircle;
@@ -234,6 +233,26 @@
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     if (_heroOpen && !_heroMoving) [self closeHero];
+}
+
+/* the photos on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+/* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo */
+- (void)heroFollowsPull:(CGFloat)pull {
+    if (_heroMoving) return;
+    if (!_hero) {
+        if (pull > 60) [self openHero];
+    } else if (_heroOpen) {
+        if (pull > 130) [self openAvatarViewer];
+        else if (-pull > 90) [self closeHero];
+    }
+}
+
+- (void)openAvatarViewer {
+    if (!_hero || !_heroOpen || _heroMoving || self.presentedViewController) return;
+    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];
+    viewer.title = _person.name;
+    viewer.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    [self presentViewController:viewer animated:YES completion:nil];
 }
 
 - (void)closeHero {
@@ -287,7 +306,6 @@
     [_ratingBadge release];
     [_editAction release];
     [_photoAction release];
-    _hero.closeRequestHandler = nil;
     [_hero release];
     [_settingsAction release];
     for (int i = 0; i < 3; ++i) [_feeds[i] release];
@@ -360,6 +378,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [_head addSubview:_settingsAction];
 
     _music = [[ExteriaMusicPill alloc] init];
+    _music.media = self.media;
     [_music addTarget:self action:@selector(openMusic) forControlEvents:UIControlEventTouchUpInside];
     ExteriaWeakReference *musicMe = _weak;
     _music.contentHandler = ^{ [(ExteriaProfileController *)musicMe.target layoutHead]; };
@@ -773,7 +792,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
     /* a pull of the list down past its top takes the wide photo away */
-    if (_heroOpen && !_heroMoving && offset < -_grid.topInset - 44) [self closeHero];
+    [self heroFollowsPull:-(offset + _grid.topInset)];
     CGFloat limit = 140;
     offset += _grid.topInset;
     CGFloat mix = MAX(0, MIN(1, (offset - limit + 40) / 40));

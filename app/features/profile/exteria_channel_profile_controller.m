@@ -1,4 +1,5 @@
 #import "exteria_platform.h"
+#import "exteria_avatar_viewer.h"
 #import "exteria_profile_hero_view.h"
 #import "exteria_channel_profile_controller.h"
 #import "exteria_notifications_chat_controller.h"
@@ -205,8 +206,6 @@
     hero.name.text = _name.text;
     hero.name.entities = _name.entities;
     hero.status.text = _status.text;
-    ExteriaWeakReference *weak = _weak;
-    hero.closeRequestHandler = ^{ [(ExteriaChannelProfileController *)weak.target closeHero]; };
     _heroCircle = _avatar.frame;
     _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
     hero.frame = _heroCircle;
@@ -225,7 +224,10 @@
     BOOL motion = !ExteriaReduceMotionEnabled();
     [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
-        for (ExteriaUserAction *card in cards) [card setInk:[UIColor whiteColor]];
+        for (ExteriaUserAction *card in cards) {
+            [card setInk:[UIColor whiteColor]];
+            [card setBlurred:YES];
+        }
         _name.alpha = 0;
         _status.alpha = 0;
         [self setBarOverPhoto:YES];
@@ -238,6 +240,25 @@
     }];
 }
 
+/* the photos on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+/* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo */
+- (void)heroFollowsPull:(CGFloat)pull {
+    if (_heroMoving) return;
+    if (!_hero) {
+        if (pull > 60) [self openHero];
+    } else if (_heroOpen) {
+        if (pull > 130) [self openAvatarViewer];
+        else if (-pull > 90) [self closeHero];
+    }
+}
+
+- (void)openAvatarViewer {
+    if (!_hero || !_heroOpen || _heroMoving || self.presentedViewController) return;
+    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
+    viewer.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    [self presentViewController:viewer animated:YES completion:nil];
+}
+
 - (void)closeHero {
     if (!_hero || !_heroOpen || _heroMoving) return;
     _heroMoving = YES;
@@ -248,7 +269,10 @@
     BOOL motion = !ExteriaReduceMotionEnabled();
     [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
-        for (ExteriaUserAction *card in cards) [card setInk:nil];
+        for (ExteriaUserAction *card in cards) {
+            [card setBlurred:NO];
+            [card setInk:nil];
+        }
         _name.alpha = 1;
         _status.alpha = 1;
         [self setBarOverPhoto:NO];
@@ -271,7 +295,6 @@
     [_dialog release];
     [_stickers release];
     [_grid release];
-    _hero.closeRequestHandler = nil;
     [_hero release];
     [_head release];
     [_avatar release];
@@ -524,7 +547,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
 /* a pull of the list down past its top takes the wide photo away */
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
-    if (_heroOpen && !_heroMoving && offset < -_grid.topInset - 44) [self closeHero];
+    [self heroFollowsPull:-(offset + _grid.topInset)];
 }
 
 - (void)layoutHead {

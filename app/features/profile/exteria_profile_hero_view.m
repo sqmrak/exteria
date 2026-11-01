@@ -38,10 +38,11 @@
 
 @implementation ExteriaProfileHeroView
 
+@synthesize bottomRoom = _bottomRoom;
+
 @synthesize name = _name;
 @synthesize status = _status;
 @synthesize stripTop = _stripTop;
-@synthesize closeRequestHandler = _closeRequestHandler;
 
 + (CGFloat)heightForWidth:(CGFloat)width screenHeight:(CGFloat)screenHeight {
     return MIN(ceil(width * 1.05), MAX(width * 0.8, screenHeight * 0.62));
@@ -54,6 +55,7 @@
     _dialog = [dialog retain];
     _avatars = [avatars retain];
     _media = [media retain];
+    _bottomRoom = ACTIONS_ROOM;
     _pages = [[NSMutableArray alloc] init];
     _asked = [[NSMutableArray alloc] init];
     _stripFills = [[NSMutableArray alloc] init];
@@ -78,11 +80,6 @@
     [self addSubview:_pager];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped:)] autorelease];
     [self addGestureRecognizer:tap];
-    /* a swipe down takes the photo away, as a pull of the list down does */
-    UISwipeGestureRecognizer *down = [[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipedDown:)] autorelease];
-    down.direction = UISwipeGestureRecognizerDirectionDown;
-    down.delegate = self;
-    [self addGestureRecognizer:down];
     _scrim = [[CAGradientLayer layer] retain];
     _scrim.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0 alpha:0].CGColor, (id)[UIColor colorWithWhite:0 alpha:0.62].CGColor, nil];
     _scrim.opacity = 0;
@@ -115,7 +112,6 @@
 - (void)dealloc {
     ++_token;
     _pager.delegate = nil;
-    [_closeRequestHandler release];
     [_session release]; [_dialog release]; [_avatars release]; [_media release]; [_photos release];
     [_cover release]; [_pager release]; [_pages release]; [_asked release]; [_strips release]; [_stripFills release]; [_scrim release];
     [_name release]; [_status release]; [_ratingBadge release];
@@ -245,9 +241,9 @@
     /* the words stand over the buttons that the screen puts on the lower edge */
     /* the badge of the rating stands before the status, and the status moves over by the room it takes */
     CGFloat statusLeft = _ratingBadge.hidden ? 20 : 20 + 26;
-    _ratingBadge.frame = CGRectMake(20, size.height - ACTIONS_ROOM - 22, 22, 20);
-    _status.frame = CGRectMake(statusLeft, size.height - ACTIONS_ROOM - 22, MAX(0, size.width - statusLeft - 20), 20);
-    _name.frame = CGRectMake(20, size.height - ACTIONS_ROOM - 22 - 32, MAX(0, size.width - 40), 30);
+    _ratingBadge.frame = CGRectMake(20, size.height - _bottomRoom - 22, 22, 20);
+    _status.frame = CGRectMake(statusLeft, size.height - _bottomRoom - 22, MAX(0, size.width - statusLeft - 20), 20);
+    _name.frame = CGRectMake(20, size.height - _bottomRoom - 22 - 32, MAX(0, size.width - 40), 30);
     CGFloat count = (CGFloat)_stripFills.count;
     if (count > 0) {
         _strips.frame = CGRectMake(SIDE_MARGIN, _stripTop, MAX(0, size.width - 2 * SIDE_MARGIN), STRIP_HEIGHT);
@@ -272,11 +268,6 @@
     (void)tap;
     if (_moving || _pages.count < 2) return;
     [self goToIndex:(_index + 1) % (NSInteger)_pages.count];
-}
-
-- (void)swipedDown:(UISwipeGestureRecognizer *)swipe {
-    (void)swipe;
-    if (!_moving && _closeRequestHandler) _closeRequestHandler();
 }
 
 /* the swipe runs beside the scrolling of the list, which also sees the finger */

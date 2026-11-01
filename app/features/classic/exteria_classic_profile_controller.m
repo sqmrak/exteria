@@ -6,6 +6,7 @@
 #import "exteria_avatar_view.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_avatar_viewer.h"
+#import "exteria_avatar_viewer.h"
 #import "exteria_profile_hero_view.h"
 #import "exteria_dialog.h"
 #import "exteria_emoji_label.h"
@@ -193,8 +194,9 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     hero.name.text = _name.text;
     hero.name.entities = _name.entities;
     hero.status.text = _detail.text;
-    ExteriaWeakReference *weak = _weak;
-    hero.closeRequestHandler = ^{ [(ExteriaClassicProfileController *)weak.target closeHero]; };
+    /* the classic profile has no cards on the lower edge of the photo, so the words stand on it instead of high above it */
+    hero.bottomRoom = 18;
+    [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
     _heroCircle = _avatar.frame;
     hero.frame = _heroCircle;
     hero.layer.cornerRadius = _heroCircle.size.width / 2;
@@ -208,6 +210,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         _name.alpha = 0;
         _detail.alpha = 0;
+        /* the hero draws its own badge on its status line; the one of the header would stay over the wide photo, on top of the name */
+        _ratingBadge.alpha = 0;
         [self layoutHeroHeader];
     } completion:^(BOOL finished) {
         (void)finished;
@@ -215,6 +219,15 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         _avatar.hidden = YES;
         [_hero finishOpen];
     }];
+}
+
+/* the photos on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+- (void)openAvatarViewer {
+    if (!_hero || !_heroOpen || _heroMoving || self.presentedViewController) return;
+    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];
+    viewer.title = _person.name;
+    viewer.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    [self presentViewController:viewer animated:YES completion:nil];
 }
 
 - (void)closeHero {
@@ -228,6 +241,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         _name.alpha = 1;
         _detail.alpha = 1;
+        _ratingBadge.alpha = 1;
         [self layoutHeroHeader];
     } completion:^(BOOL finished) {
         (void)finished;
@@ -280,7 +294,6 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [_full release];
     [_starsText release];
     [_infoRows release];
-    _hero.closeRequestHandler = nil;
     [_hero release];
     [_avatar release];
     [_name release];
@@ -326,9 +339,17 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [self loadProfile];
 }
 
-/* a pull of the list down past its top takes the wide photo away */
+/* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo */
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    if (_heroOpen && !_heroMoving && scrollView.contentOffset.y < -scrollView.contentInset.top - 44) [self closeHero];
+    if (_heroMoving) return;
+    CGFloat pull = -(scrollView.contentOffset.y + scrollView.contentInset.top);
+    if (!_hero) {
+        if (pull > 60) [self openAvatars];
+    } else if (_heroOpen) {
+        /* the pull down goes on from the wide photo to the photos on the whole screen, and scrolling up takes it back to the circle */
+        if (pull > 130) [self openAvatarViewer];
+        else if (-pull > 90) [self closeHero];
+    }
 }
 
 - (void)viewDidLayoutSubviews {

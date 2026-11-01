@@ -40,6 +40,7 @@
 #import "exteria_session_channels.h"
 #import "exteria_session_profile.h"
 #import "exteria_session_actions.h"
+#import "exteria_avatar_viewer.h"
 #import "exteria_profile_hero_view.h"
 #import "exteria_star_gift.h"
 #import "exteria_status_label.h"
@@ -57,6 +58,12 @@
 #define ACTION_HEIGHT 66.0
 #define GAP 14.0
 
+/* how far the list is pulled down past its top before the wide photo goes back to the circle, in points */
+/* the pull of the list down past its top, in points: the first opens the round photo wide, the second goes on to the photos on the whole screen; the
+   scroll of the head up by the third takes the wide photo back to the circle */
+#define HERO_OPEN_PULL 60.0
+#define HERO_VIEW_PULL 130.0
+#define HERO_FOLD_SCROLL 90.0
 #define BAR_SHADE_AFTER 24.0
 
 @interface ExteriaUserProfileController () <ExteriaGiftGridDelegate, ExteriaGroupTabsDelegate, ExteriaGiftFolderBarDelegate, UIGestureRecognizerDelegate> {
@@ -139,7 +146,6 @@
     [_stickers release];
     [_grid release];
     [_head release];
-    _hero.closeRequestHandler = nil;
     [_hero release];
     [_cardInk release];
     [_avatar release];
@@ -247,6 +253,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     [_head addSubview:_storiesAction];
 
     _music = [[ExteriaMusicPill alloc] init];
+    _music.media = self.media;
     [_music addTarget:self action:@selector(openMusic) forControlEvents:UIControlEventTouchUpInside];
     ExteriaWeakReference *musicMe = _weak;
     _music.contentHandler = ^{ [(ExteriaUserProfileController *)musicMe.target musicContentChanged]; };
@@ -542,6 +549,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     _backdrop.centerColor = ExteriaColorOfRGB(center);
     _backdrop.edgeColor = ExteriaColorOfRGB(edge);
     _backdrop.patternColor = ExteriaColorOfRGB(pattern);
+    _music.patternColor = ExteriaColorOfRGB(pattern);
     _backdrop.photoRadius = AVATAR / 2;
     /* the bar over the ground is clear, which makes it the ground's continuation, and darkens with the scroll */
     self.barTint = ExteriaDarkenedBackdrop(edge);
@@ -565,7 +573,9 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 
 - (void)showPatternOfDocument:(long long)document {
     UIImage *picture = [ExteriaCustomEmoji imageForDocument:document];
-    if (picture) _backdrop.patternImage = picture;
+    if (!picture) return;
+    _backdrop.patternImage = picture;
+    _music.patternImage = picture;
 }
 
 - (void)showFull {
@@ -763,8 +773,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 /* the bar fills once the head has moved a little under it, and clears again at the top */
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
-    /* a pull of the list down past its top takes the wide photo away */
-    if (_heroOpen && !_heroMoving && offset < -_grid.topInset - 44) [self closeHero];
+    [self heroFollowsPull:-(offset + _grid.topInset)];
     if (!_backdrop || ExteriaThemeIsClassic()) return;
     [self setBarShaded:offset > -_grid.topInset + BAR_SHADE_AFTER animated:YES];
 }
@@ -982,8 +991,6 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     hero.name.entities = _name.entities;
     hero.status.text = _status.text;
     [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
-    ExteriaWeakReference *weak = _weak;
-    hero.closeRequestHandler = ^{ [(ExteriaUserProfileController *)weak.target closeHero]; };
     _heroCircle = _avatar.frame;
     _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
     hero.frame = _heroCircle;
@@ -1002,7 +1009,10 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     BOOL motion = !ExteriaReduceMotionEnabled();
     [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
-        for (ExteriaUserAction *card in cards) [card setInk:[UIColor whiteColor]];
+        for (ExteriaUserAction *card in cards) {
+            [card setInk:[UIColor whiteColor]];
+            [card setBlurred:YES];
+        }
         _name.alpha = 0;
         _status.alpha = 0;
         _ratingBadge.alpha = 0;
@@ -1016,6 +1026,25 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     }];
 }
 
+/* the photos of the person on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+/* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo; the head stays still while it changes */
+- (void)heroFollowsPull:(CGFloat)pull {
+    if (_heroMoving) return;
+    if (!_hero) {
+        if (pull > HERO_OPEN_PULL) [self openHero];
+    } else if (_heroOpen) {
+        if (pull > HERO_VIEW_PULL) [self openAvatarViewer];
+        else if (-pull > HERO_FOLD_SCROLL) [self closeHero];
+    }
+}
+
+- (void)openAvatarViewer {
+    if (!_hero || !_heroOpen || _heroMoving || self.presentedViewController) return;
+    ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
+    viewer.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    [self presentViewController:viewer animated:YES completion:nil];
+}
+
 - (void)closeHero {
     if (!_hero || !_heroOpen || _heroMoving) return;
     _heroMoving = YES;
@@ -1026,7 +1055,10 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     BOOL motion = !ExteriaReduceMotionEnabled();
     [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
-        for (ExteriaUserAction *card in cards) [card setInk:_cardInk];
+        for (ExteriaUserAction *card in cards) {
+            [card setBlurred:NO];
+            [card setInk:_cardInk];
+        }
         _name.alpha = 1;
         _status.alpha = 1;
         _ratingBadge.alpha = 1;

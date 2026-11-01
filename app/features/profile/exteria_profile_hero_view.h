@@ -14,12 +14,12 @@
 
 @property (nonatomic, readonly) ExteriaEmojiLabel *name;
 @property (nonatomic, readonly) UILabel *status;
+/* the room the words leave under them for the cards the screen puts on the lower edge; a screen with none sets a small one so the name stands on the edge */
+@property (nonatomic, assign) CGFloat bottomRoom;
 /* where the strips run along the top of the view: under the status bar, which the photo reaches up to */
 @property (nonatomic, assign) CGFloat stripTop;
 /* the badge of the rating to the left of the status ("[rating] online"); level 0 leaves it out; a tap on it runs the action of the target */
 - (void)setRatingLevel:(int32_t)level target:(id)target action:(SEL)action;
-/* a swipe down on the photo: the screen closes it (a tap goes to the next photo, and there is nothing to close by) */
-@property (nonatomic, copy) void (^closeRequestHandler)(void);
 
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media;
 /* the photo alone, one picture that follows the frame, with the words and the strips hidden: the state the view is in while it moves */
