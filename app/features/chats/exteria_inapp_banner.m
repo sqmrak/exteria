@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_avatar_view.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_developers.h"
 #import "exteria_image_decoder.h"
@@ -26,6 +27,7 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     UIImageView *_picture;
     ExteriaEmojiLabel *_title;
     ExteriaEmojiLabel *_body;
+    CAGradientLayer *_gloss;
     BOOL _leaving;
 }
 @end
@@ -84,7 +86,12 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     CGFloat width = MIN(CARD_MAX_WIDTH, window.bounds.size.width - 2 * CARD_SIDE - insets.left - insets.right);
     CGFloat top = MAX(insets.top, [UIApplication sharedApplication].statusBarHidden ? 0 : 20) + 4;
     CGFloat height = picture ? 132 : CARD_HEIGHT;
-    banner.frame = CGRectMake(floor((window.bounds.size.width - width) / 2), top, width, height);
+    if (ExteriaThemeIsClassic()) {
+        /* the ios 5 banner is a full width black bar under the status bar, not a floating card */
+        banner.frame = CGRectMake(0, top - 4, window.bounds.size.width, height);
+    } else {
+        banner.frame = CGRectMake(floor((window.bounds.size.width - width) / 2), top, width, height);
+    }
     [window addSubview:banner];
     ExteriaShownBanner = [banner retain];
     banner.transform = CGAffineTransformMakeTranslation(0, -(top + height + 20));
@@ -96,24 +103,39 @@ static ExteriaInAppBanner *ExteriaShownBanner;
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorCard();
-    self.layer.cornerRadius = 16;
-    self.layer.shadowColor = [UIColor blackColor].CGColor;
-    self.layer.shadowOpacity = 0.25f;
-    self.layer.shadowRadius = 8;
-    self.layer.shadowOffset = CGSizeMake(0, 3);
+    BOOL classic = ExteriaThemeIsClassic();
+    if (classic) {
+        _gloss = [[CAGradientLayer layer] retain];
+        _gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0.32 alpha:0.97].CGColor, (id)[UIColor colorWithWhite:0.10 alpha:0.97].CGColor,
+                         (id)[UIColor colorWithWhite:0.02 alpha:0.97].CGColor, nil];
+        _gloss.locations = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.5], [NSNumber numberWithFloat:1], nil];
+        [self.layer insertSublayer:_gloss atIndex:0];
+        self.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1].CGColor;
+        self.layer.borderWidth = 1;
+        self.layer.shadowColor = [UIColor blackColor].CGColor;
+        self.layer.shadowOpacity = 0.5f;
+        self.layer.shadowRadius = 4;
+        self.layer.shadowOffset = CGSizeMake(0, 2);
+    } else {
+        self.backgroundColor = ExteriaColorCard();
+        self.layer.cornerRadius = 16;
+        self.layer.shadowColor = [UIColor blackColor].CGColor;
+        self.layer.shadowOpacity = 0.25f;
+        self.layer.shadowRadius = 8;
+        self.layer.shadowOffset = CGSizeMake(0, 3);
+    }
     _avatar = [[ExteriaAvatarView alloc] init];
     _avatar.circular = YES;
     _avatar.hidden = YES;
     [self addSubview:_avatar];
     _title = [[ExteriaEmojiLabel alloc] init];
-    _title.font = ExteriaFontSemibold(15);
-    _title.textColor = ExteriaColorTitle();
+    _title.font = classic ? [UIFont boldSystemFontOfSize:15] : ExteriaFontSemibold(15);
+    _title.textColor = classic ? [UIColor whiteColor] : ExteriaColorTitle();
     [self addSubview:_title];
     /* the body names who wrote, and a UILabel shows a box for every letter of a styled name that the system font lacks */
     _body = [[ExteriaEmojiLabel alloc] init];
     _body.font = ExteriaFontRegular(14);
-    _body.textColor = ExteriaColorSecondary();
+    _body.textColor = classic ? [UIColor colorWithWhite:0.85 alpha:1] : ExteriaColorSecondary();
     _body.numberOfLines = 2;
     [self addSubview:_body];
     [self addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped)] autorelease]];
@@ -129,11 +151,13 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     [_picture release];
     [_title release];
     [_body release];
+    [_gloss release];
     [super dealloc];
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    _gloss.frame = self.bounds;
     /* the text starts after the picture, and at the old edge when the card has none */
     CGFloat left = _picture ? 122 : (_avatar.hidden ? 14 : PADDING + AVATAR_SIDE + 10);
     CGFloat width = MAX(0, self.bounds.size.width - left - 14);
