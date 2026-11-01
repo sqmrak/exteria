@@ -5,6 +5,7 @@
 #import "exteria_alert.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_lottie_view.h"
+#import "exteria_devices_sticker.h"
 #import "exteria_image_decoder.h"
 #import "exteria_media_cache.h"
 #import "exteria_plural.h"
@@ -209,6 +210,7 @@ enum { RowLink, RowThis, RowEndOthers };
     UIImageView *_stickerPreview;
     ExteriaLottieView *_stickerLottie;
     BOOL _stickerAsked;
+    BOOL _stickerPlayed;
 }
 @end
 
@@ -267,6 +269,15 @@ enum { RowLink, RowThis, RowEndOthers };
 - (void)loadSticker {
     if (_stickerAsked || !_media) return;
     _stickerAsked = YES;
+    /* the animation of an earlier visit needs no server: it is parsed now, and plays when the screen is on */
+    NSData *stored = [ExteriaDevicesSticker storedData];
+    if (stored) {
+        _stickerLottie = [[ExteriaDevicesSticker animationWithData:stored] retain];
+        _stickerLottie.frame = _stickerHost.bounds;
+        [_stickerLottie setLoaded:YES];
+        [_stickerHost addSubview:_stickerLottie];
+        return;
+    }
     ExteriaWeakReference *weak = _weak;
     [_session loadStickersOfSetNamed:@"tg_placeholders_android" completion:^(NSArray *stickers, NSString *errorName) {
         ExteriaClassicDevicesController *me = weak.target;
@@ -284,15 +295,15 @@ enum { RowLink, RowThis, RowEndOthers };
             }];
         }
         if (media.stickerFormat == EXTERIA_STICKER_ANIMATED && media.file) {
-            NSString *key = media.file.key;
             [me->_media loadDataForFile:media.file completion:^(NSData *data) {
                 ExteriaClassicDevicesController *again = weak.target;
                 if (!again || !data || ExteriaFileFormatOfData(data) != ExteriaFileFormatGzip) return;
-                again->_stickerLottie = [[ExteriaLottieView alloc] initWithPackedData:data key:key];
+                [ExteriaDevicesSticker storeData:data];
+                again->_stickerLottie = [[ExteriaDevicesSticker animationWithData:data] retain];
                 again->_stickerLottie.frame = again->_stickerHost.bounds;
-                again->_stickerLottie.userInteractionEnabled = NO;
                 [again->_stickerLottie setLoaded:YES];
                 [again->_stickerHost addSubview:again->_stickerLottie];
+                again->_stickerPlayed = YES;
                 [again->_stickerLottie playOnce];
             }];
         } else if (media.stickerFormat == EXTERIA_STICKER_STATIC && media.file) {
@@ -302,6 +313,14 @@ enum { RowLink, RowThis, RowEndOthers };
             }];
         }
     }];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (_stickerLottie && !_stickerPlayed) {
+        _stickerPlayed = YES;
+        [_stickerLottie playOnce];
+    }
 }
 
 - (void)replaySticker {
