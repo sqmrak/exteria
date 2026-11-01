@@ -115,6 +115,12 @@ UIColor *ExteriaThemeFollowAccent(UIColor *color, CGFloat seedHue) {
     return [UIColor colorWithRed:red green:green blue:blue alpha:c[3]];
 }
 
+BOOL ExteriaThemeAccentHue(CGFloat *degrees) {
+    if (ExteriaTintShift == 0) return NO;
+    if (degrees) *degrees = fmod(EXTERIA_PALETTE_HUE + ExteriaTintShift + 720, 360);
+    return YES;
+}
+
 static UIColor *ExteriaRGB(CGFloat red, CGFloat green, CGFloat blue) {
     return ExteriaTurnedColor(red / 255.0, green / 255.0, blue / 255.0, 1.0);
 }
