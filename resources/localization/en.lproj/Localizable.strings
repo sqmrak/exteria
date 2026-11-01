@@ -1296,6 +1296,11 @@
 "chatset.wallpaper.intensity" = "Pattern intensity";
 "chatset.wallpaper.blur" = "Blur";
 "chatset.wallpaper.dim" = "Dimming";
+"chatset.tint.custom" = "Own color";
+"chatset.tint.custom.line" = "Pick any hue instead of taking it from the wallpaper";
+"chatset.tint.header" = "App color";
+"chatset.tint.footer" = "Drag over the square: left to right is the hue, bottom to top the saturation. Turn the switch off to give the choice back to the wallpaper.";
+"chatset.tint.picker" = "Color of the app";
 "chatset.wallpaper.failed" = "The photo could not be prepared.";
 "chatset.namecolor" = "Change Name Color";
 "chatset.namecolor.header" = "Name color";

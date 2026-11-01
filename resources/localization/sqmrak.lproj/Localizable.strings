@@ -1302,6 +1302,11 @@
 "chatset.wallpaper.intensity" = "насыщенность узора";
 "chatset.wallpaper.blur" = "размытие";
 "chatset.wallpaper.dim" = "затемнение";
+"chatset.tint.custom" = "свой цвет";
+"chatset.tint.custom.line" = "свой цвет вместо цвета обоев";
+"chatset.tint.header" = "цвет приложения";
+"chatset.tint.footer" = "проведите по квадрату: слева направо меняется оттенок, снизу вверх насыщенность. выключите переключатель, и цвет снова будет зависеть от обоев";
+"chatset.tint.picker" = "цвет приложения";
 "chatset.wallpaper.failed" = "не удалось подготовить фотографию :#";
 "chatset.namecolor" = "изменить цвет имени";
 "chatset.namecolor.header" = "цвет имени";

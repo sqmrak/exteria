@@ -559,6 +559,8 @@ static BOOL ExteriaWallpaperHue(ExteriaWallpaperSetting setting, BOOL dark, floa
 }
 
 void ExteriaWallpaperRetintTheme(CGPoint origin) {
+    /* a color of your own stays whatever the wallpaper leans to */
+    if (ExteriaThemeStoredCustomTint(NULL, NULL)) return;
     float hue = 0, was = 0;
     BOOL tinted = ExteriaWallpaperHue(ExteriaWallpaperStored(), ExteriaThemeIsDark(), &hue);
     BOOL wasTinted = ExteriaThemeStoredTint(&was);

@@ -23,14 +23,20 @@ void ExteriaThemeApplyStored(void);
 /* the wallpaper of the chat gives the whole modern palette its hue; -1 selects neutral tones */
 BOOL ExteriaThemeStoredTint(float *hue);
 void ExteriaThemeStoreTint(BOOL on, float hue);
+/* a hue (degrees) and a saturation (0 to 1, of the accent) chosen by the person; while it is stored the wallpaper no longer gives the palette its hue.
+   Storing is silent: the caller posts ExteriaThemeDidChangeNotification */
+BOOL ExteriaThemeStoredCustomTint(float *hue, float *saturation);
+void ExteriaThemeStoreCustomTint(BOOL on, float hue, float saturation);
+/* the accent of the light palette for such a pair, for a swatch that shows it before it is stored */
+UIColor *ExteriaThemeCustomTintColor(float hue, float saturation);
 /* a color of the palette of the app, or any other color built from fixed numbers, turned the same way; other colors than RGB come back as they are */
 UIColor *ExteriaThemeTinted(UIColor *color);
-/* a color turned by this many degrees of hue, for a palette with a seed hue of its own (the Shiro screens): the
-   turn it needs is the hue of the accent now less the hue of its seed */
-UIColor *ExteriaThemeRotated(UIColor *color, CGFloat degrees);
-BOOL ExteriaThemeAccentHue(CGFloat *degrees);
+/* a color of a palette with a seed hue of its own (the Shiro screens), moved to the accent of the app: the seed hue goes to the hue of the accent, the saturation
+   follows a color of your own, neutral tones stay grey. With nothing tinting the app the color comes back as it is */
+UIColor *ExteriaThemeFollowAccent(UIColor *color, CGFloat seedHue);
 /* hue in degrees, saturation and value from 0 to 1 */
 void ExteriaRGBToHSV(CGFloat red, CGFloat green, CGFloat blue, CGFloat *hue, CGFloat *saturation, CGFloat *value);
+void ExteriaHSVToRGB(CGFloat hue, CGFloat saturation, CGFloat value, CGFloat *red, CGFloat *green, CGFloat *blue);
 
 /* the screen, the fields and idle chips on it, cards and the tab bar, and the line between rows */
 UIColor *ExteriaColorScreen(void);
