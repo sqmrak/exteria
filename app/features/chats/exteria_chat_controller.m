@@ -2419,12 +2419,16 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 - (void)refreshClassicBackWithCount:(NSInteger)count {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     UIImageView *arrow = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])] autorelease];
-    arrow.frame = CGRectMake(0, 4, 22, 22);
+    /* the plate the system draws under the bordered dots item, which a custom view does not get */
+    [button setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+    [button setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+    arrow.frame = CGRectMake(8, 4, 22, 22);
+    arrow.userInteractionEnabled = NO;
     [button addSubview:arrow];
     UIView *tail;
     if (count > 0) {
         tail = ExteriaClassicBadge(count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count], NO);
-        tail.frame = CGRectMake(26, 4, tail.frame.size.width, 22);
+        tail.frame = CGRectMake(34, 4, tail.frame.size.width, 22);
     } else {
         UILabel *name = [[[UILabel alloc] init] autorelease];
         name.backgroundColor = [UIColor clearColor];
@@ -2432,11 +2436,12 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         name.font = [UIFont boldSystemFontOfSize:15];
         name.text = NSLocalizedString(@"chats.title", nil);
         [name sizeToFit];
-        name.frame = CGRectMake(26, floor((30 - name.frame.size.height) / 2), MIN(90, name.frame.size.width), name.frame.size.height);
+        name.frame = CGRectMake(34, floor((30 - name.frame.size.height) / 2), MIN(90, name.frame.size.width), name.frame.size.height);
         tail = name;
     }
+    tail.userInteractionEnabled = NO;
     [button addSubview:tail];
-    button.frame = CGRectMake(0, 0, CGRectGetMaxX(tail.frame) + 4, 30);
+    button.frame = CGRectMake(0, 0, CGRectGetMaxX(tail.frame) + 10, 30);
     [button addTarget:self action:@selector(goBack) forControlEvents:UIControlEventTouchUpInside];
     button.accessibilityLabel = NSLocalizedString(@"chats.title", nil);
     self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithCustomView:button] autorelease];
