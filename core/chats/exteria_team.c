@@ -7,7 +7,6 @@
 #define MANAGER ExteriaMarkManager
 
 static const exteria_team_member members[] = {
-    {INT64_C(8190976381), "fly1ngangel", OFF, 1},
     {INT64_C(558269829), "kfrom7", OFF, 1},
     {INT64_C(8796163695), "anazerka", DEV | OFF, 1},
     {INT64_C(5561372449), "CookieValerka", OFF, 1},
@@ -24,6 +23,7 @@ static const exteria_team_member members[] = {
     {EXTERIA_TEAM_LEAD_ID, "sqmrak", ExteriaMarkLead | ExteriaMarkSenko, 0},
     {INT64_C(5435278149), "QWERTYU1OPZ", DEV, 0},
     {INT64_C(588487063), "menstry", DEV | OFF, 1},
+    {INT64_C(659976684), "KirillPro671488", OFF, 1},
     {INT64_C(5390055485), "nestorvashenko", DEV, 0},
     {INT64_C(1448306214), "illyagif", DEV, 0},
     {INT64_C(940506028), "Maks_097", ExteriaMarkTester, 0},
