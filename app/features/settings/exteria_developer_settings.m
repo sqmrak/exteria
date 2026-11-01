@@ -116,6 +116,44 @@ static UIView *ExteriaDeveloperHost(void) {
     [_toast showInView:ExteriaDeveloperHost() inset:ExteriaStatusBarHeight()];
 }
 
+/* every chat of the main list and of the archive that holds unread messages or carries the manual unread mark is read on the server, one call after another so the
+   server is not flooded; the person is told how many went through and how many failed */
+- (void)markEverythingRead {
+    ExteriaDeveloperSettingsController *me = self;
+    [_session loadDialogsInFolder:0 completion:^(NSArray *main, NSString *mainError) {
+        if (mainError) {
+            ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"developer.readall.failed", nil), mainError]);
+            return;
+        }
+        [me->_session loadDialogsInFolder:1 completion:^(NSArray *archived, NSString *archiveError) {
+            if (archiveError) NSLog(@"exteria: the archive was not read by mark everything: %@", archiveError);
+            NSMutableArray *queue = [NSMutableArray array];
+            for (ExteriaDialog *dialog in [main arrayByAddingObjectsFromArray:archived ? archived : [NSArray array]]) {
+                if (dialog.unreadCount > 0 || dialog.unread) [queue addObject:dialog];
+            }
+            if (!queue.count) {
+                ExteriaShowNotice(nil, NSLocalizedString(@"developer.readall.none", nil));
+                return;
+            }
+            [me markNextRead:queue done:0 failed:0];
+        }];
+    }];
+}
+
+- (void)markNextRead:(NSMutableArray *)queue done:(NSUInteger)done failed:(NSUInteger)failed {
+    if (!queue.count) {
+        ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"developer.readall.done", nil), (unsigned long)done, (unsigned long)failed]);
+        return;
+    }
+    ExteriaDialog *dialog = [[[queue objectAtIndex:0] retain] autorelease];
+    [queue removeObjectAtIndex:0];
+    ExteriaChatCommand command = dialog.unreadCount > 0 ? ExteriaChatCommandMarkRead : ExteriaChatCommandClearUnreadMark;
+    [_session performAction:command onDialog:dialog completion:^(NSString *errorName) {
+        if (errorName) NSLog(@"exteria: %@ was not marked read: %@", dialog.title, errorName);
+        [self markNextRead:queue done:done + (errorName ? 0 : 1) failed:failed + (errorName ? 1 : 0)];
+    }];
+}
+
 - (void)showMarkNotices {
     static const struct { NSUInteger mark; NSString *key; } marks[] = {
         {ExteriaMarkDeveloper, @"developer.mark.developer"}, {ExteriaMarkLead, @"developer.mark.lead"}, {ExteriaMarkSenko, @"developer.mark.senko"},
@@ -200,8 +238,18 @@ static UIView *ExteriaDeveloperHost(void) {
         ExteriaDeveloperSettingsController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaLogsController alloc] initWithSession:me->_session] autorelease] animated:YES];
     }];
+    ExteriaSettingsRow *readAll = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolCheck tone:ExteriaSettingsToneBlack title:NSLocalizedString(@"developer.readall", nil)
+                                                           subtitle:NSLocalizedString(@"developer.readall.info", nil) value:nil tap:^{
+        ExteriaDeveloperSettingsController *me = weak.target;
+        if (!me) return;
+        ExteriaConfirm(NSLocalizedString(@"developer.readall", nil), NSLocalizedString(@"developer.readall.confirm", nil), NSLocalizedString(@"notice.ok", nil), ^{
+            ExteriaDeveloperSettingsController *again = weak.target;
+            if (again) [again markEverythingRead];
+        });
+    }];
     self.sections = [NSArray arrayWithObjects:
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"logs.header", nil) footer:nil rows:[NSArray arrayWithObject:logs]],
+        [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.readall.header", nil) footer:nil rows:[NSArray arrayWithObject:readAll]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.badges.header", nil) footer:nil rows:[NSArray arrayWithObject:badges]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.popups", nil) footer:NSLocalizedString(@"developer.popups.info", nil) rows:popups],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.system", nil) footer:nil rows:system],

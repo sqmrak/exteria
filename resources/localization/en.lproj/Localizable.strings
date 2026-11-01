@@ -2203,6 +2203,13 @@
 "developer.popup.crash" = "Crash report";
 "developer.popup.crash.info" = "The question whether to send the report to the lead developer";
 "developer.popup.busy" = "This window is already on screen.";
+"developer.readall.header" = "Chats";
+"developer.readall" = "Mark everything as read";
+"developer.readall.info" = "Reads every chat of the list and the archive";
+"developer.readall.confirm" = "Every chat with unread messages will be marked as read on the server.";
+"developer.readall.none" = "Nothing is unread.";
+"developer.readall.done" = "Marked as read: %lu, failed: %lu.";
+"developer.readall.failed" = "The list did not load: %@";
 "developer.popup.shiro" = "Tunnel failure";
 "developer.popup.shiro.info" = "The card shown when the built-in tunnel did not open";
 "developer.popup.noshiro" = "No tunnel was made in this run.";

@@ -2208,6 +2208,13 @@
 "developer.popup.crash" = "Отчёт о падении";
 "developer.popup.crash.info" = "Вопрос, отправить ли отчёт главному разработчику";
 "developer.popup.busy" = "Это окно уже на экране.";
+"developer.readall.header" = "Чаты";
+"developer.readall" = "Пометить всё как прочитанное";
+"developer.readall.info" = "Читает все чаты списка и архива";
+"developer.readall.confirm" = "Все чаты с непрочитанными сообщениями будут помечены прочитанными на сервере.";
+"developer.readall.none" = "Непрочитанного нет.";
+"developer.readall.done" = "Помечено прочитанными: %lu, не удалось: %lu.";
+"developer.readall.failed" = "Список не загрузился: %@";
 "developer.popup.shiro" = "Ошибка туннеля";
 "developer.popup.shiro.info" = "Карточка, когда встроенный туннель не открылся";
 "developer.popup.noshiro" = "Туннель в этом запуске не создан.";
