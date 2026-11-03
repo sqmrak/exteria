@@ -81,6 +81,11 @@ return {
 
 the host is `core/plugins`, the hooks into the chat are `app/platform/exteria_plugins.m`.
 
+## for developers
+
+- [docs/languages.md](docs/languages.md): add a language, from a `.strings` file or built into the app
+- [docs/plugins.md](docs/plugins.md): write a lua plugin
+
 ## build
 
 ```bash
