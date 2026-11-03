@@ -688,7 +688,8 @@ def background_color(path):
 
 
 def build_alternate_icons(res_dir, out_dir):
-    """opaque squares at every iphone and ipad size, from the color and picture of the adaptive icon"""
+    """opaque squares at every iphone and ipad size, from the color and picture of the adaptive icon. these are not marked pre-rendered, so springboard of ios 5 and 6
+    masks them and lays its own gloss over them; a corner baked into the file would only show black under that mask"""
     os.makedirs(out_dir, exist_ok=True)
     for name in ALTERNATE_ICONS:
         color = background_color(os.path.join(res_dir, "drawable", name + "_icon_background.xml"))
@@ -700,7 +701,7 @@ def build_alternate_icons(res_dir, out_dir):
         icon.alpha_composite(picture)
         icon = icon.convert("RGB")
         for suffix, pixels in ALTERNATE_ICON_SIZES:
-            write_png(legacy_icon(icon, pixels), os.path.join(out_dir, name.capitalize() + suffix + ".png"))
+            write_png(icon.resize((pixels, pixels), Image.LANCZOS), os.path.join(out_dir, name.capitalize() + suffix + ".png"))
 
 
 # the splash shows the icon the person chose, so each alternate icon also has the picture the splash draws: rounded, at the three scales of splash_icon
@@ -712,7 +713,7 @@ def build_image_icons(source, name, out_dir):
     if icon.width != icon.height:
         raise ValueError("%s icon must be square" % name)
     for suffix, pixels in ALTERNATE_ICON_SIZES:
-        write_png(legacy_icon(icon, pixels), os.path.join(out_dir, name + suffix + ".png"))
+        write_png(icon.resize((pixels, pixels), Image.LANCZOS), os.path.join(out_dir, name + suffix + ".png"))
     for suffix, pixels in SPLASH_SIDES:
         write_png(rounded_icon(icon, pixels), os.path.join(out_dir, "splash_" + name.lower() + suffix + ".png"))
 

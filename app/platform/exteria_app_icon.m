@@ -143,7 +143,11 @@ static NSError *ExteriaRewriteIconPlist(NSString *name) {
         }
         [plist setObject:original forKey:ExteriaIconOriginalKey];
     }
-    NSDictionary *original = [plist objectForKey:ExteriaIconOriginalKey];
+    NSMutableDictionary *original = [plist objectForKey:ExteriaIconOriginalKey];
+    /* ios 5 reads the pre-rendered flag of the flat file list from the top of the plist, so it is kept with the rest and changes with the icon; a copy saved by an
+       older version lacks it, and the plist still has the packaged value then */
+    if (![original objectForKey:@"UIPrerenderedIcon"] && [plist objectForKey:@"UIPrerenderedIcon"]) [original setObject:[plist objectForKey:@"UIPrerenderedIcon"] forKey:@"UIPrerenderedIcon"];
+    if (!name && [original objectForKey:@"UIPrerenderedIcon"]) [plist setObject:[original objectForKey:@"UIPrerenderedIcon"] forKey:@"UIPrerenderedIcon"];
 
     for (NSString *key in ExteriaIconEntryKeys()) {
         id saved = [original objectForKey:key];
@@ -166,6 +170,8 @@ static NSError *ExteriaRewriteIconPlist(NSString *name) {
         }
         if (flat) {
             [plist setObject:files forKey:key];
+            id flatFlag = [icon objectForKey:@"UIPrerenderedIcon"];
+            if (flatFlag) [plist setObject:flatFlag forKey:@"UIPrerenderedIcon"];
             continue;
         }
         NSMutableDictionary *entry = [plist objectForKey:key];
@@ -228,6 +234,16 @@ static BOOL ExteriaPNGSize(NSString *path, uint32_t *width, uint32_t *height) {
     return YES;
 }
 
+/* whether a png has an alpha channel, from its header: the packaged icons of the sizes ios 5 and 6 use carry their own rounded corners */
+static BOOL ExteriaPNGHasAlpha(NSString *path) {
+    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
+    NSData *head = [handle readDataOfLength:26];
+    [handle closeFile];
+    if (head.length < 26) return NO;
+    uint8_t colorType = ((const uint8_t *)head.bytes)[25];
+    return colorType == 4 || colorType == 6;
+}
+
 /* old uicache rebuilds system app entries but leaves ipa icon names in the user installation cache */
 static BOOL ExteriaUsesCachedUserIcons(void) {
     NSString *bundle = [[[NSBundle mainBundle] bundlePath] stringByResolvingSymlinksInPath];
@@ -278,6 +294,9 @@ static NSError *ExteriaWriteUserIconFiles(NSString *name) {
             UIImage *image = best ? [UIImage imageWithContentsOfFile:best] : nil;
             if (!image) return ExteriaIconFailure(9, @"the selected icon could not be read");
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, 1);
+            /* the alternate icons are opaque squares for the system to mask and gloss, but this install keeps the primary names and their pre-rendered flag, so nothing
+               masks them: the corners the original file has are cut here */
+            if (ExteriaPNGHasAlpha(original)) [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, width, height) cornerRadius:width * 0.18] addClip];
             [image drawInRect:CGRectMake(0, 0, width, height)];
             UIImage *resized = UIGraphicsGetImageFromCurrentImageContext();
             data = resized ? UIImagePNGRepresentation(resized) : nil;
