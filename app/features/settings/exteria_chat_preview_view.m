@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_bubble_shape.h"
 #import "exteria_chat_settings.h"
 #import "exteria_peer_colors.h"
 #import "exteria_emoji_label.h"
@@ -59,6 +60,10 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     NSInteger quoteColorId;
     UIView *box;
     CAGradientLayer *fill;
+    /* the picture of the bubble of Telegram for iOS, with its tail */
+    UIImageView *shape;
+    /* the bubble ends a run of the same side, so it has the tail */
+    BOOL lastOfRun;
     UIView *quotePlate;
     UIView *quoteBar;
     UILabel *quoteName;
@@ -75,6 +80,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
 - (void)dealloc {
     [box release];
     [fill release];
+    [shape release];
     [quotePlate release];
     [quoteBar release];
     [quoteName release];
@@ -168,6 +174,10 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
             bubble->fill = [[CAGradientLayer alloc] init];
             bubble->fill.hidden = !ExteriaThemeIsClassic();
             [bubble->box.layer insertSublayer:bubble->fill atIndex:0];
+            bubble->shape = [[UIImageView alloc] init];
+            bubble->shape.hidden = YES;
+            [bubble->box insertSubview:bubble->shape atIndex:0];
+            bubble->lastOfRun = i + 1 >= PREVIEW_ITEMS || _lines[i + 1].outgoing != _lines[i].outgoing || _lines[i + 1].sticker;
             bubble->text = [[[ExteriaEmojiLabel alloc] init] autorelease];
             bubble->text.numberOfLines = 0;
             bubble->text.text = NSLocalizedString(_lines[i].key, nil);
@@ -254,6 +264,9 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
             bubble->box.backgroundColor = [UIColor clearColor];
             bubble->box.layer.borderColor = outline.CGColor;
             bubble->box.layer.borderWidth = 1;
+        } else if (ExteriaChatTelegramBubbles()) {
+            /* the picture itself is made in the layout, which knows the corners */
+            bubble->box.backgroundColor = [UIColor clearColor];
         } else {
             bubble->box.backgroundColor = out ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn();
         }
@@ -352,6 +365,17 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
         if (apply) {
             CGFloat corner = ExteriaThemeIsClassic() ? (CGFloat)ExteriaChatClassicBubbleRadius() : MIN(radius, MIN(boxWidth, boxHeight) / 2);
             CGFloat x = bubble->outgoing ? width - PREVIEW_PAD - boxWidth : PREVIEW_PAD;
+            BOOL telegram = !ExteriaThemeIsClassic() && ExteriaChatTelegramBubbles();
+            bubble->shape.hidden = !telegram;
+            if (telegram) {
+                CGFloat major = MIN((CGFloat)ExteriaChatTelegramBubbleRadius(), MIN(boxWidth, boxHeight) / 2);
+                CGFloat join = MIN((CGFloat)ExteriaChatTelegramJoinRadius(), major);
+                BOOL out = bubble->outgoing;
+                ExteriaTelegramNeighbors neighbors = bubble->lastOfRun ? ExteriaTelegramNeighborsNone : ExteriaTelegramNeighborsTop;
+                bubble->shape.image = ExteriaTelegramBubbleImage(major, join, !out, out ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn(), neighbors);
+                bubble->shape.frame = ExteriaTelegramBubbleImageFrame(CGRectMake(0, 0, boxWidth, boxHeight), !out);
+                corner = 0;
+            }
             bubble->box.layer.cornerRadius = corner;
             bubble->box.frame = CGRectMake(x, y, boxWidth, boxHeight);
             bubble->fill.frame = bubble->box.bounds;

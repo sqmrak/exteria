@@ -1078,6 +1078,8 @@
 "chatset.theme.settings" = "Theme settings";
 "chatset.corners.header" = "Message corners";
 "chatset.corners.row" = "Corner radius";
+"chatset.tgbubbles" = "Bubbles like in original Telegram";
+"chatset.tgbubbles.info" = "Corners and tails of the bubbles as Telegram for iOS draws them";
 "chatset.list.header" = "Chat list view";
 "chatset.list.two" = "Two lines";
 "chatset.list.three" = "Three lines";

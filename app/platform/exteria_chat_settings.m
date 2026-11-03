@@ -19,6 +19,7 @@ static NSString *const ExteriaChatPauseOnMediaKey = @"exteria.chat.pauseonmedia"
 static NSString *const ExteriaChatBluetoothKey = @"exteria.chat.bluetoothmic";
 static NSString *const ExteriaChatSwipeKey = @"exteria.chat.swipe";
 static NSString *const ExteriaChatLargeEmojiKey = @"exteria.chat.largeemoji";
+static NSString *const ExteriaChatTelegramBubblesKey = @"exteria.chat.telegrambubbles";
 static NSString *const ExteriaChatListTitleKey = @"exteria.chatlist.title";
 static NSString *const ExteriaChatListCustomTitleKey = @"exteria.chatlist.customtitle";
 static NSString *const ExteriaAvatarCornerKey = @"exteria.avatar.corner";
@@ -127,6 +128,12 @@ BOOL ExteriaArchiveHidden(void) { return ExteriaStoredFlag(ExteriaArchiveHiddenK
 void ExteriaArchiveSetHidden(BOOL hidden) { ExteriaStoreFlag(ExteriaArchiveHiddenKey, hidden); }
 BOOL ExteriaChatLargeEmoji(void) { return ExteriaStoredFlag(ExteriaChatLargeEmojiKey, YES); }
 void ExteriaChatSetLargeEmoji(BOOL on) { ExteriaStoreFlag(ExteriaChatLargeEmojiKey, on); }
+BOOL ExteriaChatTelegramBubbles(void) { return ExteriaStoredFlag(ExteriaChatTelegramBubblesKey, NO); }
+void ExteriaChatSetTelegramBubbles(BOOL on) { ExteriaStoreFlag(ExteriaChatTelegramBubblesKey, on); }
+NSInteger ExteriaChatTelegramBubbleRadius(void) {
+    return (ExteriaChatBubbleRadius() * 16 + EXTERIA_CHAT_BUBBLE_RADIUS_MAX / 2) / EXTERIA_CHAT_BUBBLE_RADIUS_MAX;
+}
+NSInteger ExteriaChatTelegramJoinRadius(void) { return ExteriaChatTelegramBubbleRadius() / 2; }
 ExteriaChatListTitle ExteriaChatListTitleStored(void) {
     NSNumber *stored = ExteriaStoredNumber(ExteriaChatListTitleKey);
     return stored && stored.integerValue >= 0 && stored.integerValue < ExteriaChatListTitleCount ? (ExteriaChatListTitle)stored.integerValue : ExteriaChatListTitleDefault;

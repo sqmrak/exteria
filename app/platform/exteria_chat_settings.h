@@ -22,6 +22,13 @@ void ExteriaChatSetBubbleRadius(NSInteger radius);
 /* the same setting for the classic bubble, whose corners are 15 points where the modern ones are 17; the slider
    scaled to the classic range, so the default of both is the shape each style had before the setting existed */
 NSInteger ExteriaChatClassicBubbleRadius(void);
+/* the modern bubble drawn as Telegram for iOS draws it: corners of 16 points, 8 where it tucks in against a
+   neighbour, and a tail at the end of a run; default off */
+BOOL ExteriaChatTelegramBubbles(void);
+void ExteriaChatSetTelegramBubbles(BOOL on);
+/* the corners of that bubble from the same slider, scaled so the default of 17 gives the 16 and 8 of Telegram */
+NSInteger ExteriaChatTelegramBubbleRadius(void);
+NSInteger ExteriaChatTelegramJoinRadius(void);
 
 typedef enum {
     /* a row of the chat list is the name and one line of the last message */

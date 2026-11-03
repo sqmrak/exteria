@@ -1083,6 +1083,8 @@
 "chatset.theme.settings" = "Настройки темы";
 "chatset.corners.header" = "Углы блоков с сообщениями";
 "chatset.corners.row" = "Радиус углов";
+"chatset.tgbubbles" = "Пузыри как в оригинальном Telegram";
+"chatset.tgbubbles.info" = "Углы и хвостики сообщений, как их рисует Telegram для iOS";
 "chatset.list.header" = "Список чатов";
 "chatset.list.two" = "Двустрочный";
 "chatset.list.three" = "Трёхстрочный";

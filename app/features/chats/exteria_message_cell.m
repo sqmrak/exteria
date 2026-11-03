@@ -28,12 +28,17 @@
 #import "exteria_theme.h"
 #import "exteria_imported_theme.h"
 #import "exteria_burn_effect.h"
+#import "exteria_bubble_shape.h"
 #include "exteria_message_actions.h"
 
 #define JOIN_RADIUS 5.0
+/* the bubble of Telegram for iOS is a shape of the modern look; the classic one keeps its own */
+static BOOL ExteriaTelegramBubbles(void) {
+    return !ExteriaThemeIsClassic() && ExteriaChatTelegramBubbles();
+}
 /* the corner of a modern bubble, which the person sets in the chat settings; the corner that tucks in against a neighbour is never larger than it */
 static CGFloat ExteriaBubbleRadius(void) {
-    return (CGFloat)ExteriaChatBubbleRadius();
+    return (CGFloat)(ExteriaTelegramBubbles() ? ExteriaChatTelegramBubbleRadius() : ExteriaChatBubbleRadius());
 }
 #define MEDIA_BUTTON 48.0
 #define VOICE_BUTTON 44.0
@@ -428,7 +433,8 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
     BOOL classic = ExteriaThemeIsClassic();
     CGRect rect = self.bounds;
     CGFloat inner = classic ? (CGFloat)ExteriaChatClassicBubbleRadius() : ExteriaBubbleRadius();
-    CGFloat join = MIN(JOIN_RADIUS, inner);
+    BOOL telegram = !classic && ExteriaTelegramBubbles();
+    CGFloat join = telegram ? MIN((CGFloat)ExteriaChatTelegramJoinRadius(), inner) : MIN(JOIN_RADIUS, inner);
     CGFloat joinTop = _item.joinsPrevious ? join : inner, joinBottom = _item.joinsNext ? join : inner;
     if (_tailWidth > 0) {
         /* the content is laid out from the bubble's own corner, so a bubble with its tail on the left slides over by the tail */
@@ -439,7 +445,13 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
         }
     }
     /* the corner on the side the bubble leans towards is the one that tucks in against its neighbour */
-    if (classic) {
+    if (telegram) {
+        /* the picture of Telegram for iOS, stretched over the box; its tail stands in the room kept beside the bubble */
+        ExteriaTelegramNeighbors neighbors = ExteriaTelegramNeighborsFor(_item.joinsPrevious, _item.joinsNext);
+        if (_tailWidth <= 0 && ExteriaTelegramNeighborsHaveTail(neighbors)) neighbors = _item.joinsPrevious ? ExteriaTelegramNeighborsBoth : ExteriaTelegramNeighborsTop;
+        UIImage *image = ExteriaTelegramBubbleImage(inner, join, !outgoing, outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn(), neighbors);
+        [image drawInRect:ExteriaTelegramBubbleImageFrame(rect, !outgoing)];
+    } else if (classic) {
         ExteriaDrawClassicBubble(context, rect, outgoing, outgoing ? inner : joinTop, outgoing ? joinTop : inner, outgoing ? joinBottom : inner,
                                  outgoing ? inner : joinBottom, _tailWidth);
     } else {
@@ -1577,8 +1589,9 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _replyPreview.hidden = item.kind == ExteriaChatItemBubble || CGRectIsEmpty(item.replyFrame);
     _replyPreview.frame = CGRectOffset(item.replyFrame, bubble.origin.x, bubble.origin.y);
     [_replyPreview setNeedsDisplay];
-    /* a classic bubble ends its run with a tail, which takes a few points beside it */
-    CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.bare && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? CLASSIC_TAIL : 0;
+    /* a classic bubble and the one of Telegram end their run with a tail, which takes a few points beside it */
+    BOOL tailed = ExteriaTelegramBubbles() || (ExteriaThemeIsClassic() && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail));
+    CGFloat tail = tailed && item.kind == ExteriaChatItemBubble && !item.bare && !item.joinsNext ? (ExteriaTelegramBubbles() ? EXTERIA_TELEGRAM_TAIL_ROOM : CLASSIC_TAIL) : 0;
     _body.tailWidth = tail;
     CGRect bodyFrame = bubble;
     if (item.kind != ExteriaChatItemBubble && !CGRectIsEmpty(item.commentsFrame)) {

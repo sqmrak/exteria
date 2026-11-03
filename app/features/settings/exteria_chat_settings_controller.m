@@ -240,7 +240,15 @@ static NSString *ExteriaNightStateText(void) {
                                                                     minimum:EXTERIA_CHAT_BUBBLE_RADIUS_MIN maximum:EXTERIA_CHAT_BUBBLE_RADIUS_MAX change:^(float value) {
             [(ExteriaChatSettingsController *)weak.target radiusMoved:value];
         }];
-        [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.corners.header", nil) footer:nil rows:[NSArray arrayWithObject:radius]]];
+        NSMutableArray *corners = [NSMutableArray arrayWithObject:radius];
+        /* the shape of Telegram for iOS is one of the modern look; the classic bubble keeps its own */
+        if (!classic) {
+            [corners addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.tgbubbles", nil) subtitle:NSLocalizedString(@"chatset.tgbubbles.info", nil)
+                                                                   on:ExteriaChatTelegramBubbles() toggle:^(BOOL on) {
+                ExteriaChatSetTelegramBubbles(on);
+            }]];
+        }
+        [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.corners.header", nil) footer:nil rows:corners]];
 
         ExteriaChatListStyle style = ExteriaChatListStyleStored();
         ExteriaSettingsRow *two = [ExteriaSettingsRow checkRowWithTitle:NSLocalizedString(@"chatset.list.two", nil) subtitle:nil checked:style == ExteriaChatListTwoLines tap:^{
