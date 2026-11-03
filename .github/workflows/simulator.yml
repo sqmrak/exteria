@@ -1,0 +1,57 @@
+name: simulator
+
+on:
+  push:
+    branches: ['claude/**']
+  workflow_dispatch:
+    inputs:
+      api_id:
+        description: telegram api id (masked in the log)
+        required: false
+      api_hash:
+        description: telegram api hash (masked in the log)
+        required: false
+
+concurrency:
+  group: simulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: credentials
+        env:
+          INPUT_ID: ${{ inputs.api_id }}
+          INPUT_HASH: ${{ inputs.api_hash }}
+          SECRET_ID: ${{ secrets.EXTERIA_API_ID }}
+          SECRET_HASH: ${{ secrets.EXTERIA_API_HASH }}
+        run: |
+          id="${INPUT_ID:-$SECRET_ID}"
+          hash="${INPUT_HASH:-$SECRET_HASH}"
+          if [ -z "$id" ] || [ -z "$hash" ]; then
+            echo "::warning::no api credentials, the app is built with placeholders and cannot sign in"
+            id=1
+            hash=00000000000000000000000000000000
+          fi
+          echo "::add-mask::$id"
+          echo "::add-mask::$hash"
+          echo "EXTERIA_API_ID=$id" >> "$GITHUB_ENV"
+          echo "EXTERIA_API_HASH=$hash" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: local/sim
+          key: sim-deps-${{ hashFiles('scripts/build_simulator.sh') }}
+
+      - name: build
+        run: scripts/build_simulator.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Exteria-simulator
+          path: build/sim/Exteria-simulator.zip
+          if-no-files-found: error
