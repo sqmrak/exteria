@@ -29,6 +29,8 @@
 #import "exteria_story_strip.h"
 #import "exteria_symbol.h"
 #import "exteria_chat_settings.h"
+#import "exteria_more_settings_controller.h"
+#import "exteria_proxy_settings.h"
 #import "exteria_person.h"
 #import "exteria_falling_view.h"
 #import "exteria_sheet.h"
@@ -655,10 +657,22 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 
 - (void)showMenu:(UIView *)button {
     BOOL dark = ExteriaThemeIsDark();
-    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(dark ? @"menu.day" : @"menu.night", nil), NSLocalizedString(@"menu.group", nil),
-                       NSLocalizedString(@"menu.channel", nil), NSLocalizedString(@"menu.saved", nil), NSLocalizedString(@"bookmarks.title", nil), nil];
-    ExteriaSymbol symbols[] = {dark ? ExteriaSymbolSun : ExteriaSymbolMoon, ExteriaSymbolPerson, ExteriaSymbolMegaphone, ExteriaSymbolBookmark, ExteriaSymbolStar};
+    /* the list of proxies is one tap away only while one is on, which is when the connection may need it changed */
+    exteria_proxy proxy;
+    BOOL proxyEnabled = NO;
+    exteria_status proxyStatus = ExteriaProxyRead(&proxy, &proxyEnabled);
+    exteria_wipe(&proxy, sizeof(proxy));
+    if (proxyStatus != EXTERIA_OK) NSLog(@"exteria: proxy settings unavailable: %s", exteria_status_name(proxyStatus));
+    NSMutableArray *titles = [NSMutableArray arrayWithObjects:NSLocalizedString(dark ? @"menu.day" : @"menu.night", nil), NSLocalizedString(@"menu.group", nil),
+                              NSLocalizedString(@"menu.channel", nil), NSLocalizedString(@"menu.saved", nil), NSLocalizedString(@"bookmarks.title", nil), nil];
+    ExteriaSymbol symbols[] = {dark ? ExteriaSymbolSun : ExteriaSymbolMoon, ExteriaSymbolPerson, ExteriaSymbolMegaphone, ExteriaSymbolBookmark, ExteriaSymbolStar, ExteriaSymbolLock};
+    NSUInteger proxyIndex = NSNotFound;
+    if (proxyEnabled) {
+        proxyIndex = titles.count;
+        [titles addObject:NSLocalizedString(@"proxy.title", nil)];
+    }
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
+        if (index == proxyIndex) { [self openProxyList]; return; }
         switch (index) {
         case 0: [self toggleDayNight]; break;
         case 1: [self askNameForMegagroup:YES]; break;
@@ -680,6 +694,11 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
     if (!self.isViewLoaded) return;
     [self closeOpenCell];
     [self.table setContentOffset:CGPointMake(0, -self.table.contentInset.top) animated:YES];
+}
+
+/* the proxies are kept on the More page of the settings, with the switch and the link prompt */
+- (void)openProxyList {
+    [self.navigationController pushViewController:[[[ExteriaMoreSettingsController alloc] initWithSession:self.session] autorelease] animated:YES];
 }
 
 - (void)openBookmarks {
