@@ -717,6 +717,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     UIImageView *_tile;
     UIImageView *_trailing;
     UILabel *_title;
+    ExteriaEmojiLabel *_nameTitle;
     UILabel *_subtitle;
     UILabel *_line3;
     UILabel *_value;
@@ -760,6 +761,9 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     _title.backgroundColor = [UIColor clearColor];
     _title.numberOfLines = 1;
     [_card addSubview:_title];
+    _nameTitle = [[ExteriaEmojiLabel alloc] init];
+    _nameTitle.dropsUndrawable = YES;
+    [_card addSubview:_nameTitle];
     _subtitle = [[UILabel alloc] init];
     _subtitle.backgroundColor = [UIColor clearColor];
     _subtitle.numberOfLines = 1;
@@ -808,6 +812,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     [_tile release];
     [_trailing release];
     [_title release];
+    [_nameTitle release];
     [_subtitle release];
     [_line3 release];
     [_value release];
@@ -902,6 +907,13 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     /* a title and the line under it wrap for as many lines as they need, so "Terminate All Other Sessions" reads whole (the session rows keep one line each,
        their height is fixed) */
     _title.numberOfLines = row.isSession ? 1 : 0;
+    /* a row with a picture is a person, a chat or a pack: the system label draws a styled nick as boxes with a code in them, so the name goes through the emoji label that leaves them out */
+    _nameTitle.hidden = row.tileImage == nil;
+    _title.hidden = row.tileImage != nil;
+    _nameTitle.text = row.title;
+    _nameTitle.textColor = textColor;
+    _nameTitle.font = _title.font;
+    _nameTitle.numberOfLines = _title.numberOfLines;
     _subtitle.numberOfLines = row.isSession ? 1 : 0;
     _subtitle.text = row.subtitle;
     _subtitle.font = ExteriaFontRegular(row.isSession ? 14 : 13);
@@ -972,7 +984,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _trailing.layer.masksToBounds = !row.trailingImageUnclipped;
     _trailing.hidden = row.trailingImage == nil;
     CGFloat dim = row.disabled ? 0.5 : 1;
-    _tile.alpha = _title.alpha = _subtitle.alpha = _switch.alpha = dim;
+    _tile.alpha = _title.alpha = _nameTitle.alpha = _subtitle.alpha = _switch.alpha = dim;
     _switch.userInteractionEnabled = !row.disabled;
     self.accessibilityLabel = row.title;
     self.accessibilityTraits = tappable ? UIAccessibilityTraitButton : UIAccessibilityTraitNone;
@@ -1065,6 +1077,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     } else {
         _title.frame = CGRectMake(left, 0, textWidth, height);
     }
+    _nameTitle.frame = _title.frame;
 }
 
 @end
