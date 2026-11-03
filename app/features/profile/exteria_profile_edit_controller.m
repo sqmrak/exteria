@@ -197,7 +197,8 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
     field.returnKeyType = UIReturnKeyDone;
     field.autocorrectionType = capitalized ? UITextAutocorrectionTypeDefault : UITextAutocorrectionTypeNo;
-    field.autocapitalizationType = capitalized ? UITextAutocapitalizationTypeWords : UITextAutocapitalizationTypeNone;
+    /* a bio is prose, so it capitalizes sentences; only the name fields capitalize every word */
+    field.autocapitalizationType = name ? UITextAutocapitalizationTypeWords : (capitalized ? UITextAutocapitalizationTypeSentences : UITextAutocapitalizationTypeNone);
     field.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     return field;
 }
