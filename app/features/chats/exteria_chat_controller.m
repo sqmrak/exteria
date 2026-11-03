@@ -308,6 +308,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _onceVoiceOpened;
     BOOL _stickToBottom;
     BOOL _restoringScroll;
+    /* the kept place is looked up once, when the chat opens: the end of a window loads the newest page again, and finding it there put the list back where it was left */
+    BOOL _scrollRestoreChecked;
     /* the chat is still settling on its newest message: the kept page and the first fresh page land without a scroll animation, so the list never visibly travels */
     BOOL _opening;
     BOOL _panelShown;
@@ -2869,7 +2871,9 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [self showStatus:nil retry:NO];
     ExteriaWeakReference *weak = _weak;
     /* the place the person left the chat at comes back, as in the official clients; unread messages, a link and a bookmark take the opening first */
-    if (_startMessageId <= 0 && !_openUnread && !_pinnedList && _dialog.unreadCount <= 0) {
+    BOOL restoreOnce = !_scrollRestoreChecked;
+    _scrollRestoreChecked = YES;
+    if (restoreOnce && _startMessageId <= 0 && !_openUnread && !_pinnedList && _dialog.unreadCount <= 0) {
         int32_t kept = [self keptScrollMessageId];
         if (kept > 0) {
             _startMessageId = kept;
