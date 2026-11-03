@@ -1638,6 +1638,9 @@
 "privacy.nobody" = "Nobody";
 "privacy.exceptions" = "Exceptions";
 "privacy.exceptions.info" = "Exceptions override the choice above.";
+"privacy.photo.public" = "Set public photo";
+"privacy.photo.public.info" = "This photo is shown to those who are not allowed to see your main profile photo.";
+"privacy.photo.public.done" = "The public photo is set";
 "privacy.always" = "Always allow";
 "privacy.never" = "Never allow";
 "privacy.add" = "Add";

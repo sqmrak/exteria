@@ -1643,6 +1643,9 @@
 "privacy.nobody" = "Никто";
 "privacy.exceptions" = "Исключения";
 "privacy.exceptions.info" = "Исключения важнее выбора выше.";
+"privacy.photo.public" = "Выбрать публичное фото";
+"privacy.photo.public.info" = "Это фото видят те, кому нельзя смотреть основное фото профиля.";
+"privacy.photo.public.done" = "Публичное фото установлено";
 "privacy.always" = "Всегда разрешать";
 "privacy.never" = "Никогда не разрешать";
 "privacy.add" = "Добавить";

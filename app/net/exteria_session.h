@@ -321,6 +321,8 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* a jpeg becomes the profile photo of the signed in user: the file goes up in parts, then the server is told to
    use it */
 - (void)uploadProfilePhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
+/* a jpeg becomes the public photo: it is shown to those who are not allowed to see the main profile photo, and the main photo is left as it is */
+- (void)uploadPublicPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
 /* the same for an mp4 that becomes a moving profile picture: square, ten seconds at most and small, as ExteriaProfilePhotoPicker makes it */
 - (void)uploadProfileVideoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
 /* a jpeg becomes a story of the signed in user, shown to everyone for a day, no caption; the completion is the same as the profile photo's */

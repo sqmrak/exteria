@@ -1,5 +1,6 @@
 #import "exteria_privacy_controller.h"
 
+#import "exteria_alert.h"
 #import "exteria_classic_devices_controller.h"
 #import "exteria_contact_picker_controller.h"
 #import "exteria_devices_controller.h"
@@ -7,6 +8,7 @@
 #import "exteria_gift_screen.h"
 #import "exteria_people_avatars.h"
 #import "exteria_person.h"
+#import "exteria_profile_photo_picker.h"
 #import "exteria_sheet.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -352,6 +354,7 @@ static void ExteriaPrivacyFail(NSString *errorName) {
     ExteriaWeakReference *_weak;
     void (^_changedHandler)(ExteriaPrivacyRules *rules);
     BOOL _saving;
+    BOOL _uploadingPublic;
 }
 @end
 
@@ -449,6 +452,30 @@ static void ExteriaPrivacyFail(NSString *errorName) {
     }];
 }
 
+/* the photo that those who may not see the main one get instead; the picker hands over a square jpeg that this page deletes */
+- (void)choosePublicPhoto {
+    if (_uploadingPublic) return;
+    ExteriaWeakReference *weak = _weak;
+    [ExteriaProfilePhotoPicker pickFrom:self picked:^(NSString *path) {
+        ExteriaPrivacyRuleController *me = weak.target;
+        if (!me) {
+            [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+            return;
+        }
+        me->_uploadingPublic = YES;
+        [me->_session uploadPublicPhotoAtPath:path completion:^(NSString *errorName) {
+            [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+            ExteriaPrivacyRuleController *again = weak.target;
+            if (!again) return;
+            again->_uploadingPublic = NO;
+            if (errorName) ExteriaPrivacyFail(errorName);
+            else ExteriaShowNotice(nil, NSLocalizedString(@"privacy.photo.public.done", nil));
+        }];
+    } unavailable:^{
+        ExteriaShowNotice(nil, NSLocalizedString(@"attach.failed", nil));
+    }];
+}
+
 - (void)openExceptions:(BOOL)allowed {
     ExteriaWeakReference *weak = _weak;
     ExteriaPrivacyExceptionsController *page = [[[ExteriaPrivacyExceptionsController alloc] initWithSession:_session rules:_rules allowed:allowed avatars:_avatars media:_media] autorelease];
@@ -492,6 +519,12 @@ static void ExteriaPrivacyFail(NSString *errorName) {
                                                             tap:^{ [(ExteriaPrivacyRuleController *)weak.target openExceptions:NO]; }]];
     }
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"privacy.exceptions", nil) footer:NSLocalizedString(@"privacy.exceptions.info", nil) rows:exceptions]];
+    /* somebody is kept from the main photo only when the base is narrower than everybody or a person is on the never list */
+    if (_rules.key == EXTERIA_PRIVACY_PHOTO && (base != EXTERIA_PRIVACY_EVERYBODY || [_rules countAllowed:NO])) {
+        ExteriaSettingsRow *publicPhoto = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolCameraPlus tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"privacy.photo.public", nil) subtitle:nil
+                                                                       value:nil tap:^{ [(ExteriaPrivacyRuleController *)weak.target choosePublicPhoto]; }];
+        [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"privacy.photo.public.info", nil) rows:[NSArray arrayWithObject:publicPhoto]]];
+    }
     self.sections = sections;
     [self reloadSettings];
 }

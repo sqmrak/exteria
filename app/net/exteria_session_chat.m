@@ -48,6 +48,8 @@ typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_privacy 
     BOOL profilePhoto;
     /* ... and the file is an mp4 that moves, not a picture */
     BOOL profileVideo;
+    /* ... and it is the public photo, which those who may not see the main one get to see, not the main photo */
+    BOOL profilePublic;
     /* the file becomes a story of the signed in user */
     BOOL storyPhoto;
     /* ... with this text and for this audience */
@@ -337,6 +339,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
             exteria_status status = exteria_file_uploaded(&job->transfer, arena, &file);
             if (status == EXTERIA_OK && job->storyPhoto) status = exteria_story_publish_photo_request(arena, file, job->randomId, job->storyCaption, job->storyPrivacy, request);
             else if (status == EXTERIA_OK && job->profileVideo) status = exteria_profile_video_request(arena, file, 0, request);
+            else if (status == EXTERIA_OK && job->profilePublic) status = exteria_profile_public_photo_request(arena, file, request);
             else if (status == EXTERIA_OK) status = exteria_profile_photo_request(arena, file, request);
             return status;
         } handler:^(const exteria_mt_rpc_result *result) {
@@ -610,6 +613,10 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     [self uploadJobAtPath:path story:NO video:NO completion:completion];
 }
 
+- (void)uploadPublicPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
+    [self uploadJobAtPath:path story:NO video:NO public:YES options:NULL completion:completion];
+}
+
 - (void)uploadProfileVideoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
     [self uploadJobAtPath:path story:NO video:YES completion:completion];
 }
@@ -623,19 +630,20 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     memset(&options, 0, sizeof(options));
     options.privacy = privacy;
     if (caption.length) snprintf(options.caption, sizeof(options.caption), "%s", caption.UTF8String);
-    [self uploadJobAtPath:path story:YES video:NO options:&options completion:completion];
+    [self uploadJobAtPath:path story:YES video:NO public:NO options:&options completion:completion];
 }
 
 /* both end in a call that takes the file: the profile photo or the story of the signed in user */
 - (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video completion:(void (^)(NSString *errorName))completion {
-    [self uploadJobAtPath:path story:story video:video options:NULL completion:completion];
+    [self uploadJobAtPath:path story:story video:video public:NO options:NULL completion:completion];
 }
 
-- (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video options:(const ExteriaStoryPostOptions *)options completion:(void (^)(NSString *errorName))completion {
+- (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video public:(BOOL)publicPhoto options:(const ExteriaStoryPostOptions *)options completion:(void (^)(NSString *errorName))completion {
     void (^done)(NSString *) = [completion copy];
     ExteriaUploadJob *job = [[ExteriaUploadJob alloc] init];
     job->profilePhoto = !story;
     job->profileVideo = video && !story;
+    job->profilePublic = publicPhoto && !story && !video;
     job->storyPhoto = story;
     if (story && options) {
         memcpy(job->storyCaption, options->caption, sizeof(job->storyCaption));
