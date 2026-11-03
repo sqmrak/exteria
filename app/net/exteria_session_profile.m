@@ -259,6 +259,13 @@ static NSNumber *ExteriaSelfPremium;
     }];
 }
 
+- (void)deleteProfilePhoto:(ExteriaMedia *)photo completion:(void (^)(NSString *))completion {
+    exteria_media_ref ref = photo.ref;
+    [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_profile_photo_delete_request(arena, &ref, request);
+    } completion:completion];
+}
+
 - (void)saveMusic:(ExteriaMedia *)song unsave:(BOOL)unsave completion:(void (^)(NSString *))completion {
     exteria_media_ref ref = song.ref;
     [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {

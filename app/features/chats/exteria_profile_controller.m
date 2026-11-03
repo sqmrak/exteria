@@ -488,7 +488,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     NSString *text = NSLocalizedString(ExteriaChatFlagGet(ExteriaChatFlagGhostOffline) ? @"profile.offline.question" : @"profile.online", nil);
     _status.text = text;
     _barStatus.text = text;
-    _moreButton.hidden = !_person.username.length && !ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
+    _moreButton.hidden = ![self hasMenu];
     [self layoutHead];
 }
 
@@ -575,7 +575,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [infoRows addObjectsFromArray:ExteriaIdentityRows(_person.userId, _person.photo)];
     [_info setRows:infoRows];
     [_info setStarsBalance:_starsImage caption:NSLocalizedString(@"profile.stars", nil)];
-    _moreButton.hidden = !_person.username.length && !ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
+    _moreButton.hidden = ![self hasMenu];
     _music.savedTrack = _full.music;
     [self refreshChannelCard];
     [self layoutHead];
@@ -833,12 +833,18 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [self.navigationController pushViewController:chat animated:YES];
 }
 
+/* the dots show when there is something under them: the link of the username, the peek at being online, a photo to remove */
+- (BOOL)hasMenu {
+    return _person.username.length > 0 || _person.photo != nil || ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
+}
+
 - (void)showMenu {
     BOOL hasLink = _person.username.length > 0;
     BOOL ghost = ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
-    if (!hasLink && !ghost) return;
+    BOOL hasPhoto = _person.photo != nil;
+    if (!hasLink && !ghost && !hasPhoto) return;
     NSMutableArray *titles = [NSMutableArray array];
-    ExteriaSymbol symbols[2];
+    ExteriaSymbol symbols[3];
     NSUInteger count = 0;
     if (hasLink) {
         [titles addObject:NSLocalizedString(@"profile.qr.copy", nil)];
@@ -848,14 +854,56 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         [titles addObject:NSLocalizedString(@"profile.peek.online", nil)];
         symbols[count++] = ExteriaSymbolEye;
     }
+    if (hasPhoto) {
+        [titles addObject:NSLocalizedString(@"profile.photo.delete", nil)];
+        symbols[count++] = ExteriaSymbolTrash;
+    }
     ExteriaWeakReference *me = _weak;
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols
                                                               handler:^(NSUInteger index) {
         ExteriaProfileController *profile = me.target;
-        if (hasLink && index == 0) [profile copyLink];
-        else if (ghost && index == (hasLink ? 1u : 0u)) [profile peekOnline];
+        NSUInteger at = 0;
+        if (hasLink && index == at++) [profile copyLink];
+        else if (ghost && index == at++) [profile peekOnline];
+        else if (hasPhoto && index == at) [profile confirmDeletePhoto];
     }] autorelease];
     [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(_moreButton.frame) - 6, CGRectGetMaxY(_moreButton.frame) - 8)];
+}
+
+- (void)confirmDeletePhoto {
+    ExteriaWeakReference *me = _weak;
+    ExteriaConfirmAction(self, NSLocalizedString(@"profile.photo.delete.confirm", nil), NSLocalizedString(@"profile.photo.delete", nil), ^{
+        [(ExteriaProfileController *)me.target deletePhoto];
+    });
+}
+
+/* the newest profile photo is the one on show, so the list is asked for at the moment of the tap and its first item goes */
+- (void)deletePhoto {
+    if (_uploading || !_person) return;
+    _uploading = YES;
+    [_identity setUploading:YES];
+    [self retain];
+    void (^failed)(NSString *) = ^(NSString *errorName) {
+        NSLog(@"exteria: profile photo not removed: %@", errorName);
+        [self toast:NSLocalizedString(@"profile.photo.delete.failed", nil)];
+    };
+    [_session loadAvatarsOfDialog:[ExteriaDialog savedMessagesWithPerson:_person] completion:^(NSArray *photos, NSString *listError) {
+        if (listError || !photos.count) {
+            [self autorelease];
+            _uploading = NO;
+            [_identity setUploading:NO];
+            if (listError) failed(listError);
+            else [self loadProfile];
+            return;
+        }
+        [_session deleteProfilePhoto:[photos objectAtIndex:0] completion:^(NSString *errorName) {
+            [self autorelease];
+            _uploading = NO;
+            [_identity setUploading:NO];
+            if (errorName) failed(errorName);
+            else [self loadProfile];
+        }];
+    }];
 }
 
 - (void)peekOnline {

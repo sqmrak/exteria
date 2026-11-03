@@ -422,6 +422,9 @@
 "profile.archive.empty" = "Your expired stories are kept here";
 "profile.photo.uploading" = "Uploading the photo";
 "profile.photo.failed" = "The photo was not set";
+"profile.photo.delete" = "Delete photo";
+"profile.photo.delete.confirm" = "Delete the current profile photo?";
+"profile.photo.delete.failed" = "The photo was not deleted";
 "profile.edit.title" = "Edit";
 "profile.edit.save" = "Save";
 "profile.edit.first" = "First name";

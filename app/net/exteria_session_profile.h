@@ -83,6 +83,8 @@
 /* the profile photos of the person a chat is with (the newest first, one's own for the chat with oneself) or the
    photos a group or channel has had; the items are ExteriaMedia of kind photo */
 - (void)loadAvatarsOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSArray *photos, NSString *errorName))completion;
+/* removes one profile photo of the signed in user, an item of loadAvatarsOfDialog for oneself */
+- (void)deleteProfilePhoto:(ExteriaMedia *)photo completion:(void (^)(NSString *errorName))completion;
 /* puts a song on the signed in profile, or takes it off; the song is an ExteriaMedia of kind audio that has a file reference */
 - (void)saveMusic:(ExteriaMedia *)song unsave:(BOOL)unsave completion:(void (^)(NSString *errorName))completion;
 /* a year of zero hides it; a date the calendar does not have is refused before it is sent and comes back as INTERNAL */

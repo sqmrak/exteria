@@ -422,6 +422,9 @@
 "profile.archive.empty" = "Здесь хранятся ваши истёкшие истории";
 "profile.photo.uploading" = "Загружаем фото";
 "profile.photo.failed" = "Фото не установлено";
+"profile.photo.delete" = "Удалить фото";
+"profile.photo.delete.confirm" = "Удалить текущее фото профиля?";
+"profile.photo.delete.failed" = "Фото не удалено";
 "profile.edit.title" = "Изменить";
 "profile.edit.save" = "Сохранить";
 "profile.edit.first" = "Имя";
