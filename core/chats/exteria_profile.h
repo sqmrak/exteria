@@ -94,6 +94,11 @@ exteria_status exteria_username_request(exteria_arena *arena, const char *name, 
 
 /* photos.uploadProfilePhoto for a file already uploaded, the inputFile the upload gave */
 exteria_status exteria_profile_photo_request(exteria_arena *arena, exteria_tl_value *file, exteria_tl_value **out);
+/* the same with fallback set: the photo is shown to those who may not see the main one, and the main photo stays */
+exteria_status exteria_profile_public_photo_request(exteria_arena *arena, exteria_tl_value *file, exteria_tl_value **out);
+/* photos.deletePhotos for one profile photo of the signed in user, as a photo ref from the list of profile photos tells it; anything but a photo
+   with an id is EXTERIA_E_ARG */
+exteria_status exteria_profile_photo_delete_request(exteria_arena *arena, const exteria_media_ref *photo, exteria_tl_value **out);
 /* a profile picture that moves: the uploaded mp4 and the second of it that stands for it while it does not play */
 exteria_status exteria_profile_video_request(exteria_arena *arena, exteria_tl_value *video, double start_seconds, exteria_tl_value **out);
 

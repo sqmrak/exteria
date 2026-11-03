@@ -167,6 +167,33 @@ static void test_photo(void) {
     CHECK_EQ_INT(exteria_profile_video_request(&arena, file, 11, &request), EXTERIA_E_ARG);
     CHECK(request == NULL);
     CHECK_EQ_INT(exteria_profile_video_request(&arena, NULL, 0, &request), EXTERIA_E_ARG);
+    /* the public photo is the same upload with the fallback flag, and without a file it is refused */
+    CHECK_EQ_INT(exteria_profile_public_photo_request(&arena, file, &request), EXTERIA_OK);
+    CHECK(exteria_tl_has(request, "fallback") && exteria_tl_has(request, "file"));
+    roundtrip(request, EXTERIA_TL_ID_photos_uploadProfilePhoto);
+    CHECK_EQ_INT(exteria_profile_public_photo_request(&arena, NULL, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+}
+
+static void test_photo_delete(void) {
+    exteria_tl_value *request = NULL;
+    exteria_media_ref photo;
+    memset(&photo, 0, sizeof(photo));
+    photo.source = EXTERIA_MEDIA_SOURCE_PHOTO;
+    photo.id = 77;
+    photo.access_hash = 88;
+    photo.ref_len = 3;
+    memcpy(photo.file_ref, "abc", 3);
+    CHECK_EQ_INT(exteria_profile_photo_delete_request(&arena, &photo, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_photos_deletePhotos);
+    /* a document or a photo without an id cannot be a profile photo */
+    photo.id = 0;
+    CHECK_EQ_INT(exteria_profile_photo_delete_request(&arena, &photo, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    photo.id = 77;
+    photo.source = EXTERIA_MEDIA_SOURCE_DOCUMENT;
+    CHECK_EQ_INT(exteria_profile_photo_delete_request(&arena, &photo, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_profile_photo_delete_request(&arena, NULL, &request), EXTERIA_E_ARG);
 }
 
 static exteria_tl_value *vec_of(exteria_tl_value **items, uint32_t n) {
@@ -423,6 +450,7 @@ int main(void) {
     test_update();
     test_username();
     test_photo();
+    test_photo_delete();
     test_peer_profile();
     test_birthday_channels();
     test_music();

@@ -414,3 +414,33 @@ exteria_status exteria_profile_photo_request(exteria_arena *arena, exteria_tl_va
     if (status == EXTERIA_OK) *out = request;
     return status;
 }
+
+exteria_status exteria_profile_public_photo_request(exteria_arena *arena, exteria_tl_value *file, exteria_tl_value **out) {
+    exteria_tl_value *request = NULL;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    status = exteria_profile_photo_request(arena, file, &request);
+    if (status == EXTERIA_OK) status = exteria_tl_set_flag(request, "fallback");
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_profile_photo_delete_request(exteria_arena *arena, const exteria_media_ref *photo, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *list;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!arena || !photo || photo->source != EXTERIA_MEDIA_SOURCE_PHOTO || photo->id == 0) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "photos.deletePhotos");
+    input = exteria_tl_new_obj(arena, "inputPhoto");
+    list = exteria_tl_new_vec(arena, 1);
+    if (!request || !input || !list) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_i64(arena, input, "id", photo->id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, input, "access_hash", photo->access_hash);
+    if (status == EXTERIA_OK) status = exteria_tl_set_bytes(arena, input, "file_reference", photo->file_ref, photo->ref_len);
+    if (status == EXTERIA_OK) status = exteria_tl_vec_set(list, 0, input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "id", list);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
