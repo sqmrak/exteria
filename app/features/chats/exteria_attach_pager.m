@@ -52,8 +52,17 @@
     BOOL _loadingPhoto;
     UIImagePickerController *_picker;
     UIPopoverController *_popover;
+    /* the movie of the page in view while it plays: the view over the pages that holds its layer, and the item, watched until it can play */
+    AVPlayer *_player;
+    AVPlayerItem *_playerItem;
+    UIView *_playerView;
+    AVPlayerLayer *_playerLayer;
+    NSUInteger _playToken;
+    BOOL _playStarted;
 }
 @end
+
+static char ExteriaPlayerStatusContext;
 
 @implementation ExteriaAttachPager
 
@@ -72,6 +81,7 @@
 }
 
 - (void)dealloc {
+    [self stopPlayback];
     [_weak clear];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     _pages.delegate = nil;
@@ -163,6 +173,8 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardChanged:) name:UIKeyboardWillChangeFrameNotification object:nil];
     UITapGestureRecognizer *dismiss = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissKeyboard)] autorelease];
     [_pages addGestureRecognizer:dismiss];
+    UITapGestureRecognizer *play = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(playTapped:)] autorelease];
+    [_pages addGestureRecognizer:play];
     [self rebuild];
     [self loadPosters];
 }
@@ -174,6 +186,7 @@
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    [self stopPlayback];
     [[UIApplication sharedApplication] setStatusBarHidden:NO withAnimation:UIStatusBarAnimationNone];
 }
 
@@ -218,6 +231,7 @@
 
 /* every page and thumbnail is made again: a selection holds ten items at most, so this is cheaper than keeping the two lists in step */
 - (void)rebuild {
+    [self stopPlayback];
     for (UIView *view in [[_pages.subviews copy] autorelease]) [view removeFromSuperview];
     for (UIView *view in [[_strip.subviews copy] autorelease]) [view removeFromSuperview];
     for (NSUInteger i = 0; i < _items.count; ++i) {
@@ -275,6 +289,13 @@
     BOOL resized = !CGSizeEqualToSize(_pages.frame.size, pagesFrame.size);
     _pages.frame = pagesFrame;
     _pages.contentSize = CGSizeMake(size.width * (CGFloat)_items.count, pagesHeight);
+    if (_playerView) {
+        _playerView.frame = pagesFrame;
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        _playerLayer.frame = _playerView.bounds;
+        [CATransaction commit];
+    }
     for (UIView *view in _pages.subviews) {
         NSInteger tag = view.tag;
         if (tag >= 1000) {
@@ -324,11 +345,130 @@
     NSInteger index = (NSInteger)floor(scroll.contentOffset.x / scroll.bounds.size.width + 0.5);
     index = MAX(0, MIN((NSInteger)_items.count - 1, index));
     if (index == _index) return;
+    [self stopPlayback];
     _index = index;
     [self showSelection];
 }
 
+#pragma mark playback
+
+- (void)playTapped:(UITapGestureRecognizer *)tap {
+    (void)tap;
+    ExteriaAttachItem *item = _index >= 0 && _index < (NSInteger)_items.count ? [_items objectAtIndex:(NSUInteger)_index] : nil;
+    if (!item || !item->movie) return;
+    if (_playerView) [self stopPlayback];
+    else [self startPlaybackOfURL:item->movie];
+}
+
+- (UIView *)playGlyphOfPage:(NSInteger)index {
+    for (UIView *view in _pages.subviews) if (view.tag == 1000 + index) return view;
+    return nil;
+}
+
+- (void)startPlaybackOfURL:(NSURL *)url {
+    NSUInteger token = ++_playToken;
+    ExteriaWeakReference *weak = _weak;
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+    [asset loadValuesAsynchronouslyForKeys:[NSArray arrayWithObject:@"playable"] completionHandler:^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ExteriaAttachPager *me = weak.target;
+            if (!me || token != me->_playToken) return;
+            NSError *error = nil;
+            if ([asset statusOfValueForKey:@"playable" error:&error] != AVKeyValueStatusLoaded || !asset.playable) {
+                NSLog(@"exteria: the selected movie cannot be played: %@", error);
+                [me photoError:NSLocalizedString(@"attach.video.failed", nil)];
+                return;
+            }
+            [me beginPlaybackOfAsset:asset];
+        });
+    }];
+}
+
+- (void)beginPlaybackOfAsset:(AVAsset *)asset {
+    _playerItem = [[AVPlayerItem playerItemWithAsset:asset] retain];
+    _player = [[AVPlayer playerWithPlayerItem:_playerItem] retain];
+    _playerView = [[UIView alloc] initWithFrame:_pages.frame];
+    _playerView.backgroundColor = [UIColor clearColor];
+    _playerView.userInteractionEnabled = NO;
+    _playerLayer = [[AVPlayerLayer playerLayerWithPlayer:_player] retain];
+    _playerLayer.videoGravity = AVLayerVideoGravityResizeAspect;
+    _playerLayer.frame = _playerView.bounds;
+    [_playerView.layer addSublayer:_playerLayer];
+    [self.view insertSubview:_playerView aboveSubview:_pages];
+    [self playGlyphOfPage:_index].alpha = 0;
+    _playStarted = NO;
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self selector:@selector(playbackEnded:) name:AVPlayerItemDidPlayToEndTimeNotification object:_playerItem];
+    [center addObserver:self selector:@selector(playbackFailed:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:_playerItem];
+    [_playerItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionInitial context:&ExteriaPlayerStatusContext];
+}
+
+/* the status of an item changes on a thread of the framework's own choosing */
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (context != &ExteriaPlayerStatusContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    ExteriaWeakReference *weak = _weak;
+    NSUInteger token = _playToken;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        ExteriaAttachPager *me = weak.target;
+        if (me && token == me->_playToken && object == me->_playerItem) [me playerItemStatusChanged];
+    });
+}
+
+/* a seek with a completion handler is refused before the item is ready, and ios 6 raises an exception for it, so the movie starts once it is */
+- (void)playerItemStatusChanged {
+    AVPlayerItemStatus status = _playerItem.status;
+    if (status == AVPlayerItemStatusUnknown || _playStarted) return;
+    if (status == AVPlayerItemStatusFailed) {
+        NSLog(@"exteria: the selected movie cannot be played: %@", _playerItem.error);
+        [self stopPlayback];
+        [self photoError:NSLocalizedString(@"attach.video.failed", nil)];
+        return;
+    }
+    _playStarted = YES;
+    [_player play];
+}
+
+- (void)playbackEnded:(NSNotification *)note {
+    (void)note;
+    [self stopPlayback];
+}
+
+- (void)playbackFailed:(NSNotification *)note {
+    NSLog(@"exteria: the selected movie stopped playing: %@", [[note userInfo] objectForKey:AVPlayerItemFailedToPlayToEndTimeErrorKey]);
+    [self stopPlayback];
+    [self photoError:NSLocalizedString(@"attach.video.failed", nil)];
+}
+
+/* every way out of a playback goes through here, so the observers and the layer are gone together */
+- (void)stopPlayback {
+    ++_playToken;
+    if (_playerItem) {
+        [_playerItem removeObserver:self forKeyPath:@"status" context:&ExteriaPlayerStatusContext];
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_playerItem];
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:_playerItem];
+        [_playerItem release];
+        _playerItem = nil;
+    }
+    if (!_player) return;
+    [_player pause];
+    [_playerLayer removeFromSuperlayer];
+    [_playerLayer release];
+    _playerLayer = nil;
+    [_playerView removeFromSuperview];
+    [_playerView release];
+    _playerView = nil;
+    [_player release];
+    _player = nil;
+    [self playGlyphOfPage:_index].alpha = 1;
+}
+
+#pragma mark paging
+
 - (void)thumbTapped:(UIButton *)thumb {
+    [self stopPlayback];
     _index = thumb.tag;
     [_pages setContentOffset:CGPointMake((CGFloat)_index * _pages.bounds.size.width, 0) animated:YES];
     [self showSelection];

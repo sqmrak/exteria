@@ -254,6 +254,7 @@
 "attach.location.denied" = "Доступ к геопозиции выключен";
 "attach.gallery.unavailable" = "Галерея недоступна";
 "attach.failed" = "Не удалось подготовить файл";
+"attach.video.failed" = "Не удалось воспроизвести видео.";
 "menu.day" = "Дневной режим";
 "menu.night" = "Ночной режим";
 "menu.group" = "Создать группу";

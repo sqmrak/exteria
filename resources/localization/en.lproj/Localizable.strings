@@ -254,6 +254,7 @@
 "attach.location.denied" = "Location access is off";
 "attach.gallery.unavailable" = "The photo library is not available";
 "attach.failed" = "The file could not be prepared";
+"attach.video.failed" = "The video cannot be played.";
 "menu.day" = "Day mode";
 "menu.night" = "Night mode";
 "menu.group" = "Create group";
