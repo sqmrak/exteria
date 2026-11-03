@@ -129,12 +129,17 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
     CGFloat textWidth = _item.timeSize.width - (message.outgoing ? 20 : 0);
     if (_layerKind == ExteriaBubbleLayerOverlay) textWidth = _item.timeSize.width - 10 - (message.outgoing ? 20 : 0);
     CGFloat timeX = origin.x;
+    if (_item.authorText.length) {
+        /* the name an administrator signed the post with leads the line */
+        ExteriaDrawStringAt(_item.authorText, ExteriaFontRegular(11), CGPointMake(timeX, origin.y));
+        timeX += _item.authorWidth;
+    }
     if (_item.viewsText.length) {
         /* the view count of a post: a small eye, the count, then the time */
         UIImage *eye = ExteriaSymbolImage(ExteriaSymbolEye, 12, color);
-        [eye drawAtPoint:CGPointMake(origin.x, origin.y + 1.5)];
-        ExteriaDrawStringAt(_item.viewsText, ExteriaFontRegular(11), CGPointMake(origin.x + 15.5, origin.y));
-        timeX = origin.x + _item.viewsWidth;
+        [eye drawAtPoint:CGPointMake(timeX, origin.y + 1.5)];
+        ExteriaDrawStringAt(_item.viewsText, ExteriaFontRegular(11), CGPointMake(timeX + 15.5, origin.y));
+        timeX += _item.viewsWidth;
     }
     if (_item.deletedWidth > 0) {
         UIImage *can = ExteriaSymbolImage(ExteriaSymbolTrashCan, 12, color);

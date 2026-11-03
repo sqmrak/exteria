@@ -683,6 +683,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     exteria_tl_get_i32(m, "edit_date", &out->edit_date);
     out->edit_hide = exteria_tl_has(m, "edit_hide") ? 1 : 0;
     copy_text(out->from_rank, sizeof(out->from_rank), m, "from_rank", 0);
+    copy_text(out->post_author, sizeof(out->post_author), m, "post_author", 0);
     exteria_tl_get_i32(m, "views", &out->views);
     if (out->views < 0) out->views = 0;
     read_comments(exteria_tl_get(m, "replies"), out);

@@ -210,6 +210,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize pendingSend = _pendingSend;
 @synthesize text = _text;
 @synthesize forwardName = _forwardName;
+@synthesize postAuthor = _postAuthor;
 @synthesize forwardDate = _forwardDate;
 @synthesize groupedId = _groupedId;
 @synthesize forwardKey = _forwardKey;
@@ -393,6 +394,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     /* the entities point into the text, so a text that has some is left whole */
     message->_text = [(row->entity_count ? ExteriaUtf8(row->text) : ExteriaFilteredText(ExteriaUtf8(row->text))) copy];
     message->_forwardName = [ExteriaUtf8(row->forward_name) copy];
+    message->_postAuthor = [ExteriaUtf8(row->post_author) copy];
     message->_forwardDate = row->forward_date;
     message->_groupedId = row->grouped_id;
     message->_forwardKey = row->forward_from;
@@ -486,6 +488,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     [_sourceText release];
     [_sourceEntities release];
     [_forwardName release];
+    [_postAuthor release];
     [_senderRank release];
     [_commenters release];
     [_entities release];

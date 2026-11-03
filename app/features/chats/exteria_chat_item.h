@@ -62,6 +62,8 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     NSString *_timeText;
     NSString *_viewsText;
     CGFloat _viewsWidth;
+    NSString *_authorText;
+    CGFloat _authorWidth;
     CGFloat _deletedWidth;
     NSString *_commentsText;
     NSArray *_commenterPeople;
@@ -225,6 +227,9 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
    viewsWidth is the room that takes */
 @property (nonatomic, readonly, copy) NSString *viewsText;
 @property (nonatomic, readonly) CGFloat viewsWidth;
+/* the name the channel signed the post with and a comma, cut with dots when it is long, drawn before the views; authorWidth is the room that takes, 0 without one */
+@property (nonatomic, readonly, copy) NSString *authorText;
+@property (nonatomic, readonly) CGFloat authorWidth;
 /* the room of the trash can drawn before the time of a message the other side deleted and the phone kept, 0 for any other */
 @property (nonatomic, readonly) CGFloat deletedWidth;
 /* the row under a post that has comments: "10 comments", and the ExteriaPerson items of the newest commenters the chat knows */

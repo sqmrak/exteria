@@ -164,6 +164,7 @@ typedef struct exteria_message_row {
     uint8_t call_reason;        /* a call service message: exteria_call_outcome */
     uint8_t call_video;         /* and whether the call had video; the length in seconds is service_value */
     char from_rank[128];
+    char post_author[EXTERIA_DIALOG_SENDER_MAX];   /* the name an administrator signed a channel post with, empty for a post that has none */
     exteria_media_info media;
     exteria_gift gift;          /* a gift service message: the gift, with its note in text */
     exteria_reactions reactions;

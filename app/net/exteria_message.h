@@ -217,6 +217,7 @@ typedef enum {
     NSString *_sourceText;
     NSArray *_sourceEntities;
     NSString *_forwardName;
+    NSString *_postAuthor;
     int32_t _forwardDate;
     long long _groupedId;
     long long _forwardKey;
@@ -300,6 +301,8 @@ typedef enum {
 @property (nonatomic, assign) float uploadProgress;
 @property (nonatomic, readonly, copy) NSString *text;
 @property (nonatomic, readonly, copy) NSString *forwardName;
+/* the name a channel signs its posts with, empty when it does not sign or the message is no post */
+@property (nonatomic, readonly, copy) NSString *postAuthor;
 /* when the original of a forwarded message was written, zero when the header does not say */
 @property (nonatomic, readonly) int32_t forwardDate;
 /* the album the message belongs to: the photos and videos that were sent together share this number; zero for a

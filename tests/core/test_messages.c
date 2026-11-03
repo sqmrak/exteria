@@ -809,6 +809,11 @@ static void test_post_counters(void) {
     CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
     CHECK_EQ_INT(row->views, 0);
     CHECK_EQ_INT(row->has_comments, 0);
+    /* a post of a channel that signs its posts names the administrator, one that does not has no name, and a line break in it becomes a space */
+    CHECK(row->post_author[0] == 0);
+    set_str(m, "post_author", "Ann\nLee");
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK(strcmp(row->post_author, "Ann Lee") == 0);
     set_i32(m, "views", 79);
     set_flag(replies, "comments");
     set_i32(replies, "replies", 10);

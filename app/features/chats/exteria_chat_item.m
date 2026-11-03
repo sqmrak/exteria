@@ -39,6 +39,8 @@
 #define DELETED_MARK 12.0
 #define VIEWS_EYE 13.0
 #define VIEWS_GAP 8.0
+#define AUTHOR_WIDTH_MAX 140.0
+#define AUTHOR_GAP 4.0
 #define COMMENTS_HEIGHT 38.0
 #define SHARE_SIDE 32.0
 #define SHARE_ROOM 44.0
@@ -94,6 +96,8 @@
 @synthesize timeText = _timeText;
 @synthesize viewsText = _viewsText;
 @synthesize viewsWidth = _viewsWidth;
+@synthesize authorText = _authorText;
+@synthesize authorWidth = _authorWidth;
 @synthesize deletedWidth = _deletedWidth;
 @synthesize commentsText = _commentsText;
 @synthesize commenterPeople = _commenterPeople;
@@ -347,6 +351,18 @@ static NSString *ExteriaCommentsLine(int32_t count) {
 - (void)captureChannelPost:(ExteriaMessage *)message people:(NSDictionary *)people {
     if (!message.post || message.messageId <= 0) return;
     _showsShare = !ExteriaChatFlagGet(ExteriaChatFlagHideShare);
+    if (message.postAuthor.length) {
+        /* the signature is a name the administrators chose, so a long one is cut and never pushes the time out of the bubble */
+        NSString *name = message.postAuthor;
+        NSString *line = [name stringByAppendingString:@","];
+        UIFont *font = ExteriaTimeFont();
+        while (name.length > 1 && ceil(ExteriaStringSize(line, font).width) > AUTHOR_WIDTH_MAX) {
+            name = [name substringToIndex:name.length - 1];
+            line = [[name stringByAppendingString:@"\u2026"] stringByAppendingString:@","];
+        }
+        _authorText = [line copy];
+        _authorWidth = ceil(ExteriaStringSize(_authorText, font).width) + AUTHOR_GAP;
+    }
     if (message.views > 0) {
         _viewsText = [ExteriaShortCount(message.views) copy];
         _viewsWidth = ceil(ExteriaStringSize(_viewsText, ExteriaTimeFont()).width) + VIEWS_EYE + 3 + VIEWS_GAP;
@@ -621,6 +637,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_replyTextLayout release];
     [_timeText release];
     [_viewsText release];
+    [_authorText release];
     [_commentsText release];
     [_commenterPeople release];
     [_pollQuestionLayout release];
@@ -824,7 +841,7 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     CGFloat x = _message.outgoing ? width - SIDE_MARGIN - picture.width : [self incomingLeft];
     _bubbleFrame = CGRectMake(x, top, picture.width, picture.height);
     _pictureFrame = CGRectMake(0, 0, picture.width, picture.height);
-    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + _deletedWidth + (_message.outgoing ? CHECK_WIDTH : 0);
+    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + _authorWidth + _viewsWidth + _deletedWidth + (_message.outgoing ? CHECK_WIDTH : 0);
     _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
     _timeOrigin = CGPointMake(picture.width - _timeSize.width - 4, picture.height - _timeSize.height - 4);
     _height = top + picture.height + 1;
@@ -837,7 +854,7 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     CGFloat x = _message.outgoing ? width - SIDE_MARGIN - side : [self incomingLeft];
     _bubbleFrame = CGRectMake(x, top, side, side);
     _pictureFrame = CGRectMake(0, 0, side, side);
-    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + _deletedWidth + (_message.outgoing ? CHECK_WIDTH : 0);
+    CGFloat metaWidth = ExteriaStringSize(_timeText, ExteriaTimeFont()).width + _authorWidth + _viewsWidth + _deletedWidth + (_message.outgoing ? CHECK_WIDTH : 0);
     _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
     _timeOrigin = CGPointMake(side - _timeSize.width, side + 2);
     _height = top + side + _timeSize.height + 3;
@@ -997,7 +1014,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     CGFloat maxBubble = floor(MIN(room * MAX_BUBBLE_FRACTION, ExteriaIsPad() ? BUBBLE_CAP_PAD : BUBBLE_CAP_PHONE));
     /* a post of a channel takes the width of the screen, as the wide posts of exteraGram do: a broadcast reads like a feed, not like a chat */
     if (_message.post && !outgoing) maxBubble = floor(MIN(room - 2 * SIDE_MARGIN, ExteriaIsPad() ? BUBBLE_CAP_PAD * 1.5 : room));
-    CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _viewsWidth + _deletedWidth;
+    CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _authorWidth + _viewsWidth + _deletedWidth;
     /* a voice message has no words of its own, so what the server heard in it takes their place */
     BOOL ownText = _message.text.length > 0;
     NSString *bodyText = ownText ? _message.text : _transcript;
