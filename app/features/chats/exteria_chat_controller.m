@@ -2643,11 +2643,14 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
         CGRect inView = [self.view convertRect:[window convertRect:end fromWindow:nil] fromView:window];
         overlap = MAX(0, CGRectGetMaxY(self.view.bounds) - inView.origin.y);
     }
+    [self slideKeyboardOverlapTo:overlap duration:[[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue]
+                           curve:[[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue]];
+}
+
+- (void)slideKeyboardOverlapTo:(CGFloat)overlap duration:(NSTimeInterval)duration curve:(NSInteger)curve {
     /* a hide is announced twice (the frame change and the hide), and a second animation over the first one only restarts it */
     if (overlap == _keyboardOverlap) return;
     _keyboardOverlap = overlap;
-    NSTimeInterval duration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
-    NSInteger curve = [[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
     /* the offset UIKit clamps while the table is resized, and a page of messages that lands in the middle of the slide, both read as the chat jumping */
     _keyboardMoving = YES;
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(keyboardSettled) object:nil];
@@ -2679,12 +2682,16 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
 }
 
 - (void)dismissInput {
+    BOOL hadPanel = _panelShown;
     if (_panelShown) {
         _panelShown = NO;
         _input.panelShown = NO;
         _input.textView.inputView = nil;
     }
     [_input.textView resignFirstResponder];
+    /* the panel is our own input view, and the system does not always announce its hide with a frame the field can follow: the panel went down by itself while the
+       field stayed where it was. the field is moved here, at the pace of the system keyboard, and the announcement that may come after finds nothing left to do */
+    if (hadPanel) [self slideKeyboardOverlapTo:0 duration:0.25 curve:7];
 }
 
 - (ExteriaInputPanel *)panel {
