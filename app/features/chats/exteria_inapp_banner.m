@@ -137,6 +137,8 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     _body.font = ExteriaFontRegular(14);
     _body.textColor = classic ? [UIColor colorWithWhite:0.85 alpha:1] : ExteriaColorSecondary();
     _body.numberOfLines = 2;
+    /* the body starts with the sender of a group message, so a styled nick that no font draws is left out of it as it is out of the title, not drawn as a box */
+    _body.dropsUndrawable = YES;
     [self addSubview:_body];
     [self addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped)] autorelease]];
     /* the card follows the finger to the left, to the right or up, and goes when it is let go far enough or flicked; a tap still opens the chat */
