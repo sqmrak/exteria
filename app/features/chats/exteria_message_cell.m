@@ -2474,9 +2474,10 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     }
 }
 
-/* the row of somebody else sits right of the selection circle while messages are picked */
-- (CGAffineTransform)restingTransform {
-    return _selecting && !_item.message.outgoing && [self selectable] ? CGAffineTransformMakeTranslation(SELECT_SHIFT, 0) : CGAffineTransformIdentity;
+/* the row of somebody else sits right of the selection circle while messages are picked. it is a transform of the sublayers, as the swipe to reply is: the cell
+   of older systems sets the frame of its content view on every layout, which takes a transform of the view itself back out again, and the rows then stood under the circles */
+- (CATransform3D)restingTransform {
+    return _selecting && !_item.message.outgoing && [self selectable] ? CATransform3DMakeTranslation(SELECT_SHIFT, 0, 0) : CATransform3DIdentity;
 }
 
 - (void)resetSwipe {
@@ -2486,8 +2487,8 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_swipeDisc.layer removeAllAnimations];
     [_swipeFill removeAllAnimations];
     [self clearSwipeState];
-    self.contentView.transform = [self restingTransform];
-    self.contentView.layer.sublayerTransform = CATransform3DIdentity;
+    self.contentView.transform = CGAffineTransformIdentity;
+    self.contentView.layer.sublayerTransform = [self restingTransform];
     _swipeDisc.alpha = 0;
 }
 
@@ -2544,8 +2545,19 @@ static void ExteriaSwipeTick(void) {
     _selectMark.hidden = !show;
     CGRect bubble = _item.bubbleFrame;
     _selectMark.center = CGPointMake(8 + SELECT_MARK / 2, CGRectGetMidY(bubble));
+    CALayer *layer = self.contentView.layer;
+    CATransform3D from = [layer animationForKey:@"exteria.select"] ? [layer.presentationLayer sublayerTransform] : layer.sublayerTransform;
+    CATransform3D to = [self restingTransform];
+    [layer removeAnimationForKey:@"exteria.select"];
+    layer.sublayerTransform = to;
+    if (animated && !CATransform3DEqualToTransform(from, to)) {
+        CABasicAnimation *slide = [CABasicAnimation animationWithKeyPath:@"sublayerTransform"];
+        slide.fromValue = [NSValue valueWithCATransform3D:from];
+        slide.toValue = [NSValue valueWithCATransform3D:to];
+        slide.duration = 0.18;
+        [layer addAnimation:slide forKey:@"exteria.select"];
+    }
     void (^apply)(void) = ^{
-        self.contentView.transform = [self restingTransform];
         _selectMark.backgroundColor = selected ? ExteriaColorAccent() : [UIColor colorWithWhite:0 alpha:0.15];
         _selectMark.layer.borderColor = (selected ? ExteriaColorAccent() : [UIColor colorWithWhite:1 alpha:0.85]).CGColor;
         _selectCheck.alpha = selected ? 1 : 0;
