@@ -1,6 +1,7 @@
 #import "exteria_avatar_viewer.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import "exteria_emoji_label.h"
 #import "exteria_platform.h"
 #import "exteria_popup_menu.h"
 #import "exteria_remote_file.h"
@@ -130,8 +131,9 @@
     [_more addTarget:self action:@selector(showMenu) forControlEvents:UIControlEventTouchUpInside];
     _more.accessibilityLabel = NSLocalizedString(@"avatar.save", nil);
     [root addSubview:_more];
-    _titleLabel = [[UILabel alloc] init];
-    _titleLabel.backgroundColor = [UIColor clearColor];
+    _titleLabel = [[ExteriaEmojiLabel alloc] init];
+    /* the title is a person's name: a styled nick would show as boxes with a code in them in the system label */
+    _titleLabel.dropsUndrawable = YES;
     _titleLabel.textColor = [UIColor whiteColor];
     _titleLabel.font = ExteriaFontSemibold(20);
     /* the own profile hands over the name of the person, as its dialog is the Saved Messages chat */

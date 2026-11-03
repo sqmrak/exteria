@@ -2,6 +2,7 @@
 
 #import "exteria_avatar_cache.h"
 #import "exteria_dialog.h"
+#import "exteria_emoji_label.h"
 #import "exteria_media_cache.h"
 
 /* the profile photos of a person, a group or a channel on the whole screen, newest first: the name and the day of the shown photo under the arrow that goes
@@ -17,7 +18,7 @@
     UILabel *_counter;
     UIButton *_back;
     UIButton *_more;
-    UILabel *_titleLabel;
+    ExteriaEmojiLabel *_titleLabel;
     UILabel *_dateLabel;
     UILabel *_toast;
     UIScrollView *_strip;
