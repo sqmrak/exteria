@@ -302,7 +302,17 @@ static UIColor *ExteriaSenderTagColor(NSString *role) {
     return ExteriaColorSecondary();
 }
 
+/* "via @bot" for a message that is the result of an inline bot, nil while the bot is not among the people or has no username */
+static NSString *ExteriaViaLine(ExteriaMessage *message, NSDictionary *people) {
+    if (!message.viaBotId) return nil;
+    ExteriaPerson *bot = [people objectForKey:[NSNumber numberWithLongLong:message.viaBotId]];
+    if (![bot isKindOfClass:[ExteriaPerson class]] || !bot.username.length) return nil;
+    return [NSString stringWithFormat:NSLocalizedString(@"chat.via", nil), bot.username];
+}
+
 - (BOOL)reflectsPeople:(NSDictionary *)people role:(NSString *)role {
+    /* the bot of a message may come in after the message did, and the line is then missing from the row that was laid out without it */
+    if (!ExteriaSameString(_viaText, ExteriaViaLine(_message, people))) return NO;
     if (!_avatarColumn) return YES;
     ExteriaPerson *sender = [people objectForKey:[NSNumber numberWithLongLong:_message.senderKey]];
     return ExteriaSameString(_senderTag, ExteriaSenderTag(_message, sender, role)) &&
@@ -499,10 +509,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
         if (message.forwardDate > 0 && ExteriaChatFlagGet(ExteriaChatFlagForwardDate)) line = [NSString stringWithFormat:@"%@ \u00b7 %@", line, ExteriaDayText(message.forwardDate)];
         item->_forwardText = [line copy];
     }
-    if (message.viaBotId) {
-        ExteriaPerson *bot = [people objectForKey:[NSNumber numberWithLongLong:message.viaBotId]];
-        if ([bot isKindOfClass:[ExteriaPerson class]] && bot.username.length) item->_viaText = [[NSString stringWithFormat:NSLocalizedString(@"chat.via", nil), bot.username] copy];
-    }
+    item->_viaText = [ExteriaViaLine(message, people) copy];
     if (isCall) {
         BOOL incoming = NO, failed = NO;
         item->_call = YES;

@@ -3543,12 +3543,15 @@ static void ExteriaRedrawTree(UIView *view) {
     return [[[ExteriaDialog alloc] initWithRow:&row] autorelease];
 }
 
-/* a message of a group whose sender the list does not know has no name over it; the server is asked for the messages once, which brings their people */
+/* a message of a group whose sender the list does not know has no name over it, and a message sent through a bot has no "via @bot" line while the bot is unknown;
+   the server is asked for the messages once, which brings their people */
 - (void)fetchMissingSendersOf:(NSArray *)messages {
     NSMutableArray *ids = [NSMutableArray array];
     for (ExteriaMessage *message in messages) {
-        if (message.outgoing || message.post || message.service || message.messageId <= 0 || message.senderKey == 0) continue;
-        if ([_people objectForKey:[NSNumber numberWithLongLong:message.senderKey]]) continue;
+        if (message.service || message.messageId <= 0) continue;
+        BOOL senderMissing = !message.outgoing && !message.post && message.senderKey != 0 && ![_people objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
+        BOOL botMissing = message.viaBotId != 0 && ![_people objectForKey:[NSNumber numberWithLongLong:message.viaBotId]];
+        if (!senderMissing && !botMissing) continue;
         NSNumber *key = [NSNumber numberWithInt:message.messageId];
         if ([_senderLookups containsObject:key]) continue;
         [ids addObject:key];
@@ -3581,7 +3584,7 @@ static void ExteriaRedrawTree(UIView *view) {
     [self loadCustomEmoji];
     BOOL group = _dialog.kind == EXTERIA_DIALOG_GROUP;
     NSArray *messages = [self orderedMessages];
-    if (group) [self fetchMissingSendersOf:messages];
+    [self fetchMissingSendersOf:messages];
     NSTimeInterval serverNow = [[NSDate date] timeIntervalSince1970] + _sharingOffsetMilliseconds / 1000.0;
     NSTimeInterval nextExpiry = 0;
     NSMutableArray *items = [NSMutableArray arrayWithCapacity:messages.count + 8];
