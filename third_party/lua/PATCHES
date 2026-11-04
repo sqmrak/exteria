@@ -1,9 +1,0 @@
-lua 5.4.7, from https://www.lua.org/ftp/lua-5.4.7.tar.gz
-sha256 9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30
-
-dropped: lua.c, luac.c, linit.c, lcorolib.c, ldblib.c, liolib.c, loslib.c, loadlib.c.
-plugins run in a sandbox that opens only base, string, table, math and utf8.
-
-one local change, in src/lstrlib.c: a pattern call stops with "pattern too complex" after
-1000000 pattern items. the instruction hook of the host does not count inside a C function, and
-a pattern such as ".-.-.-.-x" over a 16 KiB message backtracks for minutes without this limit.
