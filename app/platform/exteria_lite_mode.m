@@ -56,14 +56,6 @@ NSString *ExteriaLiteClassName(exteria_lite_class device_class) {
     }
 }
 
-NSUInteger ExteriaLiteStickerLimit(void) {
-    switch (ExteriaLiteClass()) {
-    case EXTERIA_LITE_CLASS_LOW: return 1;
-    case EXTERIA_LITE_CLASS_AVERAGE: return 2;
-    default: return 3;
-    }
-}
-
 /* the stored flags, or what the class gives to a person who never changed one */
 static uint32_t StoredValue(void) {
     id stored = [Defaults() objectForKey:ExteriaLiteFlagsKey];

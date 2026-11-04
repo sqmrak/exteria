@@ -131,13 +131,18 @@ static uint64_t ExteriaMediaNowMs(void) {
 
 #pragma mark commands
 
-- (void)post:(void (^)(void))block {
+- (BOOL)post:(void (^)(void))block {
     [_lock lock];
+    if (_stopping) {
+        [_lock unlock];
+        return NO;
+    }
     [_commands addObject:[[block copy] autorelease]];
     [_lock unlock];
     char byte = 1;
     /* a full pipe already holds a wake up, so a short write loses nothing */
     if (write(_wake[1], &byte, 1) < 0 && errno != EAGAIN) NSLog(@"exteria: media link wake up failed, errno %d", errno);
+    return YES;
 }
 
 /* the thread starts with the first job, so a data center nobody needs is never dialled */
@@ -215,7 +220,7 @@ static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error
         [authorize release];
         return;
     }
-    [self post:^{
+    BOOL posted = [self post:^{
         if (!_authorizer) _authorizer = [authorize retain];
         if (!_wantLink) {
             _failures = 0;
@@ -224,6 +229,7 @@ static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error
         }
         [self submitJob:job];
     }];
+    if (!posted) ExteriaFinishJob(job, nil, @"OFFLINE");
     [authorize release];
 }
 
@@ -302,9 +308,9 @@ static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error
             } else {
                 [self importAuthorization:authId bytes:copy];
             }
-            [copy release];
-            [error release];
         }];
+        [copy release];
+        [error release];
     });
 }
 
@@ -537,6 +543,8 @@ static void ExteriaMediaError(void *ctx, exteria_status status, const char *boun
     }
 
     NSAutoreleasePool *teardown = [[NSAutoreleasePool alloc] init];
+    /* commands accepted before stop still own jobs that must be failed */
+    [self drainCommands];
     exteria_mt_socket_close(&_socket);
     if (_clientLive) exteria_client_free(&_client);
     _clientLive = NO;

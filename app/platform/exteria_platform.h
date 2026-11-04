@@ -1,5 +1,9 @@
 #import <UIKit/UIKit.h>
 
+/* developer switch that gives an iphone the tablet interface; read when the main screen is built, so it applies from the next launch */
+extern NSString *const ExteriaPadInterfaceKey;
+/* the reverse switch: an ipad gets the phone interface, a single column without the split screen; it wins over the tablet switch */
+extern NSString *const ExteriaPhoneInterfaceKey;
 BOOL ExteriaIsPad(void);
 CGFloat ExteriaScreenScale(void);
 
@@ -44,3 +48,14 @@ NSUInteger ExteriaOrientationMask(void);
 UIView *ExteriaOverlayHost(void);
 /* the height of the status bar in the orientation the app is in, which the frame of the bar gives as its short side */
 CGFloat ExteriaStatusBarHeight(void);
+
+/* the screens that cover the display hide the status bar through these: it stays hidden while any owner is on screen and comes back with the last one.
+   Show is safe to call twice and from dealloc; Settle drops owners that are no longer in a window and shows the bar if none is left */
+void ExteriaStatusBarHide(id owner, UIStatusBarAnimation animation);
+void ExteriaStatusBarShow(id owner, UIStatusBarAnimation animation);
+void ExteriaStatusBarSettle(void);
+
+/* the window is black while a viewer of pictures is up, so a viewer that goes translucent as it is pulled away shows black and not the light color of the window; every Hold has
+   its Release, and a viewer does both once */
+void ExteriaWindowBlackHold(void);
+void ExteriaWindowBlackRelease(void);

@@ -41,6 +41,7 @@ NSString *ExteriaInitialsOfName(NSString *name) {
 @synthesize mutual = _mutual;
 @synthesize premium = _premium;
 @synthesize emojiStatus = _emojiStatus;
+@synthesize emojiStatusCollectible = _emojiStatusCollectible;
 @synthesize nameColor = _nameColor;
 @synthesize presence = _presence;
 @synthesize seen = _seen;
@@ -64,6 +65,7 @@ NSString *ExteriaInitialsOfName(NSString *name) {
     _mutual = row->mutual;
     _premium = row->premium;
     _emojiStatus = ExteriaLiveEmojiStatus(row->emoji_status, row->emoji_status_until);
+    _emojiStatusCollectible = _emojiStatus ? row->emoji_status_collectible : 0;
     _nameColor = row->has_name_color ? row->name_color : -1;
     _presence = row->presence;
     _seen = row->seen;

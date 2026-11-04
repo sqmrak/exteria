@@ -34,5 +34,3 @@ void ExteriaLiteSetClassChoice(int choice);
 exteria_lite_class ExteriaLiteClass(void);
 exteria_lite_class ExteriaLiteMeasuredClass(void);
 NSString *ExteriaLiteClassName(exteria_lite_class device_class);
-/* how many animated stickers of a chat may run at once: more on a stronger class */
-NSUInteger ExteriaLiteStickerLimit(void);

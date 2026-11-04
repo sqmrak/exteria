@@ -4,6 +4,7 @@
 #include "exteria_store.h"
 
 @class ExteriaPerson;
+@class ExteriaForumSummaries;
 
 /* the mask of what the settings of the person keep of deleted and edited messages */
 uint32_t ExteriaSavingMask(void);
@@ -29,6 +30,10 @@ void ExteriaApprovePaidMessages(ExteriaSession *session, const exteria_peer_ref 
 /* what the session's own files and its chat code share; nothing here is for screens */
 @interface ExteriaSession (Internal)
 
+/* what the topics of each forum said of it, for the rows of the chat list */
+- (ExteriaForumSummaries *)forumSummaries;
+/* worker only: reads the topics of the forums of a list that the kept summaries do not cover, and tells the lists when they landed */
+- (void)refreshForumSummariesOfDialogs:(NSArray *)dialogs;
 /* runs the block on the worker thread */
 - (void)post:(void (^)(void))block;
 /* queues a request that the core built whole; the handler runs on the worker and must copy what it keeps */

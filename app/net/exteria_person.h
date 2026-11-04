@@ -20,6 +20,7 @@ long long ExteriaLiveEmojiStatus(long long document, int32_t until);
     BOOL _mutual;
     BOOL _premium;
     long long _emojiStatus;
+    long long _emojiStatusCollectible;
     NSInteger _nameColor;
     exteria_presence _presence;
     int32_t _seen;
@@ -54,6 +55,8 @@ long long ExteriaLiveEmojiStatus(long long document, int32_t until);
 @property (nonatomic, readonly) BOOL premium;
 /* the custom emoji document shown after the name, zero without one or once it has run out */
 @property (nonatomic, readonly) long long emojiStatus;
+/* the id of the unique gift worn as the status, zero when the status is no gift */
+@property (nonatomic, readonly) long long emojiStatusCollectible;
 /* the id of the color the person chose for their name in groups, -1 when they chose none and the id decides */
 @property (nonatomic, readonly) NSInteger nameColor;
 /* the colored ground of the profile from a collectible profile color or status; the colors as 0xRRGGBB, the emoji that tiles it, and the name of the collectible */

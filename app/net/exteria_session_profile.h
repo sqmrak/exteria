@@ -25,6 +25,7 @@
     ExteriaPerson *_person;
     BOOL _requiresPremium;
     BOOL _sharingRestricted;
+    BOOL _blocked;
     BOOL _hasBirthday;
     int32_t _birthdayDay;
     int32_t _birthdayMonth;
@@ -47,6 +48,8 @@
 /* only Premium users may write to this person and reply to their stories */
 @property (nonatomic, readonly) BOOL requiresPremium;
 @property (nonatomic, readonly) BOOL sharingRestricted;
+/* the account has blocked this user: they cannot write or call */
+@property (nonatomic, readonly) BOOL blocked;
 @property (nonatomic, readonly) BOOL hasBirthday;
 @property (nonatomic, readonly) int32_t birthdayDay;
 @property (nonatomic, readonly) int32_t birthdayMonth;

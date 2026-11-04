@@ -116,10 +116,25 @@ int ExteriaPhotoOriginal(NSURL *url, void (^completion)(NSData *, NSString *, NS
             (void)orientation;
             (void)info;
             /* a type the system names by its uniform type id: heic stays heic, since the server takes any file as a document */
-            NSString *extension = [uti isEqualToString:@"public.png"] ? @"png" : ([uti isEqualToString:@"public.heic"] ? @"heic" : @"jpg");
+            NSString *extension = [uti isEqualToString:@"public.png"] ? @"png" : [uti isEqualToString:@"public.heic"] ? @"heic" : [uti isEqualToString:@"com.compuserve.gif"] ? @"gif" : @"jpg";
             NSString *name = [NSString stringWithFormat:@"IMG_%@.%@", [url.resourceSpecifier substringToIndex:MIN((NSUInteger)8, url.resourceSpecifier.length)], extension];
             dispatch_async(dispatch_get_main_queue(), ^{ completion(data, extension, name, data.length ? nil : @"PHOTO_UNAVAILABLE"); });
         }];
+}
+
+/* the original file name tells a gif apart without loading the picture; asset resources came with ios 9, and an older system sends its gifs as pictures */
+BOOL ExteriaPhotoURLIsGif(NSURL *url) {
+    if (!ExteriaPhotosAvailable() || ![url.scheme isEqualToString:@"exteria-photo"] || !NSClassFromString(@"PHAssetResource")) return NO;
+    id result = ((id (*)(id, SEL, id, id))objc_msgSend)(NSClassFromString(@"PHAsset"), NSSelectorFromString(@"fetchAssetsWithLocalIdentifiers:options:"),
+        [NSArray arrayWithObject:url.resourceSpecifier], nil);
+    id asset = [result count] ? [result objectAtIndex:0] : nil;
+    if (!asset) return NO;
+    NSArray *resources = ((id (*)(id, SEL, id))objc_msgSend)(NSClassFromString(@"PHAssetResource"), NSSelectorFromString(@"assetResourcesForAsset:"), asset);
+    for (id resource in resources) {
+        NSString *name = [resource valueForKey:@"originalFilename"];
+        if ([name isKindOfClass:[NSString class]] && [[name pathExtension] caseInsensitiveCompare:@"gif"] == NSOrderedSame) return YES;
+    }
+    return NO;
 }
 
 void ExteriaCancelPhotoRequest(int request) {

@@ -170,6 +170,8 @@ typedef void (^ExteriaSavedGiftsCompletion)(NSArray *gifts, NSInteger total, NSS
 - (void)convertGift:(ExteriaSavedGift *)gift completion:(void (^)(NSString *errorName))completion;
 - (void)upgradeGift:(ExteriaSavedGift *)gift keepDetails:(BOOL)keepDetails completion:(void (^)(NSString *errorName))completion;
 - (void)transferGift:(ExteriaSavedGift *)gift toDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
+/* wears a unique gift after the name of the account, or with zero takes the status off */
+- (void)wearGiftWithId:(long long)collectibleId completion:(void (^)(NSString *errorName))completion;
 /* the gifts that stay on top of the profile, at most six */
 - (void)pinGifts:(NSArray *)gifts completion:(void (^)(NSString *errorName))completion;
 

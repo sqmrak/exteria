@@ -271,6 +271,12 @@ static exteria_status ExteriaBuildInvoice(exteria_arena *arena, ExteriaPaymentQu
     } completion:completion];
 }
 
+- (void)wearGiftWithId:(long long)collectibleId completion:(void (^)(NSString *))completion {
+    [self runGiftRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_gift_wear_request(arena, collectibleId, request);
+    } completion:completion];
+}
+
 - (void)pinGifts:(NSArray *)gifts completion:(void (^)(NSString *))completion {
     NSMutableData *ids = [NSMutableData data];
     for (ExteriaSavedGift *gift in gifts) {
