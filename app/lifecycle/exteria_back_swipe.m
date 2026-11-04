@@ -66,6 +66,7 @@
     if (gesture != _pan || _active || _navigation.viewControllers.count < 2 || _navigation.presentedViewController) return NO;
     UIViewController *top = _navigation.topViewController;
     if (!top.isViewLoaded || !top.view.window) return NO;
+    if ([top respondsToSelector:@selector(blocksBackSwipe)] && [(id<ExteriaBackSwipeBlocking>)top blocksBackSwipe]) return NO;
     /* a push still moving its content container must finish before a drag takes ownership */
     for (UIView *view = top.view; view; view = view.superview) {
         if (view.layer.animationKeys.count) return NO;
