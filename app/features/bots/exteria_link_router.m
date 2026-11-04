@@ -6,7 +6,8 @@
 
 #import "exteria_alert.h"
 #import "exteria_star_gift.h"
-#import "exteria_article_controller.h"
+#import "exteria_browser_controller.h"
+#import "exteria_browser_settings.h"
 #import "exteria_chat_controller.h"
 #import "exteria_session_channels.h"
 #import "exteria_dialog_picker_controller.h"
@@ -283,9 +284,11 @@ static NSString *ExteriaCloudThemePath(void) {
 
 - (void)openLink:(NSString *)url {
     if (!url.length) return;
-    NSURL *articleURL = [NSURL URLWithString:url];
-    if (ExteriaIsArticleURL(articleURL)) {
-        ExteriaPresentArticle(articleURL, _anchor);
+    NSURL *webURL = [NSURL URLWithString:url];
+    if (ExteriaIsWebURL(webURL) && !ExteriaIsTelegramLink(webURL)) {
+        NSString *choice = ExteriaBrowserChoice();
+        if ([choice isEqualToString:@"exteria"]) ExteriaPresentBrowser(webURL, _anchor);
+        else if (!ExteriaBrowserOpenExternal(webURL, choice)) [self showNote:NSLocalizedString(@"browser.settings.open.failed", nil)];
         return;
     }
     static NSString *const mentionPrefix = @"exteria-mention:";
