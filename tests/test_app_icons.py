@@ -10,6 +10,20 @@ from tools import make_assets
 
 
 class AppIconTests(unittest.TestCase):
+    def test_deb_icons_round_every_primary_size(self):
+        root = Path(make_assets.ROOT)
+        with tempfile.TemporaryDirectory() as directory:
+            make_assets.build_deb_icons(root / "resources/icons", directory)
+            for name, side in make_assets.APP_ICONS.items():
+                if side in make_assets.LEGACY_ICON_SIDES:
+                    continue
+                with self.subTest(name=name):
+                    path = Path(directory) / name
+                    self.assert_launcher_icon(path, side, True)
+                    self.assertEqual(path.read_bytes(), (root / "resources/deb-icons" / name).read_bytes())
+                    with Image.open(path) as rounded, Image.open(root / "resources/icons" / name) as original:
+                        self.assertEqual(rounded.getpixel((side // 2, side // 2))[:3], original.getpixel((side // 2, side // 2))[:3])
+
     def assert_launcher_icon(self, path, side=None, rounded=False):
         with Image.open(path) as icon:
             self.assertEqual(icon.format, "PNG")
