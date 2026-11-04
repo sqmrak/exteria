@@ -92,3 +92,76 @@ exteria_status exteria_photo_adjust(uint8_t *pixels, size_t capacity, uint32_t w
     }
     return EXTERIA_OK;
 }
+
+uint32_t exteria_photo_blur_radius(double strength, uint32_t short_side) {
+    if (!isfinite(strength) || !short_side) return 1;
+    double radius = clamp(strength, 0, 1) * short_side * 0.03;
+    if (radius < 1) return 1;
+    return radius > EXTERIA_PHOTO_BLUR_RADIUS_MAX ? EXTERIA_PHOTO_BLUR_RADIUS_MAX : (uint32_t)radius;
+}
+
+exteria_status exteria_photo_blur_region(uint32_t width, uint32_t height, double left, double top, double right, double bottom,
+                                       uint32_t radius, exteria_photo_region *out) {
+    if (!out) return EXTERIA_E_ARG;
+    memset(out, 0, sizeof(*out));
+    if (!width || !height || width > EXTERIA_PHOTO_SIDE_MAX || height > EXTERIA_PHOTO_SIDE_MAX ||
+        !isfinite(left) || !isfinite(top) || !isfinite(right) || !isfinite(bottom) ||
+        radius < 1 || radius > EXTERIA_PHOTO_BLUR_RADIUS_MAX || right < left || bottom < top ||
+        right < 0 || bottom < 0 || left > width || top > height)
+        return EXTERIA_E_ARG;
+    double reach = 3.0 * radius;
+    double x0 = clamp(floor(left - reach), 0, width), y0 = clamp(floor(top - reach), 0, height);
+    double x1 = clamp(ceil(right + reach), 0, width), y1 = clamp(ceil(bottom + reach), 0, height);
+    if (x1 <= x0 || y1 <= y0) return EXTERIA_E_ARG;
+    out->x = (uint32_t)x0;
+    out->y = (uint32_t)y0;
+    out->width = (uint32_t)(x1 - x0);
+    out->height = (uint32_t)(y1 - y0);
+    return EXTERIA_OK;
+}
+
+/* one sliding box over every line: lines are rows or columns of the tight copy, step is the distance between two pixels of a line */
+static void box_pass(const uint8_t *from, uint8_t *to, size_t lines, size_t length, size_t line_step, size_t step, uint32_t radius) {
+    size_t r = radius, window = 2 * r + 1;
+    for (size_t line = 0; line < lines; ++line) {
+        for (size_t channel = 0; channel < 4; ++channel) {
+            const uint8_t *in = from + line * line_step + channel;
+            uint8_t *out = to + line * line_step + channel;
+            uint32_t sum = (uint32_t)in[0] * (uint32_t)(r + 1);
+            for (size_t k = 1; k <= r; ++k) sum += in[(k < length ? k : length - 1) * step];
+            for (size_t i = 0; i < length; ++i) {
+                out[i * step] = (uint8_t)((sum + window / 2) / window);
+                size_t ahead = i + r + 1, behind = i > r ? i - r : 0;
+                sum += in[(ahead < length ? ahead : length - 1) * step];
+                sum -= in[behind * step];
+            }
+        }
+    }
+}
+
+exteria_status exteria_photo_blur(uint8_t *pixels, size_t capacity, uint32_t width, uint32_t height, size_t stride,
+                                const exteria_photo_region *region, uint32_t radius) {
+    if (!pixels || !region || !width || !height || width > EXTERIA_PHOTO_SIDE_MAX || height > EXTERIA_PHOTO_SIDE_MAX ||
+        stride < (size_t)width * 4 || stride > SIZE_MAX / height || capacity < stride * height ||
+        radius < 1 || radius > EXTERIA_PHOTO_BLUR_RADIUS_MAX || !region->width || !region->height ||
+        region->x > width || region->width > width - region->x || region->y > height || region->height > height - region->y)
+        return EXTERIA_E_ARG;
+    size_t row = (size_t)region->width * 4, bytes = row * region->height;
+    uint8_t *a = malloc(bytes), *b = malloc(bytes);
+    if (!a || !b) {
+        free(a);
+        free(b);
+        return EXTERIA_E_NOMEM;
+    }
+    for (uint32_t y = 0; y < region->height; ++y)
+        memcpy(a + y * row, pixels + (region->y + y) * stride + (size_t)region->x * 4, row);
+    for (int pass = 0; pass < 3; ++pass) {
+        box_pass(a, b, region->height, region->width, row, 4, radius);
+        box_pass(b, a, region->width, region->height, 4, row, radius);
+    }
+    for (uint32_t y = 0; y < region->height; ++y)
+        memcpy(pixels + (region->y + y) * stride + (size_t)region->x * 4, a + y * row, row);
+    free(a);
+    free(b);
+    return EXTERIA_OK;
+}
