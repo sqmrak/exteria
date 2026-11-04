@@ -265,9 +265,9 @@ def resize_rgba(image, side):
     return image.resize((side, side), Image.LANCZOS)
 
 
-def legacy_icon(square, side):
-    """the opaque square drawn at side pixels, with transparent rounded corners when only ios 5 and 6 ask for that size"""
-    if side not in LEGACY_ICON_SIDES:
+def legacy_icon(square, side, force=False):
+    """the icon at side pixels, with transparent corners for legacy sizes or when forced"""
+    if not force and side not in LEGACY_ICON_SIDES:
         return square.convert("RGB").resize((side, side), Image.LANCZOS)
     from PIL import ImageDraw
     big = square.convert("RGBA")
@@ -365,6 +365,15 @@ def build_icons(rgb, out_dir):
     square = to_image(rgb, np.ones(rgb.shape[:2])).convert("RGB").crop((cut, cut, MASTER - cut, MASTER - cut))
     for name, side in APP_ICONS.items():
         write_png(legacy_icon(square, side), os.path.join(out_dir, name))
+
+
+def build_deb_icons(source_dir, out_dir):
+    # ios 6 can use any listed icon for an app in /Applications without masking its corners
+    for name, side in APP_ICONS.items():
+        if side in LEGACY_ICON_SIDES:
+            continue
+        with Image.open(os.path.join(source_dir, name)) as icon:
+            write_png(legacy_icon(icon, side, force=True), os.path.join(out_dir, name))
 
 
 def build_qr_logo(rgb, alpha, out_dir):
@@ -846,7 +855,7 @@ def build_flags(svg_dir, countries, out_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("part", choices=("icons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "senkogram", "telegram", "phone", "flags", "all"))
+    parser.add_argument("part", choices=("icons", "debicons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "senkogram", "telegram", "phone", "flags", "all"))
     parser.add_argument("--source", default=os.path.join(ROOT, "resources/icons/source/exteria.png"))
     parser.add_argument("--animations", default=os.environ.get("EXTERIA_LOTTIE_RAW", ""))
     parser.add_argument("--phone-video", default=os.environ.get("EXTERIA_PHONE_VIDEO", ""))
@@ -854,6 +863,8 @@ def main():
     parser.add_argument("--icon-res", default=os.environ.get("EXTERIA_ICON_RES", ""))
     parser.add_argument("--out", default=os.path.join(ROOT, "resources"))
     args = parser.parse_args()
+    if args.part == "debicons":
+        build_deb_icons(os.path.join(ROOT, "resources/icons"), os.path.join(args.out, "deb-icons"))
     if args.part in ("icons", "all"):
         rgb, alpha = load_master(args.source)
         build_icons(rgb, os.path.join(args.out, "icons"))
