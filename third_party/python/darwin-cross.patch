@@ -1,0 +1,48 @@
+--- a/configure
++++ b/configure
+@@ -3820,6 +3820,9 @@
+ 	*-*-linux*)
+ 		ac_sys_system=Linux
+ 		;;
++	*-apple-darwin*)
++		ac_sys_system=Darwin
++		;;
+ 	*-*-cygwin*)
+ 		ac_sys_system=Cygwin
+ 		;;
+@@ -3887,6 +3890,9 @@
+ 			_host_cpu=$host_cpu
+ 		esac
+ 		;;
++	*-apple-darwin*)
++		_host_cpu=$host_cpu
++		;;
+ 	*-*-cygwin*)
+ 		_host_cpu=
+ 		;;
+@@ -10691,7 +10697,11 @@
+     		MACOSX_DEFAULT_ARCH="ppc"
+     		;;
+     	*)
+-    		as_fn_error $? "Unexpected output of 'arch' on macOS" "$LINENO" 5
++    		if test "$cross_compiling" = yes; then
++    			MACOSX_DEFAULT_ARCH="$host_cpu"
++    		else
++    			as_fn_error $? "Unexpected output of 'arch' on macOS" "$LINENO" 5
++    		fi
+     		;;
+     	esac
+     else
+@@ -10706,7 +10716,11 @@
+     		MACOSX_DEFAULT_ARCH="arm64"
+     		;;
+     	*)
+-    		as_fn_error $? "Unexpected output of 'arch' on macOS" "$LINENO" 5
++    		if test "$cross_compiling" = yes; then
++    			MACOSX_DEFAULT_ARCH="$host_cpu"
++    		else
++    			as_fn_error $? "Unexpected output of 'arch' on macOS" "$LINENO" 5
++    		fi
+     		;;
+     	esac
+ 

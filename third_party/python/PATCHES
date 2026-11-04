@@ -1,0 +1,9 @@
+cpython 3.11.9, from https://www.python.org/ftp/python/3.11.9/Python-3.11.9.tar.xz
+sha256 9b1e896523fc510691126c864406d9360a3d1e986acbda59cda57b5abda45b87
+
+the source is not vendored. scripts/build_python.sh unpacks the tarball into the build directory
+and applies darwin-cross.patch.
+
+darwin-cross.patch, configure only: 3.11 refuses to cross compile for darwin and, once past that,
+runs /usr/bin/arch to name the macOS default arch. the patch accepts *-apple-darwin hosts and
+takes the arch from the host triplet.
