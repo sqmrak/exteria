@@ -11,7 +11,7 @@ static void reference_curves(void) {
     /* bezier parameter 0.5 gives these exact x and y coordinates */
     CHECK(near(exteria_motion_progress(EXTERIA_MOTION_ENTER, 0.33125), 0.875));
     CHECK(near(exteria_motion_progress(EXTERIA_MOTION_EXIT, 0.6575), 0.5));
-    for (int curve = EXTERIA_MOTION_ENTER; curve <= EXTERIA_MOTION_DISMISS; ++curve) {
+    for (int curve = EXTERIA_MOTION_ENTER; curve <= EXTERIA_MOTION_SHEET_DISMISS; ++curve) {
         exteria_motion_curve kind = (exteria_motion_curve)curve;
         CHECK(near(exteria_motion_progress(kind, -1), 0));
         CHECK(near(exteria_motion_progress(kind, 0), 0));
@@ -75,6 +75,10 @@ static void spring_settles(void) {
     CHECK(near(exteria_motion_duration(EXTERIA_MOTION_DISMISS), 0.2));
     CHECK(exteria_motion_progress(EXTERIA_MOTION_DISMISS, 0.1) > 0.15);
     CHECK(near(exteria_motion_progress(EXTERIA_MOTION_DISMISS, 1.0), 1.0));
+    /* the sheet leaves on EASE_OUT: the bezier parameter 0.5 gives x 0.3425 and y 0.5, and by a fifth of the time it has covered less than a third of the way */
+    CHECK(near(exteria_motion_duration(EXTERIA_MOTION_SHEET_DISMISS), 0.25));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_SHEET_DISMISS, 0.3425), 0.5));
+    CHECK(exteria_motion_progress(EXTERIA_MOTION_SHEET_DISMISS, 0.2) < 0.34);
     CHECK(near(duration, 0.48));
     CHECK(near(exteria_motion_duration((exteria_motion_curve)-1), 0));
     CHECK(near(exteria_motion_progress((exteria_motion_curve)-1, 1), 0));

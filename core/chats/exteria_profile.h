@@ -36,6 +36,7 @@ typedef struct exteria_full_user {
     int32_t channel_message;        /* the id of the message the profile shows from it, zero for none */
     uint8_t require_premium;        /* only Telegram Premium users may write to this user, and nobody else may reply to their stories */
     uint8_t sharing_restricted;     /* either participant has disabled sharing */
+    uint8_t blocked;                /* the account has blocked this user */
     uint8_t has_music;              /* the song the profile shows first, from its saved music */
     exteria_media_info music;
     /* the message the person set for every new chat with them: a title, a text and one sticker; a business account feature */

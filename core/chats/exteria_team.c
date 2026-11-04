@@ -5,9 +5,11 @@
 #define BUG ExteriaMarkBugHunter
 #define PROMO ExteriaMarkPromotion
 #define MANAGER ExteriaMarkManager
+#define VIDEOFIX ExteriaMarkVideoFix
+#define SEER ExteriaMarkFlawSeer
 
 static const exteria_team_member members[] = {
-    {INT64_C(558269829), "kfrom7", OFF, 1},
+    {INT64_C(558269829), "kfrom7", OFF | SEER, 1},
     {INT64_C(8796163695), "anazerka", DEV | OFF, 1},
     {INT64_C(5561372449), "CookieValerka", OFF, 1},
     {INT64_C(6198068395), "inraxx", OFF, 1},
@@ -18,7 +20,7 @@ static const exteria_team_member members[] = {
     {INT64_C(5586697397), "xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", OFF | BUG, 1},
     {INT64_C(7118797604), "merwleem", OFF | MANAGER | PROMO, 1},
     {INT64_C(8256044236), "s3dativee", OFF, 1},
-    {INT64_C(1415625115), "not_a_modder", OFF | BUG, 1},
+    {INT64_C(1415625115), "not_a_modder", OFF | SEER, 1},
     {INT64_C(6233584668), "svcayon4ik", DEV, 0},
     {EXTERIA_TEAM_LEAD_ID, "sqmrak", ExteriaMarkLead | ExteriaMarkSenko, 0},
     {INT64_C(5435278149), "QWERTYU1OPZ", DEV, 0},
@@ -31,7 +33,9 @@ static const exteria_team_member members[] = {
     {INT64_C(7752146730), "nowme77", ExteriaMarkTester, 0},
     {INT64_C(8221692135), "cmp_73", ExteriaMarkCaution, 0},
     {INT64_C(7073807722), "Radickdz", PROMO, 0},
-    {INT64_C(5850832376), "Xmas_UnrealKot", PROMO, 0}
+    {INT64_C(5850832376), "Xmas_UnrealKot", PROMO, 0},
+    /* the author of ExteriaVideoFix, whose way of playing fragmented mp4 is in the app now; the username is not known, so the hint is empty */
+    {INT64_C(8604942411), "", VIDEOFIX, 0}
 };
 
 size_t exteria_team_member_count(void) { return sizeof(members) / sizeof(members[0]); }

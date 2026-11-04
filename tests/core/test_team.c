@@ -20,7 +20,9 @@ int main(void) {
     CHECK(!exteria_team_is_developer(INT64_C(659976684)));
     CHECK_EQ_INT(exteria_team_marks(INT64_C(659976684)), ExteriaMarkOfficialTester);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(8190976381)), 0);
-    CHECK_EQ_INT(exteria_team_marks(INT64_C(1415625115)), ExteriaMarkOfficialTester | ExteriaMarkBugHunter);
+    CHECK_EQ_INT(exteria_team_marks(INT64_C(1415625115)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
+    CHECK_EQ_INT(exteria_team_marks(INT64_C(558269829)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
+    CHECK_EQ_INT(exteria_team_marks(INT64_C(5586697397)), ExteriaMarkOfficialTester | ExteriaMarkBugHunter);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(6233584668)), ExteriaMarkDeveloper);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(588487063)), ExteriaMarkDeveloper | ExteriaMarkOfficialTester);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(5805414308)), 0);
@@ -28,7 +30,7 @@ int main(void) {
     CHECK_EQ_INT(exteria_team_marks(INT64_C(5153994027)), 0);
     for (size_t i = 0; i < exteria_team_member_count(); ++i) {
         const exteria_team_member *member = exteria_team_member_at(i);
-        CHECK(member && member->id > 0 && member->username && member->username[0]);
+        CHECK(member && member->id > 0 && member->username);
         CHECK(exteria_team_member_for_id(member->id) == member);
         if (member->official_list) {
             CHECK(official < sizeof(expected) / sizeof(expected[0]));
@@ -39,9 +41,11 @@ int main(void) {
         for (size_t j = 0; j < i; ++j) {
             const exteria_team_member *other = exteria_team_member_at(j);
             CHECK(member->id != other->id);
-            CHECK(strcmp(member->username, other->username) != 0);
+            CHECK(!member->username[0] || strcmp(member->username, other->username) != 0);
         }
     }
+    CHECK_EQ_INT(exteria_team_marks(INT64_C(8604942411)), ExteriaMarkVideoFix);
+    CHECK(!exteria_team_is_developer(INT64_C(8604942411)));
     CHECK_EQ_INT((int)official, 14);
     return test_finish("test_team");
 }

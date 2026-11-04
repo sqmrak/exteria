@@ -553,3 +553,18 @@ exteria_status exteria_gift_pin_request(exteria_arena *arena, const int32_t *msg
     if (status == EXTERIA_OK) *out = request;
     return status;
 }
+
+exteria_status exteria_gift_wear_request(exteria_arena *arena, int64_t collectible_id, exteria_tl_value **out) {
+    exteria_tl_value *request, *status;
+    exteria_status result;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!arena || collectible_id < 0) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "account.updateEmojiStatus");
+    status = exteria_tl_new_obj(arena, collectible_id ? "inputEmojiStatusCollectible" : "emojiStatusEmpty");
+    if (!request || !status) return EXTERIA_E_NOMEM;
+    result = collectible_id ? exteria_tl_set_i64(arena, status, "collectible_id", collectible_id) : EXTERIA_OK;
+    if (result == EXTERIA_OK) result = exteria_tl_set(request, "emoji_status", status);
+    if (result == EXTERIA_OK) *out = request;
+    return result;
+}

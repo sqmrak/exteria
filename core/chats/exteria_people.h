@@ -38,6 +38,7 @@ typedef struct exteria_person_row {
     uint8_t premium;        /* Telegram Premium: may write custom emoji */
     int64_t emoji_status;       /* the custom emoji document shown after the name, zero without one */
     int32_t emoji_status_until; /* unix time the status ends, zero when it has no end */
+    int64_t emoji_status_collectible; /* the id of the unique gift worn as the status, zero when the status is no gift */
     uint8_t deleted;
     uint8_t has_name_color;     /* the user chose the color of the name in group chats (a PeerColor with a color id) */
     int32_t name_color;         /* its id, 0 to 6 free for everyone and above them for Premium accounts */
@@ -69,6 +70,8 @@ void exteria_presence_read(const exteria_tl_value *status, exteria_presence *pre
 /* the custom emoji a user shows after their name; the caller compares until with the clock, which keeps the parse
    deterministic */
 void exteria_emoji_status_read(const exteria_tl_value *user, int64_t *document, int32_t *until);
+/* the id of the unique gift that is the emoji status of the user (an emojiStatusCollectible), zero for any other status or none */
+int64_t exteria_emoji_status_collectible(const exteria_tl_value *user);
 
 /* a User object: a userEmpty or a user without an id is EXTERIA_E_MALFORMED */
 exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person_row *out);

@@ -13,7 +13,10 @@ enum {
     ExteriaMarkPromotion = 32,
     ExteriaMarkBugHunter = 64,
     ExteriaMarkOfficialTester = 128,
-    ExteriaMarkManager = 256
+    ExteriaMarkManager = 256,
+    ExteriaMarkVideoFix = 512,
+    /* "this person sees flaws in everything": the elite testers who wear their own nickname on the plate */
+    ExteriaMarkFlawSeer = 1024
 };
 
 #define EXTERIA_TEAM_LEAD_ID INT64_C(8202789099)

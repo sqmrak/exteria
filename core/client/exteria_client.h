@@ -52,6 +52,8 @@ typedef struct exteria_client {
     uint64_t outbox_id;
     int64_t outbox_random;
     int sync_suspended;
+    /* the pause came from a failed request (flood wait, timeout, a link lost in flight), which a later try can pass; a pause without it needs the caller's resume */
+    int sync_retry;
     int sync_again;
     /* set while the changed event of a quiet container runs (see exteria_updates_quiet); the event handler may read it */
     int change_quiet;
@@ -76,6 +78,7 @@ exteria_status exteria_client_tick(exteria_client *c, uint32_t *next_ms);
 exteria_status exteria_client_request(exteria_client *c, const exteria_tl_value *request,
                                      uint32_t timeout_ms, uint64_t *id);
 exteria_status exteria_client_send(exteria_client *c, exteria_peer peer, const exteria_tl_value *request);
+/* lifts a pause of the update sync; the owner calls it after a delay, since a failed difference left alone stops every new message of the account until restart */
 void exteria_client_resume_sync(exteria_client *c);
 
 #endif
