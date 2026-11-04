@@ -18,6 +18,7 @@
 ## features
 
 - chats, folders, archive, stories, polls, reactions, custom emoji
+- reactions use the icons and animations of the server: still icons on the chips, a pop in the picker, a burst when one is put on a message. a free account keeps one reaction per message, Premium up to the limit the server names (3)
 - stickers: static, animated and video
 - voice notes, round videos, gifs, files, albums, flac music
 - location picker and nearby places, OpenStreetMap previews
@@ -28,6 +29,8 @@
 - ayumoments: copies of protected messages from chats the account can read
 - two looks: modern, and classic with the glossy ios 5 and 6 style and a hue of your own (ios 5 to 10)
 - `.tgios-theme` files in the modern look
+- in-app browser for web links, a sheet that slides up and is pulled down to close
+- a font file of your own (`.ttf` or `.otf`) or Rubik for the whole app, in chat settings
 - plugins, power saver, local notifications
 - russian, english
 
@@ -49,6 +52,10 @@ the vpn of the app and of no other app: a wireguard tunnel to cloudflare warp in
 - with the vpn on, connections wait for the tunnel and never fall back to the direct path
 - the warp account is made on the first start over tls checked against `resources/shiro/roots.pem`
 
+## browser
+
+web links open in exteria, the system browser, or an installed chrome, firefox or brave, as chosen in the main settings. telegram links stay in the app.
+
 ## proxy
 
 add a `tg://proxy`, `tg://socks`, `t.me/proxy` or `t.me/socks` link on the welcome screen or in more settings.
@@ -59,32 +66,19 @@ add a `tg://proxy`, `tg://socks`, `t.me/proxy` or `t.me/socks` link on the welco
 
 ## plugins
 
-user extensions and scripts that expand the standard features of exteria. lua 5.4 files in `Documents/Plugins`, listed in settings. a plugin runs after the person turns it on and confirms its permissions. the switch is tied to the sha-256 of the file, and three failed calls in a row switch it off.
+python plugins in the exteraGram format (`.plugin` or `.py`) in `Documents/Plugins`, listed in settings. the app runs cpython 3.11 and the sdk of [exteraless](https://github.com/exteraless/exteraless) over a small host. a plugin runs after the person turns it on and has seen the permissions it needs. the switch is tied to the sha-256 of the file, and three failed calls in a row switch it off. a tap on a running plugin opens the page of settings it builds.
 
-```lua
-return {
-  name = "no-spam",
-  permissions = { "messages.read", "messages.modify" },
-  on_message = function(m)
-    if m.text:find("spam", 1, true) then return false end
-  end,
-}
-```
+- works: `BasePlugin`, hooks for sent messages and for new ones, a page of settings from `create_settings()`, dialogs and notices, android views in an overlay, https, the standard library
+- does not work: request hooks of tl, `org.telegram.*` and `android.*` classes outside the shim, `fork`, `subprocess`. such a plugin is listed and fails on import with the class it lacks
+- a plugin runs inside the app with the rights of the app, a permission is shown to the person and is not a wall
+- `examples/doom.plugin` runs doom (shareware `doom1.wad` in its folder) in a sheet like the browser's
 
-- `on_message(m)`: a message of someone else before it is drawn; nil leaves it, false hides it, a string shows another text
-- `on_send(m)`: a text before it goes out; false stops it, a string is sent instead
-- `on_event(name)`: `start`, `stop`, `pause` or `resume`
-- at least one hook is needed; `text` needs `messages.read`, false and strings need `messages.modify`
-- `log(text)` writes to the device log
-- sandbox: base functions, string, table, math and utf8; no io, os, load or require
-- limits: 64 KiB script, 200000 vm instructions per call, 2 MiB of memory, 16 KiB text
-
-the host is `core/plugins`, the hooks into the chat are `app/platform/exteria_plugins.m`.
+the host is `core/pyhost`, the python side is `python/shim` and `third_party/exteraless`, the hooks into the chat are `app/platform/exteria_plugins.m`. the engine of doom is `third_party/doomgeneric` and `core/doom`.
 
 ## for developers
 
 - [docs/languages.md](docs/languages.md): add a language, from a `.strings` file or built into the app
-- [docs/plugins.md](docs/plugins.md): write a lua plugin
+- [docs/plugins.md](docs/plugins.md): write and port a python plugin
 
 ## build
 
