@@ -104,7 +104,7 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
             if (owner && image) [owner->_avatar showImage:image];
         }];
     }
-    sheet->_card.transform = CGAffineTransformMakeTranslation(0, sheet->_card.bounds.size.height + 30);
+    sheet->_card.transform = CGAffineTransformMakeTranslation(0, sheet.bounds.size.height - (sheet->_card.center.y - sheet->_card.bounds.size.height / 2));
     ExteriaAnimateView(sheet->_shade, CGAffineTransformIdentity, 0.45, EXTERIA_MOTION_ENTER, nil);
     ExteriaAnimateView(sheet->_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
 }
@@ -136,7 +136,8 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
     CGFloat safeBottom = ExteriaSafeInsets(self).bottom;
     CGFloat maxHeight = MAX(100, self.bounds.size.height - ExteriaStatusBarHeight() - 12 - safeBottom);
     CGFloat height = MIN(y + 70, maxHeight);
-    _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), self.bounds.size.height - safeBottom - height, width, height);
+    /* the card is moved by its transform while the sheet comes and goes, and a frame set under a transform resizes it */
+    ExteriaPlaceView(_card, CGRectMake(floor((self.bounds.size.width - width) / 2), self.bounds.size.height - safeBottom - height, width, height));
     _content.frame = CGRectMake(0, 0, width, MAX(0, height - 70));
     _content.contentSize = CGSizeMake(width, y);
     _content.scrollEnabled = y > _content.bounds.size.height;
@@ -150,8 +151,9 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
     self.userInteractionEnabled = NO;
     void (^handler)(void) = joining ? [_joinHandler copy] : nil;
     [self retain];
-    ExteriaAnimateView(_shade, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, _card.bounds.size.height + 30), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    /* the card leaves on the curve it arrives on: EXIT starts slowly and the card hung for a moment before it dropped */
+    ExteriaAnimateView(_shade, CGAffineTransformIdentity, 0, EXTERIA_MOTION_SHEET_DISMISS, nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, EXTERIA_MOTION_SHEET_DISMISS, ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         if (handler) handler();

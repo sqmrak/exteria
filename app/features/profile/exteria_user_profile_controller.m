@@ -115,6 +115,8 @@
     ExteriaProfileFeed *_feed;
     ExteriaFullUser *_fullUser;
     ExteriaStoryPeer *_storyPeer;
+    NSUInteger _fullUserGeneration;
+    NSUInteger _storiesGeneration;
     BOOL _muted;
     BOOL _muteBusy;
     CGFloat _headHeight;
@@ -325,11 +327,12 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
    seen */
 - (void)loadStories {
     ExteriaWeakReference *me = _weak;
+    NSUInteger generation = ++_storiesGeneration;
     [self retain];
     [self.session loadStoriesOfDialog:_dialog completion:^(ExteriaStoryPeer *peer, NSArray *stories, NSString *errorName) {
         [self autorelease];
         ExteriaUserProfileController *profile = me.target;
-        if (!profile || errorName) return;
+        if (!profile || generation != profile->_storiesGeneration || errorName) return;
         [profile->_storyPeer release];
         profile->_storyPeer = stories.count ? [peer retain] : nil;
         profile->_storyRing.hidden = !profile->_storyPeer;
@@ -372,16 +375,17 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     if (!ExteriaDialogIsDeveloper(_dialog)) return;
     NSUInteger mark = ExteriaMarkForDocument(document);
     if (point.y < -8 || point.y > _name.bounds.size.height + 8 || !mark) return;
-    ExteriaShowMarkNotice(_dialog.title, mark);
+    ExteriaShowMarkNoticeForUser(_dialog.title, mark, _dialog.peerId);
 }
 
 - (void)load {
     ExteriaWeakReference *me = _weak;
+    NSUInteger generation = ++_fullUserGeneration;
     [self retain];
     [self.session loadFullUserOfDialog:_dialog completion:^(ExteriaFullUser *user, NSString *errorName) {
         [self autorelease];
         ExteriaUserProfileController *profile = me.target;
-        if (!profile) return;
+        if (!profile || generation != profile->_fullUserGeneration) return;
         if (!user) {
             NSLog(@"exteria: the profile of %lld did not load: %@", profile->_dialog.peerId, errorName);
             return;
@@ -392,7 +396,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     }];
     [self loadStories];
     [_folderBar reload];
-    [_feed reload:^{ [(ExteriaUserProfileController *)me.target feedChanged]; }];
+    [_feed reload:^{ [(ExteriaUserProfileController *)me.target giftsChanged]; }];
 }
 
 #pragma mark folders
@@ -410,7 +414,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 - (void)reloadFeedOfFolder:(int32_t)folderId {
     ExteriaWeakReference *me = _weak;
     _feed.folderId = folderId;
-    [_feed reload:^{ [(ExteriaUserProfileController *)me.target feedChanged]; }];
+    [_feed reload:^{ [(ExteriaUserProfileController *)me.target giftsChanged]; }];
 }
 
 #pragma mark content
@@ -616,11 +620,16 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     [self.view setNeedsLayout];
 }
 
+- (void)giftsChanged {
+    /* folders filter the grid, not the gifts pinned around the photo */
+    if (!_feed.folderId && !_feed.errorName) [_pinnedGifts setGifts:_feed.items];
+    [self feedChanged];
+}
+
 - (void)feedChanged {
     /* the gifts show under the tabs only while the Gifts tab is chosen; the other tabs bring their own lists */
     BOOL gifts = _tabs.selectedTab == 0;
     [_grid setTiles:gifts ? _feed.tiles : [NSArray array]];
-    [_pinnedGifts setGifts:_feed.items];
     BOOL any = _feed.items.count > 0;
     NSString *text = @"";
     if (gifts && _feed.loaded && !any) text = NSLocalizedString(@"gifts.empty", nil);
@@ -631,7 +640,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 - (void)giftGridReachedEnd:(ExteriaGiftGridView *)grid {
     (void)grid;
     ExteriaWeakReference *me = _weak;
-    [_feed loadMore:^{ [(ExteriaUserProfileController *)me.target feedChanged]; }];
+    [_feed loadMore:^{ [(ExteriaUserProfileController *)me.target giftsChanged]; }];
 }
 
 - (void)giftGrid:(ExteriaGiftGridView *)grid didSelectIndex:(NSUInteger)index {
@@ -773,6 +782,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 /* the bar fills once the head has moved a little under it, and clears again at the top */
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
+    [_tabs hostDidScroll];
     [self heroFollowsPull:-(offset + _grid.topInset)];
     if (!_backdrop || ExteriaThemeIsClassic()) return;
     [self setBarShaded:offset > -_grid.topInset + BAR_SHADE_AFTER animated:YES];
@@ -788,7 +798,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 
 #pragma mark menu
 
-typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNotifications, ExteriaUserMenuReport, ExteriaUserMenuEditContact, ExteriaUserMenuSharing } ExteriaUserMenuEntry;
+typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNotifications, ExteriaUserMenuReport, ExteriaUserMenuEditContact, ExteriaUserMenuSharing, ExteriaUserMenuBlock } ExteriaUserMenuEntry;
 
 - (BOOL)canGift {
     return _dialog.kind == EXTERIA_DIALOG_USER && !_dialog.saved;
@@ -817,6 +827,28 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     ExteriaWeakReference *me = _weak;
     [self setActionSymbol:ExteriaSymbolEllipsis label:NSLocalizedString(@"profile.more", nil)
                   handler:^{ [(ExteriaUserProfileController *)me.target showMenu]; }];
+}
+
+/* a block is asked about first, since it cuts the person off; letting them back in is done at once, as the button of the chat does it */
+- (void)toggleBlock {
+    BOOL block = !_fullUser.blocked;
+    ExteriaWeakReference *me = _weak;
+    void (^apply)(void) = ^{
+        ExteriaUserProfileController *profile = me.target;
+        if (!profile) return;
+        [profile.session setBlocked:block kind:profile->_dialog.peerKind identifier:profile->_dialog.peerId hash:profile->_dialog.peerHash completion:^(NSString *errorName) {
+            ExteriaUserProfileController *current = me.target;
+            if (errorName) {
+                NSLog(@"exteria: the block was not changed: %@", errorName);
+                ExteriaShowNotice(nil, [NSString stringWithFormat:NSLocalizedString(@"profile.block.error", nil), errorName]);
+                return;
+            }
+            /* the profile is read again, and brings the state the server keeps now */
+            [current load];
+        }];
+    };
+    if (!block) { apply(); return; }
+    ExteriaConfirm(nil, [NSString stringWithFormat:NSLocalizedString(@"profile.block.confirm", nil), _dialog.title], NSLocalizedString(@"profile.block", nil), apply);
 }
 
 /* the name of the contact is asked as one line, the first word being the first name and the rest the last, as the old Telegram clients ask for it in one field */
@@ -848,7 +880,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
 - (void)showMenu {
     NSMutableArray *titles = [NSMutableArray array];
     NSMutableArray *entries = [NSMutableArray array];
-    ExteriaSymbol symbols[6];
+    ExteriaSymbol symbols[7];
     if (_fullUser && [self canGift] && !_fullUser.person.bot && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
         symbols[titles.count] = ExteriaSymbolLock;
         [titles addObject:NSLocalizedString(_fullUser.sharingRestricted ? @"chat.sharing.allow" : @"chat.sharing.disable", nil)];
@@ -874,6 +906,12 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
         symbols[titles.count] = ExteriaSymbolBell;
         [titles addObject:NSLocalizedString(@"notif.chat.header", nil)];
         [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuNotifications]];
+    }
+    /* a person can be blocked or let back in, as in the official clients; not oneself, and not the service account */
+    if (_fullUser && [self canGift] && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
+        symbols[titles.count] = ExteriaSymbolBlock;
+        [titles addObject:NSLocalizedString(_fullUser.blocked ? @"profile.unblock" : @"profile.block", nil)];
+        [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuBlock]];
     }
     if ([self canReport]) {
         symbols[titles.count] = ExteriaSymbolReport;
@@ -904,6 +942,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
             break;
         }
         case ExteriaUserMenuEditContact: [profile askContactName]; break;
+        case ExteriaUserMenuBlock: [profile toggleBlock]; break;
         case ExteriaUserMenuCopyLink: [profile copyLink]; break;
         case ExteriaUserMenuGift: [profile sendGift]; break;
         case ExteriaUserMenuNotifications:
@@ -977,7 +1016,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     ExteriaWeakReference *me = _weak;
     catalog.sentHandler = ^{
         ExteriaUserProfileController *profile = me.target;
-        if (profile) [profile->_feed reload:^{ [(ExteriaUserProfileController *)me.target feedChanged]; }];
+        if (profile) [profile->_feed reload:^{ [(ExteriaUserProfileController *)me.target giftsChanged]; }];
     };
     [self.navigationController pushViewController:catalog animated:YES];
 }

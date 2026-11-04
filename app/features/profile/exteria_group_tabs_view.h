@@ -40,5 +40,7 @@
 /* the members list starts again from the first page, after somebody was added */
 - (void)reloadMembers;
 - (CGFloat)heightForWidth:(CGFloat)width;
+/* the screen's list scrolled: the bar of the selection stays below the top bar while the list runs under it */
+- (void)hostDidScroll;
 
 @end

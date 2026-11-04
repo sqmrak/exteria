@@ -155,7 +155,7 @@ static UILabel *ExteriaQrLabel(UIColor *color, NSInteger alignment) {
     static uint8_t modules[EXTERIA_QR_MAX_MODULES];
     int side = 0;
     const char *text = url.UTF8String;
-    exteria_status status = text ? exteria_qr_encode((const uint8_t *)text, strlen(text), modules, sizeof(modules), &side, NULL) : EXTERIA_E_ARG;
+    exteria_status status = text ? exteria_qr_encode_min_version((const uint8_t *)text, strlen(text), EXTERIA_QR_LOGO_MIN_VERSION, modules, sizeof(modules), &side, NULL) : EXTERIA_E_ARG;
     if (status != EXTERIA_OK) {
         NSLog(@"exteria: the login code does not fit a QR code: %s", exteria_status_name(status));
         [self showFailure:NSLocalizedString(@"error.internal", nil)];

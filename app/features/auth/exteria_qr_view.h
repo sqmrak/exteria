@@ -1,6 +1,11 @@
 #import <UIKit/UIKit.h>
 
-/* a login QR code drawn in rounded modules with the app logo in the middle */
+/* the smallest version of a code that carries the logo: the logo and the room cleared round it hide a share of the modules that does not change with the size of the
+   code, and the corrections of versions 1 to 3 do not make up for it, so a short link (a profile's t.me address is version 2) did not read at all. Versions 4 to 6 read
+   in every try with the drawing of this view, and the later ones put an alignment pattern under the logo */
+#define EXTERIA_QR_LOGO_MIN_VERSION 5
+
+/* a QR code drawn in rounded modules with the app logo in the middle */
 @interface ExteriaQrView : UIView
 
 /* modules is side * side bytes, 1 for dark, as exteria_qr_encode gives them; with animated a code that is already

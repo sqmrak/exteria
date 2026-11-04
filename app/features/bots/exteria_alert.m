@@ -90,6 +90,10 @@ void ExteriaShowAlert(NSString *title, NSString *message, NSArray *buttons, NSIn
     ExteriaPresentAlert(title, message, buttons, cancelIndex, secure ? 1 : 0, nil, nil, handler);
 }
 
+void ExteriaShowAlertWithField(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, NSString *initial, NSString *placeholder, ExteriaAlertHandler handler) {
+    ExteriaPresentAlert(title, message, buttons, cancelIndex, 2, initial, placeholder, handler);
+}
+
 void ExteriaPromptText(NSString *title, NSString *message, NSString *initial, NSString *placeholder, void (^handler)(NSString *text)) {
     void (^done)(NSString *) = [handler copy];
     ExteriaPresentAlert(title, message, [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"tr.ok", nil), nil], 0, 2, initial, placeholder,
@@ -129,6 +133,10 @@ void ExteriaConfirm(NSString *title, NSString *message, NSString *confirmTitle, 
 }
 
 void ExteriaChoose(NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index)) {
+    ExteriaChooseFromView(nil, title, choices, destructiveIndex, handler);
+}
+
+void ExteriaChooseFromView(UIView *source, NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index)) {
     Class sheetClass = NSClassFromString(@"UIActionSheet");
     ExteriaAlertTarget *target = [[ExteriaAlertTarget alloc] init];
     target->sheetHandler = [handler copy];
@@ -139,6 +147,11 @@ void ExteriaChoose(NSString *title, NSArray *choices, NSInteger destructiveIndex
     [sheet setCancelButtonIndex:(NSInteger)choices.count];
     if (destructiveIndex >= 0 && destructiveIndex < (NSInteger)choices.count) [sheet setDestructiveButtonIndex:destructiveIndex];
     /* the view of the top controller turns with the screen and stays above a screen presented over the root */
-    [sheet showInView:ExteriaOverlayHost()];
+    UIView *host = ExteriaOverlayHost();
+    if (source && source.window && host && ExteriaIsPad() && [sheet respondsToSelector:@selector(showFromRect:inView:animated:)]) {
+        [sheet showFromRect:[host convertRect:source.bounds fromView:source] inView:host animated:YES];
+    } else {
+        [sheet showInView:host];
+    }
     [sheet release];
 }

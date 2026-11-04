@@ -1329,10 +1329,21 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _savedRightItems = [item.rightBarButtonItems copy];
     CGFloat width = self.navigationController.navigationBar.bounds.size.width;
     _classicSearch.frame = CGRectMake(0, 0, MAX(120, width - 24), 44);
-    item.leftBarButtonItems = nil;
-    item.rightBarButtonItems = [NSArray arrayWithObject:[[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"picker.cancel", nil)
-                                                                                           style:UIBarButtonItemStyleBordered target:self action:@selector(endClassicSearch)] autorelease]];
+    BOOL animate = !ExteriaReduceMotionEnabled();
+    [item setLeftBarButtonItems:nil animated:animate];
+    [item setRightBarButtonItems:[NSArray arrayWithObject:[[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"picker.cancel", nil)
+                                                                                           style:UIBarButtonItemStyleBordered target:self action:@selector(endClassicSearch)] autorelease]] animated:animate];
     item.titleView = _classicSearch;
+    if (animate) {
+        /* the field opens from the right edge, where the search was, and grows across the bar while it comes in */
+        CGFloat shrunk = 0.3f, fullWidth = _classicSearch.bounds.size.width;
+        _classicSearch.alpha = 0;
+        _classicSearch.transform = CGAffineTransformConcat(CGAffineTransformMakeScale(shrunk, 1), CGAffineTransformMakeTranslation(fullWidth * (1 - shrunk) / 2, 0));
+        [UIView animateWithDuration:0.28 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction animations:^{
+            _classicSearch.alpha = 1;
+            _classicSearch.transform = CGAffineTransformIdentity;
+        } completion:nil];
+    }
     /* the bar is in the window after this pass of the run loop, which is when a keyboard can be asked for */
     [self performSelector:@selector(raiseClassicSearchKeyboard) withObject:nil afterDelay:0];
 }
@@ -1349,9 +1360,17 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _classicSearch.text = @"";
     [_classicSearch resignFirstResponder];
     UINavigationItem *item = self.navigationItem;
+    BOOL animate = !ExteriaReduceMotionEnabled();
+    _classicSearch.alpha = 1;
+    _classicSearch.transform = CGAffineTransformIdentity;
     item.titleView = _savedTitleView;
-    item.leftBarButtonItems = _savedLeftItems;
-    item.rightBarButtonItems = _savedRightItems;
+    [item setLeftBarButtonItems:_savedLeftItems animated:animate];
+    [item setRightBarButtonItems:_savedRightItems animated:animate];
+    if (animate && _savedTitleView) {
+        /* what the bar showed before comes back with a fade, as the search went out with a grow */
+        _savedTitleView.alpha = 0;
+        [UIView animateWithDuration:0.2 animations:^{ _savedTitleView.alpha = 1; }];
+    }
     [self classicSearchChanged:@""];
 }
 

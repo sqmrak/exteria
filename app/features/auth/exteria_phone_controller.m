@@ -12,7 +12,7 @@
 #import "exteria_theme.h"
 #import "exteria_wave_background_view.h"
 
-@interface ExteriaPhoneController () <UIGestureRecognizerDelegate> {
+@interface ExteriaPhoneController () {
     ExteriaCountryBook *_book;
     ExteriaCountry *_country;
     NSString *_codeDigits;
@@ -191,11 +191,6 @@ static UITextField *ExteriaPhoneField(id<UITextFieldDelegate> delegate) {
     [_qr addTarget:self action:@selector(openQr) forControlEvents:UIControlEventTouchUpInside];
     [root addSubview:_qr];
 
-    UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissKeyboard)] autorelease];
-    tap.delegate = self;
-    tap.cancelsTouchesInView = NO;
-    [root addGestureRecognizer:tap];
-
     _codeField.text = _codeDigits;
     [self refreshCountry];
     [self refreshNumber];
@@ -204,18 +199,6 @@ static UITextField *ExteriaPhoneField(id<UITextFieldDelegate> delegate) {
 - (void)openQr {
     if (_busy) return;
     [_delegate phoneControllerDidRequestQr:self];
-}
-
-- (void)dismissKeyboard {
-    [self.view endEditing:YES];
-}
-
-/* only a tap on bare background closes the keyboard; fields and buttons keep their own taps */
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
-    for (UIView *view = touch.view; view && view != self.view; view = view.superview) {
-        if ([view isKindOfClass:[UIControl class]] || [view isKindOfClass:[UITextField class]]) return NO;
-    }
-    return YES;
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation {

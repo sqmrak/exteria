@@ -24,6 +24,8 @@
 #import "exteria_imported_theme.h"
 #import "exteria_imported_theme_preview_controller.h"
 #import "exteria_file_picker.h"
+#import "exteria_font_choice.h"
+#import "exteria_sheet.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_weak_reference.h"
 
@@ -38,6 +40,9 @@
     UIButton *_more;
 }
 - (void)chooseThemeFile;
+- (void)customFontTapped;
+- (void)chooseFontFile;
+- (void)fontsChanged;
 @end
 
 /* the duck of the theme change covers the window while the icon is written, which takes a moment and ends the app
@@ -175,6 +180,13 @@ static NSString *ExteriaNightStateText(void) {
     [self refreshMenu];
 }
 
+/* the scale is read once at launch, so the slider only stores it for the next start */
+- (void)interfaceScaleMoved:(float)value {
+    NSInteger percent = (NSInteger)(value + 0.5f);
+    if (percent == ExteriaInterfaceScaleStored()) return;
+    ExteriaInterfaceScaleStore(percent);
+}
+
 - (void)radiusMoved:(float)value {
     NSInteger radius = (NSInteger)(value + 0.5f);
     if (radius == ExteriaChatBubbleRadius()) return;
@@ -207,6 +219,13 @@ static NSString *ExteriaNightStateText(void) {
     }
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.textsize.header", nil) footer:nil rows:size]];
 
+    ExteriaSettingsRow *interfaceScale = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.uiscale.row", nil) format:@"%.0f%%" value:(float)ExteriaInterfaceScaleStored()
+                                                                        minimum:EXTERIA_INTERFACE_SCALE_MIN maximum:EXTERIA_INTERFACE_SCALE_MAX change:^(float value) {
+        [(ExteriaChatSettingsController *)weak.target interfaceScaleMoved:value];
+    }];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.uiscale.header", nil) footer:NSLocalizedString(@"chatset.uiscale.footer", nil)
+                                                             rows:[NSArray arrayWithObject:interfaceScale]]];
+
     NSMutableArray *looks = [NSMutableArray array];
     [looks addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolGallery tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"chatset.wallpaper", nil) subtitle:nil
                                                  value:nil tap:^{
@@ -234,6 +253,7 @@ static NSString *ExteriaNightStateText(void) {
     }]];
     NSString *themeFooter = ExteriaImportedThemeSelected(ExteriaThemeIsDark()) && !ExteriaThemeIsClassic() ? NSLocalizedString(@"theme.import.active", nil) : nil;
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.colortheme.header", nil) footer:themeFooter rows:themeRows]];
+    [sections addObject:[self fontSection]];
 
     {
         ExteriaSettingsRow *radius = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.corners.row", nil) format:@"%.0f" value:(float)ExteriaChatBubbleRadius()
@@ -254,6 +274,7 @@ static NSString *ExteriaNightStateText(void) {
 
     [sections addObject:[self swipeSection]];
     [sections addObject:[self recordLockSection]];
+    [sections addObject:[self lastSeenSection]];
     /* ios 10.3 has the call; older systems change the icon only through a bundle the app can write, which a jailbreak install gives, and the row says so
        where it does not */
     if (ExteriaAlternateIconNames().count > 0) {
@@ -341,6 +362,22 @@ static NSString *ExteriaNightStateText(void) {
         }]];
     }
     return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.swipe.header", nil) footer:NSLocalizedString(@"chatset.swipe.info", nil) rows:rows];
+}
+
+/* how the status line of a person shows when they were last online: as a time ago while it is under a day (7 h ago), or always as the time itself (last seen at 12:54) */
+- (ExteriaSettingsSection *)lastSeenSection {
+    ExteriaWeakReference *weak = _weak;
+    BOOL relative = ExteriaChatFlagGet(ExteriaChatFlagRelativeSeen);
+    static NSString *const keys[] = {@"chatset.seen.exact", @"chatset.seen.relative"};
+    NSMutableArray *rows = [NSMutableArray array];
+    for (NSUInteger i = 0; i < 2; ++i) {
+        BOOL value = i == 1;
+        [rows addObject:[ExteriaSettingsRow checkRowWithTitle:NSLocalizedString(keys[i], nil) subtitle:nil checked:relative == value tap:^{
+            ExteriaChatFlagSet(ExteriaChatFlagRelativeSeen, value);
+            [(ExteriaChatSettingsController *)weak.target rebuild];
+        }]];
+    }
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.seen.header", nil) footer:NSLocalizedString(@"chatset.seen.info", nil) rows:rows];
 }
 
 /* how long a held record button waits before the recording locks by itself */
@@ -434,6 +471,69 @@ static NSString *ExteriaNightStateText(void) {
         ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
         [me rebuild];
     }];
+}
+
+#pragma mark font
+
+/* the font file row and, under it, the switch that sets the whole app in Rubik; a font file wins over the switch */
+- (ExteriaSettingsSection *)fontSection {
+    ExteriaWeakReference *weak = _weak;
+    NSString *custom = ExteriaFontCustomName();
+    NSMutableArray *rows = [NSMutableArray array];
+    [rows addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"font.custom", nil) subtitle:nil
+                                                value:custom ? custom : NSLocalizedString(@"font.custom.none", nil) tap:^{
+        [(ExteriaChatSettingsController *)weak.target customFontTapped];
+    }]];
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"font.rubik", nil) subtitle:nil on:ExteriaFontRubikEverywhere() toggle:^(BOOL on) {
+        ExteriaFontStoreRubikEverywhere(on);
+        [(ExteriaChatSettingsController *)weak.target fontsChanged];
+    }]];
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"font.header", nil) footer:nil rows:rows];
+}
+
+- (void)customFontTapped {
+    if (!ExteriaFontCustomName()) {
+        [self chooseFontFile];
+        return;
+    }
+    ExteriaWeakReference *weak = _weak;
+    [ExteriaSheet presentInView:self.view.window title:ExteriaFontCustomName() message:nil
+                        options:[NSArray arrayWithObjects:NSLocalizedString(@"font.change", nil), NSLocalizedString(@"font.remove", nil), nil]
+                    destructive:[NSIndexSet indexSetWithIndex:1] cancelTitle:NSLocalizedString(@"shiro.close", nil) handler:^(NSUInteger index) {
+        ExteriaChatSettingsController *me = weak.target;
+        if (!me) return;
+        if (index == 0) {
+            [me chooseFontFile];
+        } else if (index == 1) {
+            ExteriaFontRemoveCustom();
+            [me fontsChanged];
+        }
+    }];
+}
+
+- (void)chooseFontFile {
+    ExteriaWeakReference *weak = _weak;
+    ExteriaFilePicker *picker = [[[ExteriaFilePicker alloc] initWithDirectory:nil handler:^(NSString *path) {
+        ExteriaChatSettingsController *me = weak.target;
+        if (!me) return;
+        NSString *failure = ExteriaFontImportCustom(path);
+        if (failure) ExteriaShowNotice(NSLocalizedString(@"font.header", nil), failure);
+        else [me fontsChanged];
+    } cancel:nil] autorelease];
+    picker.extensions = [NSArray arrayWithObjects:@"ttf", @"otf", nil];
+    picker.rootTitle = NSLocalizedString(@"font.pick.title", nil);
+    picker.searchPlaceholder = NSLocalizedString(@"font.pick.search", nil);
+    picker.emptyText = NSLocalizedString(@"font.pick.empty", nil);
+    picker.fileSymbol = ExteriaSymbolDocument;
+    UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:picker] autorelease];
+    if (ExteriaThemeIsClassic()) ExteriaClassicStyleNavigationBar(navigation.navigationBar);
+    [self presentViewController:navigation animated:YES completion:nil];
+}
+
+/* every screen asks for its fonts when it is built, so the main controller builds them again, from the row that was touched */
+- (void)fontsChanged {
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
+                                                      userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:self.selectPoint] forKey:ExteriaThemeOriginKey]];
 }
 
 #pragma mark actions

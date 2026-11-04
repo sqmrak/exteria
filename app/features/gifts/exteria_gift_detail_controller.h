@@ -17,6 +17,8 @@
 
 /* the profile the gift is on, for a gift of ours: with it the screen offers to put the gift in a folder of that profile */
 @property (nonatomic, retain) ExteriaDialog *folderDialog;
+/* the gifts now pinned on the profile, in order; pinning one sends this list with the change */
+@property (nonatomic, copy) NSArray *pinnedGifts;
 
 /* runs on the main thread after anything changed on the server, so the list can load again */
 @property (nonatomic, copy) void (^changedHandler)(void);

@@ -278,6 +278,7 @@ static NSMutableDictionary *ExteriaRatingRow(ExteriaSymbol symbol, NSString *tit
     if (_closing) return;
     _closing = YES;
     self.userInteractionEnabled = NO;
+    ExteriaCacheForMotion(_panel);
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 animations:^{ self.backgroundColor = [UIColor colorWithWhite:0 alpha:0]; }];
     ExteriaAnimateView(_panel, CGAffineTransformMakeTranslation(0, _panel.frame.size.height), 1, EXTERIA_MOTION_DISMISS, ^(BOOL finished) {
         (void)finished;
@@ -352,7 +353,8 @@ static NSMutableDictionary *ExteriaRatingRow(ExteriaSymbol symbol, NSString *tit
     }
     CGFloat closeRoom = 44 + 16 + 16 + safe.bottom;
     CGFloat height = MIN(y + closeRoom, self.bounds.size.height - safe.top - 24);
-    _panel.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), self.bounds.size.height - height, width, height);
+    /* the sheet is moved by a transform while it rises and leaves, and a frame written over that put it back on the screen for a frame */
+    ExteriaPlaceView(_panel, CGRectMake(floor((self.bounds.size.width - width) / 2), self.bounds.size.height - height, width, height));
     _panelBack.frame = _panel.bounds;
     _close.frame = CGRectMake(16, height - 16 - safe.bottom - 44, width - 32, 44);
     _scroll.frame = CGRectMake(0, 0, width, height - closeRoom + 8);
@@ -362,6 +364,8 @@ static NSMutableDictionary *ExteriaRatingRow(ExteriaSymbol symbol, NSString *tit
 
 void ExteriaShowRating(UIView *host, ExteriaFullUser *user) {
     if (!host || !user.hasRating) return;
+    /* not the window: before ios 8 a view in the window keeps the turn of the device, and the card lay on its side on an ipad held sideways */
+    if ([host isKindOfClass:[UIWindow class]] && ExteriaOverlayHost()) host = ExteriaOverlayHost();
     ExteriaRatingView *view = [[[ExteriaRatingView alloc] initWithUser:user] autorelease];
     view.frame = host.bounds;
     [host addSubview:view];

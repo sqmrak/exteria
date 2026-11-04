@@ -239,6 +239,7 @@
     detail.ownerName = _dialog.saved ? _ownerName : _dialog.title;
     detail.stickers = _stickers;
     if (_mine) detail.folderDialog = _dialog;
+    detail.pinnedGifts = [_gifts filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"pinned == YES"]];
     ExteriaWeakReference *weak = _weak;
     detail.changedHandler = ^{
         ExteriaGiftsController *controller = weak.target;

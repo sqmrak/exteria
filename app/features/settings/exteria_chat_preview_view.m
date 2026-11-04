@@ -275,7 +275,6 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     CGFloat width = self.bounds.size.width > 1 ? self.bounds.size.width : 320;
     _wallpaperWidth = width;
     ExteriaApplyChatWallpaperSized(_wallpaper, ExteriaThemeIsDark(), CGSizeMake(width, WALLPAPER_HEIGHT));
-    [self setNeedsLayout];
 }
 
 - (void)settingsChanged {
