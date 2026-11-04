@@ -45,6 +45,12 @@ void exteria_shiro_engine_stop(exteria_shiro_engine *engine);
    any TCP socket; waits until the far side has answered or timeout_ms has passed */
 exteria_status exteria_shiro_engine_open(exteria_shiro_engine *engine, uint32_t ip, uint16_t port, int timeout_ms, int *fd);
 
+/* the same in two steps, so that the wait for the far side is not made while the caller holds the engine: dial queues the stream and returns at once with the descriptor
+   to wait on and the time the wait ends; finish waits (it touches no engine, and an engine that is stopped meanwhile closes the stream, which is an error here) and
+   gives the stream. a dial that succeeded must be followed by a finish */
+exteria_status exteria_shiro_engine_dial(exteria_shiro_engine *engine, uint32_t ip, uint16_t port, int timeout_ms, int *wait_fd, uint64_t *deadline_ms);
+exteria_status exteria_shiro_dial_finish(int wait_fd, uint64_t deadline_ms, int *fd);
+
 /* a datagram socket for UDP through the tunnel, as a non blocking local socket for the caller to use with send and
    recv */
 exteria_status exteria_shiro_engine_open_udp(exteria_shiro_engine *engine, int *fd);

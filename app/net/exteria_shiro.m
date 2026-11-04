@@ -4,6 +4,9 @@
 
 #import <UIKit/UIKit.h>
 
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <sys/utsname.h>
@@ -36,6 +39,11 @@ static NSString *const ExteriaShiroAccountFile = @"shiro.account";
 #define REGISTRATION_TIMEOUT_MS 15000
 /* the first servers are the ones of the account, the rest are drawn; a silent network stops here instead of dialing for ever */
 #define SERVER_ATTEMPTS 5u
+/* after that many servers without an answer the tunnel is tried again on its own, this many times, the first pause being this long and each next one twice as long */
+#define AUTO_RETRIES_MAX 3u
+#define AUTO_RETRY_FIRST_SECONDS 15u
+/* how often the addresses of this phone are looked at to see that the network changed */
+#define PATH_WATCH_SECONDS 3.0
 /* the journal keeps the last lines of a run, so a report of a failure carries how it came about */
 #define LOG_LINES_MAX 400u
 #define LOG_LINES_DROP 100u
@@ -77,6 +85,11 @@ typedef struct {
     uint32_t _serial;
     unsigned _attempt;
     ExteriaShiroStats _lastStats;
+    /* main thread only: the watch on the network path, and the tries that follow a tunnel that did not open */
+    NSTimer *_pathTimer;
+    NSString *_pathSignature;
+    NSString *_pathCandidate;
+    unsigned _autoRetries;
 }
 @end
 
@@ -102,7 +115,11 @@ typedef struct {
 }
 
 - (void)dealloc {
-    dispatch_sync(_queue, ^{ [self stopEngine]; });
+    [_pathTimer invalidate];
+    [_pathSignature release];
+    [_pathCandidate release];
+    /* every queued block holds self, so the queue is idle here; dispatch_sync would deadlock when the last release comes from a block on that queue */
+    [self stopEngine];
     dispatch_release(_queue);
     pthread_rwlock_destroy(&_engineLock);
     exteria_wipe(&_identity, sizeof(_identity));
@@ -203,9 +220,11 @@ static void ExteriaShiroStamp(char out[16]) {
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:ExteriaShiroEnabledKey];
     if (![[NSUserDefaults standardUserDefaults] synchronize]) NSLog(@"exteria: the VPN switch was not saved");
     if (enabled) {
+        _autoRetries = 0;
         [self begin];
         return;
     }
+    [self stopPathWatch];
     [self newRun];
     [self setState:ExteriaShiroStateOff failure:ExteriaShiroFailureNone];
     dispatch_async(_queue, ^{ [self stopEngine]; });
@@ -213,6 +232,7 @@ static void ExteriaShiroStamp(char out[16]) {
 
 - (void)retry {
     if (!_enabled || _state != ExteriaShiroStateFailed) return;
+    _autoRetries = 0;
     /* a key the server refused is the account's own, so the try that follows makes a new account */
     [self beginDiscardingAccount:_failure == ExteriaShiroFailureKey];
 }
@@ -222,6 +242,7 @@ static void ExteriaShiroStamp(char out[16]) {
 }
 
 - (void)beginDiscardingAccount:(BOOL)discard {
+    [self startPathWatch];
     uint32_t run = [self newRun];
     uint32_t serial = ++_serial;
     _attempt = 0;
@@ -260,11 +281,82 @@ static void ExteriaShiroStamp(char out[16]) {
     [self setState:ExteriaShiroStateConnecting failure:ExteriaShiroFailureNone];
 }
 
+#pragma mark network path
+
+/* the addresses of the interfaces that reach the world (Wi-Fi and cellular), as one line: it changes when the phone moves from one network to another, and a tunnel that was
+   made on the old one is dead although its socket does not say so */
+static NSString *ExteriaShiroPathSignature(void) {
+    struct ifaddrs *list = NULL;
+    NSMutableArray *parts = [NSMutableArray array];
+    if (getifaddrs(&list) != 0) return @"";
+    for (struct ifaddrs *item = list; item; item = item->ifa_next) {
+        if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET || !(item->ifa_flags & IFF_UP) || (item->ifa_flags & IFF_LOOPBACK)) continue;
+        if (strncmp(item->ifa_name, "en", 2) != 0 && strncmp(item->ifa_name, "pdp_ip", 6) != 0) continue;
+        uint32_t address = ntohl(((struct sockaddr_in *)item->ifa_addr)->sin_addr.s_addr);
+        /* a link-local address is what an interface has while it has none yet */
+        if ((address >> 16) == 0xA9FE || address == 0) continue;
+        [parts addObject:[NSString stringWithFormat:@"%s=%u.%u.%u.%u", item->ifa_name, address >> 24, (address >> 16) & 255u, (address >> 8) & 255u, address & 255u]];
+    }
+    freeifaddrs(list);
+    [parts sortUsingSelector:@selector(compare:)];
+    return [parts componentsJoinedByString:@","];
+}
+
+- (void)startPathWatch {
+    if (_pathTimer) return;
+    [_pathSignature release];
+    _pathSignature = [ExteriaShiroPathSignature() retain];
+    [_pathCandidate release];
+    _pathCandidate = nil;
+    _pathTimer = [[NSTimer scheduledTimerWithTimeInterval:PATH_WATCH_SECONDS target:self selector:@selector(pathTick) userInfo:nil repeats:YES] retain];
+}
+
+- (void)stopPathWatch {
+    [_pathTimer invalidate];
+    [_pathTimer release];
+    _pathTimer = nil;
+    [_pathCandidate release];
+    _pathCandidate = nil;
+}
+
+- (void)pathTick {
+    if (!_enabled) {
+        [self stopPathWatch];
+        return;
+    }
+    NSString *now = ExteriaShiroPathSignature();
+    if ([now isEqualToString:_pathSignature]) {
+        [_pathCandidate release];
+        _pathCandidate = nil;
+        return;
+    }
+    /* a change is acted on when the next look finds the same, so an interface that flickers does not restart the tunnel again and again */
+    if (![now isEqualToString:_pathCandidate]) {
+        [_pathCandidate release];
+        _pathCandidate = [now copy];
+        return;
+    }
+    [_pathSignature release];
+    _pathSignature = [now retain];
+    [_pathCandidate release];
+    _pathCandidate = nil;
+    /* no address at all is a phone with no network: the tunnel stays as it is, and starts again when an address is back */
+    if (!now.length) {
+        [self log:@"the network is gone"];
+        return;
+    }
+    if (_state == ExteriaShiroStateOff) return;
+    [self log:@"the network changed (%@), the tunnel starts again", now];
+    _autoRetries = 0;
+    [self beginDiscardingAccount:NO];
+}
+
 /* main thread, from the engine's callback */
 - (void)engineState:(exteria_shiro_state)state reason:(exteria_status)reason run:(uint32_t)run serial:(uint32_t)serial {
     if (run != _run || serial != _serial || !_enabled) return;
     if (state == EXTERIA_SHIRO_UP) {
         _attempt = 0;
+        _autoRetries = 0;
         [self log:@"the tunnel is up"];
         [self setState:ExteriaShiroStateUp failure:ExteriaShiroFailureNone];
         return;
@@ -273,6 +365,21 @@ static void ExteriaShiroStamp(char out[16]) {
     BOOL wasUp = _state == ExteriaShiroStateUp;
     /* a tunnel that was working starts again from the account's own server; one that never answered goes on to the next server */
     _attempt = wasUp ? 0 : _attempt + 1;
+    if (_attempt >= SERVER_ATTEMPTS && reason != EXTERIA_E_SECURITY && _autoRetries < AUTO_RETRIES_MAX) {
+        /* a network that did not answer five servers may only be one that is changing (a lift, a tunnel, a switch from Wi-Fi to the cellular): the tunnel is tried again after a
+           pause that grows, with the traffic still blocked, before the person is told that it failed */
+        unsigned pause = AUTO_RETRY_FIRST_SECONDS << _autoRetries++;
+        uint32_t waiting = run;
+        [self log:@"no server answered, trying again in %u s (%u of %u)", pause, _autoRetries, AUTO_RETRIES_MAX];
+        _attempt = 0;
+        [self setState:ExteriaShiroStateConnecting failure:ExteriaShiroFailureNone];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)pause * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            /* nothing else began or ended the run meanwhile */
+            if (waiting != _run || !_enabled || _state != ExteriaShiroStateConnecting) return;
+            [self beginDiscardingAccount:NO];
+        });
+        return;
+    }
     if (_attempt >= SERVER_ATTEMPTS) {
         BOOL refused = reason == EXTERIA_E_SECURITY;
         [self failRun:run with:refused ? ExteriaShiroFailureKey : ExteriaShiroFailureServer
@@ -295,8 +402,10 @@ static void ExteriaShiroEngineState(void *context, exteria_shiro_state state, ex
 }
 
 static void ExteriaShiroEngineTrace(void *context, const char *line) {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     ExteriaShiroContext *c = context;
     [c->owner log:@"engine: %s", line];
+    [pool drain];
 }
 
 #pragma mark queue
@@ -602,10 +711,15 @@ static NSMutableDictionary *ExteriaShiroNames;
     if (fd) *fd = -1;
     if (!fd) return EXTERIA_E_ARG;
     if (self.route != ExteriaShiroRouteTunnel) return EXTERIA_E_STATE;
+    /* the engine is held only while the stream is queued: the wait for the far side (seconds, on a bad network) used to be made under the read side, so a turn off
+       waited for every stream that was still dialing, and with a writer waiting the new calls queued up behind it as well */
+    int waitFd = -1;
+    uint64_t deadline = 0;
     pthread_rwlock_rdlock(&_engineLock);
-    exteria_status status = _engine ? exteria_shiro_engine_open(_engine, ip, port, timeoutMs, fd) : EXTERIA_E_STATE;
+    exteria_status status = _engine ? exteria_shiro_engine_dial(_engine, ip, port, timeoutMs, &waitFd, &deadline) : EXTERIA_E_STATE;
     pthread_rwlock_unlock(&_engineLock);
-    return status;
+    if (status != EXTERIA_OK) return status;
+    return exteria_shiro_dial_finish(waitFd, deadline, fd);
 }
 
 - (BOOL)transferredIn:(unsigned long long *)bytesIn out:(unsigned long long *)bytesOut {

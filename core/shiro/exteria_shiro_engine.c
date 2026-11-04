@@ -757,13 +757,12 @@ void exteria_shiro_engine_stats(exteria_shiro_engine *e, exteria_shiro_stats *st
     pthread_mutex_unlock(&e->lock);
 }
 
-exteria_status exteria_shiro_engine_open(exteria_shiro_engine *e, uint32_t ip, uint16_t port, int timeout_ms, int *fd) {
-    int pair[2], size = STREAM_BUFFER;
+exteria_status exteria_shiro_engine_dial(exteria_shiro_engine *e, uint32_t ip, uint16_t port, int timeout_ms, int *wait_fd, uint64_t *deadline_ms) {
+    int pair[2], size = STREAM_BUFFER, full = 0;
     uint64_t deadline;
-    uint8_t ready = 1;
-    exteria_status status = EXTERIA_E_IO;
-    if (fd) *fd = -1;
-    if (!e || !fd || ip == 0 || port == 0 || timeout_ms <= 0) return EXTERIA_E_ARG;
+    if (wait_fd) *wait_fd = -1;
+    if (deadline_ms) *deadline_ms = 0;
+    if (!e || !wait_fd || !deadline_ms || ip == 0 || port == 0 || timeout_ms <= 0) return EXTERIA_E_ARG;
     if (exteria_shiro_engine_state(e) != EXTERIA_SHIRO_UP) return EXTERIA_E_STATE;
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) != 0) return EXTERIA_E_IO;
     fcntl(pair[1], F_SETFD, FD_CLOEXEC);
@@ -777,10 +776,12 @@ exteria_status exteria_shiro_engine_open(exteria_shiro_engine *e, uint32_t ip, u
     deadline = now_ms() + (uint64_t)timeout_ms;
     pthread_mutex_lock(&e->lock);
     if (e->queue_count >= MAX_PENDING || e->state != EXTERIA_SHIRO_UP) {
+        /* read under the lock: the thread that empties the queue changes it */
+        full = e->queue_count >= MAX_PENDING;
         pthread_mutex_unlock(&e->lock);
         close(pair[0]);
         close(pair[1]);
-        return e->queue_count >= MAX_PENDING ? EXTERIA_E_LIMIT : EXTERIA_E_STATE;
+        return full ? EXTERIA_E_LIMIT : EXTERIA_E_STATE;
     }
     e->queue[e->queue_count].fd = pair[0];
     e->queue[e->queue_count].ip = ip;
@@ -789,6 +790,16 @@ exteria_status exteria_shiro_engine_open(exteria_shiro_engine *e, uint32_t ip, u
     ++e->queue_count;
     pthread_mutex_unlock(&e->lock);
     wake(e);
+    *wait_fd = pair[1];
+    *deadline_ms = deadline;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_shiro_dial_finish(int wait_fd, uint64_t deadline, int *fd) {
+    exteria_status status = EXTERIA_E_IO;
+    uint8_t ready = 1;
+    if (fd) *fd = -1;
+    if (!fd || wait_fd < 0) return EXTERIA_E_ARG;
     for (;;) {
         struct pollfd p;
         uint64_t now = now_ms();
@@ -798,7 +809,7 @@ exteria_status exteria_shiro_engine_open(exteria_shiro_engine *e, uint32_t ip, u
             break;
         }
         left = (int)(deadline - now);
-        p.fd = pair[1];
+        p.fd = wait_fd;
         p.events = POLLIN;
         p.revents = 0;
         rc = poll(&p, 1, left);
@@ -808,18 +819,29 @@ exteria_status exteria_shiro_engine_open(exteria_shiro_engine *e, uint32_t ip, u
             break;
         }
         {
-            ssize_t n = recv(pair[1], &ready, 1, 0);
+            ssize_t n = recv(wait_fd, &ready, 1, 0);
+            /* the first byte says the far side answered; the end of the stream instead says the engine let the stream go, or the far side refused */
             if (n == 1 && ready == 0) status = EXTERIA_OK;
             break;
         }
     }
     if (status != EXTERIA_OK) {
-        close(pair[1]);
+        close(wait_fd);
         return status;
     }
-    make_nonblocking(pair[1]);
-    *fd = pair[1];
+    make_nonblocking(wait_fd);
+    *fd = wait_fd;
     return EXTERIA_OK;
+}
+
+exteria_status exteria_shiro_engine_open(exteria_shiro_engine *e, uint32_t ip, uint16_t port, int timeout_ms, int *fd) {
+    int wait_fd = -1;
+    uint64_t deadline = 0;
+    exteria_status status;
+    if (fd) *fd = -1;
+    status = exteria_shiro_engine_dial(e, ip, port, timeout_ms, &wait_fd, &deadline);
+    if (status != EXTERIA_OK) return status;
+    return exteria_shiro_dial_finish(wait_fd, deadline, fd);
 }
 
 exteria_status exteria_shiro_engine_open_udp(exteria_shiro_engine *e, int *fd) {
