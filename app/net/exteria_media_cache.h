@@ -17,8 +17,8 @@
 /* a picture or the first frame of tgs/vp9, bounded by maxSide pixels; completion runs on main with nil on failure */
 - (void)loadImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion;
 /* the cover of a music track, bounded by maxSide pixels: the thumbnail Telegram stored with the track, else the picture in the ID3 tag at the head of the
-   file, which costs one ranged request of 64 KiB (a second one, up to 1 MiB, when the tag is larger) and is kept on disk, an empty copy standing for a
-   file that has none. nil on the main thread's completion for a track without a cover or when the network failed */
+   file, which costs one ranged request of 64 KiB (a second one, up to 1 MiB, when the tag is larger). decoded covers are kept on disk; nil on the main thread's completion
+   means the track has no usable cover or the request failed */
 - (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion;
 /* starts the fetch and decode of a picture a row below the fold will ask for, so it is in memory by then */
 - (void)prepareImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide;
@@ -31,6 +31,8 @@
 /* the path of a file that is on the disk whole already, nil when it is not; the answer a screen needs to pick its
    button (the arrow of a file that has to come, or the triangle of one that is here) without starting a fetch */
 - (NSString *)cachedPathForFile:(ExteriaRemoteFile *)file size:(long long)size;
+/* keeps an uploaded document only when its size matches the server's document */
+- (void)cacheUploadedPath:(NSString *)path forFile:(ExteriaRemoteFile *)file size:(long long)size temporary:(BOOL)temporary completion:(void (^)(BOOL))completion;
 /* drops one request's interest: the parts stop when no other request waits, and its completion never runs */
 - (void)cancelPathRequest:(NSUInteger)request;
 /* remembers which message of which chat each file of these messages came from */
@@ -42,6 +44,11 @@
    screen */
 - (void)removeFilesOlderThanDays:(NSInteger)days;
 - (unsigned long long)diskBytes;
+/* the bytes on disk by exteria_cache_kind, read from the first bytes of each file; runs on a background queue and the completion on main, since a
+   cache of gigabytes holds thousands of files */
+- (void)loadKindBytes:(void (^)(const unsigned long long *bytes))completion;
+/* removes the files of the kinds in the mask (bit n is the kind n) on the work queue; active parts are left to their request and completion runs on main */
+- (void)clearKindsMask:(unsigned)mask completion:(void (^)(BOOL success))completion;
 - (void)clear;
 
 @end
