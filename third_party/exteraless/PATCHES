@@ -1,0 +1,22 @@
+exteraless python plugin sdk, from https://github.com/exteraless/exteraless
+commit 2587d6c15b8ff31543c7c8a062ed35a8494933a4, gpl-3.0, files copied from
+TMessagesProj/src/main/python: base_plugin, plugin_settings, hook_utils, markdown_utils, client_utils,
+android_utils, file_utils, intents, ui/, extera_utils/
+
+elyx_runtime/ is copied from the same commit; its yaml import is answered by python/shim/yaml.py.
+
+left out: dev_server, pip_controller (needs requests).
+the sdk reaches the app through app.exteraless.plugins.PythonBridge and PluginServices and through java.jclass;
+python/shim/ provides those three for ios.
+
+local changes, both for zwylib: it names the plugin behind a call by the "ElyxPlugins/<id>/" segment of the path of the
+calling file, which is where exteraGram runs the code of an .elyx archive from.
+- elyx_runtime/loader.py: the namespace of an archive searches <plugins>/ElyxPlugins/<id>, the link the extraction keeps to
+  <plugins>/.elyx_extracted/<id>/<hash>, instead of the hashed folder. without it the entry module of zwylib is src/main.py
+  and every setting, async task and hook it registers belongs to a plugin called "main"
+- extera_utils/plugin_loader.py: ElyxPlugins joins the markers that give the owner of a file by its path, so the code that
+  runs from the link, and a library that neighbours import from there, is still the code of its plugin
+
+
+local change for the ios 12 sandbox:
+- extera_utils/audit_gate.py: _runtime_paths adds every path on its own, as given and resolved, and _is_runtime_file also compares the normalized path as given. one path the sandbox refuses to resolve used to empty the cached list, and a plugin's `import random` was then refused as a file open without the files permission

@@ -1,0 +1,27 @@
+__id__ = "upper"
+__name__ = "Upper"
+__description__ = "makes every sent text loud"
+__author__ = "test"
+__version__ = "1.0"
+__min_version__ = "11.9.0"
+__icon__ = "msg_edit"
+
+from base_plugin import BasePlugin, HookResult, HookStrategy, MenuItemData, MenuItemType
+
+
+class UpperPlugin(BasePlugin):
+    def on_plugin_load(self):
+        self.add_on_send_message_hook()
+        self.set_setting("loaded", True)
+        self.log("loaded")
+        self.add_menu_item(MenuItemData(menu_type=MenuItemType.MAIN_MENU, text="Upper",
+                                        on_click=lambda ctx: self.set_setting("clicked", ctx.get("n", 0))))
+
+    def on_send_message_hook(self, account, params):
+        if params.message == "stop":
+            return HookResult(strategy=HookStrategy.CANCEL)
+        params.message = params.message.upper()
+        return HookResult(strategy=HookStrategy.MODIFY, params=params)
+
+    def on_app_event(self, event):
+        self.log("event " + event)
