@@ -6,6 +6,8 @@
 #import "exteria_chat_settings.h"
 #import "exteria_chat_controller.h"
 #import "exteria_chat_peek.h"
+#import "exteria_force_touch.h"
+#import "exteria_quick_actions.h"
 #import "exteria_dialog_cell.h"
 #import "exteria_developers.h"
 #import "exteria_classic_chrome.h"
@@ -29,6 +31,7 @@
 #import "exteria_community_screen.h"
 #import "exteria_topics_screen.h"
 #import "exteria_weak_reference.h"
+#import "exteria_falling_view.h"
 #include "exteria_list_state.h"
 #include "exteria_clock.h"
 #import "exteria_time.h"
@@ -36,10 +39,12 @@
 /* a list older than this is fetched again when its screen comes back */
 #define STALE_SECONDS 60.0
 
-#define ARCHIVE_PULL_DISTANCE 64.0
 
 @interface ExteriaClassicChatsController () <UIActionSheetDelegate> {
     ExteriaWeakReference *_badgeWeak;
+    ExteriaFallingView *_snow;
+    ExteriaFallingView *_foxes;
+    ExteriaFallingView *_boys;
     ExteriaSession *_session;
     ExteriaChatListStyle _listStyle;
     ExteriaChatSwipe _swipe;
@@ -69,11 +74,11 @@
     BOOL _failed;
     BOOL _floodRetried;
     BOOL _archiveHidden;
-    BOOL _archiveRevealed;
-    BOOL _dragFromTop;
     NSUInteger _generation;
     /* keys of the chats picked after a long press; nil outside selection */
     NSMutableSet *_selection;
+    /* the selection was begun by the button of the bar and waits for the first pick, where one begun by a long press on a row has a pick already and ends when the last is taken back */
+    BOOL _selectionPersistent;
     UIBarButtonItem *_savedLeft;
     UIBarButtonItem *_savedRight;
     void (^_unreadHandler)(NSInteger);
@@ -103,6 +108,8 @@
     self.navigationItem.title = folderId > 0 ? NSLocalizedString(@"chats.archive", nil) : NSLocalizedString(@"chats.title", nil);
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(archiveSummaryChanged:)
         name:ExteriaArchiveSummaryDidChangeNotification object:_session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(forumSummariesChanged:)
+        name:ExteriaForumSummariesDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(typingChanged:)
         name:ExteriaTypingDidChangeNotification object:_session.typing];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(draftChanged:)
@@ -119,6 +126,14 @@
     NSArray *updated = [ExteriaDialogsReplacingArchive(_dialogs, [note.userInfo objectForKey:@"dialog"]) retain];
     [_dialogs release];
     _dialogs = updated;
+    [self applyFilters];
+    [self reloadList:NO];
+}
+
+/* the topics of a forum were read, so its row counts what is unread in them */
+- (void)forumSummariesChanged:(NSNotification *)note {
+    if (![self isViewLoaded] || !_dialogs.count) return;
+    [_session applyForumSummariesToDialogs:_dialogs];
     [self applyFilters];
     [self reloadList:NO];
 }
@@ -155,6 +170,12 @@
 }
 
 - (void)dealloc {
+    [_snow stop];
+    [_foxes stop];
+    [_boys stop];
+    [_snow release];
+    [_foxes release];
+    [_boys release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [_badgeWeak clear];
     [_badgeWeak release];
@@ -199,7 +220,9 @@
     ExteriaClassicStyleTable(table);
     table.rowHeight = [ExteriaClassicDialogCell rowHeight];
     if (_folderId == 0) {
-        self.navigationItem.leftBarButtonItem = self.editButtonItem;
+        /* the plainest place for the choice of chats is the button that says Change: it opens the selection, as it does in the lists of the official clients */
+        self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"chats.edit", nil) style:UIBarButtonItemStyleBordered
+                                                                                  target:self action:@selector(editTapped)] autorelease];
         [self syncChromeWithSettings];
     }
     self.navigationItem.backBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"chats.title", nil)
@@ -276,6 +299,7 @@
     [self refreshConnectionTitle];
     UILongPressGestureRecognizer *press = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(rowPressed:)] autorelease];
     [table addGestureRecognizer:press];
+    [table addGestureRecognizer:[[[ExteriaForceTouchRecognizer alloc] initWithTarget:self action:@selector(rowPressed:)] autorelease]];
     [self reload];
 }
 
@@ -287,16 +311,22 @@
 
 - (void)liveDialogsChanged:(NSNotification *)note {
     (void)note;
-    if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
+    if (!self.isViewLoaded) return;
+    /* a list under a chat drops the event, and its next appearance reloads only after 60 seconds: a chat read on another client kept its unread badge */
+    if (!self.view.window) {
+        [self dialogsChanged];
+        return;
+    }
+    if (_liveRefreshScheduled) return;
     _liveRefreshScheduled = YES;
     uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
-    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 2500, 200);
+    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 750, 100);
     [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
 }
 
 - (void)refreshLiveDialogs {
     _liveRefreshScheduled = NO;
-    if (!self.view.window) return;
+    if (!self.view.window) { [self dialogsChanged]; return; }
     _lastLiveRefreshMs = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
     if (_loading) _liveRefreshPending = YES;
     else [self reload];
@@ -424,6 +454,7 @@
         _loadedAt = [[NSDate date] retain];
         [_dialogs release];
         _dialogs = [items retain];
+        if (!_folderId && !_folders.selectedFolder.folderId) ExteriaQuickActionsUpdate(items);
         [self loadBadgePictures];
         [_stories refresh];
         [_prompt refresh];
@@ -571,13 +602,71 @@
     }];
 }
 
+/* the classic rows are opaque, so snow and foxes fall over them: a layer on the table that does not take touches and is moved with the offset, so it stays on the screen */
+- (ExteriaFallingView *)fallingViewNamed:(NSString *)sprite {
+    ExteriaFallingView *view = sprite ? [[ExteriaFallingView alloc] initWithFrame:self.tableView.bounds spriteNamed:sprite] : [[ExteriaFallingView alloc] initWithFrame:self.tableView.bounds];
+    view.userInteractionEnabled = NO;
+    [self.tableView addSubview:view];
+    return view;
+}
+
+- (void)syncFallingEffects {
+    if (_folderId != 0 || ![self isViewLoaded] || !self.view.window) return;
+    BOOL snow = ExteriaChatFlagGet(ExteriaChatFlagSnow), foxes = ExteriaChatFlagGet(ExteriaChatFlagFoxes), boys = ExteriaChatFlagGet(ExteriaChatFlagBoykisser);
+    if (boys && !_boys) _boys = [self fallingViewNamed:@"boykisser"];
+    if (!boys && _boys) {
+        [_boys stop];
+        [_boys removeFromSuperview];
+        [_boys release];
+        _boys = nil;
+    }
+    if (snow && !_snow) _snow = [self fallingViewNamed:nil];
+    if (foxes && !_foxes) _foxes = [self fallingViewNamed:@"senko-fall"];
+    if (!snow && _snow) {
+        [_snow stop];
+        [_snow removeFromSuperview];
+        [_snow release];
+        _snow = nil;
+    }
+    if (!foxes && _foxes) {
+        [_foxes stop];
+        [_foxes removeFromSuperview];
+        [_foxes release];
+        _foxes = nil;
+    }
+    [self pinFallingEffects];
+    [_snow start];
+    [_foxes start];
+    [_boys start];
+}
+
+- (void)pinFallingEffects {
+    CGRect bounds = self.tableView.bounds;
+    if (_snow && !CGRectEqualToRect(_snow.frame, bounds)) _snow.frame = bounds;
+    if (_foxes && !CGRectEqualToRect(_foxes.frame, bounds)) _foxes.frame = bounds;
+    if (_boys && !CGRectEqualToRect(_boys.frame, bounds)) _boys.frame = bounds;
+    if (_boys) [self.tableView bringSubviewToFront:_boys];
+    if (_snow) [self.tableView bringSubviewToFront:_snow];
+    if (_foxes) [self.tableView bringSubviewToFront:_foxes];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    (void)scrollView;
+    if (_snow || _foxes || _boys) [self pinFallingEffects];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self syncFallingEffects];
+}
+
 - (void)chatSettingsChanged {
+    [self syncFallingEffects];
     [self syncChromeWithSettings];
     [self syncStoriesWithSettings];
     BOOL hidden = ExteriaArchiveHidden();
     if (hidden == _archiveHidden) return;
     _archiveHidden = hidden;
-    _archiveRevealed = NO;
     [self applyFilters];
     [self.tableView reloadData];
 }
@@ -586,9 +675,11 @@
     NSMutableArray *shown = [NSMutableArray array];
     for (ExteriaDialog *dialog in _dialogs) {
         if (!dialog.folder && dialog.peerKind == 3 && dialog.left) continue;
-        if (dialog.folder && ExteriaArchiveHidden() && !_archiveRevealed) continue;
+        if (dialog.folder && ExteriaArchiveHidden()) continue;
         if (!_folders.selectedFolder.folderId || [_folders.selectedFolder containsDialog:dialog]) [shown addObject:dialog];
     }
+    /* a community shown as one chat holds the chats added to it, which the archive does not fold */
+    if (!_folderId) shown = [NSMutableArray arrayWithArray:ExteriaDialogsFoldingCommunities(shown)];
     [_shown release];
     _shown = [shown retain];
 }
@@ -604,6 +695,8 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    /* no screen over the whole display is up, so a bar one of them left hidden comes back */
+    ExteriaStatusBarSettle();
     [_folders refresh];
     /* the chat settings are a page over this list: a new style of the rows or a new swipe is applied when the person comes back */
     ExteriaChatListStyle style = ExteriaChatListStyleStored();
@@ -614,54 +707,6 @@
         [self reloadList:NO];
     }
     if (_loadedAt && -[_loadedAt timeIntervalSinceNow] > STALE_SECONDS) [self reload];
-}
-
-#pragma mark archive
-
-/* pulling the list down past the top brings a hidden archive back, as in the modern list; scrolling away from it or leaving the screen hides it again */
-- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
-    _dragFromTop = scrollView.contentOffset.y + scrollView.contentInset.top <= 2;
-}
-
-- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
-    if (_dragFromTop && scrollView.contentOffset.y + scrollView.contentInset.top <= -ARCHIVE_PULL_DISTANCE && ExteriaArchiveHidden() && !_archiveRevealed) {
-        BOOL hasArchive = NO;
-        for (ExteriaDialog *dialog in _dialogs) hasArchive = hasArchive || dialog.folder;
-        if (hasArchive) {
-            _archiveRevealed = YES;
-            [self applyFilters];
-            [self reloadList:YES];
-            [self refreshStatus];
-        }
-    }
-    if (!decelerate) [self hideRevealedArchiveIfScrolledAway];
-}
-
-- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
-    (void)scrollView;
-    [self hideRevealedArchiveIfScrolledAway];
-}
-
-/* the rows under a revealed archive move up by its height and the offset moves with them, so what is on screen does not jump */
-- (void)hideRevealedArchiveIfScrolledAway {
-    if (!_archiveRevealed || !ExteriaArchiveHidden()) return;
-    NSUInteger index = NSNotFound;
-    for (NSUInteger i = 0; i < _shown.count; ++i) {
-        if (((ExteriaDialog *)[_shown objectAtIndex:i]).folder) {
-            index = i;
-            break;
-        }
-    }
-    if (index == NSNotFound) return;
-    CGRect row = [self.tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)index inSection:0]];
-    CGPoint offset = self.tableView.contentOffset;
-    if (CGRectGetMaxY(row) > offset.y) return;
-    _archiveRevealed = NO;
-    [self applyFilters];
-    [self reloadList:NO];
-    offset.y -= row.size.height;
-    self.tableView.contentOffset = offset;
-    [self refreshStatus];
 }
 
 /* the edit button of the list shows the plate of the official client with "read all" while the rows are open for editing */
@@ -684,10 +729,16 @@
     [navigation setToolbarHidden:!editing animated:animated];
 }
 
+- (void)editTapped {
+    if (_selection) [self endSelection];
+    else [self beginSelectionPersistent];
+}
+
 - (void)readAllChats {
     NSMutableArray *unread = [NSMutableArray array];
     for (ExteriaDialog *dialog in _dialogs) if (!dialog.folder && !dialog.community && dialog.unread) [unread addObject:dialog];
     [self setEditing:NO animated:YES];
+    [self endSelection];
     if (!unread.count) return;
     [self applyToDialogs:unread perform:^(ExteriaDialog *dialog, void (^finished)(NSString *)) {
         [_session performAction:dialog.unreadCount > 0 ? ExteriaChatCommandMarkRead : ExteriaChatCommandClearUnreadMark onDialog:dialog completion:finished];
@@ -696,13 +747,12 @@
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    [_snow stop];
+    [_foxes stop];
+    [_boys stop];
     if (self.editing) [self setEditing:NO animated:animated];
-    if (_archiveRevealed) {
-        _archiveRevealed = NO;
-        [self applyFilters];
-        [self reloadList:NO];
-        [self refreshStatus];
-    }
+    /* a selection begun by the button of the bar is left with the screen, so the toolbar does not stay over the next one */
+    if (_selectionPersistent) [self endSelection];
 }
 
 #pragma mark search
@@ -899,8 +949,15 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
 /* the bar shows what the whole pick can do: pin only when some chat is not pinned, mute only when some is not muted */
 - (void)updateSelectionBar {
     NSArray *picked = [self selectedDialogs];
-    if (!picked.count) {
+    if (!picked.count && !_selectionPersistent) {
         [self endSelection];
+        return;
+    }
+    if (_selectionPersistent) [self showReadAllToolbar];
+    if (!picked.count) {
+        /* nothing is picked yet: the bar says what to do, and has no actions to offer */
+        self.navigationItem.title = NSLocalizedString(@"chats.select.hint", nil);
+        self.navigationItem.rightBarButtonItems = nil;
         return;
     }
     self.navigationItem.title = [NSString stringWithFormat:@"%lu", (unsigned long)picked.count];
@@ -918,7 +975,30 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     self.navigationItem.rightBarButtonItems = [NSArray arrayWithObjects:trash, archive, mute, pin, nil];
 }
 
+/* the toolbar keeps what the button Change used to offer: all the chats read at once */
+- (void)showReadAllToolbar {
+    UINavigationController *navigation = self.navigationController;
+    UIBarButtonItem *space = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:NULL] autorelease];
+    UIBarButtonItem *all = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"chats.readall", nil) style:UIBarButtonItemStyleBordered target:self action:@selector(readAllChats)] autorelease];
+    self.toolbarItems = [NSArray arrayWithObjects:space, all, space, nil];
+    if (navigation) ExteriaClassicStyleToolbar(navigation.toolbar);
+    [navigation setToolbarHidden:NO animated:YES];
+}
+
+- (void)beginSelectionPersistent {
+    if (_selection || _folderId != 0) return;
+    _selection = [[NSMutableSet alloc] init];
+    _selectionPersistent = YES;
+    [self refreshConnectionTitle];
+    _savedLeft = [self.navigationItem.leftBarButtonItem retain];
+    _savedRight = [self.navigationItem.rightBarButtonItem retain];
+    self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(endSelection)] autorelease];
+    self.tableView.allowsMultipleSelection = YES;
+    [self updateSelectionBar];
+}
+
 - (void)beginSelectionAt:(NSIndexPath *)path {
+    _selectionPersistent = NO;
     _selection = [[NSMutableSet alloc] init];
     [self refreshConnectionTitle];
     _savedLeft = [self.navigationItem.leftBarButtonItem retain];
@@ -934,6 +1014,8 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     if (!_selection) return;
     [_selection release];
     _selection = nil;
+    if (_selectionPersistent) [self.navigationController setToolbarHidden:YES animated:YES];
+    _selectionPersistent = NO;
     self.tableView.allowsMultipleSelection = NO;
     NSArray *rows = [[self.tableView indexPathsForSelectedRows] retain];
     for (NSIndexPath *path in rows) [self.tableView deselectRowAtIndexPath:path animated:YES];
@@ -959,18 +1041,19 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     }
 }
 
-- (void)rowPressed:(UILongPressGestureRecognizer *)press {
+- (void)rowPressed:(UIGestureRecognizer *)press {
     if (press.state != UIGestureRecognizerStateBegan || _selection || self.editing) return;
     NSIndexPath *path = [self.tableView indexPathForRowAtPoint:[press locationInView:self.tableView]];
     if (!path || (NSUInteger)path.row >= _shown.count) return;
     ExteriaDialog *dialog = [_shown objectAtIndex:(NSUInteger)path.row];
     if (dialog.folder || dialog.community) return;
     UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:path];
-    UIWindow *window = self.view.window;
-    if (!cell || !window) return;
-    CGRect source = [self.tableView convertRect:cell.frame toView:window];
+    /* the screen on top, not the window: before ios 8 a view put in the window keeps the turn of the device, and on an ipad held sideways the card and its menu lay on their side */
+    UIView *host = self.view.window ? ExteriaOverlayHost() : nil;
+    if (!cell || !host) return;
+    CGRect source = [self.tableView convertRect:cell.frame toView:host];
     ExteriaWeakReference *weak = _badgeWeak;
-    ExteriaShowChatPeek(window, source, dialog, _session, _avatars, _media, YES, ^(ExteriaChatPeekAction action) {
+    ExteriaShowChatPeek(host, source, dialog, _session, _avatars, _media, YES, ^(ExteriaChatPeekAction action) {
         ExteriaClassicChatsController *controller = weak.target;
         if (!controller) return;
         NSUInteger index = NSNotFound;

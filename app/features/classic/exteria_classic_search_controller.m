@@ -67,7 +67,6 @@ static exteria_search_kind ExteriaClassicServerKind(NSInteger tab) {
     UILabel *_emptyTitle;
     UILabel *_emptyText;
     UIActivityIndicatorView *_spinner;
-    UIButton *_retry;
     NSString *_query;
     NSArray *_rows;
     /* the public chats the server found for the text, shown under the local results on the chat kinds */
@@ -121,7 +120,6 @@ static exteria_search_kind ExteriaClassicServerKind(NSInteger tab) {
     [_emptyTitle release];
     [_emptyText release];
     [_spinner release];
-    [_retry release];
     [_query release];
     [_rows release];
     [_global release];
@@ -223,17 +221,29 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
     [root addSubview:_spinner];
-    _retry = [[UIButton buttonWithType:UIButtonTypeRoundedRect] retain];
-    [_retry setTitle:NSLocalizedString(@"list.retry", nil) forState:UIControlStateNormal];
-    [_retry addTarget:self action:@selector(runSearch) forControlEvents:UIControlEventTouchUpInside];
-    _retry.hidden = YES;
-    [root addSubview:_retry];
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self loadRecent];
     [self refreshState];
+    [self loadEveryChat];
+}
+
+/* the list the screen was given holds one request of chats, and a chat further down would be found only by the server's own search, which keeps few of them */
+- (void)loadEveryChat {
+    ExteriaWeakReference *weak = _weak;
+    [_session loadRemainingDialogsAfter:_dialogs completion:^(NSArray *all) {
+        ExteriaClassicSearchController *search = weak.target;
+        if (!search || all.count <= search->_dialogs.count) return;
+        [search->_dialogs release];
+        search->_dialogs = [all retain];
+        [search loadRecent];
+        if (search->_query.length && ExteriaClassicTabIsLocal(search->_tabs.selectedSegmentIndex)) {
+            ++search->_generation;
+            [search runSearch];
+        }
+    }];
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation {
@@ -256,7 +266,6 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     _emptyText.frame = CGRectMake(32, y + 172, size.width - 64, 62);
     CGPoint middle = CGPointMake(size.width / 2, bodyY + bodyHeight / 2 - 20);
     _spinner.center = middle;
-    _retry.frame = CGRectMake((size.width - 140) / 2, middle.y + 10, 140, 40);
 }
 
 - (void)viewDidLayoutSubviews {
@@ -295,7 +304,6 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
-    [NSObject cancelPreviousPerformRequestsWithTarget:self];
     [_duck setPlaying:NO];
 }
 
@@ -327,6 +335,7 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     [_query release];
     _query = [trimmed copy];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runSearch) object:nil];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runGlobal) object:nil];
     ++_generation;
     if (ExteriaClassicTabIsLocal(_tabs.selectedSegmentIndex) || !_query.length) {
         [self runSearch];
@@ -340,6 +349,7 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
 
 - (void)tabChanged {
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runSearch) object:nil];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runGlobal) object:nil];
     ++_generation;
     [self runSearch];
 }
@@ -419,7 +429,8 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     }
     [_global release];
     _global = fresh.count ? [fresh retain] : nil;
-    _state = (_rows.count || _global.count) ? ExteriaClassicStateResults : ExteriaClassicStateEmpty;
+    /* a failed server search with nothing local to show is a failure, not an empty answer */
+    _state = (_rows.count || _global.count) ? ExteriaClassicStateResults : (dialogs ? ExteriaClassicStateEmpty : ExteriaClassicStateFailed);
     [self refreshState];
 }
 
@@ -438,16 +449,19 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
 #pragma mark state
 
 - (void)updateDuck {
-    [_duck setPlaying:!_emptyView.hidden && self.view.window != nil];
+    [_duck setPlaying:!_emptyView.hidden && !_duck.hidden && self.view.window != nil];
 }
 
 - (void)refreshState {
-    BOOL showsEmpty = _state == ExteriaClassicStateEmpty || _state == ExteriaClassicStateHint;
+    BOOL showsEmpty = _state == ExteriaClassicStateEmpty || _state == ExteriaClassicStateHint || _state == ExteriaClassicStateFailed;
     _emptyView.hidden = !showsEmpty;
     _duck.hidden = _state != ExteriaClassicStateEmpty;
     if (_state == ExteriaClassicStateEmpty) {
         _emptyTitle.text = NSLocalizedString(@"search.empty.title", nil);
         _emptyText.text = [NSString stringWithFormat:NSLocalizedString(@"search.empty.text", nil), _query];
+    } else if (_state == ExteriaClassicStateFailed) {
+        _emptyTitle.text = @"";
+        _emptyText.text = NSLocalizedString(@"search.failed", nil);
     } else if (_state == ExteriaClassicStateHint) {
         BOOL downloads = _tabs.selectedSegmentIndex == ExteriaClassicTabDownloads;
         _emptyTitle.text = downloads ? NSLocalizedString(@"search.downloads.title", nil) : @"";
@@ -455,7 +469,6 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     }
     if (_state == ExteriaClassicStateLoading) [_spinner startAnimating];
     else [_spinner stopAnimating];
-    _retry.hidden = _state != ExteriaClassicStateFailed;
     _table.hidden = !(_state == ExteriaClassicStateResults || _state == ExteriaClassicStateStart);
     [_table reloadData];
     [self updateDuck];
@@ -504,17 +517,19 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     [_bar resignFirstResponder];
     ExteriaDialog *dialog = [self dialogAtIndexPath:indexPath];
-    [self remember:dialog];
-    if (dialog.community) {
+    BOOL message = !ExteriaClassicTabIsLocal(_tabs.selectedSegmentIndex) && _state == ExteriaClassicStateResults;
+    if (!message) [self remember:dialog];
+    if (!message && dialog.community) {
         [self.navigationController pushViewController:ExteriaCommunityScreen(_session, dialog, nil, _avatars, _media, _stickers, nil) animated:YES];
         return;
     }
-    if (dialog.forum) {
+    if (!message && dialog.forum) {
         [self.navigationController pushViewController:ExteriaTopicsScreen(_session, dialog, _avatars, _media, _stickers, nil) animated:YES];
         return;
     }
     ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:_session dialog:dialog avatars:_avatars media:_media stickers:_stickers] autorelease];
     chat.hidesBottomBarWhenPushed = YES;
+    if (message) chat.startMessageId = dialog.topMessage;
     [self.navigationController pushViewController:chat animated:YES];
 }
 

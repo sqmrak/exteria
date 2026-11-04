@@ -315,6 +315,17 @@ void ExteriaClassicStyleSegmented(UISegmentedControl *control) {
     control.tintColor = ExteriaClassicIsFlatSystem() ? [UIColor whiteColor] : ExteriaClassicBarColor();
 }
 
+CGFloat ExteriaClassicTabBarHeight(void) {
+    static CGFloat height = 0;
+    if (height <= 0) {
+        UITabBar *bar = [[UITabBar alloc] init];
+        height = ceil([bar sizeThatFits:CGSizeZero].height);
+        [bar release];
+        if (height <= 0) height = 49;
+    }
+    return height;
+}
+
 void ExteriaClassicStyleTabBar(UITabBar *bar) {
     if (ExteriaClassicIsFlatSystem()) {
         [bar setValue:ExteriaClassicBarColor() forKey:@"barTintColor"];
@@ -448,7 +459,7 @@ UIImage *ExteriaClassicTabImage(ExteriaSymbol symbol) {
     return ExteriaSymbolImage(symbol, 28, [UIColor blackColor]);
 }
 
-UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed) {
+static UIImage *ExteriaClassicRoundImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed, BOOL red) {
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGRect bounds = CGRectMake(0.5, 0.5, side - 1, side - 1);
@@ -456,7 +467,13 @@ UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL
     CGFloat colors[] = {0.74 * dim, 0.58 * dim, 0.90 * dim, 1,
                         0.50 * dim, 0.30 * dim, 0.72 * dim, 1,
                         0.40 * dim, 0.20 * dim, 0.62 * dim, 1};
-    for (NSUInteger i = 0; i < 3; ++i) {
+    if (red) {
+        CGFloat redColors[] = {0.94 * dim, 0.42 * dim, 0.36 * dim, 1,
+                               0.80 * dim, 0.18 * dim, 0.14 * dim, 1,
+                               0.66 * dim, 0.10 * dim, 0.08 * dim, 1};
+        memcpy(colors, redColors, sizeof(colors));
+    }
+    for (NSUInteger i = 0; !red && i < 3; ++i) {
         UIColor *tinted = ExteriaThemeTinted([UIColor colorWithRed:colors[i * 4] green:colors[i * 4 + 1] blue:colors[i * 4 + 2] alpha:1]);
         [tinted getRed:&colors[i * 4] green:&colors[i * 4 + 1] blue:&colors[i * 4 + 2] alpha:NULL];
     }
@@ -471,7 +488,9 @@ UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL
     CGContextSetFillColorWithColor(context, [UIColor colorWithWhite:1 alpha:0.18].CGColor);
     CGContextFillEllipseInRect(context, CGRectMake(side * 0.12, -side * 0.35, side * 0.76, side * 0.85));
     CGContextRestoreGState(context);
-    CGContextSetStrokeColorWithColor(context, ExteriaThemeTinted([UIColor colorWithRed:0.26 green:0.12 blue:0.40 alpha:1]).CGColor);
+    UIColor *outline = red ? [UIColor colorWithRed:0.40 green:0.04 blue:0.03 alpha:1]
+                           : ExteriaThemeTinted([UIColor colorWithRed:0.26 green:0.12 blue:0.40 alpha:1]);
+    CGContextSetStrokeColorWithColor(context, outline.CGColor);
     CGContextSetLineWidth(context, 1);
     CGContextStrokeEllipseInRect(context, bounds);
     CGGradientRelease(gradient);
@@ -484,11 +503,20 @@ UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL
     return image;
 }
 
+UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed) {
+    return ExteriaClassicRoundImage(symbol, side, pressed, NO);
+}
+
+UIImage *ExteriaClassicRedRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed) {
+    return ExteriaClassicRoundImage(symbol, side, pressed, YES);
+}
+
 UIImage *ExteriaClassicProfileTabImage(UIImage *photo) {
     CGSize size = CGSizeMake(30, 30);
     UIGraphicsBeginImageContextWithOptions(size, NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
-    UIBezierPath *shape = [UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, size.width, size.height) cornerRadius:6];
+    /* a profile photo comes as a jpeg, so a round picture arrives with white corners; a circle clip, as the modern tab has, takes them off */
+    UIBezierPath *shape = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, size.width, size.height)];
     CGContextSaveGState(context);
     [shape addClip];
     [photo drawInRect:CGRectMake(0, 0, size.width, size.height)];
@@ -511,6 +539,8 @@ UIView *ExteriaClassicTitleViewWithStatus(NSString *title, NSString *subtitle, i
     BOOL hasSubtitle = subtitle.length > 0;
     /* the title is a chat name, so its emoji come from the app's pictures; an old system font shows boxes for the newer ones */
     ExteriaEmojiLabel *top = [[[ExteriaEmojiLabel alloc] initWithFrame:CGRectMake(0, hasSubtitle ? 3 : 0, titleWidth, hasSubtitle ? 24 : 44)] autorelease];
+    /* the system font of an old bar lacks the letters of a styled nick, and the bundled fallback shows them as boxes with a code in them: they are left out, as in every other name */
+    top.dropsUndrawable = YES;
     top.text = title;
     top.textAlignment = ExteriaTextAlignmentCenter;
     top.font = [UIFont boldSystemFontOfSize:hasSubtitle ? 17 : 20];
@@ -548,8 +578,8 @@ UILabel *ExteriaClassicBadge(NSString *text, BOOL muted) {
     label.font = font;
     label.textColor = [UIColor whiteColor];
     label.textAlignment = ExteriaTextAlignmentCenter;
-    /* the blue turns with the hue of the theme, as the purple of the bars does; a muted chat keeps its grey */
-    label.backgroundColor = muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : ExteriaThemeTinted([UIColor colorWithRed:0.20 green:0.50 blue:0.92 alpha:1]);
+    /* the color of the accent, as the count of the modern lists has; a muted chat keeps its grey */
+    label.backgroundColor = muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : ExteriaColorAccent();
     label.layer.cornerRadius = 11;
     label.layer.masksToBounds = YES;
     return label;
@@ -595,6 +625,25 @@ static UIImage *ExteriaClassicGlossImage(const CGFloat *fill, const CGFloat *out
     UIGraphicsEndImageContext();
     CGFloat cap = side / 2 - 1;
     return [image resizableImageWithCapInsets:UIEdgeInsetsMake(cap, cap, cap, cap)];
+}
+
+UIImage *ExteriaClassicBarButtonImage(BOOL pressed) {
+    UIColor *base = ExteriaClassicBarColor();
+    UIColor *colors[] = {
+        ExteriaMixedColor(base, [UIColor whiteColor], pressed ? 0.02 : 0.15),
+        ExteriaMixedColor(base, [UIColor blackColor], pressed ? 0.32 : 0.18),
+        ExteriaMixedColor(base, [UIColor blackColor], pressed ? 0.48 : 0.35)
+    };
+    CGFloat fill[12];
+    for (int i = 0; i < 3; ++i) {
+        const CGFloat *components = CGColorGetComponents(colors[i].CGColor);
+        for (int j = 0; j < 3; ++j) fill[i * 4 + j] = components[j];
+        fill[i * 4 + 3] = 1;
+    }
+    UIColor *border = ExteriaMixedColor(base, [UIColor blackColor], 0.65);
+    const CGFloat *components = CGColorGetComponents(border.CGColor);
+    CGFloat outline[] = {components[0], components[1], components[2]};
+    return ExteriaClassicGlossImage(fill, outline, 6, pressed ? 0.08 : 0.20, 0.30);
 }
 
 /* a purple of the classic chrome with the hue of the theme, as three components */
