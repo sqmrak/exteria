@@ -1,6 +1,7 @@
 #include "test_util.h"
 #include "exteria_messages.h"
 #include "exteria_reaction_layout.h"
+#include "exteria_reaction_art.h"
 #include "exteria_updates.h"
 #include "exteria_tl_ids.h"
 
@@ -203,6 +204,11 @@ static void test_requests(void) {
         roundtrip(request, EXTERIA_TL_ID_messages_sendReaction);
         CHECK_EQ_INT(exteria_tl_get(request, "reaction")->u.vec.count, 0);
         CHECK(!exteria_tl_has(request, "add_to_recent"));
+        CHECK_EQ_INT(exteria_paid_reaction_request(&arena, &peers[i], 10, 1, 77, &request), EXTERIA_OK);
+        roundtrip(request, EXTERIA_TL_ID_messages_sendPaidReaction);
+        CHECK_EQ_INT(exteria_paid_reaction_request(&arena, &peers[i], 10, 0, 77, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_paid_reaction_request(&arena, &peers[i], 10, EXTERIA_PAID_REACTION_MAX + 1, 77, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_paid_reaction_request(&arena, &peers[i], 10, 1, 0, &request), EXTERIA_E_ARG);
         CHECK_EQ_INT(exteria_get_reactions_request(&arena, &peers[i], ids, 3, &request), EXTERIA_OK);
         roundtrip(request, EXTERIA_TL_ID_messages_getMessagesReactions);
     }
@@ -222,6 +228,132 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_get_reactions_request(&arena, &peers[0], ids, EXTERIA_MESSAGES_MAX + 1, &request), EXTERIA_E_ARG);
     peers[0].access_hash = 0;
     CHECK_EQ_INT(exteria_get_reactions_request(&arena, &peers[0], ids, 1, &request), EXTERIA_E_ARG);
+}
+
+static exteria_tl_value *config_of(const char *key1, double v1, const char *key2, double v2) {
+    exteria_tl_value *answer = obj("help.appConfig"), *config = obj("jsonObject"), *vec = exteria_tl_new_vec(&arena, key2 ? 2 : (key1 ? 1 : 0));
+    for (unsigned i = 0; i < (key2 ? 2u : (key1 ? 1u : 0u)); ++i) {
+        exteria_tl_value *entry = obj("jsonObjectValue"), *number = obj("jsonNumber");
+        str(entry, "key", i ? key2 : key1);
+        CHECK_EQ_INT(exteria_tl_set_f64(&arena, number, "value", i ? v2 : v1), EXTERIA_OK);
+        set(entry, "value", number);
+        CHECK_EQ_INT(exteria_tl_vec_set(vec, i, entry), EXTERIA_OK);
+    }
+    i32(answer, "hash", 1);
+    set(config, "value", vec);
+    set(answer, "config", config);
+    return answer;
+}
+
+static exteria_reaction pick_of(const char *text, int32_t order) {
+    exteria_reaction r;
+    memset(&r, 0, sizeof(r));
+    r.kind = EXTERIA_REACTION_EMOJI;
+    r.chosen = order > 0;
+    r.chosen_order = order;
+    snprintf(r.emoji, sizeof(r.emoji), "%s", text);
+    return r;
+}
+
+static void test_user_limit(void) {
+    int32_t standard = 0, premium = 0;
+    exteria_reaction chosen[3], pick = pick_of("D", 0), out[EXTERIA_REACTIONS_MAX];
+    CHECK_EQ_INT(exteria_reaction_limits_read(config_of(NULL, 0, NULL, 0), &standard, &premium), EXTERIA_OK);
+    CHECK_EQ_INT(standard, 1);
+    CHECK_EQ_INT(premium, 3);
+    CHECK_EQ_INT(exteria_reaction_limits_read(config_of("reactions_user_max_default", 2, "reactions_user_max_premium", 5), &standard, &premium), EXTERIA_OK);
+    CHECK_EQ_INT(standard, 2);
+    CHECK_EQ_INT(premium, 5);
+    CHECK_EQ_INT(exteria_reaction_limits_read(config_of("reactions_user_max_premium", 0, NULL, 0), &standard, &premium), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(standard, 1);
+    CHECK_EQ_INT(exteria_reaction_limits_read(config_of("reactions_user_max_default", EXTERIA_REACTIONS_MAX + 1, NULL, 0), &standard, &premium), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_reaction_limits_read(obj("help.appConfigNotModified"), &standard, &premium), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_reaction_limits_read(config_of(NULL, 0, NULL, 0), NULL, &premium), EXTERIA_E_ARG);
+
+    /* the chosen ones come in any order, the oldest leave first, the pick goes last */
+    chosen[0] = pick_of("C", 3);
+    chosen[1] = pick_of("A", 1);
+    chosen[2] = pick_of("B", 2);
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 3, out, EXTERIA_REACTIONS_MAX), 3);
+    CHECK(!strcmp(out[0].emoji, "B") && !strcmp(out[1].emoji, "C") && !strcmp(out[2].emoji, "D"));
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 4, out, EXTERIA_REACTIONS_MAX), 4);
+    CHECK(!strcmp(out[0].emoji, "A") && !strcmp(out[3].emoji, "D"));
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 1, out, EXTERIA_REACTIONS_MAX), 1);
+    CHECK(!strcmp(out[0].emoji, "D"));
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(NULL, 0, &pick, 3, out, EXTERIA_REACTIONS_MAX), 1);
+    /* a pick that is already chosen moves to the end instead of doubling */
+    pick = pick_of("A", 0);
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 3, out, EXTERIA_REACTIONS_MAX), 3);
+    CHECK(!strcmp(out[0].emoji, "B") && !strcmp(out[1].emoji, "C") && !strcmp(out[2].emoji, "A"));
+    /* a paid reaction is not counted */
+    chosen[1].kind = EXTERIA_REACTION_PAID;
+    pick = pick_of("D", 0);
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 3, out, EXTERIA_REACTIONS_MAX), 3);
+    CHECK(!strcmp(out[0].emoji, "B") && !strcmp(out[2].emoji, "D"));
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 0, out, EXTERIA_REACTIONS_MAX), 0);
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, &pick, 3, out, 2), 0);
+    CHECK_EQ_INT(exteria_reaction_choices_after_pick(chosen, 3, NULL, 3, out, EXTERIA_REACTIONS_MAX), 0);
+}
+
+static exteria_tl_value *art_document(int64_t id, const char *mime) {
+    exteria_tl_value *d = obj("document"), *attributes = exteria_tl_new_vec(&arena, 0);
+    i64(d, "id", id);
+    i64(d, "access_hash", id * 7);
+    CHECK_EQ_INT(exteria_tl_set_bytes(&arena, d, "file_reference", "ref", 3), EXTERIA_OK);
+    i32(d, "date", 1);
+    str(d, "mime_type", mime);
+    i64(d, "size", 100);
+    i32(d, "dc_id", 2);
+    set(d, "attributes", attributes);
+    return d;
+}
+
+static exteria_tl_value *art_reaction(const char *emoji, int with_around) {
+    exteria_tl_value *r = obj("availableReaction");
+    str(r, "reaction", emoji);
+    str(r, "title", "title");
+    set(r, "static_icon", art_document(10, "image/webp"));
+    set(r, "appear_animation", art_document(11, "application/x-tgsticker"));
+    set(r, "select_animation", art_document(12, "application/x-tgsticker"));
+    set(r, "activate_animation", art_document(13, "application/x-tgsticker"));
+    set(r, "effect_animation", art_document(14, "application/x-tgsticker"));
+    if (with_around) {
+        set(r, "around_animation", art_document(15, "application/x-tgsticker"));
+    }
+    return r;
+}
+
+static void test_art(void) {
+    exteria_tl_value *v = obj("messages.availableReactions"), *vec = exteria_tl_new_vec(&arena, 2), *bad;
+    exteria_reaction_art items[4];
+    size_t count = 99;
+    CHECK_EQ_INT(exteria_tl_vec_set(vec, 0, art_reaction("👍", 1)), EXTERIA_OK);
+    bad = art_reaction("👎", 0);
+    flag(bad, "inactive");
+    CHECK_EQ_INT(exteria_tl_vec_set(vec, 1, bad), EXTERIA_OK);
+    i32(v, "hash", 1);
+    set(v, "reactions", vec);
+    CHECK_EQ_INT(exteria_reaction_art_read(v, items, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(count, 2);
+    CHECK(!strcmp(items[0].emoji, "👍"));
+    CHECK_EQ_INT(items[0].icon.id, 10);
+    CHECK_EQ_INT(items[0].icon.format, EXTERIA_STICKER_STATIC);
+    CHECK_EQ_INT(items[0].icon.ref.source, EXTERIA_MEDIA_SOURCE_DOCUMENT);
+    CHECK_EQ_INT(items[0].icon.ref.dc, 2);
+    CHECK_EQ_INT(items[0].appear.format, EXTERIA_STICKER_ANIMATED);
+    CHECK_EQ_INT(items[0].select.id, 12);
+    CHECK_EQ_INT(items[0].activate.id, 13);
+    CHECK_EQ_INT(items[0].effect.id, 14);
+    CHECK_EQ_INT(items[0].around.id, 15);
+    CHECK_EQ_INT(items[1].around.id, 0);
+    CHECK_EQ_INT(items[1].around.ref.source, EXTERIA_MEDIA_SOURCE_NONE);
+    CHECK_EQ_INT(exteria_reaction_art_read(v, items, 1, &count), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(count, 0);
+    /* a required document that is empty makes the whole answer unusable */
+    set(bad, "effect_animation", obj("documentEmpty"));
+    CHECK_EQ_INT(exteria_reaction_art_read(v, items, 4, &count), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_reaction_art_read(obj("messages.availableReactionsNotModified"), items, 4, &count), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_reaction_art_read(v, NULL, 4, &count), EXTERIA_E_ARG);
 }
 
 static void test_catalog_policy(void) {
@@ -565,6 +697,8 @@ int main(void) {
     test_faces();
     test_requests();
     test_catalog_policy();
+    test_user_limit();
+    test_art();
     test_custom_reactions();
     test_store();
     test_layout();

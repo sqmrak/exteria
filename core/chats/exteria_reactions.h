@@ -88,6 +88,18 @@ exteria_status exteria_reaction_build(exteria_arena *arena, const exteria_reacti
 exteria_status exteria_send_reactions_request(exteria_arena *arena, const struct exteria_peer_ref *peer,
                                               int32_t id, const exteria_reaction *items, size_t count,
                                               exteria_tl_value **out);
+/* messages.sendPaidReaction: count stars (at least one, at most EXTERIA_PAID_REACTION_MAX) sent to a message as a reaction; random_id must not be zero. The account's default privacy
+   for paid reactions is kept, since none is named */
+#define EXTERIA_PAID_REACTION_MAX 2500
+exteria_status exteria_paid_reaction_request(exteria_arena *arena, const struct exteria_peer_ref *peer, int32_t id, int32_t count, int64_t random_id, exteria_tl_value **out);
+/* reactions_user_max_default and reactions_user_max_premium of help.appConfig; a key the server leaves out keeps the 1 and 3 it documents, a
+   value of 0 or above EXTERIA_REACTIONS_MAX is EXTERIA_E_MALFORMED */
+exteria_status exteria_reaction_limits_read(const exteria_tl_value *config, int32_t *standard, int32_t *premium);
+/* the choices to send when pick is added to the ordinary reactions already chosen: the oldest by chosen_order go first when more than limit
+   would remain, and pick is last. returns the count written to out, 0 when out is too small or arguments are bad. paid reactions in chosen
+   are skipped, they are not part of the limit */
+size_t exteria_reaction_choices_after_pick(const exteria_reaction *chosen, size_t count, const exteria_reaction *pick, size_t limit,
+                                           exteria_reaction *out, size_t capacity);
 exteria_status exteria_get_reactions_request(exteria_arena *arena, const struct exteria_peer_ref *peer,
                                              const int32_t *ids, size_t count, exteria_tl_value **out);
 

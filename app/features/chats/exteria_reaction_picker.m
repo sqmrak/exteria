@@ -7,6 +7,8 @@
 #import "exteria_custom_emoji_picker.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
+#import "exteria_lottie_view.h"
+#import "exteria_reaction_artwork.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
@@ -18,7 +20,6 @@
 #define CELL_TARGET 44.0
 #define CELL_MIN_COLUMNS 5
 #define SIDE_PAD 6.0
-#define SECTION_HEIGHT 30.0
 
 @interface ExteriaReactionPicker () <ExteriaCustomEmojiPickerDelegate> {
     UIControl *_dim;
@@ -26,15 +27,12 @@
     UILabel *_status;
     UIButton *_retry;
     UIScrollView *_scroll;
-    UILabel *_customHeader;
     ExteriaCustomEmojiPicker *_sets;
     ExteriaSession *_session;
     ExteriaMediaCache *_media;
     BOOL _premium;
     NSArray *_reactions;
     NSArray *_buttons;
-    /* index of the first custom reaction in _reactions, which lists the ordinary ones first */
-    NSUInteger _customStart;
     CGRect _anchorRect;
     BOOL _anchorOutgoing;
     BOOL _opened;
@@ -104,7 +102,6 @@
     [_status release];
     [_retry release];
     [_scroll release];
-    [_customHeader release];
     [_sets release];
     [_session release];
     [_media release];
@@ -255,7 +252,37 @@
     label.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     label.frame = button.bounds;
     [button addSubview:label];
+    [self playAppearOfReaction:reaction inButton:button label:label order:index];
     return button;
+}
+
+/* the reactions near the top of the card pop up with the animation the server keeps for them; each parsed animation is a few megabytes, so only the first row or two play,
+   the rest stay as the still icon, and the lottie view leaves as soon as it has played */
+#define APPEAR_MAX 12
+#define APPEAR_STAGGER 0.03
+#define APPEAR_SIDE 31.0
+
+- (void)playAppearOfReaction:(ExteriaReaction *)reaction inButton:(UIButton *)button label:(UIView *)label order:(NSUInteger)order {
+    if (order >= APPEAR_MAX || reaction.row.kind != EXTERIA_REACTION_EMOJI || !_media) return;
+    ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:reaction.emoji];
+    if (!artwork) return;
+    ExteriaWeakReference *weak = _weak;
+    [ExteriaReactionArtwork animationViewForDocument:artwork.appear media:_media completion:^(ExteriaLottieView *view) {
+        ExteriaReactionPicker *picker = weak.target;
+        if (!view || !picker || picker->_closing || !button.superview) return;
+        view.userInteractionEnabled = NO;
+        view.frame = CGRectMake(floor((button.bounds.size.width - APPEAR_SIDE) / 2), floor((button.bounds.size.height - APPEAR_SIDE) / 2), APPEAR_SIDE, APPEAR_SIDE);
+        view.hidden = YES;
+        [button addSubview:view];
+        __block UIView *icon = label;
+        __block ExteriaLottieView *playing = view;
+        /* the still icon gives way on the first frame, so the cell never shows both */
+        view.firstFrameHandler = ^{ playing.hidden = NO; icon.hidden = YES; };
+        view.finishHandler = ^{ icon.hidden = NO; [playing removeFromSuperview]; };
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(order * APPEAR_STAGGER * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (view.superview) [view playOnce];
+        });
+    }];
 }
 
 - (void)cellDown:(UIButton *)button {
@@ -282,56 +309,31 @@
     [_buttons release];
     _buttons = nil;
     [_reactions release];
-    NSMutableArray *ordered = [NSMutableArray arrayWithCapacity:reactions.count];
-    for (ExteriaReaction *reaction in reactions) if (reaction.row.kind == EXTERIA_REACTION_EMOJI) [ordered addObject:reaction];
-    _customStart = ordered.count;
-    for (ExteriaReaction *reaction in reactions) if (reaction.row.kind != EXTERIA_REACTION_EMOJI) [ordered addObject:reaction];
-    _reactions = [ordered copy];
-    NSMutableArray *buttons = [NSMutableArray arrayWithCapacity:ordered.count];
-    for (NSUInteger i = 0; i < ordered.count; ++i) {
-        UIButton *button = [self buttonForReaction:[ordered objectAtIndex:i] index:i];
+    _reactions = [reactions copy];
+    NSMutableArray *buttons = [NSMutableArray arrayWithCapacity:reactions.count];
+    for (NSUInteger i = 0; i < reactions.count; ++i) {
+        UIButton *button = [self buttonForReaction:[reactions objectAtIndex:i] index:i];
         [_scroll addSubview:button];
         [buttons addObject:button];
     }
     _buttons = [buttons copy];
-    if (_customStart < ordered.count && !_customHeader) {
-        _customHeader = [[UILabel alloc] init];
-        _customHeader.backgroundColor = [UIColor clearColor];
-        _customHeader.font = ExteriaFontSemibold(14);
-        _customHeader.textColor = ExteriaColorSecondary();
-        _customHeader.text = NSLocalizedString(@"chat.reaction.section.custom", nil);
-        [_scroll addSubview:_customHeader];
-    }
-    _customHeader.hidden = _customStart >= ordered.count;
     _status.text = NSLocalizedString(@"chat.reaction.disabled", nil);
-    _status.hidden = ordered.count > 0;
+    _status.hidden = reactions.count > 0;
     _retry.hidden = YES;
-    _scroll.hidden = !ordered.count;
+    _scroll.hidden = !reactions.count;
     [self setNeedsLayout];
 }
 
-/* places the cells in rows of equal squares and returns the height of the grid; the custom ones start under their own header */
+/* places the cells in rows of equal squares and returns the height of the grid */
 - (CGFloat)layoutGridInWidth:(CGFloat)width {
     NSUInteger columns = MAX((NSUInteger)CELL_MIN_COLUMNS, (NSUInteger)floor(width / CELL_TARGET));
     CGFloat cell = floor(width / (CGFloat)columns);
     CGFloat left = floor((width - cell * (CGFloat)columns) / 2);
-    CGFloat y = 0;
-    for (NSUInteger section = 0; section < 2; ++section) {
-        NSUInteger first = section == 0 ? 0 : _customStart;
-        NSUInteger end = section == 0 ? _customStart : _buttons.count;
-        if (first >= end) continue;
-        if (section == 1) {
-            _customHeader.frame = CGRectMake(left + 6, y + 4, width - 12, SECTION_HEIGHT - 4);
-            y += SECTION_HEIGHT;
-        }
-        for (NSUInteger i = first; i < end; ++i) {
-            NSUInteger n = i - first;
-            UIView *button = [_buttons objectAtIndex:i];
-            button.frame = CGRectMake(left + cell * (CGFloat)(n % columns), y + cell * (CGFloat)(n / columns), cell, cell);
-        }
-        y += cell * (CGFloat)((end - first + columns - 1) / columns);
+    for (NSUInteger i = 0; i < _buttons.count; ++i) {
+        UIView *button = [_buttons objectAtIndex:i];
+        button.frame = CGRectMake(left + cell * (CGFloat)(i % columns), cell * (CGFloat)(i / columns), cell, cell);
     }
-    return y;
+    return cell * (CGFloat)((_buttons.count + columns - 1) / columns);
 }
 
 - (void)layoutSubviews {
