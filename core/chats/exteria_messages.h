@@ -14,7 +14,8 @@
 
 #define EXTERIA_MESSAGES_MAX 100
 #define EXTERIA_MESSAGE_TEXT_MAX (4 * 4096 + 4)
-#define EXTERIA_MESSAGE_ENTITIES_MAX 48
+/* a post with a line of custom emoji, a few links and nested styles passes fifty entities, and the ones past the cap were dropped: the last emoji stayed plain characters */
+#define EXTERIA_MESSAGE_ENTITIES_MAX 100
 #define EXTERIA_MESSAGE_URLS_MAX 1024
 #define EXTERIA_STICKERS_MAX 400
 #define EXTERIA_STICKER_SETS_MAX 200
@@ -140,6 +141,7 @@ typedef struct exteria_message_row {
     int32_t reply_peer_kind;   /* zero when the original is in this chat */
     int64_t reply_peer_id;
     char reply_quote[1024];
+    int32_t reply_story;        /* id of the story this message answers, zero when it answers none; the story is of the other person in a private chat when we wrote it */
     int32_t reply_to;           /* id of the replied message, zero without one, or when it is only the root of its forum topic */
     int32_t topic_id;           /* the forum topic it belongs to; 1 (General) for a message with no topic header */
     int32_t thread_id;          /* the top reply in a discussion, or the direct reply when there is no top */
@@ -149,6 +151,7 @@ typedef struct exteria_message_row {
     uint8_t out;
     uint8_t noforwards;
     uint8_t unread_mention;
+    uint8_t media_unread;       /* a voice note or a round video that nobody has played yet: the person for an incoming one, the other side for one of ours */
     uint8_t post;
     uint8_t forwarded;
     int32_t saved_peer_kind;    /* in the favorites: the chat the message came from (the account itself for its own notes); zero elsewhere */
@@ -161,6 +164,9 @@ typedef struct exteria_message_row {
     int64_t grouped_id;         /* the album the message is a part of, zero for a message of its own */
     int32_t forward_date;       /* when the original was written, unix seconds; zero when the header has none */
     int64_t forward_from;       /* who wrote a forwarded message, when the header says */
+    int32_t forward_origin_kind;    /* the chat a forward header names as the place of the message (saved_from_peer): the replies chat points at the comment this way */
+    int64_t forward_origin_id;
+    int32_t forward_origin_message; /* and the message in it (saved_from_msg_id), zero when the header has none */
     uint8_t call_reason;        /* a call service message: exteria_call_outcome */
     uint8_t call_video;         /* and whether the call had video; the length in seconds is service_value */
     char from_rank[128];
@@ -379,6 +385,9 @@ exteria_status exteria_send_text_reply_request(exteria_arena *arena, const exter
                                                exteria_tl_value **out);
 /* sets reply_to of a send request: the message answered, with the topic when the chat has one; zero answers the topic root only */
 exteria_status exteria_set_reply(exteria_arena *arena, exteria_tl_value *request, const exteria_peer_ref *peer, int32_t reply_to);
+/* with the words of the answered message the reply is about; the offset is in UTF-16 units, negative when unknown */
+exteria_status exteria_set_reply_quote(exteria_arena *arena, exteria_tl_value *request, const exteria_peer_ref *peer, int32_t reply_to,
+                                       const char *quote, int32_t offset);
 exteria_status exteria_send_sticker_request(exteria_arena *arena, const exteria_peer_ref *peer, const exteria_media_ref *sticker,
                                            int64_t random_id, exteria_tl_value **out);
 typedef enum exteria_upload_kind {
@@ -405,6 +414,7 @@ typedef struct exteria_upload_spec {
     char name[EXTERIA_UPLOAD_NAME_MAX];
     char mime[EXTERIA_MEDIA_MIME_MAX];
     uint8_t spoiler;                /* a photo or a video that is shown blurred until it is tapped */
+    uint8_t animated;               /* a file kind only: a gif that plays in the chat as an animation and not as a file to open */
     uint8_t view_once;              /* a photo, video, voice note or round video that is gone after the other side has opened it; files and albums cannot be */
 } exteria_upload_spec;
 
@@ -427,6 +437,9 @@ typedef struct exteria_custom_emoji {
     exteria_media_ref preview;      /* the thumbnail, the only picture of a webm emoji */
 } exteria_custom_emoji;
 
+/* one document of the server drawn as a small picture: its id, how it is stored, and the files to draw it from. alt is the text it stands for. a document that is
+   empty or has no usable id is EXTERIA_E_NOTFOUND and leaves out zeroed */
+exteria_status exteria_document_picture_read(const exteria_tl_value *document, const char *alt, exteria_custom_emoji *out);
 /* messages.getCustomEmojiDocuments for 1 to EXTERIA_CUSTOM_EMOJI_MAX documents */
 exteria_status exteria_custom_emoji_request(exteria_arena *arena, const int64_t *ids, size_t count, exteria_tl_value **out);
 /* the answer to it: one row per document that carries the custom emoji attribute with a text, in answer order */

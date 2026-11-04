@@ -2,6 +2,7 @@
 
 #import "exteria_rpc.h"
 #import "exteria_session_internal.h"
+#include "exteria_tl_ids.h"
 
 /* worker only: collects what the core walk reports as board entries; a draft that cannot be read is left out, so it neither shows nor erases one */
 static exteria_status ExteriaCollectDraft(void *ctx, int32_t kind, int64_t peer, int32_t top, const exteria_tl_value *body) {
@@ -35,6 +36,7 @@ static exteria_status ExteriaCollectDraft(void *ctx, int32_t kind, int64_t peer,
     ExteriaDraft *draft = [[[ExteriaDraft alloc] initWithText:body entities:entities replyTo:replyTo noWebpage:noWebpage
                                                           date:(int32_t)[[NSDate date] timeIntervalSince1970]] autorelease];
     [self.drafts setLocalDraft:draft kind:kind peer:chat top:top];
+    NSUInteger revision = self.drafts.revision;
     NSMutableData *strings = nil;
     size_t count = 0;
     NSMutableData *packed = ExteriaPackSendEntities(entities, &strings, &count);
@@ -42,35 +44,39 @@ static exteria_status ExteriaCollectDraft(void *ctx, int32_t kind, int64_t peer,
         (void)strings;
         return exteria_draft_save_request(arena, &peer, body.UTF8String, packed.bytes, count, replyTo, noWebpage, request);
     } handler:^(const exteria_mt_rpc_result *result) {
-        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        NSString *error = result->status == EXTERIA_OK ? (exteria_tl_is(result->value, EXTERIA_TL_ID_boolTrue) ? nil : @"REFUSED") : ExteriaRpcErrorName(result);
         [self noteRpcError:error];
         NSString *delivered = [[error copy] autorelease];
         [self deliverMain:^{
             if (delivered) NSLog(@"exteria: saving the draft of chat %lld failed: %@", chat, delivered);
-            [self.drafts noteSavedKind:kind peer:chat top:top];
+            [self.drafts noteSavedKind:kind peer:chat top:top revision:revision success:delivered == nil];
         }];
     }];
     [body release];
 }
 
 - (void)noteDraftsOfDialogsAnswer:(const exteria_tl_value *)answer complete:(BOOL)complete {
+    [self noteDraftsOfDialogsAnswer:answer complete:complete since:NSUIntegerMax];
+}
+
+- (void)noteDraftsOfDialogsAnswer:(const exteria_tl_value *)answer complete:(BOOL)complete since:(NSUInteger)revision {
     NSMutableArray *entries = [NSMutableArray array];
     exteria_status status = exteria_draft_dialogs_visit(answer, ExteriaCollectDraft, entries);
     if (status != EXTERIA_OK) {
         NSLog(@"exteria: the drafts of the chat list were not read: %s", exteria_status_name(status));
         return;
     }
-    [self deliverMain:^{ [self.drafts noteListed:entries complete:complete]; }];
+    [self deliverMain:^{ [self.drafts noteListed:entries complete:complete since:revision]; }];
 }
 
-- (void)noteDraftsOfTopicsAnswer:(const exteria_tl_value *)answer forum:(ExteriaDialog *)forum {
+- (void)noteDraftsOfTopicsAnswer:(const exteria_tl_value *)answer forum:(ExteriaDialog *)forum since:(NSUInteger)revision {
     NSMutableArray *entries = [NSMutableArray array];
     exteria_status status = exteria_draft_topics_visit(answer, forum.peerKind, forum.peerId, ExteriaCollectDraft, entries);
     if (status != EXTERIA_OK) {
         NSLog(@"exteria: the drafts of the topics were not read: %s", exteria_status_name(status));
         return;
     }
-    [self deliverMain:^{ [self.drafts noteListed:entries complete:YES]; }];
+    [self deliverMain:^{ [self.drafts noteListed:entries complete:YES since:revision]; }];
 }
 
 - (void)noteDraftUpdate:(const exteria_tl_value *)update {

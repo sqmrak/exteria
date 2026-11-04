@@ -70,6 +70,7 @@
 }
 
 - (void)dealloc {
+    ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
     _pager.delegate = nil;
     [_session release];
     [_dialog release];
@@ -184,10 +185,8 @@
             _pager.alpha = 1;
         } completion:nil];
     }
-    UIApplication *application = [UIApplication sharedApplication];
-    _statusWasHidden = application.statusBarHidden;
     /* the bar is hidden by the application before iOS 7, which has no prefersStatusBarHidden */
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarHide(self, UIStatusBarAnimationFade);
     if (_requested) return;
     _requested = YES;
     [_spinner startAnimating];
@@ -207,8 +206,7 @@
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
-    UIApplication *application = [UIApplication sharedApplication];
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:_statusWasHidden withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarShow(self, UIStatusBarAnimationFade);
 }
 
 - (void)viewWillLayoutSubviews {

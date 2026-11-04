@@ -35,6 +35,9 @@ extern NSString *const ExteriaDraftDidChangeNotification;
 @interface ExteriaDraftBoard : NSObject {
     NSMutableDictionary *_drafts;
     NSCountedSet *_unsaved;
+    NSMutableDictionary *_localRevisions;
+    NSMutableSet *_failed;
+    NSUInteger _revision;
 }
 
 /* main thread only; topic is the forum topic, zero for the whole chat */
@@ -42,14 +45,16 @@ extern NSString *const ExteriaDraftDidChangeNotification;
 - (ExteriaDraft *)draftForDialog:(ExteriaDialog *)dialog;
 /* the person edited it here; nil or an empty draft removes it. The screen sends it to the account */
 - (void)setLocalDraft:(ExteriaDraft *)draft kind:(int32_t)kind peer:(long long)peer top:(int32_t)top;
-/* one save of the person's draft came back, whether the account took it or not; its word counts again when every save is back */
-- (void)noteSavedKind:(int32_t)kind peer:(long long)peer top:(int32_t)top;
-/* the account says what the draft of a chat is, nil for none: a live update, or the answer of a list. Ignored while a draft of the person is on its way to
-   the account */
+/* a failed latest save keeps the local draft until a later save succeeds */
+- (void)noteSavedKind:(int32_t)kind peer:(long long)peer top:(int32_t)top revision:(NSUInteger)revision success:(BOOL)success;
+- (BOOL)saveFailedForKind:(int32_t)kind peer:(long long)peer top:(int32_t)top;
+/* the account says what the draft of a chat is, nil for none: ignored while a local save is pending or failed */
 - (void)noteAccountDraft:(ExteriaDraft *)draft kind:(int32_t)kind peer:(long long)peer top:(int32_t)top;
 /* a list of chats listed these chats with these drafts (NSNull for none). A list from the account takes the drafts as they are, those it lists without
    one included; a kept list (complete NO) only adds drafts the board does not have. entries are arrays of kind, peer, top and draft */
 - (void)noteListed:(NSArray *)entries complete:(BOOL)complete;
+@property (nonatomic, readonly) NSUInteger revision;
+- (void)noteListed:(NSArray *)entries complete:(BOOL)complete since:(NSUInteger)revision;
 /* every draft goes: the account was told to delete them */
 - (void)removeAll;
 

@@ -326,6 +326,26 @@ static void test_custom_emoji_entity(void) {
     free(row);
 }
 
+/* a caption with many entities (custom emoji from several packs, links, spoilers) keeps every one up to the cap, the last ones included */
+static void test_many_entities(void) {
+    exteria_message_row *row = calloc(1, sizeof(*row));
+    exteria_tl_value *m = message(70, "0123456789012345678901234567890123456789012345678901234567890123456789"), *entities[70];
+    size_t i;
+    CHECK(row != NULL);
+    for (i = 0; i < 70; ++i) {
+        entities[i] = obj("messageEntityCustomEmoji");
+        set_i32(entities[i], "offset", (int32_t)i);
+        set_i32(entities[i], "length", 1);
+        set_i64(entities[i], "document_id", (int64_t)(1000 + i));
+    }
+    set(m, "entities", vec_of(entities, 70));
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->entity_count, 70);
+    CHECK_EQ_INT(row->entities[69].offset, 69);
+    CHECK(row->entities[69].document_id == 1069);
+    free(row);
+}
+
 static void test_folder_title_entities(void) {
     exteria_tl_value *title = obj("textWithEntities"), *items[3];
     exteria_entity entities[EXTERIA_MESSAGE_ENTITIES_MAX];
@@ -671,6 +691,16 @@ static void test_media_kinds(void) {
     set_i32(attributes[0], "duration", 200);
     exteria_media_classify(media_document(document(14, "audio/mpeg", attributes, 1)), &info);
     CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_AUDIO);
+    {
+        exteria_tl_value *doc = document(14, "audio/mpeg", attributes, 1);
+        exteria_tl_value *covers[3] = {size("s", 90, 90, 1000), size("m", 160, 160, 4000), size("x", 320, 320, 16000)};
+        set(doc, "thumbs", vec_of(covers, 3));
+        exteria_media_classify(media_document(doc), &info);
+        CHECK(!strcmp(info.preview.thumb, "x"));
+        set(doc, "thumbs", vec_of(covers, 2));
+        exteria_media_classify(media_document(doc), &info);
+        CHECK(!strcmp(info.preview.thumb, "m"));
+    }
     attributes[0] = obj("documentAttributeFilename");
     set_str(attributes[0], "file_name", "track.FLAC");
     exteria_media_classify(media_document(document(14, "application/octet-stream", attributes, 1)), &info);
@@ -1499,6 +1529,25 @@ static void test_requests(void) {
         spec.duration_ms = 0;
         CHECK_EQ_INT(exteria_send_upload_request(&arena, &chat, file, &spec, 51, &request), EXTERIA_E_ARG);
 
+        /* a gif plays as an animation: the animated attribute follows the name, and the file is not forced to stay a file */
+        memset(&spec, 0, sizeof(spec));
+        spec.kind = EXTERIA_UPLOAD_FILE;
+        snprintf(spec.name, sizeof(spec.name), "cat.gif");
+        snprintf(spec.mime, sizeof(spec.mime), "image/gif");
+        spec.animated = 1;
+        CHECK_EQ_INT(exteria_send_upload_request(&arena, &chat, file, &spec, 53, &request), EXTERIA_OK);
+        check_encodes(request, EXTERIA_TL_ID_messages_sendMedia);
+        media = exteria_tl_get(request, "media");
+        attributes = exteria_tl_get(media, "attributes");
+        CHECK(attributes && attributes->u.vec.count == 2);
+        CHECK_EQ_INT(exteria_tl_id(attributes->u.vec.items[1]), EXTERIA_TL_ID_documentAttributeAnimated);
+        CHECK(!exteria_tl_has(media, "force_file"));
+        snprintf(spec.mime, sizeof(spec.mime), "image/png");
+        CHECK_EQ_INT(exteria_send_upload_request(&arena, &chat, file, &spec, 53, &request), EXTERIA_E_ARG);
+        spec.animated = 0;
+        CHECK_EQ_INT(exteria_send_upload_request(&arena, &chat, file, &spec, 53, &request), EXTERIA_OK);
+        CHECK(exteria_tl_has(exteria_tl_get(request, "media"), "force_file"));
+
         memset(&spec, 0, sizeof(spec));
         spec.kind = EXTERIA_UPLOAD_ROUND;
         spec.duration_ms = 4000;
@@ -1822,6 +1871,20 @@ static void test_forward_origin(void) {
     CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
     CHECK_EQ_INT(row->forward_from, 0);
     CHECK(!strcmp(row->forward_name, "Hidden Person"));
+    CHECK_EQ_INT(row->forward_origin_kind, 0);
+    CHECK_EQ_INT(row->forward_origin_message, 0);
+    /* the replies chat keeps the comment in the group it was written in */
+    m = message(53, "a comment");
+    header = obj("messageFwdHeader");
+    channel = obj("peerChannel");
+    set_i64(channel, "channel_id", 4242);
+    set(header, "saved_from_peer", channel);
+    set_i32(header, "saved_from_msg_id", 318);
+    set(m, "fwd_from", header);
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->forward_origin_kind, 3);
+    CHECK_EQ_INT(row->forward_origin_id, 4242);
+    CHECK_EQ_INT(row->forward_origin_message, 318);
     free(row);
 }
 
@@ -1953,6 +2016,7 @@ int main(void) {
     test_reply_boundaries();
     test_uploaded_media_reply();
     test_custom_emoji_entity();
+    test_many_entities();
     test_folder_title_entities();
     test_sticker_set_reference();
     test_formatting_entities();

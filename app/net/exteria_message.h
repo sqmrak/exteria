@@ -140,6 +140,8 @@ typedef enum {
     NSString *caption;
     /* a photo or a video shown blurred until it is tapped */
     BOOL spoiler;
+    /* a gif file that plays in the chat as an animation */
+    BOOL animated;
     /* a photo or a video that is gone from the other side once it was opened */
     BOOL viewOnce;
     int32_t durationMs;
@@ -185,6 +187,7 @@ typedef enum {
     int32_t _messageId;
     int32_t _date;
     int32_t _replyTo;
+    int32_t _replyStory;
     int32_t _replyPeerKind;
     long long _replyPeerId;
     NSString *_replyQuote;
@@ -202,6 +205,8 @@ typedef enum {
     BOOL _outgoing;
     BOOL _noForwards;
     BOOL _unreadMention;
+    BOOL _mediaUnread;
+    NSDate *_listenedDate;
     BOOL _spoilersRevealed;
     BOOL _viewOnceOpened;
     BOOL _post;
@@ -221,6 +226,9 @@ typedef enum {
     int32_t _forwardDate;
     long long _groupedId;
     long long _forwardKey;
+    int32_t _forwardOriginKind;
+    long long _forwardOriginId;
+    int32_t _forwardOriginMessage;
     BOOL _savedOut;
     int32_t _savedPeerKind;
     long long _savedPeerId;
@@ -236,6 +244,9 @@ typedef enum {
     NSArray *_reactions;
     long long _viaBotId;
     int32_t _sendReplyTo;
+    int32_t _sentAfterId;
+    NSString *_sendQuote;
+    int32_t _sendQuoteOffset;
     ExteriaMarkup *_markup;
     BOOL _reactionsPossible;
     BOOL _hasReactions;
@@ -260,6 +271,8 @@ typedef enum {
 @property (nonatomic, readonly) int32_t date;
 @property (nonatomic, readonly) BOOL noForwards;
 @property (nonatomic, readonly) int32_t replyTo;
+/* the story this message answers, zero for none */
+@property (nonatomic, readonly) int32_t replyStory;
 @property (nonatomic, readonly) int32_t replyPeerKind;
 @property (nonatomic, readonly) long long replyPeerId;
 @property (nonatomic, readonly, copy) NSString *replyQuote;
@@ -283,6 +296,10 @@ typedef enum {
 @property (nonatomic, readonly) long long randomId;
 @property (nonatomic, readonly) BOOL outgoing;
 @property (nonatomic, readonly) BOOL unreadMention;
+/* a voice note or round video that nobody has played: this person for an incoming one, the other side for one of ours; the server clears it when it is played */
+@property (nonatomic, assign) BOOL mediaUnread;
+/* when this person played the incoming voice note on this phone, nil when not known; the server does not say it */
+@property (nonatomic, retain) NSDate *listenedDate;
 @property (nonatomic, readonly) BOOL post;
 /* a message waiting to be sent into a broadcast channel looks like the post it will become: the channel writes it, not the account */
 - (void)showAsChannelPost;
@@ -310,6 +327,11 @@ typedef enum {
 @property (nonatomic, assign) long long groupedId;
 /* who wrote a forwarded message, when the header says: the user id, or the negative of the channel id, as the people of a chat are keyed; zero when hidden */
 @property (nonatomic, readonly) long long forwardKey;
+/* where the header of a forwarded message says it stands: the peer kind (2 group, 3 channel), its id and the message in it; zero when the header names no place.
+   The chat of the replies holds the comments of the account this way */
+@property (nonatomic, readonly) int32_t forwardOriginKind;
+@property (nonatomic, readonly) long long forwardOriginId;
+@property (nonatomic, readonly) int32_t forwardOriginMessage;
 - (void)placeInSavedMessagesOfUser:(long long)userId;
 /* the words the server accepted for an edit of this message, shown at once with the mark of an edited one, before the copy it sends back is read */
 - (void)noteEditedToText:(NSString *)text;
@@ -335,6 +357,11 @@ typedef enum {
 @property (nonatomic, readonly) BOOL reactionsPossible;
 /* a pending text answers this message when it goes out, zero for none; only a message that has not been sent uses it */
 @property (nonatomic, assign) int32_t sendReplyTo;
+/* the newest message the chat held when this one was written: the server's copy of a send has a number past it, an older message with the same words does not */
+@property (nonatomic, assign) int32_t sentAfterId;
+/* the words of the answered message that this reply quotes, and where they start in it; empty for a plain reply */
+@property (nonatomic, copy) NSString *sendQuote;
+@property (nonatomic, assign) int32_t sendQuoteOffset;
 /* the bot whose inline result the message is, zero for any other */
 @property (nonatomic, readonly) long long viaBotId;
 /* the buttons under the message, or the keyboard it brought; nil without any */

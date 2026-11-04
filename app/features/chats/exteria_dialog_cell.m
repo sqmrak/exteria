@@ -22,16 +22,23 @@
 #import "exteria_custom_emoji.h"
 #import "exteria_name_badge.h"
 
+/* the interface scale of the chat settings: the row, the picture and the places of the lines in it grow with the fonts */
+#define SCALED(v) ((v) * ExteriaInterfaceScale())
 #define MINI_SIDE 16.0
-#define ROW_HEIGHT 64.0
-#define AVATAR_SIZE 48.0
+#define ROW_HEIGHT SCALED(64.0)
+#define AVATAR_SIZE SCALED(48.0)
 #define RING_OUTSET 4.0
 #define ONLINE_SIDE 14.0
 #define ONLINE_BORDER 2.0
 #define SIDE_MARGIN 14.0
-#define BADGE_HEIGHT 18.0
+#define BADGE_HEIGHT SCALED(18.0)
 #define ICON_SIZE 14.0
 #define FORWARD_SIDE 14.0
+#define FORUM_TOPIC_ICON 15.0
+/* a forum row stands taller: the name, a line of topics and the last message, each of the last two in a capsule */
+#define FORUM_ROW_HEIGHT SCALED(86.0)
+#define PILL_HEIGHT SCALED(24.0)
+#define PILL_PAD 9.0
 #define ACTION_WIDTH 80.0
 #define ACTION_ICON_SIZE 32.0
 /* a drag this far across the row, or a fast flick past half the button, performs the action without a tap */
@@ -61,12 +68,26 @@
     /* the small picture of who wrote the last message of a group, when the setting asks for it */
     ExteriaAvatarView *_mini;
     UIImageView *_topicIcon;
+    /* a forum row names the topic of its last message between the name and the preview */
+    UIImageView *_forumTopicIcon;
+    ExteriaEmojiLabel *_forumTopic;
+    UIView *_topicPill;
+    UIView *_messagePill;
+    UIImageView *_pillChevron;
+    UIImageView *_secondIcon;
+    /* a folded community names its newest chats in the capsules with their pictures, where a forum has the icons of its topics */
+    ExteriaAvatarView *_capsuleAvatar;
+    ExteriaAvatarView *_capsuleSecondAvatar;
+    BOOL _communityCapsules;
+    ExteriaEmojiLabel *_secondTopic;
+    CGFloat _rowHeight;
     UIImageView *_communityBadge;
     UIButton *_communityHit;
     void (^_communityHandler)(void);
     ExteriaEmojiLabel *_title;
     UIButton *_markHit;
     NSString *_markName;
+    long long _markUserId;
     NSUInteger _marks;
     UIImageView *_mutedIcon;
     UILabel *_time;
@@ -95,11 +116,19 @@
     if (!touch) return;
     CGPoint point = [touch locationInView:_title];
     NSUInteger mark = ExteriaMarkForDocument([_title customEmojiAtPoint:point]);
-    if (mark) ExteriaShowMarkNotice(_markName, mark);
+    if (mark) ExteriaShowMarkNoticeForUser(_markName, mark, _markUserId);
 }
 
 + (CGFloat)rowHeight {
     return ROW_HEIGHT;
+}
+
+static BOOL ExteriaDialogShowsTopics(ExteriaDialog *dialog) {
+    return (dialog.forum || dialog.communityChats.count > 0) && dialog.forumTopicTitle.length > 0;
+}
+
++ (CGFloat)rowHeightForDialog:(ExteriaDialog *)dialog {
+    return ExteriaDialogShowsTopics(dialog) ? FORUM_ROW_HEIGHT : ROW_HEIGHT;
 }
 
 static ExteriaEmojiLabel *ExteriaCellEmojiLabel(UIFont *font, UIColor *color, NSInteger alignment) {
@@ -162,7 +191,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
 
     /* the row slides inside the content view, which the cell resets to its own frame on every layout */
     _actionButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    _actionButton.backgroundColor = [UIColor colorWithRed:0.682 green:0.702 blue:0.725 alpha:1];
+    _actionButton.backgroundColor = ExteriaColorAccent();
     _actionButton.clipsToBounds = YES;
     _actionButton.hidden = YES;
     [_actionButton addTarget:self action:@selector(commitSwipe) forControlEvents:UIControlEventTouchUpInside];
@@ -198,6 +227,40 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _topicIcon.contentMode = UIViewContentModeScaleAspectFit;
     _topicIcon.hidden = YES;
     [_slider addSubview:_topicIcon];
+    _rowHeight = ROW_HEIGHT;
+    _topicPill = [[UIView alloc] init];
+    _topicPill.layer.cornerRadius = PILL_HEIGHT / 2;
+    _topicPill.hidden = YES;
+    [_slider addSubview:_topicPill];
+    _messagePill = [[UIView alloc] init];
+    _messagePill.layer.cornerRadius = PILL_HEIGHT / 2;
+    _messagePill.hidden = YES;
+    [_slider addSubview:_messagePill];
+    _pillChevron = [[UIImageView alloc] init];
+    _pillChevron.hidden = YES;
+    [_slider addSubview:_pillChevron];
+    _secondIcon = [[UIImageView alloc] init];
+    _secondIcon.contentMode = UIViewContentModeScaleAspectFit;
+    _secondIcon.hidden = YES;
+    [_slider addSubview:_secondIcon];
+    _secondTopic = [ExteriaCellEmojiLabel(ExteriaFontRegular(14), ExteriaColorSecondary(), ExteriaTextAlignmentLeft) retain];
+    _secondTopic.dropsUndrawable = YES;
+    _secondTopic.hidden = YES;
+    [_slider addSubview:_secondTopic];
+    _forumTopicIcon = [[UIImageView alloc] init];
+    _forumTopicIcon.contentMode = UIViewContentModeScaleAspectFit;
+    _forumTopicIcon.hidden = YES;
+    [_slider addSubview:_forumTopicIcon];
+    _capsuleAvatar = [[ExteriaAvatarView alloc] init];
+    _capsuleAvatar.hidden = YES;
+    [_slider addSubview:_capsuleAvatar];
+    _capsuleSecondAvatar = [[ExteriaAvatarView alloc] init];
+    _capsuleSecondAvatar.hidden = YES;
+    [_slider addSubview:_capsuleSecondAvatar];
+    _forumTopic = [ExteriaCellEmojiLabel(ExteriaFontSemibold(14), ExteriaColorAccent(), ExteriaTextAlignmentLeft) retain];
+    _forumTopic.dropsUndrawable = YES;
+    _forumTopic.hidden = YES;
+    [_slider addSubview:_forumTopic];
     _communityBadge = [[UIImageView alloc] initWithImage:ExteriaCommunityBadgeImage()];
     _communityBadge.hidden = YES;
     [_slider addSubview:_communityBadge];
@@ -275,6 +338,15 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_onlineDot release];
     [_mini release];
     [_topicIcon release];
+    [_forumTopicIcon release];
+    [_capsuleAvatar release];
+    [_capsuleSecondAvatar release];
+    [_forumTopic release];
+    [_topicPill release];
+    [_messagePill release];
+    [_pillChevron release];
+    [_secondIcon release];
+    [_secondTopic release];
     [_communityBadge release];
     [_communityHit release];
     [_communityHandler release];
@@ -312,6 +384,34 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _avatar.hidden = topic;
     _topicIcon.hidden = !topic;
     _topicIcon.image = topic ? ExteriaTopicIconImage(dialog) : nil;
+    BOOL forumTopic = ExteriaDialogShowsTopics(dialog);
+    _rowHeight = forumTopic ? FORUM_ROW_HEIGHT : ROW_HEIGHT;
+    _forumTopicIcon.hidden = _forumTopic.hidden = _topicPill.hidden = _messagePill.hidden = _pillChevron.hidden = !forumTopic;
+    UIColor *pill = ExteriaColorField();
+    _topicPill.backgroundColor = pill;
+    _messagePill.backgroundColor = pill;
+    _pillChevron.image = forumTopic ? ExteriaSymbolImage(ExteriaSymbolChevronRight, 12, ExteriaColorSecondary()) : nil;
+    BOOL second = forumTopic && dialog.forumSecondTitle.length > 0;
+    _secondIcon.hidden = _secondTopic.hidden = !second;
+    _secondIcon.image = second ? ExteriaTopicIconImageOf(dialog.forumSecondEmoji, dialog.forumSecondColor) : nil;
+    _secondTopic.text = second ? dialog.forumSecondTitle : @"";
+    _forumTopicIcon.image = forumTopic ? ExteriaTopicIconImageOf(dialog.forumTopicEmoji, dialog.forumTopicColor) : nil;
+    _forumTopic.text = forumTopic ? dialog.forumTopicTitle : @"";
+    _forumTopic.textColor = ExteriaColorAccent();
+    _communityCapsules = forumTopic && dialog.communityChats.count > 0;
+    if (_communityCapsules) {
+        ExteriaDialog *first = [dialog.communityChats objectAtIndex:0];
+        _capsuleAvatar.seed = first.avatarSeed;
+        _capsuleAvatar.initials = first.initials;
+        [_capsuleAvatar setPhoto:first.photo cache:avatars];
+        ExteriaDialog *next = dialog.communityChats.count > 1 ? [dialog.communityChats objectAtIndex:1] : nil;
+        _capsuleSecondAvatar.seed = next.avatarSeed;
+        _capsuleSecondAvatar.initials = next.initials;
+        [_capsuleSecondAvatar setPhoto:next.photo cache:avatars];
+    } else {
+        [_capsuleAvatar setPhoto:nil cache:nil];
+        [_capsuleSecondAvatar setPhoto:nil cache:nil];
+    }
     /* only a private chat with a live account has a presence; the saved messages row would show the own one */
     _onlineDot.hidden = topic || dialog.kind != EXTERIA_DIALOG_USER || dialog.saved || dialog.presence != EXTERIA_PRESENCE_ONLINE;
     [self refreshOnlineDot];
@@ -325,6 +425,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _marks = ExteriaDialogIsDeveloper(dialog);
     [_markName release];
     _markName = [dialog.title copy];
+    _markUserId = dialog.peerId;
     _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), _marks, &badge);
     self.backgroundColor = ExteriaImportedThemeColor(dialog.pinned ? "chatList.pinnedItemBg" : "chatList.itemBg") ?: [UIColor clearColor];
     self.selectedBackgroundView.backgroundColor = ExteriaImportedThemeColor(dialog.pinned ? "chatList.pinnedItemHighlightedBg" : "chatList.itemHighlightedBg") ?: ExteriaColorField();
@@ -336,7 +437,8 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _preview.textColor = ExteriaImportedThemeColor("chatList.messageText") ?: ExteriaColorSecondary();
     [_preview setPrefixLength:0 color:nil];
     _preview.hidden = NO;
-    BOOL mini = dialog.showsSender && ExteriaChatFlagGet(ExteriaChatFlagSenderAvatars);
+    /* the capsule of a forum row has no room for the picture of the sender */
+    BOOL mini = dialog.showsSender && !forumTopic && ExteriaChatFlagGet(ExteriaChatFlagSenderAvatars);
     _mini.hidden = !mini;
     if (mini) {
         _mini.seed = (NSUInteger)(dialog.senderId % 1000003);
@@ -359,12 +461,14 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     BOOL showsBadge = dialog.unreadCount > 0 || (dialog.unread && dialog.unreadCount == 0);
     _badge.hidden = !showsBadge;
     _badge.text = dialog.unreadCount > 999 ? @"999+" : (dialog.unreadCount > 0 ? [NSString stringWithFormat:@"%ld", (long)dialog.unreadCount] : @"");
-    _badge.backgroundColor = ExteriaImportedThemeColor(dialog.muted ? "chatList.unreadBadgeInactiveBg" : "chatList.unreadBadgeActiveBg") ?: ExteriaColorAccent();
+    /* a chat with its notifications off counts in grey, as in the official clients, not in the accent that says something new is waiting; an imported theme may name its own */
+    _badge.backgroundColor = ExteriaImportedThemeColor(dialog.muted ? "chatList.unreadBadgeInactiveBg" : "chatList.unreadBadgeActiveBg") ?: (dialog.muted ? ExteriaColorMuted() : ExteriaColorAccent());
     _badge.textColor = ExteriaImportedThemeColor(dialog.muted ? "chatList.unreadBadgeInactiveText" : "chatList.unreadBadgeActiveText") ?: [UIColor whiteColor];
     _mention.hidden = dialog.mentions <= 0;
     _reaction.hidden = dialog.reactions <= 0;
     _pin.hidden = !dialog.pinned || showsBadge || !_mention.hidden || !_reaction.hidden;
-    self.accessibilityLabel = [NSString stringWithFormat:@"%@, %@", dialog.title, dialog.preview];
+    self.accessibilityLabel = forumTopic ? [NSString stringWithFormat:@"%@, %@, %@", dialog.title, dialog.forumTopicTitle, dialog.preview]
+                                         : [NSString stringWithFormat:@"%@, %@", dialog.title, dialog.preview];
     [self setNeedsLayout];
 }
 
@@ -456,9 +560,8 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     _action = action;
     _pan.enabled = action != ExteriaDialogActionNone;
     _actionLabel.text = ExteriaDialogActionText(action);
-    /* deleting is the one swipe that is red; the others share the grey of the archive */
-    _actionButton.backgroundColor = action == ExteriaDialogActionDeleteChat ? [UIColor colorWithRed:0.89 green:0.31 blue:0.31 alpha:1]
-                                                                            : [UIColor colorWithRed:0.682 green:0.702 blue:0.725 alpha:1];
+    /* deleting is the one swipe that is red; the others, the archive among them, take the accent of the app */
+    _actionButton.backgroundColor = action == ExteriaDialogActionDeleteChat ? [UIColor colorWithRed:0.89 green:0.31 blue:0.31 alpha:1] : ExteriaColorAccent();
     [self releaseActionIcon];
     [self layoutSwipe];
 }
@@ -482,12 +585,12 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
 
 - (void)layoutSwipe {
     CGFloat width = self.contentView.bounds.size.width;
-    _slider.frame = CGRectMake(-_offset, 0, width, ROW_HEIGHT);
+    _slider.frame = CGRectMake(-_offset, 0, width, _rowHeight);
     _actionButton.hidden = _offset <= 0;
-    _actionButton.frame = CGRectMake(width - _offset, 0, _offset, ROW_HEIGHT);
+    _actionButton.frame = CGRectMake(width - _offset, 0, _offset, _rowHeight);
     /* the icon keeps to the moving edge until the button is wide enough to center it */
     CGFloat slot = MAX(_offset, ACTION_WIDTH);
-    _actionContent.frame = CGRectMake(0, 0, slot, ROW_HEIGHT);
+    _actionContent.frame = CGRectMake(0, 0, slot, _rowHeight);
     _actionIcon.frame = CGRectMake((slot - ACTION_ICON_SIZE) / 2, 9, ACTION_ICON_SIZE, ACTION_ICON_SIZE);
     _actionLabel.frame = CGRectMake(0, 43, slot, 15);
 }
@@ -588,7 +691,7 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     CGFloat width = self.contentView.bounds.size.width;
     CGFloat textX = SIDE_MARGIN * 2 + 2 + AVATAR_SIZE - 2;
     CGFloat hairline = 1.0 / ExteriaScreenScale();
-    _avatar.frame = CGRectMake(SIDE_MARGIN, (ROW_HEIGHT - AVATAR_SIZE) / 2, AVATAR_SIZE, AVATAR_SIZE);
+    _avatar.frame = CGRectMake(SIDE_MARGIN, _rowHeight > ROW_HEIGHT ? SCALED(10) : (ROW_HEIGHT - AVATAR_SIZE) / 2, AVATAR_SIZE, AVATAR_SIZE);
     _topicIcon.frame = _avatar.frame;
     _storyRing.frame = CGRectInset(_avatar.frame, -RING_OUTSET, -RING_OUTSET);
     _onlineDot.frame = CGRectMake(CGRectGetMaxX(_avatar.frame) - ONLINE_SIDE + 1, CGRectGetMaxY(_avatar.frame) - ONLINE_SIDE + 1, ONLINE_SIDE, ONLINE_SIDE);
@@ -619,39 +722,71 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     CGFloat forwardRoom = _forwardIcon.hidden ? 0 : FORWARD_SIDE + 4;
     thumbRoom += forwardRoom;
     /* the two line row of the chat settings keeps the preview to one line; the three line row lets it take a second */
-    BOOL singleLine = ExteriaChatListStyleStored() == ExteriaChatListTwoLines;
+    /* the topic line takes the second line of the row, so the preview keeps to one line under it */
+    BOOL topicLine = !_forumTopic.hidden;
+    BOOL singleLine = topicLine || ExteriaChatListStyleStored() == ExteriaChatListTwoLines;
     _preview.numberOfLines = singleLine ? 1 : 2;
-    CGSize previewSize = [_preview sizeThatFits:CGSizeMake(MAX(0, width - SIDE_MARGIN - textX - trailing - thumbRoom), 40)];
+    /* the last message of a forum sits in a capsule that has a chevron at its end, so the words start and stop inside it */
+    CGFloat previewX = topicLine ? textX + PILL_PAD : textX;
+    CGFloat chevronRoom = topicLine ? PILL_PAD + 12 + 4 : 0;
+    CGSize previewSize = [_preview sizeThatFits:CGSizeMake(MAX(0, width - SIDE_MARGIN - previewX - trailing - thumbRoom - chevronRoom), 40)];
     BOOL wraps = !singleLine && previewSize.height > _preview.font.lineHeight * 1.5;
-    CGFloat titleY = wraps ? 6 : 12;
-    CGFloat previewY = wraps ? 31 : 33;
-    CGFloat previewHeight = wraps ? 34 : ceil(_preview.font.lineHeight) + 1;
+    CGFloat topicY = SCALED(33), pillY = SCALED(33) + PILL_HEIGHT + 2;
+    CGFloat titleY = topicLine ? SCALED(8) : (wraps ? SCALED(6) : SCALED(12));
+    CGFloat previewY = topicLine ? pillY + (PILL_HEIGHT - ceil(_preview.font.lineHeight) - 1) / 2 : (wraps ? SCALED(31) : SCALED(33));
+    CGFloat previewHeight = wraps ? SCALED(34) : ceil(_preview.font.lineHeight) + 1;
 
-    CGSize timeSize = [_time sizeThatFits:CGSizeMake(120, 20)];
+    CGSize timeSize = [_time sizeThatFits:CGSizeMake(120, SCALED(20))];
     CGFloat timeX = width - SIDE_MARGIN - timeSize.width;
-    _time.frame = CGRectMake(timeX, titleY + 1, timeSize.width, 18);
+    _time.frame = CGRectMake(timeX, titleY + 1, timeSize.width, SCALED(18));
     CGFloat titleRight = timeX - 6;
     if (!_checks.hidden) {
         CGSize checkSize = _checks.image.size;
         CGFloat checkX = timeX - 4 - checkSize.width;
-        _checks.frame = CGRectMake(checkX, titleY + 1 + (18 - checkSize.height) / 2, checkSize.width, checkSize.height);
+        _checks.frame = CGRectMake(checkX, titleY + 1 + (SCALED(18) - checkSize.height) / 2, checkSize.width, checkSize.height);
         titleRight = checkX - 6;
     }
     CGFloat iconSpace = _mutedIcon.hidden ? 0 : _mutedIcon.image.size.width + 4;
     CGFloat titleMax = MAX(0, titleRight - textX - iconSpace);
-    CGSize titleSize = [_title sizeThatFits:CGSizeMake(titleMax, 20)];
+    CGSize titleSize = [_title sizeThatFits:CGSizeMake(titleMax, SCALED(20))];
     CGFloat titleWidth = MIN(titleSize.width, titleMax);
-    _title.frame = CGRectMake(textX, titleY, titleWidth, 20);
+    _title.frame = CGRectMake(textX, titleY, titleWidth, SCALED(20));
     CGFloat fullTitleWidth = [_title sizeThatFits:CGSizeMake(4096, 20)].width;
     NSUInteger markCount = 0;
-    for (NSUInteger bit = 1; bit <= ExteriaMarkOfficialTester; bit <<= 1) if (_marks & bit) ++markCount;
+    for (NSUInteger bit = 1; bit <= ExteriaMarkFlawSeer; bit <<= 1) if (_marks & bit) ++markCount;
     CGFloat markWidth = markCount * 30.0 + (_marks & ExteriaMarkCaution ? 24.0 * (EXTERIA_CAUTION_BADGE_RATIO - 1) : 0);
     _markHit.hidden = !markCount || fullTitleWidth > titleMax;
     _markHit.frame = CGRectMake(textX + MAX(0, titleWidth - markWidth), titleY - 4, MIN(titleWidth, markWidth), 28);
-    _mutedIcon.frame = CGRectMake(textX + titleWidth + 4, titleY + (20 - _mutedIcon.image.size.height) / 2,
+    _mutedIcon.frame = CGRectMake(textX + titleWidth + 4, titleY + (SCALED(20) - _mutedIcon.image.size.height) / 2,
                                   _mutedIcon.image.size.width, _mutedIcon.image.size.height);
 
-    CGFloat markCenter = previewY + (wraps ? 16 : 9);
+    /* the topic of the last message stands in a capsule, and the topic before it follows in plain words as far as the row reaches */
+    CGFloat topicHeight = ceil(_forumTopic.font.lineHeight) + 1;
+    CGFloat rowRight = width - SIDE_MARGIN;
+    CGFloat nameX = textX + PILL_PAD + FORUM_TOPIC_ICON + 4;
+    CGFloat nameWidth = MIN([_forumTopic sizeThatFits:CGSizeMake(4096, topicHeight)].width, MAX(0, rowRight - PILL_PAD - nameX));
+    CGFloat pillRight = nameX + nameWidth + PILL_PAD;
+    _topicPill.frame = CGRectMake(textX, topicY, pillRight - textX, PILL_HEIGHT);
+    _forumTopicIcon.frame = CGRectMake(textX + PILL_PAD, topicY + (PILL_HEIGHT - FORUM_TOPIC_ICON) / 2, FORUM_TOPIC_ICON, FORUM_TOPIC_ICON);
+    _forumTopic.frame = CGRectMake(nameX, topicY + (PILL_HEIGHT - topicHeight) / 2, nameWidth, topicHeight);
+    CGFloat secondX = pillRight + 8;
+    CGFloat secondNameX = secondX + FORUM_TOPIC_ICON + 4;
+    BOOL secondFits = !_secondTopic.hidden && rowRight - secondNameX >= 36;
+    _secondIcon.hidden = _secondTopic.hidden ? YES : !secondFits;
+    _secondIcon.frame = CGRectMake(secondX, topicY + (PILL_HEIGHT - FORUM_TOPIC_ICON) / 2, FORUM_TOPIC_ICON, FORUM_TOPIC_ICON);
+    /* the pictures of the chats take the places of the icons of the topics */
+    BOOL secondPicture = _communityCapsules && !_secondIcon.hidden;
+    _capsuleAvatar.hidden = !_communityCapsules;
+    _capsuleAvatar.frame = _forumTopicIcon.frame;
+    _capsuleSecondAvatar.hidden = !secondPicture;
+    _capsuleSecondAvatar.frame = _secondIcon.frame;
+    if (_communityCapsules) _forumTopicIcon.hidden = _secondIcon.hidden = YES;
+    _secondTopic.frame = CGRectMake(secondNameX, topicY + (PILL_HEIGHT - topicHeight) / 2, MAX(0, rowRight - secondNameX), topicHeight);
+    CGFloat messageRight = width - SIDE_MARGIN - trailing;
+    _messagePill.frame = CGRectMake(textX, pillY, MAX(0, messageRight - textX), PILL_HEIGHT);
+    _pillChevron.frame = CGRectMake(messageRight - PILL_PAD - 12, pillY + (PILL_HEIGHT - 12) / 2, 12, 12);
+
+    CGFloat markCenter = topicLine ? pillY + PILL_HEIGHT / 2 : previewY + (wraps ? SCALED(16) : SCALED(9));
     CGFloat badgesRight = width - SIDE_MARGIN - (_badge.hidden ? 0 : badgeSize.width + 4);
     if (!_mention.hidden) {
         _mention.frame = CGRectMake(badgesRight - BADGE_HEIGHT, markCenter - BADGE_HEIGHT / 2, BADGE_HEIGHT, BADGE_HEIGHT);
@@ -665,12 +800,12 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
         CGSize pinSize = _pin.image.size;
         _pin.frame = CGRectMake(width - SIDE_MARGIN - pinSize.width, markCenter - pinSize.height / 2, pinSize.width, pinSize.height);
     }
-    _preview.frame = CGRectMake(textX + thumbRoom, previewY, MAX(0, width - SIDE_MARGIN - textX - trailing - thumbRoom), previewHeight);
-    _typing.frame = CGRectMake(textX, previewY, MAX(0, width - SIDE_MARGIN - textX - trailing), ceil(_preview.font.lineHeight) + 1);
-    _forwardIcon.frame = CGRectMake(textX + miniRoom, previewY + (ceil(_preview.font.lineHeight) + 1 - FORWARD_SIDE) / 2, FORWARD_SIDE, FORWARD_SIDE);
-    _thumb.frame = CGRectMake(textX + miniRoom + forwardRoom, previewY + (ceil(_preview.font.lineHeight) + 1 - [ExteriaPreviewThumb side]) / 2, [ExteriaPreviewThumb side], [ExteriaPreviewThumb side]);
-    _mini.frame = CGRectMake(textX, previewY + (ceil(_preview.font.lineHeight) + 1 - MINI_SIDE) / 2, MINI_SIDE, MINI_SIDE);
-    _line.frame = CGRectMake(textX, ROW_HEIGHT - hairline, width - textX, hairline);
+    _preview.frame = CGRectMake(previewX + thumbRoom, previewY, MAX(0, width - SIDE_MARGIN - previewX - trailing - thumbRoom - chevronRoom), previewHeight);
+    _typing.frame = CGRectMake(previewX, previewY, MAX(0, width - SIDE_MARGIN - previewX - trailing - chevronRoom), ceil(_preview.font.lineHeight) + 1);
+    _forwardIcon.frame = CGRectMake(previewX + miniRoom, previewY + (ceil(_preview.font.lineHeight) + 1 - FORWARD_SIDE) / 2, FORWARD_SIDE, FORWARD_SIDE);
+    _thumb.frame = CGRectMake(previewX + miniRoom + forwardRoom, previewY + (ceil(_preview.font.lineHeight) + 1 - [ExteriaPreviewThumb side]) / 2, [ExteriaPreviewThumb side], [ExteriaPreviewThumb side]);
+    _mini.frame = CGRectMake(previewX, previewY + (ceil(_preview.font.lineHeight) + 1 - MINI_SIDE) / 2, MINI_SIDE, MINI_SIDE);
+    _line.frame = CGRectMake(textX, _rowHeight - hairline, width - textX, hairline);
     [self layoutSwipe];
 }
 

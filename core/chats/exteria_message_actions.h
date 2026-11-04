@@ -52,7 +52,8 @@ typedef enum exteria_message_action {
     EXTERIA_ACTION_REMIND = 1 << 22,            /* a reminder about the message arrives in the favorites at a time the person picks */
     EXTERIA_ACTION_REPLY_PRIVATE = 1 << 23,     /* the sender of a group message is written to in a chat of their own */
     EXTERIA_ACTION_EDIT_HISTORY = 1 << 24,      /* what the message said before its edits; the client adds it, since only it knows whether the versions were kept */
-    EXTERIA_ACTION_REACTORS = 1 << 25          /* the people and dates of a message's reactions */
+    EXTERIA_ACTION_REACTORS = 1 << 25,         /* the people and dates of a message's reactions */
+    EXTERIA_ACTION_SELECT_TEXT = 1 << 26       /* the words are selected in the bubble, to copy or to quote */
 } exteria_message_action;
 
 typedef struct exteria_action_context {

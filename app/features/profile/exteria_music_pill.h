@@ -9,7 +9,7 @@
 
 /* the song the profile shows first, nil when it has none */
 @property (nonatomic, retain) ExteriaMedia *savedTrack;
-/* whether the pill has anything to show: a saved song or a song that plays */
+/* whether the pill has anything to show: a saved song */
 @property (nonatomic, readonly) BOOL hasContent;
 /* runs when the pill changes between having content and not, so the owner can lay the head out again */
 @property (nonatomic, copy) void (^contentHandler)(void);

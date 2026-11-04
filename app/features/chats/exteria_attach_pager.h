@@ -6,6 +6,13 @@
     UIImage *image;
     NSURL *movie;
     UIImage *poster;
+    double trimStart;
+    double trimEnd;
+    BOOL muted;
+    NSInteger turns;
+    BOOL mirrored;
+    unsigned aspect;
+    NSUInteger posterGeneration;
 }
 @end
 

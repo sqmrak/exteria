@@ -121,17 +121,28 @@
 - (void)styleDidChange:(BOOL)involvesClassic {
     if (!_detail) return;
     BOOL classic = ExteriaThemeIsClassic();
-    NSArray *oldPages = involvesClassic ? [[_detail.viewControllers copy] autorelease] : nil;
+    /* every change of the palette makes the pages again, not only the swap between the styles: the colors are read when a page is built, and a page left as it was kept the
+       old ones, so with the list on the left in the dark theme the chat on the right stayed light */
+    NSArray *oldPages = [[_detail.viewControllers copy] autorelease];
     if (classic) ExteriaClassicStyleNavigationBar(_detail.navigationBar);
     [_detail setNavigationBarHidden:!classic animated:NO];
-    if (!oldPages) return;
+    if (!oldPages.count) return;
     NSMutableArray *pages = [NSMutableArray array];
+    BOOL rebuilt = NO;
     for (UIViewController *old in oldPages) {
-        if (![old respondsToSelector:@selector(controllerAfterThemeChange)]) break;
-        UIViewController *page = [(id<ExteriaThemeRestorable>)old controllerAfterThemeChange];
-        if (!page) break;
-        [pages addObject:page];
+        UIViewController *page = [old respondsToSelector:@selector(controllerAfterThemeChange)] ? [(id<ExteriaThemeRestorable>)old controllerAfterThemeChange] : nil;
+        if (page) {
+            [pages addObject:page];
+            rebuilt = YES;
+        } else if (involvesClassic) {
+            /* the structure of the screens changed, so a page that cannot be made again cannot stay either */
+            break;
+        } else {
+            /* the same structure, another palette: a page that cannot be made again stays, since closing it would take away what the person is reading */
+            [pages addObject:old];
+        }
     }
+    if (!rebuilt && !involvesClassic) return;
     if (!pages.count) {
         [pages addObject:[[[ExteriaDetailPlaceholder alloc] init] autorelease]];
     } else if (classic) {
@@ -248,9 +259,11 @@ BOOL ExteriaIsDetailRoot(UIViewController *screen) {
     root.backgroundColor = ExteriaColorScreen();
     self.view = root;
     [self addChildViewController:_masterNavigation];
+    _masterNavigation.view.clipsToBounds = YES;
     [root addSubview:_masterNavigation.view];
     [_masterNavigation didMoveToParentViewController:self];
     [self addChildViewController:_detailNavigation];
+    _detailNavigation.view.clipsToBounds = YES;
     [root addSubview:_detailNavigation.view];
     [_detailNavigation didMoveToParentViewController:self];
     _divider = [[UIView alloc] init];

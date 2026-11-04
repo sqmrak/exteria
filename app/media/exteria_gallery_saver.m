@@ -1,4 +1,5 @@
 #import "exteria_gallery_saver.h"
+#import "exteria_video_stage.h"
 
 #import "exteria_image_decoder.h"
 #import "exteria_weak_reference.h"
@@ -78,21 +79,28 @@
 }
 
 - (void)saveVideoAtPath:(NSString *)path {
-    /* a hard link keeps the cached movie where it is without copying it on the main thread; the library wants a name that ends in .mp4 */
+    /* the library wants a name that ends in .mp4 and the plain form of a fragmented video; a plain one is kept where it is by a hard link, without a copy */
     NSString *staged = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-save-%08x.mp4", arc4random()]];
-    NSError *error = nil;
-    if (![[NSFileManager defaultManager] linkItemAtPath:path toPath:staged error:&error]) {
-        NSLog(@"exteria: the video could not be staged for the library: %@", error);
-        [self finishWithKey:@"media.save.failed"];
-        return;
-    }
-    _stagedPath = [staged copy];
-    if (!UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(staged)) {
-        NSLog(@"exteria: the library does not take this video");
-        [self finishWithKey:@"media.save.failed"];
-        return;
-    }
-    UISaveVideoAtPathToSavedPhotosAlbum(staged, self, @selector(video:didFinishSavingWithError:contextInfo:), NULL);
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaStageVideoAsync(path, staged, ^(BOOL done, NSError *error) {
+        ExteriaGallerySaver *saver = weak.target;
+        if (!saver) {
+            [[NSFileManager defaultManager] removeItemAtPath:staged error:NULL];
+            return;
+        }
+        if (!done) {
+            NSLog(@"exteria: the video could not be staged for the library: %@", error);
+            [saver finishWithKey:@"media.save.failed"];
+            return;
+        }
+        saver->_stagedPath = [staged copy];
+        if (!UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(staged)) {
+            NSLog(@"exteria: the library does not take this video");
+            [saver finishWithKey:@"media.save.failed"];
+            return;
+        }
+        UISaveVideoAtPathToSavedPhotosAlbum(staged, saver, @selector(video:didFinishSavingWithError:contextInfo:), NULL);
+    });
 }
 
 + (void)saveMedia:(ExteriaMedia *)media cache:(ExteriaMediaCache *)cache completion:(void (^)(NSString *))completion {

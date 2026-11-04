@@ -1,5 +1,8 @@
 #import <Foundation/Foundation.h>
 
+/* the most photos and videos one selection holds; they go out as albums of ten */
+#define ATTACH_SELECTION_MAX 30
+
 /* what the person asked for in the gallery sheet besides the pictures themselves: the words to send with them and
    the choices of its menu */
 @interface ExteriaAttachOptions : NSObject {

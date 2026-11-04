@@ -135,6 +135,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     view.layer.shadowRadius = 14;
     view.layer.shadowOffset = CGSizeMake(0, 5);
     view.backgroundColor = ExteriaColorCard();
+    ExteriaSetShadowPath(view, radius);
 }
 
 #pragma mark content
@@ -448,8 +449,13 @@ static void ExteriaRevealCard(UIView *card, BOOL fromTop) {
         group.beginTime = [row.layer convertTime:CACurrentMediaTime() fromLayer:nil] + delay;
         group.fillMode = kCAFillModeBackwards;
         group.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        /* each row fades and moves alone, and a row with a label and a picture is a group that fades off screen on every frame unless it is a bitmap first */
+        ExteriaCacheForMotion(row);
         [row.layer addAnimation:group forKey:@"exteria.menu.row"];
     }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((duration + 0.05) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        for (UIView *row in content.subviews) ExteriaUncacheAfterMotion(row);
+    });
 }
 
 /* the card is below the message unless the screen had no room for it there */
@@ -506,6 +512,8 @@ static void ExteriaRevealCard(UIView *card, BOOL fromTop) {
     self.userInteractionEnabled = NO;
     void (^next)(void) = [after copy];
     [self retain];
+    ExteriaCacheForMotion(_card);
+    if (_pill) ExteriaCacheForMotion(_pill);
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
     /* the popup of exteraless leaves by fading while it slips 5 points toward the message */
     if (_pill) ExteriaAnimateView(_pill, CGAffineTransformMakeTranslation(0, 5), 0, EXTERIA_MOTION_EXIT, nil);

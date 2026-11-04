@@ -391,20 +391,33 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
     }
 }
 
+/* starts what the rows of the table show: the files of a cached set arrive while the grid is laid out, before the panel stands in a window, and animateMedia drops
+   an answer that finds no window, so the stickers of a panel opened from the cache stayed still */
+- (void)animateVisibleRows {
+    if (!self.window || self.hidden) return;
+    for (UITableViewCell *cell in _table.visibleCells) {
+        NSIndexPath *path = [_table indexPathForCell:cell];
+        if (path && [cell isKindOfClass:[ExteriaStickerRow class]]) [self animateRow:(ExteriaStickerRow *)cell atIndexPath:path];
+    }
+}
+
 - (void)didMoveToWindow {
     [super didMoveToWindow];
     if (!self.window) [self stopAnimations];
+    else [self animateVisibleRows];
 }
 
 - (void)setHidden:(BOOL)hidden {
     [super setHidden:hidden];
     if (hidden) [self stopAnimations];
+    else [self animateVisibleRows];
 }
 
 /* an animated sticker plays over its picture as soon as its file is here, when the power saving settings let stickers of the keyboard play */
 - (void)animateMedia:(ExteriaMedia *)media picture:(UIImageView *)picture row:(ExteriaStickerRow *)row index:(NSInteger)index request:(NSUInteger)request {
     if (media.stickerFormat != EXTERIA_STICKER_ANIMATED && media.stickerFormat != EXTERIA_STICKER_VIDEO) return;
     if (!media.file || !ExteriaLiteEnabled(EXTERIA_LITE_STICKERS_KEYBOARD)) return;
+    for (NSDictionary *entry in _playing) if ([entry objectForKey:@"picture"] == picture) return;
     NSString *key = media.file.key;
     [_media loadDataForFile:media.file completion:^(NSData *data) {
         if (request != _request || picture.tag != index || row.superview == nil || !self.window || self.hidden) return;
@@ -424,6 +437,20 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
         [overlay setPlaying:YES];
         [_playing addObject:[NSDictionary dictionaryWithObjectsAndKeys:overlay, @"overlay", picture, @"picture", row, @"row", nil]];
     }];
+}
+
+/* the sticker of each column of a row plays over its picture */
+- (void)animateRow:(ExteriaStickerRow *)row atIndexPath:(NSIndexPath *)indexPath {
+    NSDictionary *section = [_sections objectAtIndex:(NSUInteger)indexPath.section];
+    NSArray *stickers = [section objectForKey:@"stickers"];
+    BOOL recent = (ExteriaSectionKind)[[section objectForKey:@"kind"] intValue] == ExteriaSectionRecent;
+    for (NSInteger i = 0; i < _columns && i < (NSInteger)row.views.count; ++i) {
+        UIImageView *view = [row.views objectAtIndex:(NSUInteger)i];
+        NSInteger item = indexPath.row * _columns + i;
+        NSInteger index = recent ? item - 1 : item;
+        if (view.hidden || view.tag != item || index < 0 || index >= (NSInteger)stickers.count) continue;
+        [self animateMedia:[[stickers objectAtIndex:(NSUInteger)index] media] picture:view row:row index:item request:_request];
+    }
 }
 
 #pragma mark layout
@@ -546,7 +573,6 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
         }
         if (index < 0 || index >= (NSInteger)stickers.count) continue;
         ExteriaMedia *media = [[stickers objectAtIndex:(NSUInteger)index] media];
-        [self animateMedia:media picture:view row:row index:item request:request];
         /* prefer the small server preview, then render a poster when the set has none */
         ExteriaRemoteFile *file = media.stickerFormat == EXTERIA_STICKER_STATIC ? media.file : (media.previewFile ? media.previewFile : media.file);
         UIImage *ready = [_media cachedImageForFile:file maxSide:side];
@@ -562,6 +588,7 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
             }];
         }];
     }
+    [self animateRow:row atIndexPath:indexPath];
     return row;
 }
 

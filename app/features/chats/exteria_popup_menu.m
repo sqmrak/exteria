@@ -89,6 +89,7 @@
         _card.layer.shadowOpacity = ExteriaThemeIsDark() ? 0.5 : 0.22;
         _card.layer.shadowRadius = 12;
         _card.layer.shadowOffset = CGSizeMake(0, 4);
+        ExteriaSetShadowPath(_card, radius);
     }
     for (NSUInteger i = 0; i < _titles.count; ++i) {
         UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -169,7 +170,12 @@
     _card.layer.position = CGPointMake(x + CARD_WIDTH, top);
     _card.transform = CGAffineTransformMakeScale(0.8, 0.8);
     _card.alpha = 0;
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    ExteriaCacheForMotion(_card);
+    UIView *card = _card;
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, ^(BOOL finished) {
+        (void)finished;
+        ExteriaUncacheAfterMotion(card);
+    });
 }
 
 - (void)leaveThen:(void (^)(void))after {
@@ -177,6 +183,7 @@
     _closing = YES;
     void (^next)(void) = [after copy];
     self.userInteractionEnabled = NO;
+    ExteriaCacheForMotion(_card);
     ExteriaAnimateView(_card, CGAffineTransformMakeScale(0.8, 0.8), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];

@@ -22,6 +22,8 @@
     ExteriaWaveBackgroundView *_backdrop;
     UIView *_barShade;
     ExteriaConnectingLabel *_titleLabel;
+    UILabel *_subtitleLabel;
+    NSString *_subheading;
     ExteriaBarButton *_back;
     BOOL _showsBack;
     BOOL _titleOnLeft;
@@ -72,6 +74,8 @@
     [_backdrop release];
     [_barShade release];
     [_titleLabel release];
+    [_subtitleLabel release];
+    [_subheading release];
     [_barAccessory removeFromSuperview];
     [_barAccessory release];
     [_back release];
@@ -84,6 +88,18 @@
 
 - (NSString *)heading {
     return _heading;
+}
+
+- (NSString *)subheading {
+    return _subheading;
+}
+
+- (void)setSubheading:(NSString *)subheading {
+    if (subheading == _subheading || [subheading isEqualToString:_subheading]) return;
+    [_subheading release];
+    _subheading = [subheading copy];
+    _subtitleLabel.text = _subheading;
+    [self.view setNeedsLayout];
 }
 
 - (void)setHeading:(NSString *)heading {
@@ -168,6 +184,12 @@
     _titleLabel.textAlignment = ExteriaTextAlignmentCenter;
     [self refreshTitle];
     [root addSubview:_titleLabel];
+    _subtitleLabel = [[UILabel alloc] init];
+    _subtitleLabel.backgroundColor = [UIColor clearColor];
+    _subtitleLabel.textColor = ExteriaColorSecondary();
+    _subtitleLabel.textAlignment = ExteriaTextAlignmentCenter;
+    _subtitleLabel.text = _subheading;
+    [root addSubview:_subtitleLabel];
     if (_barAccessory) [root addSubview:_barAccessory];
 
     _back = [[ExteriaBarButton alloc] init];
@@ -436,6 +458,16 @@
         /* a centered title leaves the accessory the right end too, as a bar with buttons is never drawn from the corner of the screen */
         CGFloat accessoryWidth = _barAccessory ? MAX(52, _barAccessory.bounds.size.width) : 0;
         _barAccessory.frame = CGRectMake(edge - accessoryWidth - 2, insets.top, accessoryWidth, BAR_HEIGHT);
+    }
+    /* a heading with a line under it is two lines in the bar: the name above and the small words below, both on the same edges */
+    BOOL twoLines = _subheading.length > 0 && !_titleOnLeft;
+    _subtitleLabel.hidden = !twoLines;
+    if (twoLines) {
+        _titleLabel.font = ExteriaFontBold(ExteriaIsPad() ? 22 : 18);
+        _subtitleLabel.font = ExteriaFontRegular(13);
+        CGRect title = _titleLabel.frame;
+        _titleLabel.frame = CGRectMake(title.origin.x, insets.top + 5, title.size.width, 24);
+        _subtitleLabel.frame = CGRectMake(title.origin.x, insets.top + 28, title.size.width, 18);
     }
     CGFloat tableTop = _contentUnderBar ? insets.top : barBottom;
     CGFloat oldTop = _table.contentInset.top;

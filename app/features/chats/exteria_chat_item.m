@@ -89,6 +89,7 @@
 @synthesize replyTitle = _replyTitle;
 @synthesize replyText = _replyText;
 @synthesize replyEntities = _replyEntities;
+
 @synthesize replyColor = _replyColor;
 @synthesize replyFrame = _replyFrame;
 @synthesize replyTitleLayout = _replyTitleLayout;
@@ -262,6 +263,7 @@ static void ExteriaViewOnceCaptions(ExteriaMessage *message, NSString **title, N
     _builtEdited = message.edited;
     _builtDeleted = message.deletedLocally;
     _builtOnceExpired = ExteriaMessageIsViewOnce(message) && ExteriaViewOnceExpired(message);
+    _builtMediaUnread = message.mediaUnread;
     _builtService = message.service;
     _builtServiceValue = message.serviceValue;
     _builtText = [message.text copy];
@@ -274,13 +276,24 @@ static BOOL ExteriaSameString(NSString *a, NSString *b) {
     return a == b || [a isEqualToString:b];
 }
 
+- (NSString *)highlightQuery { return _highlightQuery; }
+
+/* the words reach a text that is laid out already as well as one that is laid out later */
+- (void)setHighlightQuery:(NSString *)query {
+    if (query == _highlightQuery || [query isEqualToString:_highlightQuery]) return;
+    [_highlightQuery release];
+    _highlightQuery = [query copy];
+    _textLayout.highlight = _highlightQuery;
+}
+
 - (BOOL)reflectsMessage:(ExteriaMessage *)message {
-    return _message && _message.replyTo == message.replyTo && _message.sendReplyTo == message.sendReplyTo &&
+    return _message && _message.replyTo == message.replyTo && _message.replyStory == message.replyStory && _message.sendReplyTo == message.sendReplyTo &&
            _message.replyPeerKind == message.replyPeerKind && _message.replyPeerId == message.replyPeerId && ExteriaSameString(_message.replyQuote, message.replyQuote) &&
            _message.senderKey == message.senderKey && ExteriaSameString(_message.senderRank, message.senderRank) &&
            _builtMessageId == message.messageId && _builtRandomId == message.randomId &&
            _builtState == message.state && _builtEdited == message.edited && _builtDeleted == message.deletedLocally && _builtService == message.service && _builtServiceValue == message.serviceValue &&
            _builtOnceExpired == (ExteriaMessageIsViewOnce(message) && ExteriaViewOnceExpired(message)) &&
+           _builtMediaUnread == message.mediaUnread &&
            ExteriaSameString(_builtText, message.text) && ExteriaSameString(_builtReactionKey, message.reactionKey) &&
            ExteriaSameString(_builtMarkupKey, message.markupKey) && ExteriaSameString(_builtPollKey, message.pollKey);
 }
@@ -611,6 +624,11 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     return item;
 }
 
+- (void)showOpenChatRow {
+    [_commentsText release];
+    _commentsText = [NSLocalizedString(@"chat.replies.open", nil) copy];
+}
+
 - (void)dropForwardText {
     [_forwardText release];
     _forwardText = nil;
@@ -639,6 +657,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_replyTitle release];
     [_replyText release];
     [_replyEntities release];
+    [_highlightQuery release];
     [_replyColor release];
     [_replyTitleLayout release];
     [_replyTextLayout release];
@@ -1055,6 +1074,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     _textLayout = hasText ? [[ExteriaTextLayout layoutForText:bodyText entities:ownText ? _message.entities : nil font:ExteriaFontRegular(textSize)
                                                         color:textColor linkColor:linkColor width:MAX(40, textMax) maxLines:0 flush:0] retain] : nil;
     _textLayout.spoilersRevealed = _message.spoilersRevealed;
+    _textLayout.highlight = _highlightQuery;
 
     /* a run of messages from one person names them once, on the first bubble, and the picture stands under the last */
     [_senderLayout release];

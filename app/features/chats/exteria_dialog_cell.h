@@ -54,6 +54,8 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action);
 - (void)setStoryPeer:(ExteriaStoryPeer *)peer;
 
 + (CGFloat)rowHeight;
+/* the height of the row of this chat: a forum that names its topics stands taller than the rest */
++ (CGFloat)rowHeightForDialog:(ExteriaDialog *)dialog;
 - (void)configureWithDialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars action:(ExteriaDialogAction)action;
 /* replaces the preview with what the chat is doing right now, in the accent color; nil puts the last message back */
 - (void)showTypingText:(NSString *)text;

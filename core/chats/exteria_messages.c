@@ -9,6 +9,7 @@
 /* the largest size worth a bubble on a small screen; a photo goes for the smallest size that covers it */
 #define PHOTO_TARGET 640
 #define STICKER_PREVIEW_TARGET 100
+#define AUDIO_COVER_TARGET 300
 
 static void copy_text(char *dst, size_t cap, const exteria_tl_value *object, const char *field, int keep_lines) {
     const uint8_t *data;
@@ -223,7 +224,7 @@ static void read_document(const exteria_tl_value *document, const exteria_tl_val
     } else if (animated) {
         out->kind = EXTERIA_PREVIEW_GIF;
     }
-    if (pick_size(exteria_tl_get(document, "thumbs"), STICKER_PREVIEW_TARGET, type, &w, &h, &bytes))
+    if (pick_size(exteria_tl_get(document, "thumbs"), out->kind == EXTERIA_PREVIEW_AUDIO ? AUDIO_COVER_TARGET : STICKER_PREVIEW_TARGET, type, &w, &h, &bytes))
         ref_from(&out->preview, EXTERIA_MEDIA_SOURCE_DOCUMENT, document, dc, type);
     else if ((out->kind == EXTERIA_PREVIEW_GIF || out->kind == EXTERIA_PREVIEW_VIDEO) && pick_video_size(exteria_tl_get(document, "video_thumbs"), STICKER_PREVIEW_TARGET, type))
         ref_from(&out->preview, EXTERIA_MEDIA_SOURCE_DOCUMENT, document, dc, type);
@@ -645,12 +646,18 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     out->out = exteria_tl_has(m, "out") ? 1 : 0;
     out->noforwards = exteria_tl_has(m, "noforwards") ? 1 : 0;
     out->unread_mention = exteria_tl_has(m, "mentioned") && exteria_tl_has(m, "media_unread") ? 1 : 0;
+    out->media_unread = exteria_tl_has(m, "media_unread") ? 1 : 0;
     out->post = exteria_tl_has(m, "post") ? 1 : 0;
     if (exteria_peer_from_tl(exteria_tl_get(m, "from_id"), &from) == EXTERIA_OK) {
         if (from.kind == 1) out->from_id = from.id;
         else if (from.kind == 3) out->from_channel = from.id;
     }
     header = exteria_tl_get(m, "reply_to");
+    if (header && exteria_tl_is(header, EXTERIA_TL_ID_messageReplyStoryHeader)) {
+        /* an answer to a story has no message to name, only the story */
+        exteria_tl_get_i32(header, "story_id", &out->reply_story);
+        header = NULL;
+    }
     if (header) {
         exteria_tl_get_i32(header, "reply_to_msg_id", &out->reply_to);
         if (exteria_tl_get_i32(header, "reply_to_top_id", &out->thread_id) != EXTERIA_OK || out->thread_id <= 0) out->thread_id = out->reply_to;
@@ -703,6 +710,11 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
         out->forward_saved_out = exteria_tl_has(header, "saved_out") ? 1 : 0;
         copy_text(out->forward_name, sizeof(out->forward_name), header, "from_name", 0);
         exteria_tl_get_i32(header, "date", &out->forward_date);
+        if (exteria_peer_from_tl(exteria_tl_get(header, "saved_from_peer"), &origin) == EXTERIA_OK) {
+            out->forward_origin_kind = origin.kind;
+            out->forward_origin_id = origin.id;
+            exteria_tl_get_i32(header, "saved_from_msg_id", &out->forward_origin_message);
+        }
         if (exteria_peer_from_tl(exteria_tl_get(header, "from_id"), &origin) == EXTERIA_OK) {
             if (origin.kind == 1) out->forward_from = origin.id;
             else if (origin.kind == 3) out->forward_from = -origin.id;
@@ -1093,6 +1105,12 @@ exteria_status exteria_set_topic_reply(exteria_arena *arena, exteria_tl_value *r
 
 /* a reply names the message it answers; inside a topic it also names the topic, so the server files the reply there */
 exteria_status exteria_set_reply(exteria_arena *arena, exteria_tl_value *request, const exteria_peer_ref *peer, int32_t reply_to) {
+    return exteria_set_reply_quote(arena, request, peer, reply_to, NULL, -1);
+}
+
+/* the same, with a quote: the words of the answered message that the reply is about; offset is where they start in UTF-16 units, or negative when unknown */
+exteria_status exteria_set_reply_quote(exteria_arena *arena, exteria_tl_value *request, const exteria_peer_ref *peer, int32_t reply_to,
+                                       const char *quote, int32_t offset) {
     exteria_tl_value *reply;
     exteria_status status;
     if (!arena || !request || !peer || reply_to < 0) return EXTERIA_E_ARG;
@@ -1101,6 +1119,10 @@ exteria_status exteria_set_reply(exteria_arena *arena, exteria_tl_value *request
     if (!reply) return EXTERIA_E_NOMEM;
     status = exteria_tl_set_i32(arena, reply, "reply_to_msg_id", reply_to);
     if (status == EXTERIA_OK && peer->topic_id > 1) status = exteria_tl_set_i32(arena, reply, "top_msg_id", peer->topic_id);
+    if (status == EXTERIA_OK && quote && quote[0]) {
+        status = exteria_tl_set_str(arena, reply, "quote_text", quote);
+        if (status == EXTERIA_OK && offset >= 0) status = exteria_tl_set_i32(arena, reply, "quote_offset", offset);
+    }
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "reply_to", reply);
     return status;
 }
@@ -1642,14 +1664,18 @@ static exteria_status upload_media(exteria_arena *arena, exteria_tl_value *file,
         if (!attribute) return status == EXTERIA_OK ? EXTERIA_E_ARG : status;
         mime = spec->kind == EXTERIA_UPLOAD_VOICE ? "audio/ogg" : (spec->kind == EXTERIA_UPLOAD_FILE ? spec->mime : "video/mp4");
         media = exteria_tl_new_obj(arena, "inputMediaUploadedDocument");
-        attributes = exteria_tl_new_vec(arena, 1);
+        attributes = exteria_tl_new_vec(arena, spec->animated ? 2 : 1);
         if (!media || !attributes) return EXTERIA_E_NOMEM;
         status = exteria_tl_vec_set(attributes, 0, attribute);
+        if (status == EXTERIA_OK && spec->animated) {
+            exteria_tl_value *animated = exteria_tl_new_obj(arena, "documentAttributeAnimated");
+            status = animated ? exteria_tl_vec_set(attributes, 1, animated) : EXTERIA_E_NOMEM;
+        }
         if (status == EXTERIA_OK) status = exteria_tl_set(media, "file", file);
         if (status == EXTERIA_OK) status = exteria_tl_set_str(arena, media, "mime_type", mime);
         if (status == EXTERIA_OK) status = exteria_tl_set(media, "attributes", attributes);
         /* a sent video is not played in a circle, and a file is never turned into a picture on the other side */
-        if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_FILE) status = exteria_tl_set_flag(media, "force_file");
+        if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_FILE && !spec->animated) status = exteria_tl_set_flag(media, "force_file");
         if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_VIDEO && spec->spoiler) status = exteria_tl_set_flag(media, "spoiler");
         if (status == EXTERIA_OK && spec->view_once) status = exteria_tl_set_i32(arena, media, "ttl_seconds", EXTERIA_VIEW_ONCE_TTL);
     }
@@ -1659,7 +1685,8 @@ static exteria_status upload_media(exteria_arena *arena, exteria_tl_value *file,
 
 static int upload_spec_valid(const exteria_upload_spec *spec) {
     /* a document sent as a file keeps its bytes for good, so a one-time file is a mistake of the caller */
-    return spec->kind >= EXTERIA_UPLOAD_VOICE && spec->kind <= EXTERIA_UPLOAD_FILE && !(spec->view_once && spec->kind == EXTERIA_UPLOAD_FILE) && memchr(spec->name, 0, sizeof(spec->name)) != NULL &&
+    return spec->kind >= EXTERIA_UPLOAD_VOICE && spec->kind <= EXTERIA_UPLOAD_FILE && !(spec->animated && (spec->kind != EXTERIA_UPLOAD_FILE || strcmp(spec->mime, "image/gif"))) &&
+           !(spec->view_once && spec->kind == EXTERIA_UPLOAD_FILE) && memchr(spec->name, 0, sizeof(spec->name)) != NULL &&
            memchr(spec->mime, 0, sizeof(spec->mime)) != NULL && memchr(spec->caption, 0, sizeof(spec->caption)) != NULL;
 }
 
@@ -1828,6 +1855,24 @@ exteria_status exteria_custom_emoji_request(exteria_arena *arena, const int64_t 
     status = exteria_tl_set_i64_vec(arena, request, "document_id", ids, (uint32_t)count);
     if (status == EXTERIA_OK) *out = request;
     return status;
+}
+
+exteria_status exteria_document_picture_read(const exteria_tl_value *document, const char *alt, exteria_custom_emoji *out) {
+    exteria_media_info info;
+    int64_t id;
+    if (!out) return EXTERIA_E_ARG;
+    memset(out, 0, sizeof(*out));
+    if (!alt) return EXTERIA_E_ARG;
+    if (!exteria_tl_is(document, EXTERIA_TL_ID_document) || exteria_tl_get_i64(document, "id", &id) != EXTERIA_OK || id == 0) return EXTERIA_E_NOTFOUND;
+    memset(&info, 0, sizeof(info));
+    read_document(document, NULL, &info);
+    out->id = id;
+    snprintf(out->alt, sizeof(out->alt), "%s", alt);
+    out->ref = info.ref;
+    out->preview = info.preview;
+    out->format = !strcmp(info.mime, "application/x-tgsticker") ? EXTERIA_STICKER_ANIMATED
+                  : !strcmp(info.mime, "video/webm") ? EXTERIA_STICKER_VIDEO : EXTERIA_STICKER_STATIC;
+    return EXTERIA_OK;
 }
 
 exteria_status exteria_custom_emoji_parse(const exteria_tl_value *answer, exteria_custom_emoji *rows, size_t cap, size_t *count) {

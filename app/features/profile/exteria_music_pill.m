@@ -201,12 +201,14 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     [super dealloc];
 }
 
+/* the controls belong to the profile's own song; a song the person plays from elsewhere must not replace what the profile shows */
 - (BOOL)playerActive {
-    return [ExteriaMusicPlayer sharedPlayer].state != ExteriaMusicStateIdle;
+    ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
+    return player.state != ExteriaMusicStateIdle && [player isCurrentTrack:_savedTrack];
 }
 
 - (BOOL)hasContent {
-    return _savedTrack != nil || [self playerActive];
+    return _savedTrack != nil;
 }
 
 - (void)setSavedTrack:(ExteriaMedia *)track {
@@ -251,11 +253,11 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     }];
 }
 
-/* shows the song that plays when one does, the saved one otherwise */
+/* shows the saved song, with the controls while it is the one that plays */
 - (void)refresh {
     ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
     BOOL active = [self playerActive];
-    ExteriaMedia *shown = active ? player.track : _savedTrack;
+    ExteriaMedia *shown = _savedTrack;
     BOOL content = shown != nil;
     self.hidden = !content;
     _title.text = shown ? ExteriaTrackTitle(shown) : @"";

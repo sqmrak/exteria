@@ -11,8 +11,9 @@
 
 /* worker only: the drafts a chat list answer carries go to the board; complete is NO for the answer the last run kept */
 - (void)noteDraftsOfDialogsAnswer:(const exteria_tl_value *)answer complete:(BOOL)complete;
+- (void)noteDraftsOfDialogsAnswer:(const exteria_tl_value *)answer complete:(BOOL)complete since:(NSUInteger)revision;
 /* worker only: the same for the topics of a forum */
-- (void)noteDraftsOfTopicsAnswer:(const exteria_tl_value *)answer forum:(ExteriaDialog *)forum;
+- (void)noteDraftsOfTopicsAnswer:(const exteria_tl_value *)answer forum:(ExteriaDialog *)forum since:(NSUInteger)revision;
 /* worker only: an updateDraftMessage of the account */
 - (void)noteDraftUpdate:(const exteria_tl_value *)update;
 /* worker only: asks for every draft of the account once per run; they come back as updates */

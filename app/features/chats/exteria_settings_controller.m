@@ -125,6 +125,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
     [_weak clear];
     [_weak release];
     [_session release];
@@ -144,6 +145,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(chatSettingsChanged) name:ExteriaChatSettingsDidChangeNotification object:nil];
     BOOL classic = ExteriaThemeIsClassic();
     _header = [[ExteriaSettingsHeaderView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, classic ? CLASSIC_HEADER_HEIGHT : HEADER_HEIGHT)
                                                    identityTop:classic ? EXTERIA_IDENTITY_TOP : EXTERIA_IDENTITY_BAR + EXTERIA_IDENTITY_TOP];
@@ -187,6 +189,10 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     [self loadPerson];
 }
 
+- (void)chatSettingsChanged {
+    if (_person) [self showPerson];
+}
+
 - (void)openQr {
     if (!_person) return;
     ExteriaProfileQrController *code = [[[ExteriaProfileQrController alloc] initWithSession:_session person:_person avatars:_avatars media:_media] autorelease];
@@ -224,6 +230,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 
 - (void)showPerson {
     ExteriaProfileIdentityView *identity = _header.identity;
+    identity.userId = _person.userId;
     [identity setName:_person.name developer:ExteriaPersonIsDeveloper(_person)];
     identity.line.text = _person.username.length ? [@"@" stringByAppendingString:_person.username] : ExteriaOwnPhoneText(_person.phone);
     if (ExteriaThemeIsClassic()) {
@@ -444,8 +451,9 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 - (void)showMenu {
     ExteriaWeakReference *weak = _weak;
     if (ExteriaThemeIsClassic()) {
-        ExteriaSettingsChoose(self, nil, [NSArray arrayWithObject:NSLocalizedString(@"settings.signout", nil)], ^(NSUInteger index) {
-            (void)index;
+        /* from the dots that were tapped: the sheet of an ipad is a popover, and without a place to point at it came up in the middle of the screen over the chat */
+        ExteriaChooseFromView(_more, nil, [NSArray arrayWithObject:NSLocalizedString(@"settings.signout", nil)], 0, ^(NSInteger index) {
+            if (index < 0) return;
             [(ExteriaSettingsController *)weak.target confirmSignOut];
         });
         return;

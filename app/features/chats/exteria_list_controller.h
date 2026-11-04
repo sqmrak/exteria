@@ -13,6 +13,8 @@
 @property (nonatomic, readonly) ExteriaSession *session;
 @property (nonatomic, readonly) UITableView *table;
 @property (nonatomic, copy) NSString *heading;
+/* a small line under the heading, such as how many chats a community has; empty for none */
+@property (nonatomic, copy) NSString *subheading;
 /* the height of what covers the bottom edge, such as the tab bar */
 @property (nonatomic, assign) CGFloat bottomInset;
 /* where the rows get profile photos from */
@@ -44,6 +46,8 @@
 /* the same, but a load already running is dropped, because what it brings was asked for before something changed */
 - (void)reloadDiscardingRunning;
 - (void)reloadAfterCurrent;
+/* the list holds old rows: it loads again the next time it is on screen, whatever its age */
+- (void)dialogsChanged;
 - (void)reloadTable;
 /* called by reloadTable before it reloads the whole table: a list whose rows have names moves, adds and removes
    them with animation and answers YES, in which case the table is not reloaded */

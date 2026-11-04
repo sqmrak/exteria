@@ -71,7 +71,7 @@ uint32_t exteria_message_actions_for(const exteria_action_context *c) {
     int sent, words_only, may_write;
     if (!c || c->service) return 0;
     sent = c->message_id > 0;
-    if (c->has_text) mask |= EXTERIA_ACTION_COPY;
+    if (c->has_text) mask |= EXTERIA_ACTION_COPY | EXTERIA_ACTION_SELECT_TEXT;
     if (!sent) return mask;
     words_only = c->media == EXTERIA_PREVIEW_NONE || c->media == EXTERIA_PREVIEW_TEXT;
     /* a broadcast channel is written to by its admins alone, and so replied in, pinned in and cleaned up by them */

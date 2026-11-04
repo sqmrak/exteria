@@ -1,4 +1,5 @@
 #import "exteria_attach_sheet.h"
+#import "exteria_caption_view.h"
 #import "exteria_chat_settings.h"
 
 #import <AssetsLibrary/AssetsLibrary.h>
@@ -16,9 +17,12 @@
 
 
 #define ASSETS_MAX 300
-#define SELECTION_MAX 10
+#define SELECTION_MAX ATTACH_SELECTION_MAX
 #define BAR_HEIGHT 70.0
 #define CAPTION_HEIGHT 64.0
+/* five lines of the caption font; more scroll inside the field */
+#define CAPTION_LINES_MAX_HEIGHT 110.0
+#define CAPTION_CHARACTERS_MAX 1024
 #define HEADER_HEIGHT 56.0
 
 #define PANEL_RADIUS 14.0
@@ -37,7 +41,7 @@
 /* the room above a sheet that rises over the keyboard */
 #define KEYBOARD_TOP_ROOM 24.0
 
-@interface ExteriaAttachSheet () <UITableViewDataSource, UITableViewDelegate, UIGestureRecognizerDelegate, UITextFieldDelegate> {
+@interface ExteriaAttachSheet () <UITableViewDataSource, UITableViewDelegate, UIGestureRecognizerDelegate, UITextViewDelegate> {
     UIView *_dim;
     UIView *_panel;
     CAShapeLayer *_panelMask;
@@ -50,7 +54,7 @@
     UILabel *_title;
     UIButton *_more;
     UIView *_captionBar;
-    ExteriaCenteredHintField *_caption;
+    ExteriaCaptionView *_caption;
     UIButton *_send;
     UILabel *_count;
     UITableView *_grid;
@@ -190,13 +194,13 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     field.layer.cornerRadius = SEND_SIDE / 2;
     field.tag = 1;
     [_captionBar addSubview:field];
-    _caption = [[ExteriaCenteredHintField alloc] init];
+    _caption = [[ExteriaCaptionView alloc] init];
     _caption.backgroundColor = [UIColor clearColor];
     _caption.font = ExteriaFontRegular(16);
     _caption.textColor = ExteriaColorTitle();
-    _caption.leftAligned = YES;
     _caption.placeholder = NSLocalizedString(@"attach.caption", nil);
-    _caption.returnKeyType = UIReturnKeyDone;
+    /* the return key makes a new line; the round button sends */
+    _caption.returnKeyType = UIReturnKeyDefault;
     _caption.delegate = self;
     _caption.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     [field addSubview:_caption];
@@ -322,16 +326,22 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     _title.frame = CGRectMake(20, 16, width - 20 - 56, 40);
     CGFloat bottom = _keyboard > 0 ? 0 : safe.bottom;
     BOOL picking = _selected.count > 0;
-    CGFloat barHeight = _profilePicker ? bottom : (picking ? CAPTION_HEIGHT : BAR_HEIGHT) + bottom;
+    /* the field grows with its lines up to five, and the bar with it */
+    CGFloat captionWidth = MAX(40, width - 24 - 14 - SEND_SIDE - 6);
+    CGFloat textHeight = MIN(CAPTION_LINES_MAX_HEIGHT, MAX(27.0, [_caption contentHeightForWidth:captionWidth]));
+    CGFloat fieldHeight = MAX(SEND_SIDE, textHeight + 16);
+    CGFloat captionBarHeight = CAPTION_HEIGHT + fieldHeight - SEND_SIDE;
+    CGFloat barHeight = _profilePicker ? bottom : (picking ? captionBarHeight : BAR_HEIGHT) + bottom;
     _bar.frame = CGRectMake(0, height - BAR_HEIGHT - bottom, width, BAR_HEIGHT + bottom);
     _captionBar.frame = CGRectMake(0, height - barHeight, width, barHeight);
     _line.frame = CGRectMake(0, 0, width, 1 / ExteriaScreenScale());
     _grid.frame = CGRectMake(0, HEADER_HEIGHT, width, MAX(0, height - HEADER_HEIGHT - barHeight));
     UIView *field = [_captionBar viewWithTag:1];
     /* the field runs the whole width of the sheet and the round button sits inside its right end */
-    field.frame = CGRectMake(12, (CAPTION_HEIGHT - SEND_SIDE) / 2, width - 24, SEND_SIDE);
-    _caption.frame = CGRectMake(18, 0, field.frame.size.width - 18 - SEND_SIDE - 6, SEND_SIDE);
-    _send.frame = CGRectMake(width - 12 - SEND_SIDE, (CAPTION_HEIGHT - SEND_SIDE) / 2, SEND_SIDE, SEND_SIDE);
+    field.frame = CGRectMake(12, (CAPTION_HEIGHT - SEND_SIDE) / 2, width - 24, fieldHeight);
+    _caption.frame = CGRectMake(10, floor((fieldHeight - textHeight) / 2), captionWidth + 8, textHeight);
+    /* the round button stays at the bottom of the field as the field grows upward */
+    _send.frame = CGRectMake(width - 12 - SEND_SIDE, CGRectGetMaxY(field.frame) - SEND_SIDE, SEND_SIDE, SEND_SIDE);
     /* the classic button is a picture with its own rim, a layer border would draw a square around it */
     if (!ExteriaThemeIsClassic()) {
         _send.layer.borderWidth = 3;
@@ -577,16 +587,26 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
     if (_leaving || !self.window) return;
     CGRect end = [[note.userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
     BOOL showing = [note.name isEqualToString:UIKeyboardWillShowNotification];
-    CGRect inSheet = [self convertRect:end fromView:nil];
+    /* the frame of the keyboard is in the coordinates of the screen, which do not turn with the interface; through the window it lands right in landscape too, where the plain
+       conversion put it elsewhere and the sheet stayed under the keys */
+    CGRect inSheet = [self convertRect:[self.window convertRect:end fromWindow:nil] fromView:nil];
     _keyboard = showing ? MAX(0, self.bounds.size.height - inSheet.origin.y) : 0;
     NSTimeInterval duration = [[note.userInfo objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     [self setNeedsLayout];
     [UIView animateWithDuration:duration delay:0 options:UIViewAnimationOptionBeginFromCurrentState animations:^{ [self layoutIfNeeded]; } completion:nil];
 }
 
-- (BOOL)textFieldShouldReturn:(UITextField *)field {
-    [field resignFirstResponder];
-    return NO;
+- (void)textViewDidChange:(UITextView *)textView {
+    (void)textView;
+    [self setNeedsLayout];
+    [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionBeginFromCurrentState animations:^{ [self layoutIfNeeded]; } completion:nil];
+    /* the line being typed stays in view when the field stops growing */
+    [_caption scrollRangeToVisible:_caption.selectedRange];
+}
+
+- (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
+    (void)textView;
+    return textView.text.length - range.length + text.length <= CAPTION_CHARACTERS_MAX;
 }
 
 #pragma mark showing

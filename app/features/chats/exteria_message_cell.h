@@ -15,6 +15,10 @@
 - (void)messageCellDidLongPress:(ExteriaMessageCell *)cell;
 - (void)messageCell:(ExteriaMessageCell *)cell didTapReaction:(ExteriaReaction *)reaction;
 - (void)messageCellDidTapFailed:(ExteriaMessageCell *)cell;
+@optional
+/* the part of the words the person selected in the bubble is to be quoted by an answer; offset counts UTF-16 units of the text */
+- (void)messageCell:(ExteriaMessageCell *)cell didQuoteText:(NSString *)quote offset:(int32_t)offset;
+@required
 /* the preview of the message this one answers */
 - (void)messageCellDidTapReply:(ExteriaMessageCell *)cell;
 /* the card of a gift service message was tapped */
@@ -23,8 +27,6 @@
 - (void)messageCellDidTapAudio:(ExteriaMessageCell *)cell;
 /* the file button of a document that has come was tapped: the file is at path, and name is what it was called */
 - (void)messageCell:(ExteriaMessageCell *)cell didOpenFileAtPath:(NSString *)path name:(NSString *)name;
-/* the round message played to its end; the next one of the chat can follow */
-- (void)messageCellDidFinishRound:(ExteriaMessageCell *)cell;
 /* the comments row under a channel post, and the round button beside it */
 - (void)messageCellDidTapComments:(ExteriaMessageCell *)cell;
 - (void)messageCellDidTapShare:(ExteriaMessageCell *)cell;
@@ -70,6 +72,8 @@
 
 @property (nonatomic, assign) id<ExteriaMessageCellDelegate> delegate;
 @property (nonatomic, readonly) ExteriaChatItem *item;
+/* where the chip of a reaction stands in view's coordinates, CGRectZero when the row has no such chip */
+- (CGRect)chipFrameOfReaction:(ExteriaReaction *)reaction inView:(UIView *)view;
 /* the message whose picture the last tap hit: a picture of an album, or the message of the row; set before the delegate hears of the tap */
 @property (nonatomic, readonly) ExteriaMessage *tappedMediaMessage;
 /* an emoji, sticker or gif eligible for the visible animation budget, including files still loading */
@@ -97,6 +101,10 @@
 - (void)setSelecting:(BOOL)selecting selected:(BOOL)selected animated:(BOOL)animated;
 /* a picture of the row as it is drawn now, for the menu that keeps the message lit while the rest of the chat is dimmed */
 - (UIImage *)contentSnapshot;
+/* selects the word the last long press touched, with handles and a menu to copy or quote it */
+- (void)beginTextSelection;
+- (void)clearTextSelection;
+- (BOOL)hasTextSelection;
 /* a spinner on one button of the keyboard under the message while its press is answered; nil takes it away */
 - (void)setBusyMarkupButton:(ExteriaMarkupButton *)button;
 /* starts the round message of this cell if it is not already playing */
@@ -104,5 +112,9 @@
 /* the lottie sticker plays or rests on its first frame; any other cell ignores it */
 - (void)setAnimating:(BOOL)animating;
 - (BOOL)replySwipeActive;
+/* the height of the bubble as it is drawn now; the table reads it before a row is configured again and passes it to growBodyFromHeight: after, so a bubble that gains a
+   reaction row grows instead of jumping */
+- (CGFloat)bodyHeight;
+- (void)growBodyFromHeight:(CGFloat)from;
 
 @end
