@@ -8,6 +8,7 @@
 #import "exteria_lite_mode.h"
 #import "exteria_notify_store.h"
 #import "exteria_plural.h"
+#import "exteria_quick_actions.h"
 #import "exteria_session_internal.h"
 #import "exteria_session_notify.h"
 #import "exteria_voip_socket.h"
@@ -55,7 +56,9 @@ static void ExteriaNotifySetFlag(NSString *key, BOOL on) {
 
 BOOL ExteriaNotifyEnabled(void) { return ExteriaNotifyFlag(KEY_ENABLED, YES); }
 void ExteriaNotifySetEnabled(BOOL on) { ExteriaNotifySetFlag(KEY_ENABLED, on); }
-BOOL ExteriaNotifySavingAvailable(void) { return [ExteriaBackgroundKeeper needed]; }
+/* the silence keeps the app awake where no voip socket can: ios 7 and later, and ios 5 and 6 while the link runs through the tunnel, whose streams are not sockets of the network */
+static BOOL ExteriaKeeperNeeded(ExteriaSession *session) { return [ExteriaBackgroundKeeper needed] || session.tunneled; }
+BOOL ExteriaNotifySavingAvailable(ExteriaSession *session) { return ExteriaKeeperNeeded(session); }
 BOOL ExteriaNotifySaving(void) { return ExteriaNotifyFlag(KEY_SAVING, NO); }
 void ExteriaNotifySetSaving(BOOL on) { ExteriaNotifySetFlag(KEY_SAVING, on); }
 
@@ -208,6 +211,8 @@ BOOL ExteriaBackgroundLinkWanted(void) {
 }
 
 - (void)stop {
+    /* the menu of the icon names chats of the account that leaves, and it outlives the process */
+    ExteriaQuickActionsUpdate(nil);
     if (!_started) return;
     _started = NO;
     ++_scanGeneration;
@@ -247,7 +252,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     [self scanAnnouncing:NO application:application];
     [self installKeepAliveForApplication:application];
     /* where no VoIP socket is kept for the app, playing silence is what keeps it, and its link, awake */
-    if ([ExteriaBackgroundKeeper needed] && !ExteriaNotifySaving()) [_keeper start];
+    if (ExteriaKeeperNeeded(_session) && !ExteriaNotifySaving()) [_keeper start];
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
