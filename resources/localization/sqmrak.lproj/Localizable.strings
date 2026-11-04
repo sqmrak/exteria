@@ -826,7 +826,7 @@
 "plugins.import.search" = "поиск файлов плагинов";
 "plugins.import.empty" = "здесь нет файлов плагинов :3";
 "plugins.import.done" = "%@ лежит в папке plugins. включите его в списке, чтобы он заработал.";
-"plugins.import.large" = "плагин больше 1 мб.";
+"plugins.import.large" = "плагин больше 4 мб.";
 "plugins.import.full" = "в папке plugins уже столько скриптов, сколько список может показать.";
 "plugins.import.failed" = "не удалось записать файл в папку plugins :P";
 "plugins.file.title" = "плагин python";

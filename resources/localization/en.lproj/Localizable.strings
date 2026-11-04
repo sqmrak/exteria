@@ -820,7 +820,7 @@
 "plugins.import.search" = "Search plugin files";
 "plugins.import.empty" = "No plugin files here";
 "plugins.import.done" = "%@ is in the Plugins folder. Turn it on in the list to use it.";
-"plugins.import.large" = "The plugin is larger than 1 MiB.";
+"plugins.import.large" = "The plugin is larger than 4 MiB.";
 "plugins.import.full" = "The Plugins folder holds the most scripts it can list.";
 "plugins.import.failed" = "The file could not be written to the Plugins folder.";
 "plugins.file.title" = "Python plugin";

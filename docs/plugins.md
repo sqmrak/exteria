@@ -5,7 +5,7 @@ a plugin is a python file in the exteraGram plugin format. the app runs it with 
 ## use
 
 - put a `.plugin`, `.py` or `.elyx` file in `Documents/Plugins`, import it in settings, plugins, or open a `.plugin` from a chat. import copies the file and never turns it on
-- the page lists every file (64 at most, 1 MiB each) with the permissions it needs, or why it was refused
+- the page lists every file (64 at most, 4 MiB each) with the permissions it needs, or why it was refused
 - the switch is tied to the sha-256 of the file: a changed file is off until it is turned on again
 - three failed calls in a row switch the plugin off, and the page shows the last traceback
 - a tap on a running plugin opens its page of settings, if it has `create_settings()`

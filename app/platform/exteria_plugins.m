@@ -13,8 +13,8 @@ static NSString *const ExteriaPluginsSettingsKey = @"exteria.plugins.settings";
 /* a folder of hundreds of files would stall the page, each one is parsed to read its name */
 #define PLUGINS_LISTED_MAX 64
 #define RESULTS_MAX 512
-/* the exteraGram catalog has plugins of several hundred KiB */
-#define PLUGIN_FILE_MAX (1024 * 1024)
+/* a plugin may carry compressed game data, but its source still has a hard limit */
+#define PLUGIN_FILE_MAX (4 * 1024 * 1024)
 #define SETTING_VALUE_MAX 16384
 #define SETTINGS_PER_PLUGIN_MAX 256
 #define TEXT_MAX 16384
