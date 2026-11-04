@@ -15,6 +15,8 @@
 #import "exteria_bookmarks_controller.h"
 #import "exteria_chat_controller.h"
 #import "exteria_chat_peek.h"
+#import "exteria_force_touch.h"
+#import "exteria_quick_actions.h"
 #import "exteria_search_controller.h"
 #import "exteria_search_field.h"
 #import "exteria_dialog_cell.h"
@@ -45,24 +47,20 @@
 
 #define SEARCH_HEIGHT 38.0
 #define HEADER_HEIGHT (SEARCH_HEIGHT + 12)
+/* a scan of a custom folder younger than this is not repeated; the kept chats are the folder */
+#define FOLDER_KEPT_FRESH_SECONDS 90.0
 /* the room above the folders when the field of search is hidden */
 #define HEADER_HEIGHT_NO_SEARCH 6.0
 
 static CGFloat ExteriaChatsHeaderTop(void) {
     return ExteriaChatFlagGet(ExteriaChatFlagHideSearchBar) ? HEADER_HEIGHT_NO_SEARCH : HEADER_HEIGHT;
 }
-/* how far past the top the list is pulled to show a hidden archive */
-#define ARCHIVE_PULL_DISTANCE 64.0
 
 @interface ExteriaChatsController () <ExteriaDialogCellDelegate, UIAlertViewDelegate> {
     ExteriaWeakReference *_badgeWeak;
     int32_t _folderId;
     /* the picture of the old rows that is leaving while a change of folder slides the new ones in */
     UIView *_leavingRows;
-    /* a pull on the list shows the hidden archive until the screen is left */
-    BOOL _archiveRevealed;
-    /* the drag that is running began with the list at its top: only such a pull asks for a hidden archive, and not a long drag down through the rows that ends past the top */
-    BOOL _dragFromTop;
     BOOL _archiveHidden;
     BOOL _vpnHidden;
     ExteriaDialogCell *_openCell;
@@ -118,6 +116,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     _archiveHidden = ExteriaArchiveHidden();
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(archiveSummaryChanged:)
         name:ExteriaArchiveSummaryDidChangeNotification object:self.session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(forumSummariesChanged:)
+        name:ExteriaForumSummariesDidChangeNotification object:self.session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(typingChanged:)
         name:ExteriaTypingDidChangeNotification object:self.session.typing];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(draftChanged:)
@@ -131,10 +131,17 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 - (void)liveDialogsChanged:(NSNotification *)note {
     (void)note;
-    if (_liveRefreshScheduled || !self.isViewLoaded || !self.view.window) return;
+    if (!self.isViewLoaded) return;
+    /* a list under a chat or another tab drops the event, and its next appearance reloads only after 60 seconds: a chat read on another client kept its unread badge */
+    if (!self.view.window) {
+        [_folderSnapshotDates removeAllObjects];
+        [self dialogsChanged];
+        return;
+    }
+    if (_liveRefreshScheduled) return;
     _liveRefreshScheduled = YES;
     uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
-    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 2500, 200);
+    uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 750, 100);
     [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
 }
 
@@ -144,6 +151,9 @@ static CGFloat ExteriaChatsHeaderTop(void) {
         _lastLiveRefreshMs = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
         [_folderSnapshotDates removeAllObjects];
         [self reloadAfterCurrent];
+    } else {
+        [_folderSnapshotDates removeAllObjects];
+        [self dialogsChanged];
     }
 }
 
@@ -199,7 +209,6 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     BOOL archiveChanged = _archiveHidden != ExteriaArchiveHidden();
     _archiveHidden = ExteriaArchiveHidden();
     if (archiveChanged) {
-        _archiveRevealed = NO;
         [self applyFilters];
         [self reloadTable];
     }
@@ -216,6 +225,17 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     NSArray *updated = [ExteriaDialogsReplacingArchive(_dialogs, [note.userInfo objectForKey:@"dialog"]) retain];
     [_dialogs release];
     _dialogs = updated;
+    [self applyFilters];
+    [self reloadTable];
+}
+
+/* the topics of a forum were read: its row names the topic of the last message and counts what is unread in them */
+- (void)forumSummariesChanged:(NSNotification *)note {
+    if (!self.isViewLoaded || !_dialogs.count) return;
+    [self.session applyForumSummariesToDialogs:_dialogs];
+    [self.session applyForumSummariesToDialogs:_mainDialogs];
+    [self loadBadgePictures];
+    [self refreshCounts];
     [self applyFilters];
     [self reloadTable];
 }
@@ -312,6 +332,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_badgeWeak clear];
     [_badgeWeak release];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaArchiveSummaryDidChangeNotification object:self.session];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaForumSummariesDidChangeNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaTypingDidChangeNotification object:self.session.typing];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDraftDidChangeNotification object:self.session.drafts];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
@@ -440,22 +461,24 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     self.table.tableHeaderView = _header;
     UILongPressGestureRecognizer *peek = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(peekChat:)] autorelease];
     [self.table addGestureRecognizer:peek];
+    [self.table addGestureRecognizer:[[[ExteriaForceTouchRecognizer alloc] initWithTarget:self action:@selector(peekChat:)] autorelease]];
     [self loadOwnTitle];
 }
 
-- (void)peekChat:(UILongPressGestureRecognizer *)gesture {
+- (void)peekChat:(UIGestureRecognizer *)gesture {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     NSIndexPath *path = [self.table indexPathForRowAtPoint:[gesture locationInView:self.table]];
     if (!path || (NSUInteger)path.row >= _shown.count) return;
     ExteriaDialog *dialog = [_shown objectAtIndex:(NSUInteger)path.row];
     if (dialog.folder || dialog.community) return;
     UITableViewCell *cell = [self.table cellForRowAtIndexPath:path];
-    UIWindow *window = self.view.window;
-    if (!cell || !window) return;
+    /* the screen on top, not the window: before ios 8 a view put in the window keeps the turn of the device, and on an ipad held sideways the card and its menu lay on their side */
+    UIView *host = self.view.window ? ExteriaOverlayHost() : nil;
+    if (!cell || !host) return;
     [self closeOpenCell];
-    CGRect source = [self.table convertRect:cell.frame toView:window];
+    CGRect source = [self.table convertRect:cell.frame toView:host];
     ExteriaWeakReference *weak = _badgeWeak;
-    ExteriaShowChatPeek(window, source, dialog, self.session, self.avatars, _media, NO, ^(ExteriaChatPeekAction action) {
+    ExteriaShowChatPeek(host, source, dialog, self.session, self.avatars, _media, NO, ^(ExteriaChatPeekAction action) {
         ExteriaChatsController *controller = weak.target;
         if (!controller) return;
         NSUInteger index = NSNotFound;
@@ -548,23 +571,50 @@ static CGFloat ExteriaChatsHeaderTop(void) {
             completion(snapshot, nil);
             return;
         }
+        ExteriaChatFolder *folder = [[_folders.selectedFolder copy] autorelease];
         ExteriaWeakReference *weak = _badgeWeak;
-        _folderLoad = [[self.session loadDialogsForChatFolder:_folders.selectedFolder progress:^(NSArray *items) {
+        void (^show)(NSArray *) = ^(NSArray *items) {
             ExteriaChatsController *controller = weak.target;
             if (!controller || token != controller->_folderProgressToken) return;
-            NSNumber *key = [NSNumber numberWithInt:controller->_folders.selectedFolder.folderId];
             [controller->_folderSnapshots setObject:items forKey:key];
             [items retain];
             [controller->_dialogs release];
             controller->_dialogs = items;
             [controller applyFilters];
             [controller reloadTable];
-        } completion:completion] retain];
+        };
+        void (^scan)(void) = ^{
+            ExteriaChatsController *controller = weak.target;
+            /* the screen waits for an answer to every request it made, a replaced one included */
+            if (!controller || token != controller->_folderProgressToken) { completion(nil, @"CANCELLED"); return; }
+            controller->_folderLoad = [[controller.session loadDialogsForChatFolder:folder progress:show completion:completion] retain];
+        };
+        /* a scan of a long list takes many pages of the chat list and ends in a flood wait when it is repeated, so a folder scanned a minute ago is shown from the disk, and an
+           older one is shown from the disk while the scan runs */
+        ExteriaListCompletion keptCompletion = [[completion copy] autorelease];
+        NSTimeInterval age = [self.session keptAgeOfChatFolder:folder];
+        BOOL fresh = age >= 0 && age < FOLDER_KEPT_FRESH_SECONDS;
+        [self.session loadKeptDialogsForChatFolder:folder completion:^(NSArray *kept, NSString *keptError) {
+            (void)keptError;
+            ExteriaChatsController *controller = weak.target;
+            if (!controller || token != controller->_folderProgressToken) { keptCompletion(nil, @"CANCELLED"); return; }
+            if (kept && fresh) {
+                controller->_usingFolderSnapshot = YES;
+                keptCompletion(kept, nil);
+                return;
+            }
+            /* the first rows of the scan replace these, and a scan that fails leaves them on the screen */
+            if (kept && ![controller->_folderSnapshots objectForKey:key]) show(kept);
+            scan();
+        }];
     } else [self.session loadDialogsInFolder:_folderId completion:completion];
 }
 
 - (void)loadKeptItemsWithCompletion:(ExteriaListCompletion)completion {
-    if (!_folderId && _folders.selectedFolder.folderId) { completion(nil, nil); return; }
+    if (!_folderId && _folders.selectedFolder.folderId) {
+        [self.session loadKeptDialogsForChatFolder:_folders.selectedFolder completion:completion];
+        return;
+    }
     [self.session loadCachedDialogsInFolder:_folderId completion:completion];
 }
 
@@ -582,6 +632,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     } else if (!_folderId) {
         [_mainDialogs release];
         _mainDialogs = [items retain];
+        ExteriaQuickActionsUpdate(items);
     }
     [self loadBadgePictures];
     [self refreshCounts];
@@ -596,6 +647,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     NSMutableArray *documents = [NSMutableArray array];
     for (ExteriaDialog *dialog in _dialogs) {
         if (dialog.emojiStatus && !dialog.saved) [documents addObject:[NSNumber numberWithLongLong:dialog.emojiStatus]];
+        if (dialog.forumTopicEmoji) [documents addObject:[NSNumber numberWithLongLong:dialog.forumTopicEmoji]];
         for (ExteriaTextEntity *entity in dialog.previewEntities) [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
     }
     ExteriaWeakReference *weak = _badgeWeak;
@@ -625,13 +677,16 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 /* the archive entry is a shortcut that the person may hide on this device; the archive itself is the account's */
 - (void)applyFilters {
     NSMutableArray *shown = [NSMutableArray array];
-    BOOL archiveShown = !ExteriaArchiveHidden() || _archiveRevealed;
+    BOOL archiveShown = !ExteriaArchiveHidden();
     for (ExteriaDialog *dialog in _dialogs) {
         if (!dialog.folder && dialog.peerKind == 3 && dialog.left) continue;
         if (_folders.selectedFolder.folderId && ![_folders.selectedFolder containsDialog:dialog]) continue;
         if (dialog.folder && !archiveShown) continue;
         [shown addObject:dialog];
     }
+    /* a community shown as one chat holds the chats added to it, which the archive does not fold */
+    NSArray *list = _folderId ? shown : ExteriaDialogsFoldingCommunities(shown);
+    shown = list == shown ? shown : [NSMutableArray arrayWithArray:list];
     [_shown release];
     _shown = [shown retain];
 }
@@ -769,8 +824,8 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     (void)tableView;
-    (void)indexPath;
-    return [ExteriaDialogCell rowHeight];
+    if ((NSUInteger)indexPath.row >= _shown.count) return [ExteriaDialogCell rowHeight];
+    return [ExteriaDialogCell rowHeightForDialog:[_shown objectAtIndex:(NSUInteger)indexPath.row]];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -836,7 +891,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
 /* the archive entry has its own swipe, and the archive itself always offers to take a chat out of it; in the main list the swipe is the one the chat
    settings chose, which is the archive until the person chooses another */
 - (ExteriaDialogAction)swipeActionForDialog:(ExteriaDialog *)dialog {
-    if (dialog.folder) return ExteriaArchiveHidden() ? ExteriaDialogActionPin : ExteriaDialogActionHide;
+    if (dialog.folder) return ExteriaDialogActionHide;
     return ExteriaDialogSwipeAction(dialog, _folderId);
 }
 
@@ -990,13 +1045,10 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
     switch (action) {
     case ExteriaDialogActionHide:
         ExteriaArchiveSetHidden(YES);
-        _archiveRevealed = NO;
         [self removeShownRowAtIndexPath:indexPath animation:UITableViewRowAnimationTop];
         break;
     case ExteriaDialogActionPin:
-        /* the row stays, so it slides back and the next swipe on it offers to hide it */
         ExteriaArchiveSetHidden(NO);
-        _archiveRevealed = NO;
         [cell setSwipeAction:ExteriaDialogActionHide];
         [cell closeSwipeAnimated:YES];
         break;
@@ -1040,14 +1092,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
     }
     ExteriaDialog *selected = [_shown objectAtIndex:(NSUInteger)indexPath.row];
     if (selected.folder) {
-        ExteriaChatsController *archive = [[[ExteriaChatsController alloc] initWithSession:self.session] autorelease];
-        archive.folderId = selected.folderId > 0 ? selected.folderId : 1;
-        archive.heading = NSLocalizedString(@"chats.archive", nil);
-        archive.avatars = self.avatars;
-        archive.media = _media;
-        archive.stickerLibrary = _stickerLibrary;
-        archive.showsBack = YES;
-        [self.navigationController pushViewController:archive animated:YES];
+        [self openArchive:selected];
         return;
     }
     if (selected.community) {
@@ -1056,8 +1101,12 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
         return;
     }
     if (selected.forum) {
-        [self.navigationController pushViewController:ExteriaTopicsScreen(self.session, selected, self.avatars, _media, _stickerLibrary,
-                                                                          ^{ [self reload]; }) animated:YES];
+        ExteriaDialog *archive = nil;
+        for (ExteriaDialog *entry in _shown) if (entry.folder) { archive = entry; break; }
+        /* a hidden archive stays out of the column of a phone too */
+        void (^archiveHandler)(void) = archive && !_archiveHidden ? ^{ [self openArchive:archive]; } : nil;
+        [self.navigationController pushViewController:ExteriaTopicsScreenWithChats(self.session, selected, _shown, self.avatars, _media, _stickerLibrary,
+                                                                                   archiveHandler, ^{ [self reload]; }) animated:YES];
         return;
     }
     ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:self.session dialog:selected avatars:self.avatars
@@ -1066,6 +1115,17 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
     chat.closeHandler = ^{ [self reload]; };
     chat.nextChatProvider = ^ExteriaDialog *(ExteriaDialog *current) { return [self nextUnreadChannelAfter:current]; };
     [self.navigationController pushViewController:chat animated:YES];
+}
+
+- (void)openArchive:(ExteriaDialog *)entry {
+    ExteriaChatsController *archive = [[[ExteriaChatsController alloc] initWithSession:self.session] autorelease];
+    archive.folderId = entry.folderId > 0 ? entry.folderId : 1;
+    archive.heading = NSLocalizedString(@"chats.archive", nil);
+    archive.avatars = self.avatars;
+    archive.media = _media;
+    archive.stickerLibrary = _stickerLibrary;
+    archive.showsBack = YES;
+    [self.navigationController pushViewController:archive animated:YES];
 }
 
 /* the first broadcast channel of the list with unread posts that is not the one read now, in the order of the list as exteraGram takes it */
@@ -1078,72 +1138,13 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
     [super scrollViewWillBeginDragging:scrollView];
-    _dragFromTop = scrollView.contentOffset.y + scrollView.contentInset.top <= 2;
     [self closeOpenCell];
-}
-
-/* a revealed archive that the list has scrolled out of sight goes away again where the list stands, so it need not
-   wait for the person to leave the screen */
-- (void)hideRevealedArchiveIfScrolledAway {
-    if (!_archiveRevealed || !ExteriaArchiveHidden()) return;
-    NSUInteger index = NSNotFound;
-    for (NSUInteger i = 0; i < _shown.count; ++i) {
-        if (((ExteriaDialog *)[_shown objectAtIndex:i]).folder) {
-            index = i;
-            break;
-        }
-    }
-    if (index == NSNotFound) return;
-    CGRect row = [self.table rectForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)index inSection:0]];
-    CGPoint offset = self.table.contentOffset;
-    if (CGRectGetMaxY(row) > offset.y + self.table.contentInset.top) return;
-    _archiveRevealed = NO;
-    [self applyFilters];
-    [self reloadTable];
-    offset.y -= row.size.height;
-    self.table.contentOffset = offset;
-}
-
-- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
-    [super scrollViewDidEndDecelerating:scrollView];
-    [self hideRevealedArchiveIfScrolledAway];
-}
-
-/* pulling the list down past the top brings a hidden archive back; scrolling away from it or leaving the screen hides it again */
-- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
-    [super scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
-    if (!decelerate) [self hideRevealedArchiveIfScrolledAway];
-    if (!_dragFromTop || scrollView.contentOffset.y + scrollView.contentInset.top > -ARCHIVE_PULL_DISTANCE || !ExteriaArchiveHidden() || _archiveRevealed) return;
-    BOOL hasArchive = NO;
-    for (ExteriaDialog *dialog in _dialogs) hasArchive = hasArchive || dialog.folder;
-    if (!hasArchive) return;
-    NSArray *before = [[_shown retain] autorelease];
-    _archiveRevealed = YES;
-    [self applyFilters];
-    NSUInteger archiveIndex = NSNotFound;
-    for (NSUInteger i = 0; i < _shown.count; ++i) {
-        if (((ExteriaDialog *)[_shown objectAtIndex:i]).folder) { archiveIndex = i; break; }
-    }
-    if (archiveIndex == NSNotFound) {
-        _archiveRevealed = NO;
-        return;
-    }
-    NSMutableArray *withoutArchive = [NSMutableArray arrayWithArray:_shown];
-    [withoutArchive removeObjectAtIndex:archiveIndex];
-    if (![withoutArchive isEqualToArray:before] || [self.table numberOfRowsInSection:0] != (NSInteger)before.count) {
-        [self reloadTable];
-        return;
-    }
-    [self.table beginUpdates];
-    [self.table insertRowsAtIndexPaths:[NSArray arrayWithObject:[NSIndexPath indexPathForRow:(NSInteger)archiveIndex inSection:0]]
-                      withRowAnimation:UITableViewRowAnimationTop];
-    [self.table endUpdates];
-    [_displayedKeys release];
-    _displayedKeys = [[self shownKeys] retain];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    /* no screen over the whole display is up, so a bar one of them left hidden comes back */
+    ExteriaStatusBarSettle();
     if (_folderId || self.showsBack) return;
     if (ExteriaChatFlagGet(ExteriaChatFlagSnow)) {
         if (!_snow) {
@@ -1168,11 +1169,6 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
     [_snow stop];
     [_foxes stop];
     [self closeOpenCell];
-    if (_archiveRevealed) {
-        _archiveRevealed = NO;
-        [self applyFilters];
-        [self reloadTable];
-    }
 }
 
 @end
