@@ -40,11 +40,13 @@ NSArray *ExteriaShiroShimmerColors(void) {
 
 /* the faces of the bundle: Rubik-Regular, Rubik-Medium and Rubik-Bold are registered in Info.plist, and ios before 11 reads no variable font axes */
 UIFont *ExteriaShiroFontDisplay(CGFloat size) {
+    size *= ExteriaInterfaceScale();
     UIFont *font = [UIFont fontWithName:@"Rubik-Bold" size:size];
     return font ? font : [UIFont boldSystemFontOfSize:size];
 }
 
 UIFont *ExteriaShiroFontBody(CGFloat size, BOOL medium) {
+    size *= ExteriaInterfaceScale();
     UIFont *font = [UIFont fontWithName:medium ? @"Rubik-Medium" : @"Rubik-Regular" size:size];
     if (font) return font;
     return medium ? [UIFont boldSystemFontOfSize:size] : [UIFont systemFontOfSize:size];

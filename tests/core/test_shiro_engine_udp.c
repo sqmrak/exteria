@@ -285,7 +285,22 @@ int main(void) {
         CHECK_EQ_INT(s.initiations, 1);
     }
 
-    exteria_shiro_engine_stop(engine);
+    /* the two steps of a dial: the stream is queued at once, and a stop that comes while the caller waits ends the wait with an error and no stream, long before the deadline */
+    {
+        int wait_fd = -1, stream = -1;
+        uint64_t deadline = 0, began = exteria_system_clock.monotonic_ms(NULL);
+        CHECK_EQ_INT(exteria_shiro_engine_dial(engine, PEER_ADDRESS, 443, 20000, &wait_fd, &deadline), EXTERIA_OK);
+        CHECK(wait_fd >= 0);
+        CHECK(deadline >= began + 19000);
+        /* the engine is stopped while the wait has not begun; the queued stream is closed by the engine, so the wait sees the end of it */
+        exteria_shiro_engine_stop(engine);
+        engine = NULL;
+        CHECK_EQ_INT(exteria_shiro_dial_finish(wait_fd, deadline, &stream), EXTERIA_E_IO);
+        CHECK_EQ_INT(stream, -1);
+        CHECK(exteria_system_clock.monotonic_ms(NULL) < began + 3000);
+    }
+
+    if (engine) exteria_shiro_engine_stop(engine);
     close(s.fd);
     pthread_mutex_destroy(&w.lock);
     return test_finish("test_shiro_engine_udp");

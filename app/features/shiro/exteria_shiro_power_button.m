@@ -239,7 +239,8 @@ static void ExteriaShiroSpin(CALayer *layer, double direction, CFTimeInterval se
 - (void)morphFrontAnimated:(BOOL)animated {
     CAShapeLayer *shown = (CAShapeLayer *)[_front presentationLayer];
     CGPathRef from = shown && shown.path ? shown.path : _front.path;
-    CGPathRetain(from);
+    /* the path is still empty before the first layout, and CGPathRetain(NULL) crashes on ios 5 and 6 */
+    if (from) CGPathRetain(from);
     [_front removeAnimationForKey:ExteriaShiroCycleKey];
     [_front removeAnimationForKey:ExteriaShiroMorphKey];
     [CATransaction begin];
@@ -254,7 +255,7 @@ static void ExteriaShiroSpin(CALayer *layer, double direction, CFTimeInterval se
         morph.timingFunction = ExteriaShiroSpring();
         [_front addAnimation:morph forKey:ExteriaShiroMorphKey];
     }
-    CGPathRelease(from);
+    if (from) CGPathRelease(from);
 }
 
 /* the loading cycle: the shape flows through the others and comes back */
