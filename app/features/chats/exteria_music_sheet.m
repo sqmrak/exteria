@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_animation.h"
 #import "exteria_dismiss_pan.h"
 #import "exteria_emoji_label.h"
 #import "exteria_music_player.h"
@@ -87,6 +88,7 @@
 
 @interface ExteriaMusicSheet () <UITableViewDataSource, UITableViewDelegate> {
     UIView *_panel;
+    UIView *_dim;
     UITableView *_table;
     UIImageView *_cover;
     ExteriaEmojiLabel *_title;
@@ -110,6 +112,7 @@
     for (UIView *view in host.subviews) if ([view isKindOfClass:self]) return;
     ExteriaMusicSheet *sheet = [[[self alloc] initWithFrame:host.bounds] autorelease];
     [host addSubview:sheet];
+    [sheet enter];
 }
 /* the glyphs of the two modes are drawn here because the symbol set has no arrows that loop or cross; the song mode of the loop carries a 1 */
 static void SheetArrow(CGContextRef context, CGPoint from, CGPoint to, CGFloat head) {
@@ -175,11 +178,12 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     self = [super initWithFrame:frame];
     if (!self) return nil;
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    UIView *dim = [[[UIView alloc] initWithFrame:self.bounds] autorelease];
-    dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    dim.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
-    [dim addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)] autorelease]];
-    [self addSubview:dim];
+    _dim = [[UIView alloc] initWithFrame:self.bounds];
+    _dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    _dim.backgroundColor = [UIColor blackColor];
+    _dim.alpha = 0;
+    [_dim addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)] autorelease]];
+    [self addSubview:_dim];
     _panel = [[UIView alloc] init];
     _panel.backgroundColor = ExteriaColorCard();
     _panel.layer.cornerRadius = 12;
@@ -236,7 +240,7 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     _table.dataSource = nil; _table.delegate = nil;
-    [_panel release]; [_table release]; [_cover release]; [_title release]; [_performer release];
+    [_dim release]; [_panel release]; [_table release]; [_cover release]; [_title release]; [_performer release];
     [_slider release]; [_elapsed release]; [_remaining release]; [_toggle release];
     [_shownQueue release]; [_shownTrack release];
     [super dealloc];
@@ -245,7 +249,8 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     [super layoutSubviews];
     CGFloat width = MIN(self.bounds.size.width, 480);
     CGFloat height = MIN(self.bounds.size.height - ExteriaSafeInsets(self).top - 12, 620);
-    _panel.frame = CGRectMake((self.bounds.size.width - width) / 2, self.bounds.size.height - height, width, height);
+    /* the panel is moved by its transform while it comes and goes, and a frame set under a transform resizes it */
+    ExteriaPlaceView(_panel, CGRectMake((self.bounds.size.width - width) / 2, self.bounds.size.height - height, width, height));
     _cover.frame = CGRectMake(16, 20, 54, 54);
     _title.frame = CGRectMake(82, 23, MAX(0, width - 140), 22);
     _performer.frame = CGRectMake(82, 47, MAX(0, width - 140), 20);
@@ -306,14 +311,26 @@ static NSString *SheetTime(NSTimeInterval value) {
 - (void)previous { [[ExteriaMusicPlayer sharedPlayer] previous]; }
 - (void)toggle { [[ExteriaMusicPlayer sharedPlayer] togglePause]; }
 - (void)next { [[ExteriaMusicPlayer sharedPlayer] next]; }
+/* how far the panel goes to stand just below the screen, from where it rests; the top is taken from the center, which a pull by the finger does not move */
+- (CGFloat)panelTravel {
+    return self.bounds.size.height - (_panel.center.y - _panel.bounds.size.height / 2);
+}
+/* the player slides up from the bottom edge with the dim coming in under it, the way the other sheets arrive */
+- (void)enter {
+    [self layoutIfNeeded];
+    _panel.transform = CGAffineTransformMakeTranslation(0, [self panelTravel]);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.5, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_panel, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+}
 - (void)dismiss {
     if (_closing) return;
     _closing = YES;
     self.userInteractionEnabled = NO;
-    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 delay:0
-                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseIn
-                     animations:^{ _panel.transform = CGAffineTransformMakeTranslation(0, _panel.bounds.size.height); self.alpha = 0; }
-                     completion:^(BOOL finished) { (void)finished; [self removeFromSuperview]; }];
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_SHEET_DISMISS, nil);
+    ExteriaAnimateView(_panel, CGAffineTransformMakeTranslation(0, [self panelTravel]), 1, EXTERIA_MOTION_SHEET_DISMISS, ^(BOOL finished) {
+        (void)finished;
+        [self removeFromSuperview];
+    });
 }
 - (NSInteger)tableView:(UITableView *)table numberOfRowsInSection:(NSInteger)section { (void)table; (void)section; return (NSInteger)[ExteriaMusicPlayer sharedPlayer].queue.count; }
 - (UITableViewCell *)tableView:(UITableView *)table cellForRowAtIndexPath:(NSIndexPath *)path {

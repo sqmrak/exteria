@@ -25,6 +25,7 @@
     BOOL _mutual;
     UIView *_line;
     NSUInteger _developer;
+    BOOL _premium;
     UIColor *_trailingTint;
 }
 @end
@@ -36,6 +37,7 @@ UIColor *ExteriaMemberTagColor(BOOL owner) {
 @implementation ExteriaPersonCell
 
 @synthesize developer = _developer;
+@synthesize premium = _premium;
 @synthesize mutual = _mutual;
 @synthesize trailingTint = _trailingTint;
 
@@ -69,6 +71,7 @@ static UILabel *ExteriaPersonLabel(UIFont *font, NSInteger alignment) {
     _avatar = [[ExteriaAvatarView alloc] init];
     [self.contentView addSubview:_avatar];
     _name = [ExteriaPersonEmojiLabel(ExteriaFontSemibold(16.5), ExteriaTextAlignmentLeft) retain];
+    _name.dropsUndrawable = YES;
     [self.contentView addSubview:_name];
     _subtitle = [ExteriaPersonEmojiLabel(ExteriaFontRegular(14), ExteriaTextAlignmentLeft) retain];
     [self.contentView addSubview:_subtitle];
@@ -123,10 +126,11 @@ static UILabel *ExteriaPersonLabel(UIFont *font, NSInteger alignment) {
     _avatar.deleted = NO;
     [_avatar setPhoto:photo cache:avatars];
     NSArray *badges = nil;
-    _name.text = ExteriaNameWithBadges(name, 0, _developer, &badges);
+    _name.text = ExteriaNameWithBadges(name, ExteriaBadgeDocument(0, _premium), _developer, &badges);
     _name.entities = badges;
     _name.dropsUndrawable = YES;
     _developer = 0;
+    _premium = NO;
     _name.textColor = nameColor ? nameColor : ExteriaColorTitle();
     _subtitle.text = subtitle;
     _subtitle.textColor = subtitleColor ? subtitleColor : ExteriaColorSecondary();

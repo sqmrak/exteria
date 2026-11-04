@@ -1,9 +1,12 @@
 #include "exteria_tl_ids.h"
+#include "exteria_typing.h"
 #import "exteria_session_drafts.h"
 #import "exteria_session_internal.h"
 #import "exteria_session_sendas.h"
 #import "exteria_session_stickermake.h"
 #import "exteria_chat_settings.h"
+#import "exteria_reaction_artwork.h"
+#include "exteria_reaction_art.h"
 
 #include "exteria_sticker_make.h"
 #include "exteria_message_actions.h"
@@ -14,6 +17,7 @@
 #include "exteria_mt_files.h"
 
 #import "exteria_community.h"
+#import "exteria_forum_summaries.h"
 #import "exteria_person.h"
 #import "exteria_photo.h"
 #include "exteria_channel.h"
@@ -37,7 +41,7 @@ exteria_peer_ref ExteriaPeerRefOfDialog(ExteriaDialog *dialog) {
 }
 
 /* one file on its way to the server: the transfer state, and what the message that names it needs once it is there */
-typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_privacy privacy; } ExteriaStoryPostOptions;
+typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_audience audience; } ExteriaStoryPostOptions;
 
 @interface ExteriaUploadJob : NSObject {
 @public
@@ -54,7 +58,7 @@ typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_privacy 
     BOOL storyPhoto;
     /* ... with this text and for this audience */
     char storyCaption[EXTERIA_STORY_CAPTION_MAX];
-    exteria_story_privacy storyPrivacy;
+    exteria_story_audience storyAudience;
     /* the file is a sticker, which becomes a document of the signed in user for a set to take */
     void (^stickerDone)(ExteriaStickerDocument *document, NSString *errorName);
     /* the file is one item of an album: its media, as an NSData of exteria_album_media, or the error */
@@ -337,7 +341,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
         [self submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
             exteria_tl_value *file = NULL;
             exteria_status status = exteria_file_uploaded(&job->transfer, arena, &file);
-            if (status == EXTERIA_OK && job->storyPhoto) status = exteria_story_publish_photo_request(arena, file, job->randomId, job->storyCaption, job->storyPrivacy, request);
+            if (status == EXTERIA_OK && job->storyPhoto) status = exteria_story_publish_photo_audience_request(arena, file, job->randomId, job->storyCaption, &job->storyAudience, request);
             else if (status == EXTERIA_OK && job->profileVideo) status = exteria_profile_video_request(arena, file, 0, request);
             else if (status == EXTERIA_OK && job->profilePublic) status = exteria_profile_public_photo_request(arena, file, request);
             else if (status == EXTERIA_OK) status = exteria_profile_photo_request(arena, file, request);
@@ -626,11 +630,17 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
 }
 
 - (void)postStoryPhotoAtPath:(NSString *)path caption:(NSString *)caption privacy:(exteria_story_privacy)privacy completion:(void (^)(NSString *errorName))completion {
-    ExteriaStoryPostOptions options;
-    memset(&options, 0, sizeof(options));
-    options.privacy = privacy;
-    if (caption.length) snprintf(options.caption, sizeof(options.caption), "%s", caption.UTF8String);
-    [self uploadJobAtPath:path story:YES video:NO public:NO options:&options completion:completion];
+    [self postStoryPhotoAtPath:path caption:caption audience:[ExteriaStoryAudience audienceWithBase:privacy] completion:completion];
+}
+
+- (void)postStoryPhotoAtPath:(NSString *)path caption:(NSString *)caption audience:(ExteriaStoryAudience *)audience completion:(void (^)(NSString *errorName))completion {
+    /* the options hold the whole list of people, which is large: they live on the heap while the job is made */
+    ExteriaStoryPostOptions *options = calloc(1, sizeof(*options));
+    if (!options) { if (completion) completion(@"NO_MEMORY"); return; }
+    if (audience) [audience fillAudience:&options->audience];
+    if (caption.length) snprintf(options->caption, sizeof(options->caption), "%s", caption.UTF8String);
+    [self uploadJobAtPath:path story:YES video:NO public:NO options:options completion:completion];
+    free(options);
 }
 
 /* both end in a call that takes the file: the profile photo or the story of the signed in user */
@@ -647,7 +657,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     job->storyPhoto = story;
     if (story && options) {
         memcpy(job->storyCaption, options->caption, sizeof(job->storyCaption));
-        job->storyPrivacy = options->privacy;
+        job->storyAudience = options->audience;
     }
     job->randomId = story ? (((long long)arc4random() << 32) | arc4random()) | 1 : 0;
     job->completion = [^(int32_t messageId, NSString *errorName) {
@@ -730,6 +740,7 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
     spec.reply_to = replyTo;
     spec.spoiler = outgoing->spoiler ? 1 : 0;
     spec.view_once = outgoing->viewOnce && kind != EXTERIA_UPLOAD_FILE ? 1 : 0;
+    spec.animated = outgoing->animated && kind == EXTERIA_UPLOAD_FILE ? 1 : 0;
     if (!ExteriaUploadCaption(&spec, outgoing->caption)) { completion(0, @"CAPTION_TOO_LONG"); return; }
     if (kind == EXTERIA_UPLOAD_FILE) {
         int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", outgoing->name.UTF8String);
@@ -1081,8 +1092,18 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
 
 #pragma mark topics
 
+- (void)setTyping:(BOOL)typing inDialog:(ExteriaDialog *)dialog {
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_typing_request(arena, &peer, !typing, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        if (result->status != EXTERIA_OK) NSLog(@"exteria: typing status of chat %lld was not sent: %@", dialog.peerId, ExteriaRpcErrorName(result));
+    }];
+}
+
 - (void)loadTopicsOfDialog:(ExteriaDialog *)forum completion:(ExteriaListCompletion)completion {
     ExteriaListCompletion done = [completion copy];
+    NSUInteger draftRevision = self.drafts.revision;
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(forum);
     exteria_dialog_row base;
     memset(&base, 0, sizeof(base));
@@ -1105,7 +1126,8 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                                              rows, EXTERIA_DIALOGS_MAX, &count) == EXTERIA_OK) {
                 topics = [NSMutableArray arrayWithCapacity:count];
                 for (size_t i = 0; i < count; ++i) [topics addObject:[[[ExteriaDialog alloc] initWithRow:&rows[i]] autorelease]];
-                [self noteDraftsOfTopicsAnswer:result->value forum:forum];
+                [self noteDraftsOfTopicsAnswer:result->value forum:forum since:draftRevision];
+                [self keepSummaryOfTopicRows:rows count:count forum:forum];
             } else {
                 NSLog(@"exteria: messages.getForumTopics answer rejected");
                 error = @"INTERNAL";
@@ -1116,6 +1138,81 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
         NSArray *deliveredTopics = [[topics copy] autorelease];
         NSString *deliveredError = [[error copy] autorelease];
         [self deliverMain:^{ done(deliveredTopics, deliveredError); [done release]; }];
+    }];
+}
+
+/* worker only: the rows of a forum's topics, as the list names the topic of the last message and counts the unread ones from them */
+- (void)keepSummaryOfTopicRows:(const exteria_dialog_row *)rows count:(size_t)count forum:(ExteriaDialog *)forum {
+    if (forum.saved || !forum.forum) return;
+    exteria_forum_summary summary;
+    if (exteria_forum_summarize(rows, count, forum.topMessage, &summary) != EXTERIA_OK) return;
+    [[self forumSummaries] setSummary:&summary forForum:forum.peerId topMessage:forum.topMessage];
+    [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaForumSummariesDidChangeNotification object:self]; }];
+}
+
+/* the forums that a screen can show at a time are few, and each read is one request */
+#define FORUM_SUMMARY_READS_MAX 12
+
+- (void)refreshForumSummariesOfDialogs:(NSArray *)dialogs {
+    NSUInteger started = 0;
+    for (ExteriaDialog *dialog in dialogs) {
+        if (!dialog.forum || dialog.saved || started >= FORUM_SUMMARY_READS_MAX) continue;
+        if (![[self forumSummaries] beginReadingForum:dialog.peerId topMessage:dialog.topMessage]) continue;
+        ++started;
+        int64_t peerId = dialog.peerId;
+        exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+        exteria_dialog_row base;
+        memset(&base, 0, sizeof(base));
+        base.peer_kind = peer.kind;
+        base.peer_id = peer.id;
+        base.peer_hash = peer.access_hash;
+        base.kind = EXTERIA_DIALOG_GROUP;
+        int32_t last = dialog.topMessage;
+        [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+            return exteria_topics_request(arena, peer.kind, peer.id, peer.access_hash, 0, 0, 0, EXTERIA_DIALOGS_MAX, request);
+        } handler:^(const exteria_mt_rpc_result *result) {
+            exteria_dialog_row *rows = result->status == EXTERIA_OK ? calloc(EXTERIA_DIALOGS_MAX, sizeof(*rows)) : NULL;
+            size_t count = 0;
+            if (rows && exteria_topics_parse(result->value, &base, [self workerAccount], (int32_t)[[NSDate date] timeIntervalSince1970],
+                                             rows, EXTERIA_DIALOGS_MAX, &count) == EXTERIA_OK) {
+                exteria_forum_summary summary;
+                if (exteria_forum_summarize(rows, count, last, &summary) == EXTERIA_OK) {
+                    [[self forumSummaries] setSummary:&summary forForum:peerId topMessage:last];
+                    [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaForumSummariesDidChangeNotification object:self]; }];
+                }
+            } else {
+                NSLog(@"exteria: the topics of forum %lld did not load for the list: %@", (long long)peerId, result->status == EXTERIA_OK ? @"answer rejected" : ExteriaRpcErrorName(result));
+            }
+            free(rows);
+            [[self forumSummaries] endReadingForum:peerId];
+        }];
+    }
+}
+
+- (void)applyForumSummariesToDialogs:(NSArray *)dialogs {
+    [[self forumSummaries] applyToDialogs:dialogs];
+}
+
+- (void)loadMessageCountOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSInteger, NSString *))completion {
+    void (^done)(NSInteger, NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_history_request(arena, &peer, 0, 1, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSInteger count = -1;
+        NSString *error = nil;
+        int32_t total = 0;
+        if (result->status != EXTERIA_OK) error = ExteriaRpcErrorName(result);
+        else if (exteria_tl_get_i32(result->value, "count", &total) == EXTERIA_OK && total >= 0) count = total;
+        else {
+            /* messages.messages is the whole list and carries no count of its own */
+            const exteria_tl_value *all = NULL;
+            if (exteria_tl_is(result->value, EXTERIA_TL_ID_messages_messages) && exteria_tl_get_vec(result->value, "messages", &all) == EXTERIA_OK) count = all->u.vec.count;
+            else error = @"INTERNAL";
+        }
+        [self noteRpcError:error];
+        NSString *deliveredError = [[error copy] autorelease];
+        [self deliverMain:^{ done(count, deliveredError); [done release]; }];
     }];
 }
 
@@ -1366,7 +1463,13 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
 
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo
       completion:(ExteriaSendCompletion)completion {
+    [self sendText:text entities:entities toDialog:dialog randomId:randomId replyTo:replyTo quote:nil quoteOffset:-1 completion:completion];
+}
+
+- (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo
+           quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset completion:(ExteriaSendCompletion)completion {
     ExteriaSendCompletion done = [completion copy];
+    NSString *quoted = [quote copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     NSString *body = [text copy];
     BOOL noPreview = ExteriaChatFlagGet(ExteriaChatFlagNoLinkPreview);
@@ -1377,12 +1480,14 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
         /* the block keeps the data object, not only the pointer into it */
         exteria_status status = exteria_send_text_reply_request(arena, &peer, body.UTF8String, packed.bytes, count, randomId, replyTo, request);
         (void)strings;
+        if (status == EXTERIA_OK && quoted.length && replyTo > 0) status = exteria_set_reply_quote(arena, *request, &peer, replyTo, quoted.UTF8String, quoteOffset);
         if (status == EXTERIA_OK && noPreview) status = exteria_tl_set_flag(*request, "no_webpage");
         return status == EXTERIA_OK ? ExteriaApplySendAs(self, &peer, arena, *request) : status;
     } handler:^(const exteria_mt_rpc_result *result) {
         [self finishSend:result randomId:randomId completion:done];
     }];
     [body release];
+    [quoted release];
 }
 
 - (void)sendSticker:(ExteriaMedia *)sticker toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId completion:(ExteriaSendCompletion)completion {
@@ -1815,6 +1920,20 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
     [requested release];
 }
 
+- (void)sendPaidReactionOfStars:(int32_t)stars messageId:(int32_t)messageId dialog:(ExteriaDialog *)dialog completion:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    /* one id for the call, kept by the block, so a send that is repeated by the transport is not paid for twice */
+    long long randomId = (((long long)arc4random() << 32) | arc4random()) | 1;
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_paid_reaction_request(arena, &peer, messageId, stars, randomId, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        if (result->status != EXTERIA_OK) [self finishLoad:nil error:ExteriaRpcErrorName(result) completion:done];
+        else [self refreshReactionsForMessages:[NSArray arrayWithObject:[NSNumber numberWithInt:messageId]] dialog:dialog completion:done];
+        [done release];
+    }];
+}
+
 - (void)sendReactions:(NSArray *)reactions messageId:(int32_t)messageId dialog:(ExteriaDialog *)dialog
            completion:(ExteriaListCompletion)completion {
     NSArray *choices = [reactions copy];
@@ -1831,6 +1950,71 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
         [done release];
     }];
     [choices release];
+}
+
+- (void)loadReactionArt:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        *request = exteria_tl_new_obj(arena, "messages.getAvailableReactions");
+        return *request ? exteria_tl_set_i32(arena, *request, "hash", 0) : EXTERIA_E_NOMEM;
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSMutableArray *art = nil;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) error = ExteriaRpcErrorName(result);
+        else {
+            /* six documents with a file reference each per reaction, so the rows live on the heap */
+            exteria_reaction_art *rows = calloc(EXTERIA_REACTION_CATALOG_MAX, sizeof(*rows));
+            size_t count = 0;
+            exteria_status status = rows ? exteria_reaction_art_read(result->value, rows, EXTERIA_REACTION_CATALOG_MAX, &count) : EXTERIA_E_NOMEM;
+            if (status != EXTERIA_OK) {
+                NSLog(@"exteria: reaction art rejected: %s", exteria_status_name(status));
+                error = @"INTERNAL";
+            } else {
+                art = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) {
+                    ExteriaCustomEmojiDocument *icon = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].icon];
+                    ExteriaCustomEmojiDocument *appear = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].appear];
+                    ExteriaCustomEmojiDocument *select = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].select];
+                    ExteriaCustomEmojiDocument *activate = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].activate];
+                    ExteriaCustomEmojiDocument *effect = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].effect];
+                    ExteriaCustomEmojiDocument *around = rows[i].around.id ? [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].around] : nil;
+                    ExteriaReactionArtwork *item = [[ExteriaReactionArtwork alloc] initWithEmoji:[NSString stringWithUTF8String:rows[i].emoji] icon:icon appear:appear
+                                                                                  select:select activate:activate effect:effect around:around];
+                    [art addObject:item];
+                    [item release];
+                    [icon release];
+                    [appear release];
+                    [select release];
+                    [activate release];
+                    [effect release];
+                    [around release];
+                }
+            }
+            free(rows);
+        }
+        [self finishLoad:art error:error completion:done];
+        [done release];
+    }];
+}
+
+- (void)loadReactionLimits:(void (^)(int32_t, int32_t, NSString *))completion {
+    void (^done)(int32_t, int32_t, NSString *) = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        *request = exteria_tl_new_obj(arena, "help.getAppConfig");
+        return *request ? exteria_tl_set_i32(arena, *request, "hash", 0) : EXTERIA_E_NOMEM;
+    } handler:^(const exteria_mt_rpc_result *result) {
+        int32_t standard = 1, premium = 3;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) error = ExteriaRpcErrorName(result);
+        else if (exteria_reaction_limits_read(result->value, &standard, &premium) != EXTERIA_OK) {
+            standard = 1;
+            premium = 3;
+            error = @"CONFIG_INVALID";
+        }
+        [self noteRpcError:error];
+        NSString *delivered = [[error copy] autorelease];
+        [self deliverMain:^{ done(standard, premium, delivered); [done release]; }];
+    }];
 }
 
 #pragma mark stickers

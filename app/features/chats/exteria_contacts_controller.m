@@ -296,6 +296,7 @@ static UIButton *ExteriaContactsBarButton(ExteriaSymbol symbol, id target, SEL a
     ExteriaPerson *person = [_list personAtIndexPath:indexPath];
     BOOL online = person.presence == EXTERIA_PRESENCE_ONLINE;
     cell.developer = ExteriaPersonIsDeveloper(person);
+    cell.premium = person.premium;
     cell.mutual = person.mutual;
     [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003)
                    subtitle:person.bot ? NSLocalizedString(@"seen.bot", nil) : ExteriaLastSeenText(person.presence, person.seen)

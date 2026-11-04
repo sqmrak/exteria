@@ -7,6 +7,8 @@
 
 #import "exteria_attach_options.h"
 #import "exteria_attach_pager.h"
+#include "exteria_video_edit.h"
+#import "exteria_video_composition.h"
 #import "exteria_location_controller.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_theme.h"
@@ -205,7 +207,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
 }
 
 - (void)chooseAssets:(NSArray *)urls options:(ExteriaAttachOptions *)options {
-    if (_cancelled || _picker || _preview || _pager || _busy || !urls.count || urls.count > 10) return;
+    if (_cancelled || _picker || _preview || _pager || _busy || !urls.count || urls.count > ATTACH_SELECTION_MAX) return;
     [_options release];
     _options = [options retain];
     _captionTaken = NO;
@@ -241,7 +243,9 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     if (direct && !_collected) [self takeCaptionForNextItem];
     if ([url.scheme isEqualToString:@"exteria-photo"]) {
         [self showBusy];
-        if (direct && _options->asFiles && !ExteriaPhotoURLIsVideo(url)) {
+        /* a gif keeps its frames only as the original bytes; a selection of several goes to the pager as pictures */
+        BOOL gif = direct && !_collected && !_options->asFiles && ExteriaPhotoURLIsGif(url);
+        if ((direct && _options->asFiles && !ExteriaPhotoURLIsVideo(url)) || gif) {
             _photoRequest = ExteriaPhotoOriginal(url, ^(NSData *data, NSString *extension, NSString *name, NSString *error) {
                 _photoRequest = 0;
                 if (_cancelled) return;
@@ -250,7 +254,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
                     [self hideBusy]; [self endQueue]; [self alert:NSLocalizedString(@"attach.failed", nil)];
                     return;
                 }
-                [self prepareOriginalData:data extension:extension name:name];
+                [self prepareOriginalData:data extension:extension name:name animated:gif];
             });
             return;
         }
@@ -277,10 +281,12 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
             if (_cancelled) return;
             if (!asset) { [self endQueue]; [self alert:NSLocalizedString(@"attach.failed", nil)]; return; }
             if ([[asset valueForProperty:ALAssetPropertyType] isEqualToString:ALAssetTypeVideo]) {
-                if (direct && _options->asFiles) [self prepareOriginalOfAsset:asset];
+                if (direct && _options->asFiles) [self prepareOriginalOfAsset:asset animated:NO];
                 else [self presentOrPrepareMovie:url];
             } else if (direct && _options->asFiles) {
-                [self prepareOriginalOfAsset:asset];
+                [self prepareOriginalOfAsset:asset animated:NO];
+            } else if (direct && !_collected && [asset.defaultRepresentation.UTI isEqualToString:@"com.compuserve.gif"]) {
+                [self prepareOriginalOfAsset:asset animated:YES];
             } else {
                 ALAssetRepresentation *rep = asset.defaultRepresentation;
                 CGImageRef screen = rep.fullScreenImage;
@@ -338,7 +344,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     ExteriaAttachItem *item = [[[_ready objectAtIndex:0] retain] autorelease];
     [_ready removeObjectAtIndex:0];
     [self takeCaptionForNextItem];
-    if (item->movie) [self prepareMovieAtURL:item->movie];
+    if (item->movie) [self prepareMovieAtURL:item->movie start:item->trimStart end:item->trimEnd muted:item->muted turns:item->turns mirrored:item->mirrored aspect:item->aspect];
     else [self preparePhoto:item->image];
 }
 
@@ -376,10 +382,9 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     else [self previewPhoto:image url:nil];
 }
 
-static NSString *ExteriaMimeOfPath(NSString *path);
 
 /* the bytes of a photo as the library keeps them, written out and sent as a document: nothing is scaled or recompressed on the way */
-- (void)prepareOriginalData:(NSData *)data extension:(NSString *)extension name:(NSString *)name {
+- (void)prepareOriginalData:(NSData *)data extension:(NSString *)extension name:(NSString *)name animated:(BOOL)animated {
     NSString *path = ExteriaTemporaryFile(extension);
     NSString *caption = [[_caption copy] autorelease];
     ExteriaOutgoing *outgoing = nil;
@@ -390,6 +395,7 @@ static NSString *ExteriaMimeOfPath(NSString *path);
         outgoing->path = [path copy];
         outgoing->name = [name copy];
         outgoing->mime = [ExteriaMimeOfPath(path) copy];
+        outgoing->animated = animated;
         outgoing->temporary = YES;
     } else {
         NSLog(@"exteria: the original photo was not written");
@@ -399,7 +405,7 @@ static NSString *ExteriaMimeOfPath(NSString *path);
 }
 
 /* the old library hands over a representation; it is copied in pieces, so a photo of twenty megabytes never sits in memory whole */
-- (void)prepareOriginalOfAsset:(ALAsset *)asset {
+- (void)prepareOriginalOfAsset:(ALAsset *)asset animated:(BOOL)animated {
     ALAssetRepresentation *rep = asset.defaultRepresentation;
     long long size = rep.size;
     NSString *name = rep.filename.length ? rep.filename : @"photo.jpg";
@@ -433,6 +439,7 @@ static NSString *ExteriaMimeOfPath(NSString *path);
     outgoing->path = [path copy];
     outgoing->name = [name copy];
     outgoing->mime = [ExteriaMimeOfPath(path) copy];
+    outgoing->animated = animated;
     outgoing->temporary = YES;
     [self deliver:outgoing];
 }
@@ -520,19 +527,12 @@ static NSString *ExteriaMimeOfPath(NSString *path);
 }
 
 - (void)previewMovie:(NSURL *)url {
-    ExteriaWeakReference *weak = _weak;
-    _preview = [[ExteriaMediaViewer alloc] initWithVideoURL:url send:^(NSString *caption) {
-        ExteriaAttachFlow *flow = weak.target;
-        if (!flow || flow->_cancelled) return;
-        [flow->_caption release]; flow->_caption = [caption copy];
-        [flow->_preview release]; flow->_preview = nil;
-        [flow prepareMovieAtURL:url];
-    }];
-    _preview.cancelHandler = ^{
-        ExteriaAttachFlow *flow = weak.target;
-        if (flow) { [flow->_preview release]; flow->_preview = nil; [flow endQueue]; }
-    };
-    [_host presentViewController:_preview animated:YES completion:nil];
+    if (!_options) _options = [[ExteriaAttachOptions alloc] init];
+    _options->preview = NO;
+    [_collected release]; _collected = [[NSMutableArray alloc] init];
+    ExteriaAttachItem *item = [[[ExteriaAttachItem alloc] init] autorelease];
+    item->movie = [url retain];
+    [self collectItem:item];
 }
 
 - (void)previewPhoto:(UIImage *)image url:(NSURL *)url {
@@ -610,9 +610,19 @@ static NSString *ExteriaMimeOfPath(NSString *path);
 
 /* normal videos are exported to mp4; files keep their encoded tracks */
 - (void)prepareMovieAtURL:(NSURL *)url {
+    [self prepareMovieAtURL:url start:0 end:1 muted:NO turns:0 mirrored:NO aspect:0];
+}
+
+- (void)prepareMovieAtURL:(NSURL *)url start:(double)start end:(double)end muted:(BOOL)muted turns:(NSInteger)turns mirrored:(BOOL)mirrored aspect:(unsigned)aspect {
     [self showBusy];
-    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+    AVURLAsset *original = [AVURLAsset URLAssetWithURL:url options:nil];
     BOOL asFile = _options && _options->asFiles;
+    /* a file keeps its bytes; a video gets a sound track, silent when it has none, so it is not turned into a gif on the other side */
+    AVAsset *asset = asFile ? original : ExteriaAssetWithSoundTrack(original);
+    double begin = 0, length = 0;
+    if (exteria_video_edit_range(CMTimeGetSeconds(asset.duration), start, end, &begin, &length) != EXTERIA_OK) {
+        [self hideBusy]; [self alert:NSLocalizedString(@"attach.failed", nil)]; return;
+    }
     NSString *path = ExteriaTemporaryFile(asFile ? @"mov" : @"mp4");
     NSString *preset = ExteriaPhotosAvailable() ? AVAssetExportPresetHighestQuality : AVAssetExportPresetMediumQuality;
     if (_options && _options->standard) preset = AVAssetExportPresetLowQuality;
@@ -626,6 +636,26 @@ static NSString *ExteriaMimeOfPath(NSString *path);
     export.outputURL = [NSURL fileURLWithPath:path];
     export.outputFileType = fileType;
     export.shouldOptimizeForNetworkUse = YES;
+    export.timeRange = CMTimeRangeMake(CMTimeMakeWithSeconds(begin, 600), CMTimeMakeWithSeconds(length, 600));
+    if (turns || mirrored || aspect) {
+        AVVideoComposition *composition = ExteriaVideoComposition(asset, turns, mirrored, exteria_video_edit_aspect(aspect));
+        if (!composition) {
+            [_export release]; _export = nil;
+            [export release]; [self hideBusy]; [self alert:NSLocalizedString(@"attach.failed", nil)]; return;
+        }
+        export.videoComposition = composition;
+    }
+    if (muted) {
+        NSMutableArray *parameters = [NSMutableArray array];
+        for (AVAssetTrack *track in [asset tracksWithMediaType:AVMediaTypeAudio]) {
+            AVMutableAudioMixInputParameters *input = [AVMutableAudioMixInputParameters audioMixInputParametersWithTrack:track];
+            [input setVolume:0 atTime:kCMTimeZero];
+            [parameters addObject:input];
+        }
+        AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
+        mix.inputParameters = parameters;
+        export.audioMix = mix;
+    }
     [export exportAsynchronouslyWithCompletionHandler:^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         BOOL done = export.status == AVAssetExportSessionStatusCompleted;
@@ -679,7 +709,7 @@ static NSString *ExteriaMimeOfPath(NSString *path);
 
 #pragma mark file
 
-static NSString *ExteriaMimeOfPath(NSString *path) {
+NSString *ExteriaMimeOfPath(NSString *path) {
     NSString *extension = path.pathExtension;
     if (!extension.length) return @"application/octet-stream";
     CFStringRef uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, (CFStringRef)extension, NULL);

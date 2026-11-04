@@ -1,6 +1,7 @@
 #import "exteria_chat_settings.h"
 #import "exteria_proximity.h"
 #import "exteria_music_player.h"
+#import "exteria_video_stage.h"
 
 #include <unistd.h>
 
@@ -367,8 +368,9 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     [self setState:ExteriaMusicStateFailed];
 }
 
-/* the link under the name given, in a folder that is emptied first */
-static NSURL *ExteriaLinkNamed(NSString *path, NSString *aliasName, NSString *slot) {
+/* the link under the name given, in a folder that is emptied first; a video that is fragmented is written there in its plain form instead, which the player of an old
+   system needs */
+static NSURL *ExteriaLinkNamed(NSString *path, NSString *aliasName, NSString *slot, BOOL plainVideo) {
     NSFileManager *files = [NSFileManager defaultManager];
     NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[@"exteria-" stringByAppendingString:slot]];
     [files removeItemAtPath:directory error:NULL];
@@ -378,6 +380,7 @@ static NSURL *ExteriaLinkNamed(NSString *path, NSString *aliasName, NSString *sl
         return nil;
     }
     NSString *alias = [directory stringByAppendingPathComponent:aliasName];
+    if (plainVideo && ExteriaWritePlainVideo(path, alias)) return [NSURL fileURLWithPath:alias];
     /* a hard link is the cached file itself, so the player never follows a link out of the temporary folder into the cache; the symbolic link stays for
        a volume that refuses the hard link */
     if (link(path.fileSystemRepresentation, alias.fileSystemRepresentation) == 0) return [NSURL fileURLWithPath:alias];
@@ -388,8 +391,33 @@ static NSURL *ExteriaLinkNamed(NSString *path, NSString *aliasName, NSString *sl
     return [NSURL fileURLWithPath:alias];
 }
 
+/* the work of a plain form is reading and writing the whole file on the thread that asked, so a file larger than this is only linked here, and the callers that can wait
+   use ExteriaPlayableLinkAsync */
+#define PLAYABLE_PLAIN_SYNC_BYTES (24ull * 1024 * 1024)
+
 NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot) {
-    return ExteriaLinkNamed(path, [@"file." stringByAppendingString:extension], slot);
+    BOOL video = [extension isEqualToString:@"mp4"];
+    NSDictionary *attributes = video ? [[NSFileManager defaultManager] attributesOfItemAtPath:path error:NULL] : nil;
+    BOOL small = [attributes fileSize] <= PLAYABLE_PLAIN_SYNC_BYTES;
+    return ExteriaLinkNamed(path, [@"file." stringByAppendingString:extension], slot, video && small);
+}
+
+void ExteriaPlayableLinkAsync(NSString *path, NSString *extension, NSString *slot, void (^completion)(NSURL *url)) {
+    void (^done)(NSURL *) = [completion copy];
+    NSString *from = [path copy], *type = [extension copy], *where = [slot copy];
+    dispatch_async(ExteriaVideoStageQueue(), ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        NSURL *url = [ExteriaLinkNamed(from, [@"file." stringByAppendingString:type], where, [type isEqualToString:@"mp4"]) retain];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            done(url);
+            [url release];
+            [done release];
+        });
+        [from release];
+        [type release];
+        [where release];
+        [pool drain];
+    });
 }
 
 /* an inch short of what a file system takes: names are cut in the middle of the stem, never in the extension, since the extension tells the type */
@@ -406,7 +434,7 @@ NSURL *ExteriaNamedLink(NSString *path, NSString *name, NSString *slot) {
     while ([stem lengthOfBytesUsingEncoding:NSUTF8StringEncoding] + (extension.length ? extension.length + 1 : 0) > LINK_NAME_BYTES_MAX && stem.length > 1) {
         stem = [stem substringToIndex:stem.length - 1];
     }
-    return ExteriaLinkNamed(path, extension.length ? [stem stringByAppendingPathExtension:extension] : stem, slot);
+    return ExteriaLinkNamed(path, extension.length ? [stem stringByAppendingPathExtension:extension] : stem, slot, NO);
 }
 
 /* a voice note is Ogg Opus, which no system here plays; the decoder writes the samples as they come, so the

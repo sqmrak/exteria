@@ -55,6 +55,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     NSString *_replyTitle;
     NSString *_replyText;
     NSArray *_replyEntities;
+    NSString *_highlightQuery;
     UIColor *_replyColor;
     CGRect _replyFrame;
     ExteriaTextLayout *_replyTitleLayout;
@@ -83,6 +84,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     BOOL _builtDeleted;
     /* what the row said about a one-time file: waiting, or gone */
     BOOL _builtOnceExpired;
+    BOOL _builtMediaUnread;
     int _builtService;
     int32_t _builtServiceValue;
     BOOL _sharingExpired;
@@ -214,9 +216,13 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly, copy) NSString *viaText;
 /* the chat of the replies shows every message as forwarded, and the line says nothing there */
 - (void)dropForwardText;
+/* the chat of the replies puts this row at the foot of a comment, where a channel post has its comments: it says where the message came from, and a tap opens that chat */
+- (void)showOpenChatRow;
 @property (nonatomic, readonly, copy) NSString *replyTitle;
 @property (nonatomic, readonly, copy) NSString *replyText;
 @property (nonatomic, copy) NSArray *replyEntities;
+/* the words of the search the message was found by: they stand on a plate in its text */
+@property (nonatomic, copy) NSString *highlightQuery;
 @property (nonatomic, readonly, retain) UIColor *replyColor;
 @property (nonatomic, readonly) CGRect replyFrame;
 @property (nonatomic, readonly, retain) ExteriaTextLayout *replyTitleLayout;

@@ -10,7 +10,9 @@
 #import "exteria_developers.h"
 #import "exteria_emoji_store.h"
 #import "exteria_sticker_library.h"
+#import "exteria_force_touch.h"
 #import "exteria_music_player.h"
+#import "exteria_round_playback.h"
 #import "exteria_image_decoder.h"
 #import "exteria_lottie_view.h"
 #import "exteria_gift_card.h"
@@ -53,14 +55,6 @@ static char ExteriaGifStatusContext;
 #define COMMENTER_SIDE 24.0
 #define COMMENTER_STEP 16.0
 
-/* a view whose layer plays a video, for a round message that plays in its own circle */
-@interface ExteriaRoundVideoView : UIView
-@end
-
-@implementation ExteriaRoundVideoView
-+ (Class)layerClass { return [AVPlayerLayer class]; }
-@end
-
 typedef enum { ExteriaBubbleLayerBody, ExteriaBubbleLayerOverlay, ExteriaBubbleLayerReply } ExteriaBubbleLayer;
 
 /* draws the bubble with its text, or the time capsule over a picture */
@@ -73,6 +67,8 @@ typedef enum { ExteriaBubbleLayerBody, ExteriaBubbleLayerOverlay, ExteriaBubbleL
 @property (nonatomic, retain) ExteriaChatItem *item;
 /* the room a classic bubble keeps beside itself for its tail, on the side the bubble leans to; zero without a tail */
 @property (nonatomic, assign) CGFloat tailWidth;
+/* the part of the text that is selected, in the characters of the laid out string; no length when nothing is */
+@property (nonatomic, assign) NSRange pickRange;
 @property (nonatomic, assign) ExteriaBubbleLayer layerKind;
 @property (nonatomic, copy) NSString *fileProgressText;
 /* where the bars of a voice note and its speed chip are, in the bubble's coordinates */
@@ -85,6 +81,7 @@ typedef enum { ExteriaBubbleLayerBody, ExteriaBubbleLayerOverlay, ExteriaBubbleL
 @synthesize item = _item;
 @synthesize layerKind = _layerKind;
 @synthesize tailWidth = _tailWidth;
+@synthesize pickRange = _pickRange;
 @synthesize fileProgressText = _fileProgressText;
 
 - (id)initWithFrame:(CGRect)frame {
@@ -142,7 +139,7 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
         timeX += _item.viewsWidth;
     }
     if (_item.deletedWidth > 0) {
-        UIImage *can = ExteriaSymbolImage(ExteriaSymbolTrashCan, 12, color);
+        UIImage *can = ExteriaSymbolImage(ExteriaSymbolTrash, 12, color);
         [can drawAtPoint:CGPointMake(timeX, origin.y + 1 + (12 - can.size.height) / 2)];
         timeX += _item.deletedWidth;
     }
@@ -210,6 +207,13 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
     NSUInteger count = (NSUInteger)MAX(1, floor((wave.size.width + WAVE_GAP) / (WAVE_BAR + WAVE_GAP)));
     UIColor *strong = message.outgoing && !ExteriaThemeIsClassic() ? [UIColor whiteColor] : ExteriaColorAccent();
     UIColor *quiet = ExteriaColorBubbleMeta(message.outgoing);
+    /* a note nobody has played has a ring round its button in the strong color, which fades to a faint one once it is played, so what is new reads at a glance */
+    CGRect ring = CGRectInset(CGRectMake(_item.fileFrame.origin.x, _item.fileFrame.origin.y, 44, 44), -3, -3);
+    CGContextSaveGState(context);
+    CGContextSetStrokeColorWithColor(context, [strong colorWithAlphaComponent:message.mediaUnread ? 1.0 : 0.22].CGColor);
+    CGContextSetLineWidth(context, 2);
+    CGContextStrokeEllipseInRect(context, CGRectInset(ring, 1, 1));
+    CGContextRestoreGState(context);
     const uint8_t *levels = bars.bytes;
     for (NSUInteger i = 0; i < count; ++i) {
         CGFloat level = 0.35;
@@ -465,7 +469,24 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
     [self drawReply];
     if (_item.content == ExteriaChatItemContentFile) [self drawFileRow:context];
     if (_item.content == ExteriaChatItemContentPoll) [self drawPoll:context];
+    if (_item.textLayout && _pickRange.length) {
+        [[ExteriaColorAccent() colorWithAlphaComponent:0.35f] setFill];
+        for (NSValue *box in [_item.textLayout rectsForRange:_pickRange]) UIRectFill(CGRectOffset(box.CGRectValue, _item.textOrigin.x, _item.textOrigin.y));
+    }
     if (_item.textLayout) [_item.textLayout drawAtPoint:_item.textOrigin];
+    if (_item.textLayout && _pickRange.length) {
+        NSArray *boxes = [_item.textLayout rectsForRange:_pickRange];
+        if (boxes.count) {
+            CGRect first = [[boxes objectAtIndex:0] CGRectValue], last = [[boxes lastObject] CGRectValue];
+            [ExteriaColorAccent() setFill];
+            CGFloat left = _item.textOrigin.x + first.origin.x, top = _item.textOrigin.y + first.origin.y;
+            CGFloat right = _item.textOrigin.x + CGRectGetMaxX(last), bottom = _item.textOrigin.y + CGRectGetMaxY(last);
+            UIRectFill(CGRectMake(left - 1, top, 2, first.size.height));
+            UIRectFill(CGRectMake(right - 1, bottom - last.size.height, 2, last.size.height));
+            CGContextFillEllipseInRect(context, CGRectMake(left - 4.5, top - 8, 9, 9));
+            CGContextFillEllipseInRect(context, CGRectMake(right - 4.5, bottom - 1, 9, 9));
+        }
+    }
     BOOL overPicture = _item.content == ExteriaChatItemContentPicture && !_item.textLayout;
     /* the time of a call is in its second line */
     if (!overPicture && !_item.call) [self drawMetaAt:_item.timeOrigin color:ExteriaColorBubbleMeta(outgoing) context:context];
@@ -878,9 +899,18 @@ static float ExteriaSpoilerRandom(void) {
     UIView *_selectMark;
     UIImageView *_selectCheck;
     BOOL _selecting;
+    NSRange _pick;
+    CGPoint _pressPoint;
+    UIPanGestureRecognizer *_handlePan;
+    NSInteger _dragHandle;
     BOOL _selected;
     ExteriaChatItem *_item;
     ExteriaBubbleView *_body;
+    /* the bubble grows to the height a new reaction row gives it on its own clock, since the body is drawn at its bounds and a layer animation would stretch the text */
+    CADisplayLink *_growLink;
+    CFTimeInterval _growStart;
+    CGFloat _growFrom;
+    CGFloat _growTo;
     ExteriaBubbleView *_replyPreview;
     ExteriaBubbleView *_overlay;
     UIImageView *_picture;
@@ -919,12 +949,12 @@ static float ExteriaSpoilerRandom(void) {
     NSUInteger _token;
     BOOL _animating;
     ExteriaRoundVideoView *_roundView;
-    AVPlayer *_roundPlayer;
-    AVPlayerItem *_roundItem;
     UIButton *_roundSpeed;
     CAShapeLayer *_roundRing;
     NSTimer *_roundTimer;
-    NSUInteger _roundToken;
+    /* owned by the content view; read to keep a hard press and a long press of one touch from opening the menu twice */
+    UIGestureRecognizer *_longPress;
+    UIGestureRecognizer *_forcePress;
     ExteriaReactionsView *_reactions;
     int32_t _reactionsMessageId;
     NSString *_reactionsKey;
@@ -947,6 +977,33 @@ static float ExteriaSpoilerRandom(void) {
     NSString *_pendingLottieKey;
 }
 - (void)resumeReplyTable;
+- (void)growBodyStep:(CADisplayLink *)link;
+- (void)stopBodyGrowth;
+@end
+
+#define BODY_GROW_SECONDS 0.25
+
+@interface ExteriaBodyGrowTicker : NSObject {
+    ExteriaWeakReference *_target;
+}
+- (id)initWithTarget:(id)target;
+- (void)tick:(CADisplayLink *)link;
+@end
+
+@implementation ExteriaBodyGrowTicker
+- (id)initWithTarget:(id)target {
+    self = [super init];
+    if (!self) return nil;
+    _target = [[ExteriaWeakReference referenceTo:target] retain];
+    return self;
+}
+- (void)dealloc {
+    [_target release];
+    [super dealloc];
+}
+- (void)tick:(CADisplayLink *)link {
+    [(ExteriaMessageCell *)_target.target growBodyStep:link];
+}
 @end
 
 @implementation ExteriaMessageCell
@@ -1000,6 +1057,10 @@ static float ExteriaSpoilerRandom(void) {
     [self.contentView addSubview:_reactions];
     UILongPressGestureRecognizer *press = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPressed:)] autorelease];
     [self.contentView addGestureRecognizer:press];
+    _longPress = press;
+    /* a hard press on a 3d touch screen (ios 9 and later) opens the same menu without waiting out the long press */
+    _forcePress = [[[ExteriaForceTouchRecognizer alloc] initWithTarget:self action:@selector(longPressed:)] autorelease];
+    [self.contentView addGestureRecognizer:_forcePress];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped:)] autorelease];
     tap.cancelsTouchesInView = NO;
     [tap requireGestureRecognizerToFail:press];
@@ -1061,6 +1122,7 @@ static float ExteriaSpoilerRandom(void) {
     [_swipe requireGestureRecognizerToFail:_seekPan];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged:) name:ExteriaMusicPlayerDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerTicked:) name:ExteriaMusicPlayerDidTickNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(roundPlaybackChanged:) name:ExteriaRoundPlaybackDidChangeNotification object:nil];
     return self;
 }
 
@@ -1080,17 +1142,20 @@ static float ExteriaSpoilerRandom(void) {
     if (_item.message.media.kind == EXTERIA_PREVIEW_VOICE && [[ExteriaMusicPlayer sharedPlayer] isCurrentTrack:_item.message.media]) [_body setNeedsDisplay];
 }
 
-/* the round message that plays now; only one does, and it stops the song and the other round message */
-static ExteriaMessageCell *sPlayingRound = nil;
-
 - (void)dealloc {
+    /* a recognizer does not retain its target and can outlive the cell while it waits on the long press and the double tap it requires to fail, so a tap that was
+       still being decided when the chat closed called tapped: on a freed cell */
+    for (UIGestureRecognizer *recognizer in [NSArray arrayWithArray:self.contentView.gestureRecognizers]) [recognizer removeTarget:self action:NULL];
     [_weak clear];
+    [self stopBodyGrowth];
     [self stopGif];
     [self resumeReplyTable];
     _swipe.delegate = nil;
     [_swipe release];
     _seekPan.delegate = nil;
     [_seekPan release];
+    _handlePan.delegate = nil;
+    [_handlePan release];
     [_swipeDisc release];
     [_swipeRing release];
     [_swipeFill release];
@@ -1099,7 +1164,7 @@ static ExteriaMessageCell *sPlayingRound = nil;
     [_selectMark release];
     [_selectCheck release];
     [_markupView release];
-    [self stopRound];
+    [self detachRound];
     [self cancelMediaLoad];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_weak clear];
@@ -1155,12 +1220,14 @@ static ExteriaMessageCell *sPlayingRound = nil;
 
 - (void)prepareForReuse {
     [super prepareForReuse];
+    [self clearTextSelection];
     /* the slide of a new message runs on the layer of the cell, and a cell taken for another row in the middle of it would carry the slide to that row */
     ExteriaCancelEnter(self);
+    [self stopBodyGrowth];
     [self hideAlbumViews];
     [self resetSwipe];
     [self stopGif];
-    [self stopRound];
+    [self detachRound];
     [self cancelMediaLoad];
     ++_token;
     [self discardLottie];
@@ -1384,7 +1451,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     if (_replayRequested) {
         _replayRequested = NO;
         _emojiPlayed = YES;
-        [_lottie playOnce];
+        [self replayAnimation];
     } else [self setAnimating:_animating];
 }
 
@@ -1443,7 +1510,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         point.y -= 3;
         NSUInteger mark = ExteriaMarkForDocument([_item.senderLayout customEmojiAtPoint:point]);
         if (mark) {
-            ExteriaShowMarkNotice(_item.senderName, mark);
+            ExteriaShowMarkNoticeForUser(_item.senderName, mark, _item.message.fromId);
             return;
         }
     }
@@ -1539,8 +1606,51 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_markupView setBusyButton:button];
 }
 
+- (CGFloat)bodyHeight {
+    return _body.frame.size.height;
+}
+
+- (void)setBodyHeight:(CGFloat)height {
+    CGRect frame = _body.frame, bounds = _body.bounds;
+    frame.size.height = height;
+    bounds.size.height = height;
+    _body.frame = frame;
+    _body.bounds = bounds;
+    [_body setNeedsDisplay];
+}
+
+- (void)stopBodyGrowth {
+    if (!_growLink) return;
+    [_growLink invalidate];
+    _growLink = nil;
+}
+
+/* a reaction row makes the bubble taller by the height of the chips; the table moves the rows under it, and the bubble follows on the same 250 ms */
+- (void)growBodyFromHeight:(CGFloat)from {
+    CGFloat to = _body.frame.size.height;
+    if (ExteriaReduceMotionEnabled() || _item.kind != ExteriaChatItemBubble || from <= 0 || fabs(from - to) < 1) return;
+    [self stopBodyGrowth];
+    _growFrom = from;
+    _growTo = to;
+    _growStart = CACurrentMediaTime();
+    [self setBodyHeight:from];
+    ExteriaBodyGrowTicker *ticker = [[[ExteriaBodyGrowTicker alloc] initWithTarget:self] autorelease];
+    _growLink = [CADisplayLink displayLinkWithTarget:ticker selector:@selector(tick:)];
+    [_growLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+}
+
+- (void)growBodyStep:(CADisplayLink *)link {
+    (void)link;
+    CGFloat t = (CGFloat)MIN(1.0, (CACurrentMediaTime() - _growStart) / BODY_GROW_SECONDS);
+    CGFloat eased = 1 - (1 - t) * (1 - t) * (1 - t);
+    [self setBodyHeight:_growFrom + (_growTo - _growFrom) * eased];
+    if (t >= 1) [self stopBodyGrowth];
+}
+
 - (void)configureWithItem:(ExteriaChatItem *)item media:(ExteriaMediaCache *)media avatars:(ExteriaAvatarCache *)avatars {
     [self resetSwipe];
+    if (_pick.length && (!_item || ![_item isSameRowAs:item] || item.textLayout != _item.textLayout)) [self clearTextSelection];
+    [self stopBodyGrowth];
     BOOL sameFile = _item && [_item isSameRowAs:item] && _item.message.media.kind == item.message.media.kind &&
         [_item.message.media.file.key isEqualToString:item.message.media.file.key];
     BOOL keepMedia = sameFile && (_loadRequest || _loadedPath || _gifPlayer || _lottie);
@@ -1548,7 +1658,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     if (!keepMedia) {
         ++_token;
         [self stopGif];
-        [self stopRound];
+        [self detachRound];
         [self cancelMediaLoad];
         [self discardLottie];
         _gifFailed = NO;
@@ -1556,6 +1666,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _animationLoading = NO;
         _animating = NO;
     }
+    if (_roundView) _play.transform = CGAffineTransformIdentity;
     _emojiPlayed = played;
     _replayRequested = NO;
     [item retain];
@@ -1659,7 +1770,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     ExteriaMedia *content = item.message.media;
     BOOL pictureOnly = (item.content == ExteriaChatItemContentPicture && !item.textLayout) || item.bare;
     if (item.kind == ExteriaChatItemEmoji) {
-        _picture.hidden = NO;
+        _picture.hidden = _lottie.layer.contents != nil;
         _picture.contentMode = UIViewContentModeScaleAspectFit;
         _picture.frame = CGRectOffset(item.pictureFrame, bubble.origin.x, bubble.origin.y);
         _picture.backgroundColor = [UIColor clearColor];
@@ -1673,7 +1784,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         if ([self playsOnItsOwn]) [self loadEmojiAnimation];
         pictureOnly = YES;
     } else if (item.kind == ExteriaChatItemSticker) {
-        _picture.hidden = NO;
+        _picture.hidden = _lottie.layer.contents != nil;
         _picture.contentMode = UIViewContentModeScaleAspectFit;
         _picture.frame = CGRectOffset(item.pictureFrame, bubble.origin.x, bubble.origin.y);
         _picture.backgroundColor = [UIColor clearColor];
@@ -1734,7 +1845,13 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _gifLabel.hidden = NO;
     }
     _lottie.frame = _picture.frame;
-    _roundView.frame = _picture.frame;
+    if (_roundView) {
+        ExteriaRoundPlayback *playback = [ExteriaRoundPlayback sharedPlayback];
+        [_play setIcon:playback.playing ? ExteriaMediaIconNone : ExteriaMediaIconPlay animated:NO];
+        [self growRoundAnimated:NO];
+    } else {
+        [self adoptRound];
+    }
     if (_gifPlayer && _gifItem.status == AVPlayerItemStatusReadyToPlay) _play.hidden = YES;
     [self refreshSpoilerCoverForItem:item];
     [self prepareVoiceActionForItem:item bubble:bubble];
@@ -2085,35 +2202,24 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 #pragma mark round message
 
-/* a circle that plays pauses when the app goes away, if the person asked for that; the sound of a circle is not a background audio */
-+ (void)initialize {
-    if (self != [ExteriaMessageCell class]) return;
-    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil queue:[NSOperationQueue mainQueue]
-                                                  usingBlock:^(NSNotification *note) {
-        (void)note;
-        if (sPlayingRound && [sPlayingRound roundPlaying] && ExteriaChatFlagGet(ExteriaChatFlagPauseRoundOnMinimize)) [sPlayingRound toggleRound];
-    }];
+- (NSString *)roundKey {
+    return _item.message.media.file.key;
 }
 
 - (BOOL)roundPlaying {
-    return _roundPlayer != nil && _roundPlayer.rate > 0;
+    ExteriaRoundPlayback *playback = [ExteriaRoundPlayback sharedPlayback];
+    return [playback isActiveKey:[self roundKey]] && playback.playing;
 }
 
-/* the playback goes; the file stays, and the button goes back to the triangle */
-- (void)stopRound {
-    ++_roundToken;
+/* the cell stops drawing the circle and the playback goes on: the row scrolled away, was taken for another message or its chat was
+   left, and the circle floats until the person ends it. the button goes back to the triangle */
+- (void)detachRound {
     [_roundTimer invalidate];
     _roundTimer = nil;
-    if (_roundItem) [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_roundItem];
-    [_roundPlayer pause];
     ((AVPlayerLayer *)_roundView.layer).player = nil;
     [_roundView removeFromSuperview];
     [_roundView release];
     _roundView = nil;
-    [_roundPlayer release];
-    _roundPlayer = nil;
-    [_roundItem release];
-    _roundItem = nil;
     [_roundRing removeFromSuperlayer];
     [_roundRing release];
     _roundRing = nil;
@@ -2127,38 +2233,52 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _play.hidden = NO;
         [_play setIcon:_loadedPath ? ExteriaMediaIconPlay : ExteriaMediaIconDownload animated:_play.window != nil];
     }
-    if (sPlayingRound == self) sPlayingRound = nil;
+    [[ExteriaRoundPlayback sharedPlayback] releaseHost:self];
 }
 
 - (void)startRound {
-    if (_roundPlayer) return;
+    if ([[ExteriaRoundPlayback sharedPlayback] isActiveKey:[self roundKey]]) return;
     [self toggleRound];
 }
 
-/* the speed chip on a playing circle, and the rate of the video follow the speed the player keeps */
+/* the speed chip on a playing circle follows the speed the player keeps; the rate of the video is the playback's */
 - (void)applyRoundSpeed {
-    float speed = [ExteriaMusicPlayer sharedPlayer].speed;
-    [_roundSpeed setTitle:ExteriaSpeedText(speed) forState:UIControlStateNormal];
-    if ([self roundPlaying]) _roundPlayer.rate = speed;
+    [_roundSpeed setTitle:ExteriaSpeedText([ExteriaMusicPlayer sharedPlayer].speed) forState:UIControlStateNormal];
 }
 
 - (void)cycleRoundSpeed {
     [[ExteriaMusicPlayer sharedPlayer] cycleSpeed];
 }
 
+/* a row that comes back on screen while its video message plays takes the circle from the one that floats */
+- (void)adoptRound {
+    if (_roundView || _item.kind != ExteriaChatItemRound || !self.window || _picture.hidden) return;
+    if (![[ExteriaRoundPlayback sharedPlayback] isActiveKey:[self roundKey]]) return;
+    [self showRound];
+}
+
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    if (self.window) [self adoptRound];
+    else if (_roundView) [self detachRound];
+}
+
+- (void)roundPlaybackChanged:(NSNotification *)note {
+    (void)note;
+    if (!_roundView) return;
+    ExteriaRoundPlayback *playback = [ExteriaRoundPlayback sharedPlayback];
+    if (![playback isActiveKey:[self roundKey]]) {
+        [self detachRound];
+        return;
+    }
+    [_play setIcon:playback.playing ? ExteriaMediaIconNone : ExteriaMediaIconPlay animated:YES];
+}
+
 /* a tap on the circle starts the video, pauses it and resumes it; one that was let go or never arrived is asked
    for again by a tap */
 - (void)toggleRound {
-    if (_roundPlayer) {
-        if ([self roundPlaying]) {
-            [_roundPlayer pause];
-            [_play setIcon:ExteriaMediaIconPlay animated:YES];
-        } else {
-            if (!ExteriaAudioSessionBeginPlayback()) return;
-            [_roundPlayer play];
-            [self applyRoundSpeed];
-            [_play setIcon:ExteriaMediaIconNone animated:YES];
-        }
+    if ([[ExteriaRoundPlayback sharedPlayback] isActiveKey:[self roundKey]]) {
+        [[ExteriaRoundPlayback sharedPlayback] togglePause];
         return;
     }
     if (!_item.message.media.file) return;
@@ -2182,22 +2302,27 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 - (void)beginRoundAtPath:(NSString *)path {
     NSURL *url = ExteriaPlayableLink(path, @"mp4", @"round");
-    if (!url || !ExteriaAudioSessionBeginPlayback()) {
-        [self stopRound];
+    id<ExteriaRoundChain> chain = [_delegate conformsToProtocol:@protocol(ExteriaRoundChain)] ? (id<ExteriaRoundChain>)_delegate : nil;
+    if (!url || ![[ExteriaRoundPlayback sharedPlayback] beginWithURL:url key:[self roundKey] chain:chain]) {
+        [self detachRound];
         return;
     }
-    if (sPlayingRound && sPlayingRound != self) [sPlayingRound stopRound];
-    sPlayingRound = self;
-    [[ExteriaMusicPlayer sharedPlayer] pauseForMedia];
-    [_play setIcon:ExteriaMediaIconNone animated:YES];
-    _roundItem = [[AVPlayerItem playerItemWithURL:url] retain];
-    _roundPlayer = [[AVPlayer playerWithPlayerItem:_roundItem] retain];
+    [self showRound];
+}
+
+/* the circle of the video over the picture, with the ring of the progress and the speed chip. the playback is already going */
+- (void)showRound {
+    ExteriaRoundPlayback *playback = [ExteriaRoundPlayback sharedPlayback];
+    [self detachRound];
+    if (!self.window) return;
+    [playback setHost:self];
+    [_play setIcon:playback.playing ? ExteriaMediaIconNone : ExteriaMediaIconPlay animated:NO];
     _roundView = [[ExteriaRoundVideoView alloc] initWithFrame:_picture.frame];
     _roundView.userInteractionEnabled = NO;
     _roundView.layer.cornerRadius = _picture.frame.size.width / 2;
     _roundView.layer.masksToBounds = YES;
     ((AVPlayerLayer *)_roundView.layer).videoGravity = AVLayerVideoGravityResizeAspectFill;
-    ((AVPlayerLayer *)_roundView.layer).player = _roundPlayer;
+    ((AVPlayerLayer *)_roundView.layer).player = playback.player;
     [self.contentView insertSubview:_roundView aboveSubview:_picture];
     _roundRing = [[CAShapeLayer layer] retain];
     /* the layer is the size of the picture and stands on it, so the turn that starts the stroke at the top is
@@ -2209,11 +2334,10 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _roundRing.strokeColor = [UIColor colorWithWhite:1 alpha:0.9].CGColor;
     _roundRing.lineWidth = 3;
     _roundRing.lineCap = kCALineCapRound;
-    _roundRing.strokeEnd = 0;
+    _roundRing.strokeEnd = [playback progress];
     /* the stroke starts at the top and runs clockwise, which a path from three o'clock does not */
     _roundRing.transform = CATransform3DMakeRotation((CGFloat)(-M_PI / 2), 0, 0, 1);
     [self.contentView.layer addSublayer:_roundRing];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(roundEnded:) name:AVPlayerItemDidPlayToEndTimeNotification object:_roundItem];
     _roundSpeed = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     _roundSpeed.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     _roundSpeed.layer.cornerRadius = 11;
@@ -2221,9 +2345,8 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _roundSpeed.frame = CGRectMake(CGRectGetMidX(_picture.frame) - 20, CGRectGetMaxY(_picture.frame) - 34, 40, 22);
     [_roundSpeed addTarget:self action:@selector(cycleRoundSpeed) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:_roundSpeed];
-    [self growRound];
-    [_roundPlayer play];
     [self applyRoundSpeed];
+    [self growRoundAnimated:YES];
     _roundTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(roundTick:) userInfo:nil repeats:YES];
 }
 
@@ -2231,51 +2354,68 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
    the room its own row has above (the gap to the row before) and below (the line of the time): that keeps it off the neighbours,
    and it moves down or up by the difference so it fills that room evenly. the pause button and the speed chip follow the
    circle, since they are laid out for the picture, not for where the circle ends up */
-- (void)growRound {
+- (void)growRoundAnimated:(BOOL)animated {
     CGFloat side = _picture.frame.size.width, width = self.contentView.bounds.size.width, margin = 6;
-    if (side < 1 || width < side || ExteriaReduceMotionEnabled()) return;
-    CGFloat above = CGRectGetMinY(_picture.frame), below = self.contentView.bounds.size.height - CGRectGetMaxY(_picture.frame);
-    if (above < 0 || below < 0) return;
-    CGFloat grow = MIN(1.5, MIN((width - 2 * margin) / side, 1 + (above + below) / side));
-    if (grow < 1.05) return;
+    CGFloat above = CGRectGetMinY(_picture.frame), below = _item.height - CGRectGetMaxY(_picture.frame);
+    if (!CGRectIsEmpty(_item.reactionFrame))
+        below = MIN(below, CGRectGetMinY(_item.reactionFrame) - CGRectGetMaxY(_picture.frame) - 4);
+    CGFloat grow = 1, shift = 0, dy = 0;
+    if (side >= 1 && width >= side && above >= 0 && below >= 0 && !ExteriaReduceMotionEnabled())
+        grow = MAX(1, MIN(1.5, MIN((width - 2 * margin) / side, 1 + (above + below) / side)));
     /* the swell reaches up and down in the proportion of the room on each side, so the center moves by half of the difference */
-    CGFloat extra = side * (grow - 1), up = extra * above / (above + below), dy = extra / 2 - up;
-    CGFloat half = side * grow / 2, middle = CGRectGetMidX(_picture.frame), shift = 0;
-    if (middle - half < margin) shift = margin - (middle - half);
-    else if (middle + half > width - margin) shift = (width - margin) - (middle + half);
+    if (grow >= 1.05) {
+        CGFloat extra = side * (grow - 1), up = extra * above / (above + below);
+        dy = extra / 2 - up;
+        CGFloat half = side * grow / 2, middle = CGRectGetMidX(_picture.frame);
+        if (middle - half < margin) shift = margin - (middle - half);
+        else if (middle + half > width - margin) shift = (width - margin) - (middle + half);
+    } else grow = 1;
     self.clipsToBounds = NO;
     self.contentView.clipsToBounds = NO;
-    self.layer.zPosition = 10;
+    self.layer.zPosition = grow > 1 ? 10 : 0;
+    CGRect bounds = CGRectMake(0, 0, _picture.frame.size.width, _picture.frame.size.height);
+    CGPoint center = CGPointMake(CGRectGetMidX(_picture.frame), CGRectGetMidY(_picture.frame));
+    _roundView.bounds = bounds;
+    _roundView.center = center;
+    _roundView.layer.cornerRadius = side / 2;
+    _roundSpeed.transform = CGAffineTransformIdentity;
+    _roundSpeed.frame = CGRectMake(center.x - 20, CGRectGetMaxY(_picture.frame) - 34, 40, 22);
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _roundRing.bounds = bounds;
+    _roundRing.position = center;
+    _roundRing.path = [UIBezierPath bezierPathWithOvalInRect:CGRectInset(bounds, 1.5, 1.5)].CGPath;
     CATransform3D ring = CATransform3DMakeTranslation(shift, dy, 0);
     ring = CATransform3DScale(ring, grow, grow, 1);
     ring = CATransform3DRotate(ring, (CGFloat)(-M_PI / 2), 0, 0, 1);
     _roundRing.transform = ring;
+    [CATransaction commit];
     CGAffineTransform view = CGAffineTransformScale(CGAffineTransformMakeTranslation(shift, dy), grow, grow);
     CGAffineTransform speed = CGAffineTransformMakeTranslation(shift, dy + side * (grow - 1) / 2);
     CGAffineTransform button = CGAffineTransformMakeTranslation(shift, dy);
-    [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
+    void (^change)(void) = ^{
         _roundView.transform = view;
         _roundSpeed.transform = speed;
         _play.transform = button;
-    } completion:nil];
+    };
+    if (animated) [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:change completion:nil];
+    else change();
 }
 
 - (void)roundTick:(NSTimer *)timer {
     (void)timer;
-    if (_roundItem.status == AVPlayerItemStatusFailed) {
-        NSLog(@"exteria: round video does not play: %@", _roundItem.error);
-        [self stopRound];
-        return;
-    }
-    NSTimeInterval length = CMTimeGetSeconds(_roundItem.duration);
-    NSTimeInterval at = CMTimeGetSeconds(_roundPlayer.currentTime);
-    if (length > 0 && length < 1e9 && at >= 0) _roundRing.strokeEnd = (CGFloat)MIN(1, at / length);
+    _roundRing.strokeEnd = [[ExteriaRoundPlayback sharedPlayback] progress];
 }
 
-- (void)roundEnded:(NSNotification *)note {
-    (void)note;
-    [self stopRound];
-    [_delegate messageCellDidFinishRound:self];
+/* a tap on an animation starts it from the beginning: a sticker that plays on its own goes on looping as it did, anything else (an emoji, or a sticker that stands still under the
+   power saving settings) plays once */
+- (void)replayAnimation {
+    if (_item.kind == ExteriaChatItemSticker && [self playsOnItsOwn]) {
+        [_lottie setPlaying:NO];
+        [_lottie setPlaying:YES];
+    } else {
+        [_lottie playOnce];
+    }
 }
 
 - (void)setAnimating:(BOOL)animating {
@@ -2430,7 +2570,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     if (recognizer == _seekPan) {
         if (_selecting || !_item.message) return NO;
         CGPoint point = [recognizer locationInView:self.contentView];
-        if (_item.kind == ExteriaChatItemRound && _roundPlayer) {
+        if (_item.kind == ExteriaChatItemRound && _roundView) {
             CGFloat x = point.x - CGRectGetMidX(_picture.frame), y = point.y - CGRectGetMidY(_picture.frame);
             CGFloat radius = _picture.frame.size.width / 2;
             CGFloat distance = hypot(x, y);
@@ -2446,8 +2586,9 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         }
         return NO;
     }
+    if (recognizer == _handlePan) return [self handleNear:[recognizer locationInView:_body]] != 0;
     if (recognizer != _swipe) return YES;
-    if (_selecting || !_item.message || _item.kind == ExteriaChatItemPill || ![_delegate messageCellCanSwipeReply:self]) return NO;
+    if (_selecting || _pick.length || !_item.message || _item.kind == ExteriaChatItemPill || ![_delegate messageCellCanSwipeReply:self]) return NO;
     UITableView *table = [self replyTable];
     CGPoint velocity = [_swipe velocityInView:self];
     if (table.decelerating || (table.dragging && fabs(velocity.y) * 3 >= fabs(velocity.x))) return NO;
@@ -2456,16 +2597,13 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 - (void)seekDragged:(UIPanGestureRecognizer *)pan {
     if (pan.state != UIGestureRecognizerStateBegan && pan.state != UIGestureRecognizerStateChanged && pan.state != UIGestureRecognizerStateEnded) return;
-    if (_item.kind == ExteriaChatItemRound && _roundPlayer) {
+    if (_item.kind == ExteriaChatItemRound && _roundView) {
         CGPoint point = [pan locationInView:self.contentView];
         CGFloat angle = atan2(point.y - CGRectGetMidY(_picture.frame), point.x - CGRectGetMidX(_picture.frame)) + (CGFloat)M_PI / 2;
         if (angle < 0) angle += (CGFloat)(2 * M_PI);
-        NSTimeInterval duration = CMTimeGetSeconds(_roundItem.duration);
-        if (isfinite(duration) && duration > 0) {
-            CGFloat fraction = angle / (CGFloat)(2 * M_PI);
-            _roundRing.strokeEnd = fraction;
-            [_roundPlayer seekToTime:CMTimeMakeWithSeconds(duration * fraction, 600)];
-        }
+        CGFloat fraction = angle / (CGFloat)(2 * M_PI);
+        _roundRing.strokeEnd = fraction;
+        [[ExteriaRoundPlayback sharedPlayback] seekToFraction:fraction];
     } else if (_item.message.media.kind == EXTERIA_PREVIEW_VOICE) {
         CGPoint point = [pan locationInView:_body];
         if (!_item.message.outgoing) point.x -= _body.tailWidth;
@@ -2529,10 +2667,14 @@ static void ExteriaSwipeTick(void) {
 - (UIImage *)contentSnapshot {
     CGSize size = self.contentView.bounds.size;
     if (size.width <= 0 || size.height <= 0) return nil;
+    CGAffineTransform pictureTransform = _picture.transform;
+    /* AVPlayerLayer does not render into the menu snapshot, so its cover must follow the enlarged video */
+    if (_roundView) _picture.transform = _roundView.transform;
     UIGraphicsBeginImageContextWithOptions(size, NO, 0);
     [self.contentView.layer renderInContext:UIGraphicsGetCurrentContext()];
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
+    if (_roundView) _picture.transform = pictureTransform;
     return image;
 }
 
@@ -2680,10 +2822,18 @@ static void ExteriaSwipeTick(void) {
     }
 }
 
-- (void)longPressed:(UILongPressGestureRecognizer *)press {
+- (CGRect)chipFrameOfReaction:(ExteriaReaction *)reaction inView:(UIView *)view {
+    return [_reactions frameOfReaction:reaction inView:view];
+}
+
+- (void)longPressed:(UIGestureRecognizer *)press {
     /* the controller knows what can be done to the message, so a message that offers nothing just shows no menu */
     if (press.state != UIGestureRecognizerStateBegan || !_item.message || _item.kind == ExteriaChatItemPill) return;
+    /* the press that came second in the same touch finds the menu already open */
+    UIGestureRecognizer *other = press == _forcePress ? _longPress : _forcePress;
+    if (other.state == UIGestureRecognizerStateBegan || other.state == UIGestureRecognizerStateChanged) return;
     CGPoint point = [press locationInView:self.contentView];
+    _pressPoint = [press locationInView:_body];
     if (CGRectContainsPoint(_item.bubbleFrame, point)) [_delegate messageCellDidLongPress:self];
 }
 
@@ -2704,7 +2854,163 @@ static void ExteriaSwipeTick(void) {
     if ([_delegate respondsToSelector:@selector(messageCell:answerSharingRequest:)]) [_delegate messageCell:self answerSharingRequest:NO];
 }
 
+#pragma mark text selection
+
+/* the point of the bubble, in the coordinates of the text box */
+- (CGPoint)layoutPointOfBodyPoint:(CGPoint)point {
+    if (!_item.message.outgoing) point.x -= _body.tailWidth;
+    return CGPointMake(point.x - _item.textOrigin.x, point.y - _item.textOrigin.y);
+}
+
+- (CGPoint)bodyPointOfLayoutPoint:(CGPoint)point {
+    point.x += _item.textOrigin.x; point.y += _item.textOrigin.y;
+    if (!_item.message.outgoing) point.x += _body.tailWidth;
+    return point;
+}
+
+- (BOOL)canPickText { return _item.textLayout && _item.textLayout.length > 0 && _item.message && _item.kind != ExteriaChatItemPill; }
+
+/* 1 for the handle at the start of the selection, 2 for the one at its end, 0 for neither */
+- (NSInteger)handleNear:(CGPoint)bodyPoint {
+    if (!_pick.length) return 0;
+    NSArray *boxes = [_item.textLayout rectsForRange:_pick];
+    if (!boxes.count) return 0;
+    CGRect first = [[boxes objectAtIndex:0] CGRectValue], last = [[boxes lastObject] CGRectValue];
+    CGPoint start = [self bodyPointOfLayoutPoint:CGPointMake(first.origin.x, first.origin.y - 4)];
+    CGPoint end = [self bodyPointOfLayoutPoint:CGPointMake(CGRectGetMaxX(last), CGRectGetMaxY(last) + 4)];
+    CGFloat toStart = hypot(bodyPoint.x - start.x, bodyPoint.y - start.y), toEnd = hypot(bodyPoint.x - end.x, bodyPoint.y - end.y);
+    if (MIN(toStart, toEnd) > 26) return 0;
+    return toStart <= toEnd ? 1 : 2;
+}
+
+/* starts a selection on the word under the finger of the long press that opened the menu, or on the first word */
+- (void)beginTextSelection {
+    if (![self canPickText]) return;
+    ExteriaTextLayout *layout = _item.textLayout;
+    NSUInteger index = [layout characterIndexAtPoint:[self layoutPointOfBodyPoint:_pressPoint]];
+    NSRange word = [layout wordRangeAtIndex:index > 0 && index >= layout.length ? layout.length - 1 : index];
+    if (!word.length) word = NSMakeRange(0, MIN((NSUInteger)1, layout.length));
+    _pick = word;
+    _body.pickRange = _pick;
+    [_body setNeedsDisplay];
+    if (!_handlePan) {
+        _handlePan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleDragged:)];
+        _handlePan.delegate = self;
+        _handlePan.maximumNumberOfTouches = 1;
+        [_body addGestureRecognizer:_handlePan];
+    }
+    _handlePan.enabled = YES;
+    UITableView *table = [self replyTable];
+    if (table) [table.panGestureRecognizer requireGestureRecognizerToFail:_handlePan];
+    [self performSelector:@selector(showPickMenu) withObject:nil afterDelay:0.3];
+}
+
+- (void)clearTextSelection {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(showPickMenu) object:nil];
+    if (!_pick.length) return;
+    _pick = NSMakeRange(0, 0);
+    _body.pickRange = _pick;
+    _handlePan.enabled = NO;
+    [_body setNeedsDisplay];
+    if ([self isFirstResponder]) {
+        [[UIMenuController sharedMenuController] setMenuVisible:NO animated:NO];
+        [self resignFirstResponder];
+    }
+}
+
+- (BOOL)hasTextSelection { return _pick.length > 0; }
+
+- (BOOL)canBecomeFirstResponder { return YES; }
+
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+    return action == @selector(exteriaCopyPick) || action == @selector(exteriaQuotePick) || action == @selector(exteriaPickAll);
+}
+
+- (void)showPickMenu {
+    if (!_pick.length || ![self canPickText]) return;
+    [self becomeFirstResponder];
+    NSMutableArray *items = [NSMutableArray array];
+    [items addObject:[[[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"chat.sel.copy", nil) action:@selector(exteriaCopyPick)] autorelease]];
+    /* a quote has to be words the message really has, and the chat has to allow an answer */
+    if ([_delegate respondsToSelector:@selector(messageCell:didQuoteText:offset:)] && [_delegate messageCellCanSwipeReply:self] && _item.message.messageId > 0) {
+        [items addObject:[[[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"chat.sel.quote", nil) action:@selector(exteriaQuotePick)] autorelease]];
+    }
+    if (_pick.length < _item.textLayout.length) {
+        [items addObject:[[[UIMenuItem alloc] initWithTitle:NSLocalizedString(@"chat.sel.all", nil) action:@selector(exteriaPickAll)] autorelease]];
+    }
+    NSArray *boxes = [_item.textLayout rectsForRange:_pick];
+    CGRect area = CGRectNull;
+    for (NSValue *box in boxes) area = CGRectUnion(area, box.CGRectValue);
+    if (CGRectIsNull(area)) return;
+    CGPoint corner = [self bodyPointOfLayoutPoint:area.origin];
+    CGRect target = [self convertRect:CGRectMake(corner.x, corner.y, area.size.width, area.size.height) fromView:_body];
+    UIMenuController *menu = [UIMenuController sharedMenuController];
+    menu.menuItems = items;
+    [menu setTargetRect:target inView:self];
+    [menu setMenuVisible:YES animated:YES];
+}
+
+- (NSString *)pickedWords {
+    NSRange range = [_item.textLayout textRangeForRange:_pick];
+    NSString *text = [_item.textLayout text];
+    if (!range.length || NSMaxRange(range) > text.length) return nil;
+    return [text substringWithRange:range];
+}
+
+- (void)exteriaCopyPick {
+    NSString *words = [self pickedWords];
+    if (words.length) [UIPasteboard generalPasteboard].string = words;
+    [self clearTextSelection];
+}
+
+- (void)exteriaQuotePick {
+    NSString *words = [self pickedWords];
+    NSRange range = [_item.textLayout textRangeForRange:_pick];
+    [self clearTextSelection];
+    if (words.length) [_delegate messageCell:self didQuoteText:words offset:(int32_t)range.location];
+}
+
+- (void)exteriaPickAll {
+    _pick = NSMakeRange(0, _item.textLayout.length);
+    _body.pickRange = _pick;
+    [_body setNeedsDisplay];
+    [self performSelector:@selector(showPickMenu) withObject:nil afterDelay:0.05];
+}
+
+- (void)handleDragged:(UIPanGestureRecognizer *)pan {
+    if (!_pick.length) return;
+    if (pan.state == UIGestureRecognizerStateBegan) {
+        _dragHandle = [self handleNear:[pan locationInView:_body]];
+        [[UIMenuController sharedMenuController] setMenuVisible:NO animated:NO];
+        return;
+    }
+    if (pan.state == UIGestureRecognizerStateChanged && _dragHandle) {
+        CGPoint point = [self layoutPointOfBodyPoint:[pan locationInView:_body]];
+        NSUInteger index = [_item.textLayout characterIndexAtPoint:point];
+        NSUInteger from = _pick.location, to = NSMaxRange(_pick);
+        if (_dragHandle == 1) from = MIN(index, to - 1);
+        else to = MAX(index, from + 1);
+        _pick = NSMakeRange(from, to - from);
+        _body.pickRange = _pick;
+        [_body setNeedsDisplay];
+        return;
+    }
+    if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled || pan.state == UIGestureRecognizerStateFailed) {
+        _dragHandle = 0;
+        [self showPickMenu];
+    }
+}
+
 - (void)tapped:(UITapGestureRecognizer *)tap {
+    if (_pick.length) {
+        /* a tap in the selected words brings the menu back; anywhere else drops the selection */
+        CGPoint inside = [self layoutPointOfBodyPoint:[tap locationInView:_body]];
+        BOOL onWords = NO;
+        for (NSValue *box in [_item.textLayout rectsForRange:_pick]) if (CGRectContainsPoint(CGRectInset(box.CGRectValue, -4, -4), inside)) onWords = YES;
+        if (onWords) [self showPickMenu];
+        else [self clearTextSelection];
+        return;
+    }
     if (_item.giftCard && CGRectContainsPoint(_item.bubbleFrame, [tap locationInView:self.contentView]) && [_delegate respondsToSelector:@selector(messageCellDidTapGift:)]) {
         [_delegate messageCellDidTapGift:self];
         return;
@@ -2830,7 +3136,7 @@ static void ExteriaSwipeTick(void) {
     if (animatedKind && CGRectContainsPoint(_picture.frame, [tap locationInView:self.contentView])) {
         if (_lottie) {
             _emojiPlayed = YES;
-            [_lottie playOnce];
+            [self replayAnimation];
         } else {
             _replayRequested = YES;
             if (_item.kind == ExteriaChatItemEmoji) [self loadEmojiAnimation];

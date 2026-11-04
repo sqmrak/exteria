@@ -16,6 +16,9 @@ NSString *ExteriaTrackLine(ExteriaMedia *track);
    by key only */
 NSURL *ExteriaPlayableLink(NSString *path, NSString *extension, NSString *slot);
 
+/* the same for a video that can be large: the plain form of a fragmented file is made off the main thread, and completion gets the address (nil on failure) on the main one */
+void ExteriaPlayableLinkAsync(NSString *path, NSString *extension, NSString *slot, void (^completion)(NSURL *url));
+
 /* the same, named as the file was sent: a document that goes to another app or to the files of the person keeps its own name and extension, and two documents
    do not become file.pdf and file(1).pdf there */
 NSURL *ExteriaNamedLink(NSString *path, NSString *name, NSString *slot);

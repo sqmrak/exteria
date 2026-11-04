@@ -5,6 +5,7 @@
 
 #import "exteria_chat_settings.h"
 #import "exteria_classic_chrome.h"
+#import "exteria_tab_bar.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_emoji_text_view.h"
 #import "exteria_input_format.h"
@@ -15,22 +16,22 @@
 #import "exteria_imported_theme.h"
 
 #define MARGIN 8.0
-/* on an ipad the one line bar is as tall as the tab bar beside it (49 points), so the tops of the two bars stand on one line */
-#define MARGIN_PAD 6.5
+#define FIELD_MIN 36.0
 
-static CGFloat ExteriaInputVerticalMargin(void) {
-    return ExteriaIsPad() ? MARGIN_PAD : MARGIN;
+/* on an ipad the one line bar is as tall as the tab bar beside it, so the tops of the two bars stand on one line: the system tab bar of the classic theme
+   changes its height with the os, our own bar of the modern theme is 49 points */
+static CGFloat ExteriaInputIdleHeight(void) {
+    if (!ExteriaIsPad()) return 48;
+    return ExteriaThemeIsClassic() ? ExteriaClassicTabBarHeight() : [ExteriaTabBar barHeight];
 }
 
-/* the bar that has a button or a note in place of the field, as tall as the one line bar */
-static CGFloat ExteriaInputIdleHeight(void) {
-    return ExteriaIsPad() ? 49 : 48;
+static CGFloat ExteriaInputVerticalMargin(void) {
+    return ExteriaIsPad() ? (ExteriaInputIdleHeight() - FIELD_MIN) / 2 : MARGIN;
 }
 
 static void ExteriaInputSetImage(UIButton *button, UIImage *image, UIControlState state) {
     if ([button imageForState:state] != image) [button setImage:image forState:state];
 }
-#define FIELD_MIN 36.0
 #define FIELD_MAX 112.0
 #define BUTTON 36.0
 #define PANEL_BUTTON_WIDTH 36.0
@@ -90,7 +91,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     NSString *_placeholderText;
     NSString *_menuTitle;
     NSString *_actionTitle;
-    BOOL _actionWithInput;
     ExteriaBotKeyboardState _botState;
 }
 @end
@@ -211,6 +211,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _mode = (ExteriaRecordMode)[[NSUserDefaults standardUserDefaults] integerForKey:ExteriaRecordModeKey];
     if (_mode != ExteriaRecordRound) _mode = ExteriaRecordVoice;
     _send = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _send.frame = CGRectMake(0, 0, BUTTON, BUTTON);
     /* the classic button is a bitmap of its own, see refreshControls */
     if (!classic) {
         _send.backgroundColor = ExteriaColorAccent();
@@ -352,7 +353,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 /* the field and its buttons, the note of a chat that cannot be written in and the wide button each have their turn */
 - (void)applyVisibility {
-    BOOL action = _actionTitle.length > 0 && (!_actionWithInput || !_writable);
+    BOOL action = _actionTitle.length > 0;
     _note.hidden = _writable || action;
     _field.hidden = !_writable || action;
     _send.hidden = !_writable || action;
@@ -360,15 +361,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _senderButton.hidden = !_writable || action || !_senderVisible;
     _actionButton.hidden = !_actionTitle.length;
     [self setNeedsLayout];
-}
-
-- (BOOL)actionWithInput { return _actionWithInput; }
-
-- (void)setActionWithInput:(BOOL)value {
-    if (_actionWithInput == value) return;
-    _actionWithInput = value;
-    [self applyVisibility];
-    [_delegate inputBarDidChangeHeight:self];
 }
 
 - (void)setActionTitle:(NSString *)title {
@@ -640,9 +632,9 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 }
 
 - (CGFloat)preferredHeight {
-    if (!_writable || (_actionTitle.length && !_actionWithInput)) return ExteriaInputIdleHeight();
+    if (!_writable || _actionTitle.length) return ExteriaInputIdleHeight();
     CGFloat height = MIN(FIELD_MAX, MAX(FIELD_MIN, [self textHeight] + 1));
-    return height + 2 * ExteriaInputVerticalMargin() + (_actionTitle.length && _actionWithInput ? ExteriaInputIdleHeight() : 0);
+    return height + 2 * ExteriaInputVerticalMargin();
 }
 
 - (void)textViewDidChange:(UITextView *)view {
@@ -674,6 +666,11 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 - (void)textViewDidBeginEditing:(UITextView *)view {
     (void)view;
     [_delegate inputBarDidBeginEditing:self];
+}
+
+- (void)textViewDidEndEditing:(UITextView *)view {
+    (void)view;
+    [_delegate inputBarDidEndEditing:self];
 }
 
 - (void)refreshOnceChip {
@@ -1000,7 +997,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     CGSize size = self.bounds.size;
     _toolbar.frame = self.bounds;
     _hairline.frame = CGRectMake(0, 0, size.width, 1.0 / ExteriaScreenScale());
-    if (_actionTitle.length && (!_actionWithInput || !_writable)) {
+    if (_actionTitle.length) {
         _actionButton.frame = CGRectMake(MARGIN, 0, size.width - 2 * MARGIN, ExteriaInputIdleHeight());
         return;
     }
@@ -1008,7 +1005,6 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _note.frame = CGRectMake(MARGIN, 0, size.width - 2 * MARGIN, ExteriaInputIdleHeight());
         return;
     }
-    if (_actionTitle.length && _actionWithInput) _actionButton.frame = CGRectMake(MARGIN, _fieldHeight + 2 * ExteriaInputVerticalMargin(), size.width - 2 * MARGIN, ExteriaInputIdleHeight());
     CGFloat sendWidth = BUTTON;
     CGFloat sendHeight = BUTTON;
     /* a scaled button keeps its frame, so a transform in flight is set aside while the frame is set */

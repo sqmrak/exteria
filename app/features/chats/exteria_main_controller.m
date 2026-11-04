@@ -17,6 +17,12 @@
 #import "exteria_lite_mode.h"
 #import "exteria_link_router.h"
 #import "exteria_developers.h"
+#import "exteria_dialog_picker_controller.h"
+#import "exteria_gift_screen.h"
+#import "exteria_share_intake.h"
+#import "exteria_plugins.h"
+#import "exteria_plugin_ui.h"
+#import "exteria_weak_reference.h"
 #import "exteria_notifier.h"
 #import "exteria_person.h"
 #import "exteria_platform.h"
@@ -161,6 +167,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     root.backgroundColor = ExteriaColorScreen();
     root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.view = root;
+    /* the busy view draws its duck into pictures when it is made, and the first change of the theme should find them done */
+    [self performSelector:@selector(prepareBusy) withObject:nil afterDelay:3];
     for (NSUInteger i = 0; i < 2; ++i) {
         UISwipeGestureRecognizer *swipe = [[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipedTab:)] autorelease];
         swipe.direction = i == 0 ? UISwipeGestureRecognizerDirectionRight : UISwipeGestureRecognizerDirectionLeft;
@@ -177,6 +185,64 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openTeamPerson:) name:ExteriaOpenTeamPersonNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openChatRequested:) name:ExteriaOpenChatNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openLinkRequested:) name:ExteriaOpenLinkNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(shareFilesRequested:) name:ExteriaShareFilesNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(pluginPickRequested:) name:ExteriaPluginPickNotification object:nil];
+}
+
+/* a plugin asks the person for chats (the pickers of zwylib): the picker of the app opens, the answer goes back to python */
+- (void)pluginPickRequested:(NSNotification *)note {
+    NSNumber *token = [note.userInfo objectForKey:@"token"];
+    NSUInteger types = (NSUInteger)[[note.userInfo objectForKey:@"types"] unsignedIntValue];
+    NSUInteger limit = (NSUInteger)[[note.userInfo objectForKey:@"limit"] unsignedIntegerValue];
+    if (!token || !types || limit < 1) return;
+    if (!_linkRouter) _linkRouter = [[ExteriaLinkRouter alloc] initWithSession:_session avatars:_avatars media:_media stickers:_stickers];
+    [_linkRouter pickDialogsWithFilter:^BOOL(ExteriaDialog *dialog) {
+        if (dialog.folder || dialog.community) return NO;
+        switch (dialog.kind) {
+        case EXTERIA_DIALOG_USER: return (types & 1u) != 0;
+        case EXTERIA_DIALOG_BOT: return (types & 2u) != 0;
+        case EXTERIA_DIALOG_GROUP: return (types & 4u) != 0;
+        case EXTERIA_DIALOG_CHANNEL: return (types & 8u) != 0;
+        }
+        return NO;
+    } limit:limit completion:^(NSArray *dialogs) {
+        NSMutableArray *chosen = [NSMutableArray arrayWithCapacity:dialogs.count];
+        for (ExteriaDialog *dialog in dialogs) {
+            NSNumber *kind = [NSNumber numberWithInt:(int)dialog.kind];
+            [chosen addObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:dialog.peerId], @"id", kind, @"kind", nil]];
+        }
+        ExteriaPluginsCallHost(@"pick_result", [NSArray arrayWithObjects:token, chosen, nil]);
+    }];
+}
+
+/* files handed over by the share sheet: the person picks the chat they go to, and the chat opens once they are sent */
+- (void)shareFilesRequested:(NSNotification *)note {
+    NSArray *urls = [note.userInfo objectForKey:@"urls"];
+    NSString *text = [note.userInfo objectForKey:@"text"];
+    NSString *directory = [note.userInfo objectForKey:@"directory"];
+    if (![urls isKindOfClass:[NSArray class]] || (!urls.count && !text.length)) return;
+    ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
+    picker.screenTitle = NSLocalizedString(@"share.to", nil);
+    picker.forwarding = YES;
+    picker.filter = ^BOOL(ExteriaDialog *dialog) {
+        return !dialog.folder && !dialog.community && (dialog.kind != EXTERIA_DIALOG_CHANNEL || dialog.canPost);
+    };
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    picker.pickHandler = ^(NSArray *dialogs) {
+        ExteriaMainController *main = weak.target;
+        ExteriaDialog *target = [dialogs lastObject];
+        if (!main || !target) return;
+        ExteriaShareSendFiles(urls, text, target, main->_session, ^(NSString *errorName) {
+            ExteriaShareDiscard(directory);
+            ExteriaMainController *again = weak.target;
+            if (errorName) ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+            if (again) [again openDialog:target];
+        });
+    };
+    UINavigationController *navigation = _classicTabs ? (UINavigationController *)_classicTabs.selectedViewController : self.navigationController;
+    if (_classicTabs) [navigation popToRootViewControllerAnimated:NO];
+    else [navigation popToViewController:self animated:NO];
+    [navigation pushViewController:picker animated:YES];
 }
 
 /* an address from outside the screens: it opens over the tab that is up, as a tap on it inside a chat would */
@@ -389,6 +455,11 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [root addSubview:_tabBar];
     [self showTab:tab];
     [self loadProfileTab];
+}
+
+- (void)prepareBusy {
+    if (_busy) return;
+    _busy = [[ExteriaThemeBusyView alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 }
 
 /* the root view turns with the interface on ios 5 through 7 */

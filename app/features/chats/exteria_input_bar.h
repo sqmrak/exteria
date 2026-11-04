@@ -18,6 +18,8 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 /* the text grew or shrank to another number of lines, so the bar needs another height */
 - (void)inputBarDidChangeHeight:(ExteriaInputBar *)bar;
 - (void)inputBarDidBeginEditing:(ExteriaInputBar *)bar;
+/* the field gave up the keyboard or the panel, by whatever way: the screen takes the bar down with it */
+- (void)inputBarDidEndEditing:(ExteriaInputBar *)bar;
 /* the paperclip: the screen offers a photo or video, a file or the place the person stands in */
 - (void)inputBarDidTapAttach:(ExteriaInputBar *)bar;
 /* the button was held long enough: the screen starts the recorder and answers NO when it cannot, which ends the hold */
@@ -56,7 +58,6 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 @property (nonatomic, readonly) ExteriaAvatarView *senderAvatar;
 /* a wide button with this title takes the place of the whole bar's controls; nil gives the field back */
 @property (nonatomic, copy) NSString *actionTitle;
-@property (nonatomic, assign) BOOL actionWithInput;
 /* false for a chat the person cannot write in, such as a channel, which swaps the field for a note */
 @property (nonatomic, assign) BOOL writable;
 @property (nonatomic, copy) NSString *readOnlyNote;

@@ -1,4 +1,5 @@
 #import "exteria_message.h"
+#import "exteria_reaction_artwork.h"
 #import "exteria_text_filter.h"
 
 #import "exteria_person.h"
@@ -166,10 +167,18 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
     return self.emoji;
 }
 - (NSArray *)displayEntities {
-    if (_row.kind != EXTERIA_REACTION_CUSTOM || ![ExteriaReaction knowsCustomDocument:_row.document_id]) return nil;
+    long long document = _row.document_id;
+    /* an ordinary reaction is drawn with the still icon the server keeps for it, over its emoji, until the catalog or the picture is in */
+    if (_row.kind == EXTERIA_REACTION_EMOJI) {
+        ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:self.emoji];
+        if (!artwork) return nil;
+        document = artwork.icon.documentId;
+    } else if (_row.kind != EXTERIA_REACTION_CUSTOM || ![ExteriaReaction knowsCustomDocument:document]) {
+        return nil;
+    }
     ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
                                                                     range:NSMakeRange(0, self.displayText.length) url:nil] autorelease];
-    entity.documentId = _row.document_id;
+    entity.documentId = document;
     return [NSArray arrayWithObject:entity];
 }
 
@@ -183,6 +192,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize replyPeerKind = _replyPeerKind;
 @synthesize replyPeerId = _replyPeerId;
 @synthesize replyQuote = _replyQuote;
+@synthesize replyStory = _replyStory;
 @synthesize topicId = _topicId;
 @synthesize threadId = _threadId;
 @synthesize fromId = _fromId;
@@ -197,6 +207,8 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize outgoing = _outgoing;
 @synthesize noForwards = _noForwards;
 @synthesize unreadMention = _unreadMention;
+@synthesize mediaUnread = _mediaUnread;
+@synthesize listenedDate = _listenedDate;
 @synthesize post = _post;
 @synthesize spoilersRevealed = _spoilersRevealed;
 @synthesize viewOnceOpened = _viewOnceOpened;
@@ -214,6 +226,9 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize forwardDate = _forwardDate;
 @synthesize groupedId = _groupedId;
 @synthesize forwardKey = _forwardKey;
+@synthesize forwardOriginKind = _forwardOriginKind;
+@synthesize forwardOriginId = _forwardOriginId;
+@synthesize forwardOriginMessage = _forwardOriginMessage;
 @synthesize savedPeerKind = _savedPeerKind;
 @synthesize savedPeerId = _savedPeerId;
 
@@ -277,6 +292,9 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 
 @synthesize viaBotId = _viaBotId;
 @synthesize sendReplyTo = _sendReplyTo;
+@synthesize sentAfterId = _sentAfterId;
+@synthesize sendQuote = _sendQuote;
+@synthesize sendQuoteOffset = _sendQuoteOffset;
 @synthesize markup = _markup;
 @synthesize hasMarkup = _hasMarkup;
 
@@ -355,6 +373,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_messageId = row->id;
     message->_date = row->date;
     message->_replyTo = row->reply_to;
+    message->_replyStory = row->reply_story;
     message->_replyPeerKind = row->reply_peer_kind;
     message->_replyPeerId = row->reply_peer_id;
     message->_replyQuote = [[NSString stringWithUTF8String:row->reply_quote] copy];
@@ -374,6 +393,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_outgoing = row->out && !row->post;
     message->_noForwards = row->noforwards != 0;
     message->_unreadMention = row->unread_mention;
+    message->_mediaUnread = row->media_unread;
     message->_post = row->post;
     message->_forwarded = row->forwarded;
     message->_savedOut = row->forward_saved_out;
@@ -398,6 +418,9 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_forwardDate = row->forward_date;
     message->_groupedId = row->grouped_id;
     message->_forwardKey = row->forward_from;
+    message->_forwardOriginKind = row->forward_origin_kind;
+    message->_forwardOriginId = row->forward_origin_id;
+    message->_forwardOriginMessage = row->forward_origin_message;
     message->_callOutcome = row->call_reason;
     message->_callVideo = row->call_video != 0;
     message->_senderRank = [ExteriaUtf8(row->from_rank) copy];
@@ -481,9 +504,11 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
 }
 
 - (void)dealloc {
+    [_listenedDate release];
     [_markup release];
     [_pendingSend release];
     [_replyQuote release];
+    [_sendQuote release];
     [_text release];
     [_sourceText release];
     [_sourceEntities release];

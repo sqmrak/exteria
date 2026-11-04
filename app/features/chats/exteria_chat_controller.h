@@ -42,4 +42,13 @@
 - (void)applyDraft:(NSString *)text;
 - (void)jumpToMessageId:(int32_t)messageId;
 
+/* the chat this screen shows, for the plugin sdk */
+- (ExteriaDialog *)openDialog;
+/* lays the messages out again, at once, after a plugin changed what it says of them */
+- (void)redrawForPlugins;
+/* sends text for a plugin by the path of the field, without the send hooks: the plugin is already running inside one */
+- (void)sendPluginText:(NSString *)text replyTo:(int32_t)replyTo;
+/* sends the picture at path as a photo for a plugin: decoded within a bounded side and re-encoded as jpeg on white, since a png with alpha turns black. nil on success, else the reason */
+- (NSString *)sendPluginPhotoAtPath:(NSString *)path caption:(NSString *)caption replyTo:(int32_t)replyTo;
+
 @end

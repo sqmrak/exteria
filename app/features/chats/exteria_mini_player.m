@@ -5,6 +5,7 @@
 #import "exteria_music_player.h"
 #import "exteria_music_sheet.h"
 #import "exteria_platform.h"
+#import "exteria_round_playback.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 
@@ -20,6 +21,7 @@
     UIView *_line;
     UIImageView *_backdrop;
     BOOL _showing;
+    BOOL _wearsBarColor;
     void (^_changeHandler)(void);
 }
 @end
@@ -27,6 +29,7 @@
 @implementation ExteriaMiniPlayer
 
 @synthesize showing = _showing;
+@synthesize wearsBarColor = _wearsBarColor;
 @synthesize changeHandler = _changeHandler;
 
 + (CGFloat)height { return STRIP_HEIGHT; }
@@ -37,6 +40,11 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     button.accessibilityLabel = NSLocalizedString(label, nil);
     return button;
+}
+
+- (void)setWearsBarColor:(BOOL)wears {
+    _wearsBarColor = wears;
+    if (!ExteriaThemeIsClassic()) self.backgroundColor = wears ? ExteriaColorBar() : ExteriaColorCard();
 }
 
 - (id)initWithFrame:(CGRect)frame {
@@ -70,6 +78,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _line.backgroundColor = classic ? [UIColor colorWithWhite:0 alpha:0.55] : ExteriaColorHairline();
     [self addSubview:_line];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged:) name:ExteriaMusicPlayerDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged:) name:ExteriaRoundPlaybackDidChangeNotification object:nil];
     [self refresh];
     return self;
 }
@@ -94,10 +103,12 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 
 - (void)refresh {
     ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
-    BOOL showing = player.state != ExteriaMusicStateIdle && player.track != nil;
+    ExteriaRoundPlayback *round = [ExteriaRoundPlayback sharedPlayback];
+    /* a video message that plays holds the output, so the strip is its and not the one of the song it paused */
+    BOOL showing = round.active || (player.state != ExteriaMusicStateIdle && player.track != nil);
     if (showing) {
-        BOOL playing = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading;
-        _title.text = ExteriaTrackLine(player.track);
+        BOOL playing = round.active ? round.playing : (player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading);
+        _title.text = round.active ? NSLocalizedString(@"round.title", nil) : ExteriaTrackLine(player.track);
         [_toggle setImage:ExteriaSymbolImage(playing ? ExteriaSymbolPause : ExteriaSymbolPlay, 22, ExteriaThemeIsClassic() ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
         _toggle.accessibilityLabel = NSLocalizedString(playing ? @"music.pause" : @"music.play", nil);
     }
@@ -121,11 +132,26 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [self setNeedsLayout];
 }
 
-- (void)previousTapped { [[ExteriaMusicPlayer sharedPlayer] previous]; }
-- (void)toggleTapped { [[ExteriaMusicPlayer sharedPlayer] togglePause]; }
-- (void)nextTapped { [[ExteriaMusicPlayer sharedPlayer] next]; }
-- (void)closeTapped { [[ExteriaMusicPlayer sharedPlayer] stop]; }
-- (void)openPlayer { [ExteriaMusicSheet present]; }
+- (void)previousTapped {
+    if ([ExteriaRoundPlayback sharedPlayback].active) [[ExteriaRoundPlayback sharedPlayback] step:-1];
+    else [[ExteriaMusicPlayer sharedPlayer] previous];
+}
+- (void)toggleTapped {
+    if ([ExteriaRoundPlayback sharedPlayback].active) [[ExteriaRoundPlayback sharedPlayback] togglePause];
+    else [[ExteriaMusicPlayer sharedPlayer] togglePause];
+}
+- (void)nextTapped {
+    if ([ExteriaRoundPlayback sharedPlayback].active) [[ExteriaRoundPlayback sharedPlayback] step:1];
+    else [[ExteriaMusicPlayer sharedPlayer] next];
+}
+- (void)closeTapped {
+    if ([ExteriaRoundPlayback sharedPlayback].active) [[ExteriaRoundPlayback sharedPlayback] stop];
+    else [[ExteriaMusicPlayer sharedPlayer] stop];
+}
+/* the sheet of the player has nothing for a video message, which has its own circle */
+- (void)openPlayer {
+    if (![ExteriaRoundPlayback sharedPlayback].active) [ExteriaMusicSheet present];
+}
 
 - (void)layoutSubviews {
     [super layoutSubviews];

@@ -123,7 +123,7 @@ static exteria_action_context sent_text(void) {
 
 static void test_rules(void) {
     exteria_action_context c = sent_text();
-    uint32_t base = EXTERIA_ACTION_REACT | EXTERIA_ACTION_REPLY | EXTERIA_ACTION_COPY | EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_SAVE |
+    uint32_t base = EXTERIA_ACTION_REACT | EXTERIA_ACTION_REPLY | EXTERIA_ACTION_SELECT_TEXT | EXTERIA_ACTION_COPY | EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_SAVE |
                     EXTERIA_ACTION_PIN | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_SELECT | EXTERIA_ACTION_BOOKMARK | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_REMIND;
     /* somebody else's text in a group: no edit, no delete, no link in a basic group, but it can be reported */
     CHECK_EQ_INT(exteria_message_actions_for(&c), base | EXTERIA_ACTION_REPORT);
@@ -176,7 +176,7 @@ static void test_rules(void) {
     c.has_text = 0;
     c.outgoing = 0;
     c.media = EXTERIA_PREVIEW_STICKER;
-    CHECK_EQ_INT(exteria_message_actions_for(&c), (base | EXTERIA_ACTION_REPORT) & ~EXTERIA_ACTION_COPY);
+    CHECK_EQ_INT(exteria_message_actions_for(&c), (base | EXTERIA_ACTION_REPORT) & ~(EXTERIA_ACTION_COPY | EXTERIA_ACTION_SELECT_TEXT));
     /* a public channel or supergroup gives a link */
     c = sent_text();
     c.peer_kind = 3;
@@ -414,9 +414,9 @@ static void test_unsent_and_service(void) {
     /* a message still on its way can only be copied */
     c.message_id = 0;
     c.outgoing = 1;
-    CHECK_EQ_INT(exteria_message_actions_for(&c), EXTERIA_ACTION_COPY);
+    CHECK_EQ_INT(exteria_message_actions_for(&c), EXTERIA_ACTION_COPY | EXTERIA_ACTION_SELECT_TEXT);
     c.message_id = -5;
-    CHECK_EQ_INT(exteria_message_actions_for(&c), EXTERIA_ACTION_COPY);
+    CHECK_EQ_INT(exteria_message_actions_for(&c), EXTERIA_ACTION_COPY | EXTERIA_ACTION_SELECT_TEXT);
     c.has_text = 0;
     CHECK_EQ_INT(exteria_message_actions_for(&c), 0);
     c = sent_text();

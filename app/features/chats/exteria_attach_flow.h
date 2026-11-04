@@ -4,6 +4,9 @@
 #import "exteria_message.h"
 @class ExteriaSession, ExteriaDialog;
 
+/* the type of a file by its extension, application/octet-stream for one the system does not know */
+NSString *ExteriaMimeOfPath(NSString *path);
+
 /* what the paperclip opens: the photo library, the file browser or the place the person is at */
 @interface ExteriaAttachFlow : NSObject
 

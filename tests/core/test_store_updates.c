@@ -63,6 +63,18 @@ static void test_atomic(void) {
     CHECK_EQ_INT(exteria_updates_apply(&u, v), EXTERIA_OK);
     CHECK_EQ_INT(exteria_store_journal_page(s, 0, 512, count_visit, &count), EXTERIA_OK);
     CHECK_EQ_INT(count, 1);
+    {
+        exteria_tl_value *wrapper = exteria_tl_new_obj(&a, "updateShort");
+        exteria_tl_value *typing = exteria_tl_new_obj(&a, "updateUserTyping");
+        CHECK_EQ_INT(exteria_tl_set_i64(&a, typing, "user_id", peer.id), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set(typing, "action", exteria_tl_new_obj(&a, "sendMessageTypingAction")), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set(wrapper, "update", typing), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(&a, wrapper, "date", 102), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_updates_apply(&u, wrapper), EXTERIA_OK);
+        count = 0;
+        CHECK_EQ_INT(exteria_store_journal_page(s, 0, 512, count_visit, &count), EXTERIA_OK);
+        CHECK_EQ_INT(count, 1);
+    }
     CHECK_EQ_INT(exteria_updates_apply(&u, short_update(&a, 13, 1, 9)), EXTERIA_E_RETRY);
     CHECK_EQ_INT(exteria_store_cursor_get(s, 0, &cursor), EXTERIA_OK);
     CHECK_EQ_INT(cursor.pts, 11);
@@ -304,7 +316,58 @@ static void test_min_keeps_whole(void) {
     exteria_arena_free(&read);
 }
 
+/* a voice note that was played elsewhere loses its unplayed mark in the store, and an id the store does not hold is no error */
+static void test_contents_read(void) {
+    exteria_store *s = NULL;
+    exteria_arena a, read;
+    exteria_updates u;
+    exteria_tl_value *m, *from, *update, *wrapper, *got;
+    exteria_peer peer = {1, INT64_C(4294967399)};
+    int32_t ids[2] = {7, 99};
+    char path[] = "/tmp/exteria-contents-XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0);
+    if (fd >= 0) close(fd);
+    exteria_arena_init(&a, 8u * 1024u * 1024u);
+    exteria_arena_init(&read, 8u * 1024u * 1024u);
+    CHECK_EQ_INT(exteria_store_open(&s, path, 123), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_init(&u, s, 123), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_state(&u, state(&a, 10, 5, 2)), EXTERIA_OK);
+    m = exteria_tl_new_obj(&a, "message");
+    from = exteria_tl_new_obj(&a, "peerUser");
+    CHECK(m && from);
+    CHECK_EQ_INT(exteria_tl_set_i64(&a, from, "user_id", peer.id), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(m, "peer_id", from), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, m, "id", 7), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, m, "date", 100), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_str(&a, m, "message", ""), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_flag(m, "media_unread"), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_cache_message(&u, m), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_MESSAGE, peer, 7, &read, &got), EXTERIA_OK);
+    CHECK(exteria_tl_has(got, "media_unread"));
+    update = exteria_tl_new_obj(&a, "updateReadMessagesContents");
+    CHECK(update != NULL);
+    CHECK_EQ_INT(exteria_tl_set_i32_vec(&a, update, "messages", ids, 2), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, update, "pts", 11), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, update, "pts_count", 1), EXTERIA_OK);
+    wrapper = exteria_tl_new_obj(&a, "updateShort");
+    CHECK(wrapper != NULL);
+    CHECK_EQ_INT(exteria_tl_set(wrapper, "update", update), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, wrapper, "date", 101), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_apply(&u, wrapper), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_MESSAGE, peer, 7, &read, &got), EXTERIA_OK);
+    CHECK(!exteria_tl_has(got, "media_unread"));
+    CHECK_EQ_INT(exteria_tl_get_i32(got, "id", &ids[1]), EXTERIA_OK);
+    CHECK_EQ_INT(ids[1], 7);
+    CHECK_EQ_INT(exteria_tl_clear(got, "no_such_field"), EXTERIA_E_NOTFOUND);
+    exteria_store_close(s);
+    unlink(path);
+    exteria_arena_free(&a);
+    exteria_arena_free(&read);
+}
+
 int main(void) {
+    test_contents_read();
     test_min_keeps_whole();
     test_atomic();
     test_difference();

@@ -273,6 +273,38 @@ static exteria_status short_message(exteria_updates *u, const exteria_tl_value *
     return status;
 }
 
+/* the voice notes and round videos of these ids were played on another phone or by the other side: they are no longer new */
+static exteria_status apply_contents_read(exteria_updates *u, const exteria_tl_value *v, int64_t channel) {
+    const exteria_tl_value *vec = exteria_tl_get(v, "messages");
+    uint32_t i;
+    if (!vec || vec->kind != EXTERIA_TL_V_VEC || vec->u.vec.count > UPDATE_MAX) return EXTERIA_E_MALFORMED;
+    for (i = 0; i < vec->u.vec.count; ++i) {
+        const exteria_tl_value *item = vec->u.vec.items[i];
+        exteria_peer peer = {3, channel};
+        exteria_arena arena;
+        exteria_tl_value *message = NULL;
+        exteria_status status;
+        if (!item || item->kind != EXTERIA_TL_V_I32 || item->u.i32 <= 0) return EXTERIA_E_MALFORMED;
+        if (!channel) {
+            status = exteria_store_find_common_message(u->store, item->u.i32, &peer);
+            if (status == EXTERIA_E_NOTFOUND) continue;
+            if (status != EXTERIA_OK) return status;
+        }
+        exteria_arena_init(&arena, 2u * 1024u * 1024u);
+        status = exteria_store_get(u->store, EXTERIA_RECORD_MESSAGE, peer, item->u.i32, &arena, &message);
+        /* a message that is not held needs nothing: it arrives with the flag as the server has it */
+        if (status == EXTERIA_OK && exteria_tl_has(message, "media_unread")) {
+            status = exteria_tl_clear(message, "media_unread");
+            if (status == EXTERIA_OK) status = exteria_store_put(u->store, EXTERIA_RECORD_MESSAGE, peer, item->u.i32, message);
+        } else if (status == EXTERIA_E_NOTFOUND) {
+            status = EXTERIA_OK;
+        }
+        exteria_arena_free(&arena);
+        if (status != EXTERIA_OK) return status;
+    }
+    return EXTERIA_OK;
+}
+
 static exteria_status apply_reactions(exteria_updates *u, const exteria_tl_value *v) {
     exteria_peer peer;
     int32_t id;
@@ -353,6 +385,8 @@ static exteria_status apply_one(exteria_updates *u, const exteria_tl_value *v, i
         status = short_message(u, v);
     } else if (id == EXTERIA_TL_ID_updateMessageReactions) {
         status = apply_reactions(u, v);
+    } else if (id == EXTERIA_TL_ID_updateReadMessagesContents || id == EXTERIA_TL_ID_updateChannelReadMessagesContents) {
+        status = apply_contents_read(u, v, channel);
     } else if (id == EXTERIA_TL_ID_updateMessageID) {
         int32_t server_id;
         int64_t random_id;
@@ -374,6 +408,10 @@ static exteria_status apply_one(exteria_updates *u, const exteria_tl_value *v, i
         }
     } else if (id == EXTERIA_TL_ID_updateDraftMessage) {
         /* the account keeps the draft and the client event shows it live; a journal entry per edit from another phone would only pile up */
+        return EXTERIA_OK;
+    } else if (id == EXTERIA_TL_ID_updateUserTyping || id == EXTERIA_TL_ID_updateChatUserTyping ||
+               id == EXTERIA_TL_ID_updateChannelUserTyping) {
+        /* typing expires in seconds and cannot be replayed from the journal */
         return EXTERIA_OK;
     } else if (id == EXTERIA_TL_ID_updateNotifySettings) {
         /* the settings of the account are read through account.getNotifySettings and getNotifyExceptions, which answer with a list of these, and nothing

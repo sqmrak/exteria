@@ -58,12 +58,16 @@ static NSString *ExteriaDraftKey(int32_t kind, long long peer, int32_t top) {
     if (!self) return nil;
     _drafts = [[NSMutableDictionary alloc] init];
     _unsaved = [[NSCountedSet alloc] init];
+    _localRevisions = [[NSMutableDictionary alloc] init];
+    _failed = [[NSMutableSet alloc] init];
     return self;
 }
 
 - (void)dealloc {
     [_drafts release];
     [_unsaved release];
+    [_localRevisions release];
+    [_failed release];
     [super dealloc];
 }
 
@@ -97,24 +101,40 @@ static NSString *ExteriaDraftKey(int32_t kind, long long peer, int32_t top) {
 
 - (void)setLocalDraft:(ExteriaDraft *)draft kind:(int32_t)kind peer:(long long)peer top:(int32_t)top {
     NSString *key = ExteriaDraftKey(kind, peer, top);
+    [_localRevisions setObject:[NSNumber numberWithUnsignedInteger:++_revision] forKey:key];
     [_unsaved addObject:key];
     if ([self storeDraft:draft key:key]) [self postChangeKind:kind peer:peer top:top local:YES];
 }
 
-- (void)noteSavedKind:(int32_t)kind peer:(long long)peer top:(int32_t)top {
-    [_unsaved removeObject:ExteriaDraftKey(kind, peer, top)];
+- (void)noteSavedKind:(int32_t)kind peer:(long long)peer top:(int32_t)top revision:(NSUInteger)revision success:(BOOL)success {
+    NSString *key = ExteriaDraftKey(kind, peer, top);
+    [_unsaved removeObject:key];
+    if ([[_localRevisions objectForKey:key] unsignedIntegerValue] != revision) return;
+    if (success) [_failed removeObject:key];
+    else [_failed addObject:key];
+}
+
+- (BOOL)saveFailedForKind:(int32_t)kind peer:(long long)peer top:(int32_t)top {
+    return [_failed containsObject:ExteriaDraftKey(kind, peer, top)];
 }
 
 - (void)noteAccountDraft:(ExteriaDraft *)draft kind:(int32_t)kind peer:(long long)peer top:(int32_t)top {
     NSString *key = ExteriaDraftKey(kind, peer, top);
-    if ([_unsaved containsObject:key]) return;
+    if ([_unsaved containsObject:key] || [_failed containsObject:key]) return;
     if ([self storeDraft:draft key:key]) [self postChangeKind:kind peer:peer top:top local:NO];
 }
 
 - (void)noteListed:(NSArray *)entries complete:(BOOL)complete {
+    [self noteListed:entries complete:complete since:_revision];
+}
+
+- (NSUInteger)revision { return _revision; }
+
+- (void)noteListed:(NSArray *)entries complete:(BOOL)complete since:(NSUInteger)revision {
     for (NSArray *entry in entries) {
         int32_t kind = [[entry objectAtIndex:0] intValue], top = [[entry objectAtIndex:2] intValue];
         long long peer = [[entry objectAtIndex:1] longLongValue];
+        if ([[_localRevisions objectForKey:ExteriaDraftKey(kind, peer, top)] unsignedIntegerValue] > revision) continue;
         ExteriaDraft *draft = [entry objectAtIndex:3];
         if ([draft isKindOfClass:[NSNull class]]) {
             /* a kept list is older than what the board heard since, so it cannot say that a draft is gone */
@@ -131,6 +151,8 @@ static NSString *ExteriaDraftKey(int32_t kind, long long peer, int32_t top) {
     NSArray *keys = [_drafts allKeys];
     [_drafts removeAllObjects];
     [_unsaved removeAllObjects];
+    [_localRevisions removeAllObjects];
+    [_failed removeAllObjects];
     for (NSString *key in keys) {
         NSArray *parts = [key componentsSeparatedByString:@":"];
         [self postChangeKind:[[parts objectAtIndex:0] intValue] peer:[[parts objectAtIndex:1] longLongValue] top:[[parts objectAtIndex:2] intValue] local:NO];

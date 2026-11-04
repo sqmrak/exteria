@@ -6,6 +6,7 @@
 #import "exteria_profile_controller.h"
 #import "exteria_profile_identity_view.h"
 #import "exteria_chat_settings.h"
+#import "exteria_name_badge.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -427,6 +428,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _titleLabel.text = NSLocalizedString(@"tab.profile", nil);
     [root addSubview:_titleLabel];
     _barName = [[ExteriaEmojiLabel alloc] init];
+    _barName.dropsUndrawable = YES;
     _barName.textColor = ExteriaColorTitle();
     _barName.font = ExteriaFontSemibold(17);
     _barName.textAlignment = ExteriaTextAlignmentCenter;
@@ -471,10 +473,15 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshOwnStatus) name:ExteriaChatSettingsDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(chatSettingsChanged) name:ExteriaChatSettingsDidChangeNotification object:nil];
     [self refreshOwnStatus];
     [self loadProfile];
     [self selectTab:0];
+}
+
+- (void)chatSettingsChanged {
+    [self refreshOwnStatus];
+    if (_person) [self refreshProfile];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -550,7 +557,14 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         _ratingBadge.level = _full.rating.level;
         _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)_full.rating.level];
     }
-    [_identity setName:_person.name developer:ExteriaPersonIsDeveloper(_person)];
+    /* the account's own mark: the status it chose, else the Premium star, which a switch of Exteria can also give */
+    long long badge = ExteriaBadgeDocument(_person.emojiStatus, ExteriaPremiumEffective(_person.premium));
+    _identity.userId = _person.userId;
+    [_identity setName:_person.name badge:badge developer:ExteriaPersonIsDeveloper(_person)];
+    if (_person.emojiStatus) {
+        ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:_identity];
+        ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:_person.emojiStatus]], _session, _media, ^{ [(ExteriaProfileIdentityView *)weak.target redrawName]; });
+    }
     _barName.text = _person.name;
     _avatar.initials = _person.initials;
     _avatar.deleted = _person.deleted;
@@ -669,6 +683,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         detail.ownerName = _person.name;
         detail.stickers = _stickerLibrary;
         detail.folderDialog = [ExteriaDialog savedMessagesWithPerson:_person];
+        detail.pinnedGifts = [feed.items filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"pinned == YES"]];
         ExteriaWeakReference *me = _weak;
         detail.changedHandler = ^{ ExteriaProfileController *profile = me.target; [profile refreshCurrentFeed]; [profile->_folderBar reload]; };
         [self.navigationController pushViewController:detail animated:YES];

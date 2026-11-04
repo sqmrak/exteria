@@ -6,6 +6,8 @@
 #import "exteria_centered_hint_field.h"
 #import "exteria_theme.h"
 #import "exteria_media_viewer.h"
+#import "exteria_video_stage.h"
+#import "exteria_caption_view.h"
 #import "exteria_burn_effect.h"
 
 #import <AVFoundation/AVFoundation.h>
@@ -16,7 +18,9 @@
 #import "exteria_image_decoder.h"
 #import "exteria_music_player.h"
 #import "exteria_photo_editor.h"
+#import "exteria_animation.h"
 #import "exteria_platform.h"
+#include "exteria_photo_zoom.h"
 #import "exteria_popup_menu.h"
 #import "exteria_time.h"
 #import "exteria_symbol.h"
@@ -33,7 +37,7 @@ static char ExteriaMediaPlayerStatusContext;
 + (Class)layerClass { return [AVPlayerLayer class]; }
 @end
 
-@interface ExteriaMediaViewer () <UIScrollViewDelegate, UIGestureRecognizerDelegate, UITextFieldDelegate, UIDocumentInteractionControllerDelegate> {
+@interface ExteriaMediaViewer () <UIScrollViewDelegate, UIGestureRecognizerDelegate, UITextViewDelegate, UIDocumentInteractionControllerDelegate> {
     NSArray *_messages;
     NSDictionary *_senderNames;
     NSString *_chatTitle;
@@ -53,8 +57,14 @@ static char ExteriaMediaPlayerStatusContext;
     UIView *_page;
     UIImageView *_pageTransition;
     BOOL _paging;
+    BOOL _blackHeld;
     UIPanGestureRecognizer *_pagePan;
     UIPanGestureRecognizer *_dismissPan;
+    UIPinchGestureRecognizer *_videoPinch;
+    UIPanGestureRecognizer *_videoPan;
+    double _videoZoom;
+    double _videoX;
+    double _videoY;
     UIScrollView *_zoom;
     UIImageView *_image;
     ExteriaMediaVideoView *_video;
@@ -64,7 +74,7 @@ static char ExteriaMediaPlayerStatusContext;
     UILabel *_date;
     UILabel *_count;
     ExteriaEmojiLabel *_caption;
-    UITextField *_captionInput;
+    ExteriaCaptionView *_captionInput;
     UIButton *_play;
     UIButton *_mute;
     UIButton *_more;
@@ -188,6 +198,8 @@ static char ExteriaMediaPlayerStatusContext;
 - (BOOL)isSending { return _sendPhoto || _sendVideo; }
 
 - (void)dealloc {
+    ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
+    if (_blackHeld) { _blackHeld = NO; ExteriaWindowBlackRelease(); }
     [_weak clear];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_media cancelPathRequest:_request];
@@ -283,11 +295,11 @@ static char ExteriaMediaPlayerStatusContext;
     _caption = [[ExteriaEmojiLabel alloc] init];
     _caption.textColor = [UIColor whiteColor]; _caption.font = ExteriaFontRegular(15);
     _caption.numberOfLines = 3; [_bottom addSubview:_caption];
-    _captionInput = [[ExteriaCenteredHintField alloc] init];
-    ((ExteriaCenteredHintField *)_captionInput).leftAligned = YES;
+    _captionInput = [[ExteriaCaptionView alloc] init];
     _captionInput.textColor = [UIColor whiteColor]; _captionInput.font = [UIFont systemFontOfSize:16];
     _captionInput.placeholder = NSLocalizedString(@"media.caption", nil);
-    _captionInput.delegate = self; _captionInput.returnKeyType = UIReturnKeyDone;
+    /* the return key makes a new line */
+    _captionInput.delegate = self; _captionInput.returnKeyType = UIReturnKeyDefault;
     _captionInput.accessibilityLabel = NSLocalizedString(@"media.caption", nil);
     [_bottom addSubview:_captionInput];
     _send = [self button:ExteriaSymbolSendArrow action:@selector(send) host:_bottom];
@@ -322,18 +334,28 @@ static char ExteriaMediaPlayerStatusContext;
     _dismissPan = dismiss;
     [page requireGestureRecognizerToFail:dismiss];
     [_zoom.panGestureRecognizer requireGestureRecognizerToFail:dismiss];
+    /* a video is enlarged by hand: it plays in a layer of its own, outside the scroll view that zooms a picture */
+    _videoZoom = 1;
+    _videoPinch = [[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(videoPinched:)] autorelease];
+    _videoPinch.delegate = self; [self.view addGestureRecognizer:_videoPinch];
+    _videoPan = [[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(videoPanned:)] autorelease];
+    _videoPan.delegate = self; _videoPan.maximumNumberOfTouches = 2; [self.view addGestureRecognizer:_videoPan];
     [self loadCurrent];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    _statusHidden = [UIApplication sharedApplication].statusBarHidden;
-    [[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationNone];
+    ExteriaStatusBarHide(self, UIStatusBarAnimationNone);
+    if (!_blackHeld) { _blackHeld = YES; ExteriaWindowBlackHold(); }
+}
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    if (_blackHeld) { _blackHeld = NO; ExteriaWindowBlackRelease(); }
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     _wantsPlay = NO; [_player pause]; [self tick];
-    [[UIApplication sharedApplication] setStatusBarHidden:_statusHidden withAnimation:UIStatusBarAnimationNone];
+    ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
 }
 - (BOOL)prefersStatusBarHidden { return YES; }
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation { return YES; }
@@ -355,10 +377,13 @@ static char ExteriaMediaPlayerStatusContext;
         [self cancelPaging];
         _layoutSize = bounds.size;
         [_zoom setZoomScale:1 animated:NO];
+        [self resetVideoZoom];
     }
     _page.bounds = bounds;
     _page.center = CGPointMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds));
-    _zoom.frame = bounds; _video.frame = bounds;
+    _zoom.frame = bounds;
+    /* the video may be enlarged, and the frame of a scaled view is not where it stands */
+    ExteriaPlaceView(_video, bounds);
     if (_zoom.zoomScale <= 1.001) { _image.frame = _zoom.bounds; _zoom.contentSize = bounds.size; }
     CGFloat header = top + (self.isSending ? 56 : 96);
     _top.frame = CGRectMake(0, 0, width, header);
@@ -398,10 +423,10 @@ static char ExteriaMediaPlayerStatusContext;
     _keyboardHeight = MAX(0, CGRectGetMaxY(self.view.bounds) - MAX(0, frame.origin.y));
     [self.view setNeedsLayout];
 }
-- (BOOL)textFieldShouldReturn:(UITextField *)field { [field resignFirstResponder]; return YES; }
-- (BOOL)textField:(UITextField *)field shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
+- (BOOL)textView:(UITextView *)field shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)string {
     return range.location <= field.text.length && range.length <= field.text.length - range.location && field.text.length - range.length + string.length <= 1024;
 }
+- (void)textViewDidChange:(UITextView *)field { (void)field; [_captionInput scrollRangeToVisible:_captionInput.selectedRange]; }
 
 - (void)releasePlayer {
     if (_timeObserver && _player) [_player removeTimeObserver:_timeObserver];
@@ -422,6 +447,7 @@ static char ExteriaMediaPlayerStatusContext;
     [self releasePlayer];
     [_loadedPath release]; _loadedPath = nil;
     [_zoom setZoomScale:1 animated:NO]; _zoom.maximumZoomScale = self.isVideo ? 1 : 4;
+    [self resetVideoZoom];
     _photoReady = NO;
     _image.image = nil; _retry.hidden = YES; _progress.hidden = YES; _progress.progress = 0;
     _more.enabled = _forward.enabled = _headerEdit.enabled = NO;
@@ -535,9 +561,19 @@ static char ExteriaMediaPlayerStatusContext;
 - (void)playPath:(NSString *)path {
     [_loadedPath release]; _loadedPath = [path copy];
     NSString *slot = [NSString stringWithFormat:@"viewer-%p", self];
-    _playableURL = [ExteriaPlayableLink(path, @"mp4", slot) retain];
-    if (!_playableURL) { [self failed]; return; }
-    [self playURL:_playableURL];
+    NSUInteger generation = _generation;
+    ExteriaWeakReference *weak = _weak;
+    /* a fragmented video is made plain first, which takes a moment for a large one */
+    [_spinner startAnimating];
+    ExteriaPlayableLinkAsync(path, @"mp4", slot, ^(NSURL *url) {
+        ExteriaMediaViewer *me = weak.target;
+        if (!me || me->_closed || me->_generation != generation) return;
+        [me->_spinner stopAnimating];
+        if (!url) { [me failed]; return; }
+        [me->_playableURL release];
+        me->_playableURL = [url retain];
+        [me playURL:url];
+    });
 }
 
 - (void)playURL:(NSURL *)url {
@@ -648,6 +684,63 @@ static NSString *ExteriaVideoTime(double seconds) {
 }
 - (void)backgrounded:(NSNotification *)note { (void)note; _wantsPlay = NO; [_player pause]; [self tick]; }
 
+#pragma mark video zoom
+
+- (BOOL)videoIsZoomed { return _videoZoom > 1.03; }
+- (void)resetVideoZoom {
+    _videoZoom = 1; _videoX = _videoY = 0;
+    [_video.layer removeAnimationForKey:@"exteria.motion"];
+    _video.transform = CGAffineTransformIdentity;
+}
+/* the picture the player draws, fitted into the view */
+- (CGSize)videoPictureSize {
+    CGSize area = _video.bounds.size, picture = _playerItem.presentationSize;
+    if (picture.width < 1 || picture.height < 1) return area;
+    CGFloat scale = MIN(area.width / picture.width, area.height / picture.height);
+    return CGSizeMake(picture.width * scale, picture.height * scale);
+}
+- (void)clampVideoZoomWithMinimum:(double)minimum {
+    CGSize picture = [self videoPictureSize], area = _video.bounds.size;
+    if (area.width < 1 || picture.width < 1 || exteria_photo_zoom_clamp(picture.width, picture.height, area.width, area.height, minimum, &_videoZoom, &_videoX, &_videoY) != EXTERIA_OK) {
+        _videoZoom = 1; _videoX = _videoY = 0;
+    }
+}
+- (void)applyVideoZoomAnimated:(BOOL)animated {
+    CGAffineTransform transform = CGAffineTransformMake((CGFloat)_videoZoom, 0, 0, (CGFloat)_videoZoom, (CGFloat)_videoX, (CGFloat)_videoY);
+    if (animated) ExteriaAnimateView(_video, transform, 1, EXTERIA_MOTION_SPRING, nil);
+    else { [_video.layer removeAnimationForKey:@"exteria.motion"]; _video.transform = transform; }
+}
+- (void)videoPinched:(UIPinchGestureRecognizer *)pinch {
+    if (pinch.state == UIGestureRecognizerStateBegan) [_video.layer removeAnimationForKey:@"exteria.motion"];
+    if (pinch.state == UIGestureRecognizerStateBegan || pinch.state == UIGestureRecognizerStateChanged) {
+        CGPoint point = [pinch locationInView:_video.superview];
+        CGSize area = _video.bounds.size;
+        double next = _videoZoom * pinch.scale, x = _videoX, y = _videoY;
+        if (exteria_photo_zoom_about(_videoZoom, _videoX, _videoY, point.x - area.width / 2, point.y - area.height / 2, next, &x, &y) == EXTERIA_OK) {
+            _videoZoom = next; _videoX = x; _videoY = y;
+        }
+        pinch.scale = 1;
+        [self clampVideoZoomWithMinimum:0.75];
+        [self applyVideoZoomAnimated:NO];
+    } else if (pinch.state == UIGestureRecognizerStateEnded || pinch.state == UIGestureRecognizerStateCancelled || pinch.state == UIGestureRecognizerStateFailed) {
+        [self clampVideoZoomWithMinimum:1];
+        [self applyVideoZoomAnimated:YES];
+    }
+}
+- (void)videoPanned:(UIPanGestureRecognizer *)pan {
+    if (pan.state == UIGestureRecognizerStateBegan) [_video.layer removeAnimationForKey:@"exteria.motion"];
+    if (pan.state == UIGestureRecognizerStateBegan || pan.state == UIGestureRecognizerStateChanged) {
+        CGPoint move = [pan translationInView:self.view];
+        [pan setTranslation:CGPointZero inView:self.view];
+        _videoX += move.x; _videoY += move.y;
+        [self clampVideoZoomWithMinimum:0.75];
+        [self applyVideoZoomAnimated:NO];
+    } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled || pan.state == UIGestureRecognizerStateFailed) {
+        [self clampVideoZoomWithMinimum:1];
+        [self applyVideoZoomAnimated:YES];
+    }
+}
+
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scroll { return self.isVideo ? nil : _image; }
 - (void)scrollViewDidZoom:(UIScrollView *)scroll {
     CGSize size = scroll.bounds.size;
@@ -658,14 +751,17 @@ static NSString *ExteriaVideoTime(double seconds) {
     return YES;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    if (gesture == _videoPinch || other == _videoPinch || gesture == _videoPan || other == _videoPan) return (gesture == _videoPinch || gesture == _videoPan) && (other == _videoPinch || other == _videoPan);
     if (gesture == _dismissPan || other == _dismissPan) return NO;
     return _zoom.zoomScale <= 1.001 && ([gesture isKindOfClass:[UISwipeGestureRecognizer class]] || [other isKindOfClass:[UISwipeGestureRecognizer class]] || gesture.view == self.view || other.view == self.view);
 }
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture {
     if (_paging || _closed || _burning) return NO;
+    if (gesture == _videoPinch) return self.isVideo && _video.window && _playerItem;
+    if (gesture == _videoPan) return [self videoIsZoomed];
     if (gesture == _pagePan || gesture == _dismissPan) {
         CGPoint speed = [(UIPanGestureRecognizer *)gesture velocityInView:self.view];
-        if (_zoom.zoomScale > 1.001 || _captionInput.isFirstResponder) return NO;
+        if (_zoom.zoomScale > 1.001 || [self videoIsZoomed] || _captionInput.isFirstResponder) return NO;
         exteria_media_drag_direction direction = exteria_media_drag_direction_for(speed.x, speed.y);
         if (gesture == _dismissPan) return direction == EXTERIA_MEDIA_DRAG_VERTICAL;
         return _messages.count > 1 && direction == EXTERIA_MEDIA_DRAG_HORIZONTAL;
@@ -734,7 +830,8 @@ static NSString *ExteriaVideoTime(double seconds) {
         } completion:^(BOOL finished) {
             if (!finished || !_paging || _closed) return;
             _paging = NO;
-            if (close) [self close];
+            /* the view is invisible already, and a dissolve over it would flash it once more */
+            if (close) { if (_oneTime && _opened) [self close]; else [self closeAnimated:NO]; }
         }];
     }
 }
@@ -806,18 +903,27 @@ static NSString *ExteriaVideoTime(double seconds) {
 - (void)forward {
     [self.view endEditing:YES];
     _wantsPlay = NO; [_player pause]; [self tick];
-    NSMutableArray *items = [NSMutableArray array];
     if (self.isVideo && _loadedPath) {
         if (_sharePath) [[NSFileManager defaultManager] removeItemAtPath:_sharePath error:NULL];
         [_sharePath release];
         _sharePath = [[NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-share-%08x.mp4", arc4random()]] copy];
-        NSError *error = nil;
-        if (![[NSFileManager defaultManager] linkItemAtPath:_loadedPath toPath:_sharePath error:&error]) {
-            NSLog(@"exteria: cannot stage video for sharing: %@", error); [self notice:NSLocalizedString(@"media.share.failed", nil)]; return;
-        }
-        [items addObject:[NSURL fileURLWithPath:_sharePath]];
-    } else if (_image.image) [items addObject:_image.image];
-    if (!items.count) return;
+        NSUInteger generation = _generation;
+        ExteriaWeakReference *weak = _weak;
+        /* what goes to another app is the plain form of a fragmented video, which the apps of an old system can open */
+        ExteriaStageVideoAsync(_loadedPath, _sharePath, ^(BOOL staged, NSError *error) {
+            ExteriaMediaViewer *me = weak.target;
+            if (!me || me->_closed || me->_generation != generation) return;
+            if (!staged) {
+                NSLog(@"exteria: cannot stage video for sharing: %@", error); [me notice:NSLocalizedString(@"media.share.failed", nil)]; return;
+            }
+            [me presentShareItems:[NSArray arrayWithObject:[NSURL fileURLWithPath:me->_sharePath]]];
+        });
+        return;
+    }
+    if (_image.image) [self presentShareItems:[NSArray arrayWithObject:_image.image]];
+}
+
+- (void)presentShareItems:(NSArray *)items {
     Class activityClass = NSClassFromString(@"UIActivityViewController");
     if (activityClass) {
         id activity = [[activityClass alloc] initWithActivityItems:items applicationActivities:nil];
@@ -856,14 +962,15 @@ static NSString *ExteriaVideoTime(double seconds) {
     } completion:nil];
 }
 
-- (void)closeNow {
+- (void)closeNow { [self closeAnimated:YES]; }
+- (void)closeAnimated:(BOOL)animated {
     [self cancelPaging];
     if (_closed) return;
     _closed = YES; ++_generation;
     [_media cancelPathRequest:_request]; _request = 0;
     [self releasePlayer]; [self.view endEditing:YES];
     void (^cancel)(void) = [[_cancelHandler copy] autorelease];
-    [self dismissViewControllerAnimated:YES completion:^{ if (cancel) cancel(); }];
+    [self dismissViewControllerAnimated:animated completion:^{ if (cancel) cancel(); }];
 }
 - (void)edit {
     if (!_image.image || self.isVideo || (!self.isSending && !_photoReady)) return;
@@ -898,16 +1005,24 @@ static NSString *ExteriaVideoTime(double seconds) {
 - (void)save {
     if (_saving) return;
     if (self.isVideo && _loadedPath) {
-        /* a hard link pins the cached movie without copying it on the main thread */
+        /* the library takes the plain form of a fragmented video, and a plain one is pinned by a hard link without a copy */
         NSString *temporary = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-save-%08x.mp4", arc4random()]];
-        NSError *error = nil;
-        if (![[NSFileManager defaultManager] linkItemAtPath:_loadedPath toPath:temporary error:&error]) { NSLog(@"exteria: cannot stage video: %@", error); [self notice:NSLocalizedString(@"media.save.failed", nil)]; return; }
-        if (!UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(temporary)) {
-            [[NSFileManager defaultManager] removeItemAtPath:temporary error:NULL];
-            [self notice:NSLocalizedString(@"media.save.failed", nil)]; return;
-        }
-        _saving = YES; [self retain];
-        UISaveVideoAtPathToSavedPhotosAlbum(temporary, self, @selector(video:didFinishSavingWithError:contextInfo:), NULL);
+        NSUInteger generation = _generation;
+        ExteriaWeakReference *weak = _weak;
+        _saving = YES;
+        ExteriaStageVideoAsync(_loadedPath, temporary, ^(BOOL staged, NSError *error) {
+            ExteriaMediaViewer *me = weak.target;
+            if (!me) { [[NSFileManager defaultManager] removeItemAtPath:temporary error:NULL]; return; }
+            me->_saving = NO;
+            if (me->_closed || me->_generation != generation) { [[NSFileManager defaultManager] removeItemAtPath:temporary error:NULL]; return; }
+            if (!staged) { NSLog(@"exteria: cannot stage video: %@", error); [me notice:NSLocalizedString(@"media.save.failed", nil)]; return; }
+            if (!UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(temporary)) {
+                [[NSFileManager defaultManager] removeItemAtPath:temporary error:NULL];
+                [me notice:NSLocalizedString(@"media.save.failed", nil)]; return;
+            }
+            me->_saving = YES; [me retain];
+            UISaveVideoAtPathToSavedPhotosAlbum(temporary, me, @selector(video:didFinishSavingWithError:contextInfo:), NULL);
+        });
     } else if (_image.image) {
         _saving = YES; [self retain];
         UIImageWriteToSavedPhotosAlbum(_image.image, self, @selector(image:didFinishSavingWithError:contextInfo:), NULL);
