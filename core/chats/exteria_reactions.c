@@ -1,7 +1,10 @@
 #include "exteria_reactions.h"
+#include "exteria_reaction_art.h"
 
+#include <stdio.h>
 #include <string.h>
 
+#include "exteria_app_config.h"
 #include "exteria_messages.h"
 #include "exteria_store.h"
 #include "exteria_tl_ids.h"
@@ -232,6 +235,39 @@ exteria_status exteria_reaction_catalog_read(const exteria_tl_value *answer, ext
     return EXTERIA_OK;
 }
 
+static exteria_status read_art_document(const exteria_tl_value *row, const char *field, const char *emoji, int required, exteria_custom_emoji *out) {
+    exteria_status status = exteria_document_picture_read(exteria_tl_get(row, field), emoji, out);
+    if (status == EXTERIA_E_NOTFOUND && !required) return EXTERIA_OK;
+    return status == EXTERIA_OK ? EXTERIA_OK : EXTERIA_E_MALFORMED;
+}
+
+exteria_status exteria_reaction_art_read(const exteria_tl_value *answer, exteria_reaction_art *items, size_t cap, size_t *count) {
+    const exteria_tl_value *vec;
+    uint32_t i;
+    if (count) *count = 0;
+    if (!items || !count || !cap) return EXTERIA_E_ARG;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_availableReactions) ||
+        exteria_tl_get_vec(answer, "reactions", &vec) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    if (vec->u.vec.count > cap) return EXTERIA_E_LIMIT;
+    for (i = 0; i < vec->u.vec.count; ++i) {
+        exteria_reaction_art *art = &items[i];
+        exteria_reaction r;
+        const exteria_tl_value *v = vec->u.vec.items[i];
+        memset(art, 0, sizeof(*art));
+        memset(&r, 0, sizeof(r));
+        if (!exteria_tl_is(v, EXTERIA_TL_ID_availableReaction) || read_emoji(v, "reaction", &r) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+        snprintf(art->emoji, sizeof(art->emoji), "%s", r.emoji);
+        if (read_art_document(v, "static_icon", art->emoji, 1, &art->icon) != EXTERIA_OK ||
+            read_art_document(v, "appear_animation", art->emoji, 1, &art->appear) != EXTERIA_OK ||
+            read_art_document(v, "select_animation", art->emoji, 1, &art->select) != EXTERIA_OK ||
+            read_art_document(v, "activate_animation", art->emoji, 1, &art->activate) != EXTERIA_OK ||
+            read_art_document(v, "effect_animation", art->emoji, 1, &art->effect) != EXTERIA_OK ||
+            read_art_document(v, "around_animation", art->emoji, 0, &art->around) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    }
+    *count = vec->u.vec.count;
+    return EXTERIA_OK;
+}
+
 exteria_status exteria_reaction_policy_read(const exteria_tl_value *answer, exteria_reactions *allowed, int *all) {
     const exteria_tl_value *full, *policy, *vec;
     uint32_t i;
@@ -313,6 +349,24 @@ exteria_status exteria_reaction_build(exteria_arena *arena, const exteria_reacti
         return *out ? exteria_tl_set_i64(arena, *out, "document_id", r->document_id) : EXTERIA_E_NOMEM;
     }
     return EXTERIA_E_ARG;
+}
+
+exteria_status exteria_paid_reaction_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, int32_t count, int64_t random_id, exteria_tl_value **out) {
+    exteria_tl_value *input, *request;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!arena || id <= 0 || count < 1 || count > EXTERIA_PAID_REACTION_MAX || random_id == 0) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.sendPaidReaction");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "msg_id", id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "count", count);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "random_id", random_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
 }
 
 exteria_status exteria_send_reactions_request(exteria_arena *arena, const exteria_peer_ref *peer,
@@ -420,4 +474,51 @@ exteria_status exteria_reactions_merge_min(exteria_tl_value *incoming, const ext
         }
     }
     return EXTERIA_OK;
+}
+
+static exteria_status read_limit(const exteria_tl_value *config, const char *key, int32_t fallback, int32_t *out) {
+    int32_t value;
+    exteria_status status = exteria_app_config_i32(config, key, &value);
+    if (status == EXTERIA_E_NOTFOUND) { *out = fallback; return EXTERIA_OK; }
+    if (status != EXTERIA_OK) return status;
+    if (value < 1 || value > EXTERIA_REACTIONS_MAX) return EXTERIA_E_MALFORMED;
+    *out = value;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_reaction_limits_read(const exteria_tl_value *config, int32_t *standard, int32_t *premium) {
+    int32_t a, b;
+    exteria_status status;
+    if (!standard || !premium) return EXTERIA_E_ARG;
+    *standard = 1;
+    *premium = 3;
+    status = read_limit(config, "reactions_user_max_default", 1, &a);
+    if (status == EXTERIA_OK) status = read_limit(config, "reactions_user_max_premium", 3, &b);
+    if (status != EXTERIA_OK) return status;
+    *standard = a;
+    *premium = b;
+    return EXTERIA_OK;
+}
+
+size_t exteria_reaction_choices_after_pick(const exteria_reaction *chosen, size_t count, const exteria_reaction *pick, size_t limit,
+                                           exteria_reaction *out, size_t capacity) {
+    size_t n = 0, skip, i;
+    if (!pick || !out || !limit || limit > capacity || (count && !chosen)) return 0;
+    for (i = 0; i < count; ++i) {
+        if (chosen[i].kind == EXTERIA_REACTION_PAID || exteria_reaction_equal(&chosen[i], pick)) continue;
+        if (n == capacity) return 0;
+        out[n++] = chosen[i];
+    }
+    /* the list is sent in order of choosing, oldest first, so the server keeps the order and the oldest go when there is no room for pick */
+    for (i = 1; i < n; ++i) {
+        exteria_reaction t = out[i];
+        size_t j = i;
+        for (; j > 0 && out[j - 1].chosen_order > t.chosen_order; --j) out[j] = out[j - 1];
+        out[j] = t;
+    }
+    skip = n + 1 > limit ? n + 1 - limit : 0;
+    if (skip) memmove(out, out + skip, (n - skip) * sizeof(*out));
+    n -= skip;
+    out[n++] = *pick;
+    return n;
 }

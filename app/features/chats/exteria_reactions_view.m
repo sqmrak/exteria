@@ -15,6 +15,10 @@
 #import "exteria_imported_theme.h"
 #include "exteria_reaction_layout.h"
 
+/* the plate, label and faces are laid out separately, so UIKit cannot resize the classic plate independently of its contents */
+#define LABEL_TAG 7401
+#define FACE_TAG 7402
+#define PLATE_TAG 7403
 #define FACE_SIZE 20.0
 /* each face covers a third of the one before it, as the people of a call or a group do */
 #define FACE_STEP 14.0
@@ -162,7 +166,7 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
    side the count moved to, each by 0.4 of the line height, while they fade */
 - (void)rollLabelOfButton:(UIView *)button from:(UIImage *)old up:(BOOL)up {
     if (ExteriaReactionStill()) return;
-    UIView *label = button.subviews.count ? [button.subviews objectAtIndex:0] : nil;
+    UIView *label = [button viewWithTag:LABEL_TAG];
     if (!label) return;
     CGFloat amplitude = 0.4f * ((ExteriaEmojiLabel *)label).font.lineHeight;
     CAMediaTimingFunction *quint = [CAMediaTimingFunction functionWithControlPoints:0.22f :1 :0.36f :1];
@@ -270,7 +274,7 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
         } else {
             if (animated && key) {
                 [_moveFrom setObject:[NSValue valueWithCGRect:button.frame] forKey:key];
-                UIView *oldLabel = button.subviews.count ? [button.subviews objectAtIndex:0] : nil;
+                UIView *oldLabel = [button viewWithTag:LABEL_TAG];
                 UIImage *oldWords = oldLabel ? ExteriaDustSnapshot(oldLabel) : nil;
                 if (oldWords) [_labelFrom setObject:oldWords forKey:key];
             }
@@ -291,7 +295,10 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
         if (ExteriaThemeIsClassic() && (r.chosen || !_inBubble)) {
             /* a lit button for the chip you picked and a plate for the others, as the old chrome draws them */
             UIImage *face = r.chosen ? ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) : ExteriaClassicPlateImage();
-            [button setBackgroundImage:face forState:UIControlStateNormal];
+            UIImageView *plate = [[[UIImageView alloc] initWithImage:face] autorelease];
+            plate.tag = PLATE_TAG;
+            plate.userInteractionEnabled = NO;
+            [button addSubview:plate];
         } else {
             button.backgroundColor = [self chipColorChosen:r.chosen];
             button.layer.cornerRadius = 16 * ExteriaReactionScale();
@@ -308,6 +315,7 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
         label.textColor = [self chipTextColorChosen:r.chosen];
         label.textAlignment = ExteriaTextAlignmentCenter;
         label.userInteractionEnabled = NO;
+        label.tag = LABEL_TAG;
         [button addSubview:label];
         /* the people sit over the chip right of the label, the last one on top */
         NSUInteger faceCount = counts ? r.faces.count : 0;
@@ -319,6 +327,7 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
             face.initials = person.initials;
             face.deleted = person.deleted;
             face.userInteractionEnabled = NO;
+            face.tag = FACE_TAG;
             face.layer.cornerRadius = FACE_SIZE / 2;
             [face setPhoto:person.photo cache:_avatars];
             [button addSubview:face];
@@ -336,6 +345,14 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
     }
     _buttons = [buttons copy];
     [self setNeedsLayout];
+}
+
+- (CGRect)frameOfReaction:(ExteriaReaction *)reaction inView:(UIView *)view {
+    for (NSUInteger i = 0; i < _buttons.count && i < _reactions.count; ++i) {
+        if (![[(ExteriaReaction *)[_reactions objectAtIndex:i] key] isEqualToString:reaction.key]) continue;
+        return [self convertRect:[(UIView *)[_buttons objectAtIndex:i] frame] toView:view];
+    }
+    return CGRectZero;
 }
 
 - (void)picked:(UIButton *)button {
@@ -388,14 +405,17 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
                 [button.layer addAnimation:widen forKey:@"exteria.reaction.widen"];
             }
         }
-        UIView *label = [button.subviews objectAtIndex:0];
+        UIView *label = [button viewWithTag:LABEL_TAG];
+        [button viewWithTag:PLATE_TAG].frame = button.bounds;
         ExteriaReaction *reaction = i < _reactions.count ? [_reactions objectAtIndex:i] : nil;
         CGFloat facesWidth = ExteriaFacesWidth(reaction, _counts);
         label.frame = CGRectMake(5, 0, button.bounds.size.width - 10 - facesWidth, button.bounds.size.height);
         CGFloat faceX = button.bounds.size.width - 10 - facesWidth + FACE_GAP;
-        for (NSUInteger f = 1; f < button.subviews.count; ++f) {
-            UIView *face = [button.subviews objectAtIndex:f];
-            face.frame = CGRectMake(faceX + (CGFloat)(f - 1) * FACE_STEP, (button.bounds.size.height - FACE_SIZE) / 2, FACE_SIZE, FACE_SIZE);
+        NSUInteger placed = 0;
+        for (UIView *face in button.subviews) {
+            if (face.tag != FACE_TAG) continue;
+            face.frame = CGRectMake(faceX + (CGFloat)placed * FACE_STEP, (button.bounds.size.height - FACE_SIZE) / 2, FACE_SIZE, FACE_SIZE);
+            ++placed;
         }
     }
     /* the glide is asked for once, by the layout that follows the change */

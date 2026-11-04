@@ -29,6 +29,8 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
 - (void)setReactions:(NSArray *)reactions counts:(BOOL)counts;
 /* animated: a chip that is new, or whose count changed since the last call, pops in with an overshoot */
 - (void)setReactions:(NSArray *)reactions counts:(BOOL)counts animated:(BOOL)animated;
+/* where the chip of a reaction stands in view's coordinates, CGRectZero when it has none */
+- (CGRect)frameOfReaction:(ExteriaReaction *)reaction inView:(UIView *)view;
 /* a chip of a reaction that was taken away is still shrinking out of view */
 - (BOOL)animatingOut;
 
