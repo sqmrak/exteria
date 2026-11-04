@@ -30,6 +30,8 @@ UIView *ExteriaClassicSearchFacade(CGRect frame, NSString *placeholder);
 @end
 void ExteriaClassicStyleSegmented(UISegmentedControl *control);
 void ExteriaClassicStyleTabBar(UITabBar *bar);
+/* the height the system gives a tab bar on this os, so a bar standing beside it can match */
+CGFloat ExteriaClassicTabBarHeight(void);
 
 /* a plain or grouped table in the colors of the theme; the light theme keeps the system's own background */
 void ExteriaClassicStyleTable(UITableView *table);
@@ -48,6 +50,7 @@ void ExteriaClassicStyleTabItem(UITabBarItem *item, ExteriaSymbol symbol);
 
 /* the round record or send button of the message bar: a glossy purple dome with its glyph, drawn whole so it needs no layers */
 UIImage *ExteriaClassicRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed);
+UIImage *ExteriaClassicRedRoundButtonImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed);
 
 /* the face in a chrome rim, as the logo of the QR code wears it: a brushed metal gradient outside, a darker bevel before the face, an inner shadow and a gloss over the
    upper half; side is in points, the face is cropped round and may be nil */
@@ -62,7 +65,7 @@ UIView *ExteriaClassicTitleView(NSString *title, NSString *subtitle);
    also runs three dots after the words); the bar is purple, so the colors are light ones */
 UIView *ExteriaClassicTitleViewWithStatus(NSString *title, NSString *subtitle, int kind);
 
-/* the small round count on a row, in the system's blue or gray */
+/* the small round count on a row, in the accent color or gray */
 UILabel *ExteriaClassicBadge(NSString *text, BOOL muted);
 
 /* the colors of a glossy button of the classic style */
@@ -77,6 +80,7 @@ typedef enum {
 /* a stretchable glossy button, rounded and lit from above with a pale upper half, in a color; pressed is the
    darker one */
 UIImage *ExteriaClassicGlossButtonImage(ExteriaClassicGloss color, BOOL pressed);
+UIImage *ExteriaClassicBarButtonImage(BOOL pressed);
 
 /* a plate in the card color of the theme, with a lit rim and a thin outline */
 UIImage *ExteriaClassicPlateImage(void);

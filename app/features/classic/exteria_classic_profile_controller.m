@@ -5,6 +5,7 @@
 
 #import "exteria_avatar_view.h"
 #import "exteria_classic_chrome.h"
+#import "exteria_chat_settings.h"
 #import "exteria_avatar_viewer.h"
 #import "exteria_avatar_viewer.h"
 #import "exteria_profile_hero_view.h"
@@ -20,6 +21,8 @@
 #import "exteria_rating_view.h"
 #import "exteria_profile_photo_picker.h"
 #import "exteria_music_list_controller.h"
+#import "exteria_music_player.h"
+#import "exteria_settings_controller.h"
 #import "exteria_symbol.h"
 #import "exteria_session_profile.h"
 #import "exteria_star_gift.h"
@@ -33,6 +36,173 @@
 
 #define AVATAR 84.0
 #define HEADER_HEIGHT 150.0
+#define BLOCK_MARGIN 10.0
+#define BLOCK_GAP 8.0
+#define ACTION_HEIGHT 62.0
+#define MUSIC_HEIGHT 56.0
+#define MUSIC_COVER 40.0
+
+/* a lit plate with the symbol over its word, the three blocks under the name; the plate is drawn by the classic chrome so it follows the theme */
+@interface ExteriaClassicProfileAction : UIControl {
+    UIImageView *_plate;
+    UIImageView *_icon;
+    UILabel *_caption;
+}
+- (id)initWithSymbol:(ExteriaSymbol)symbol title:(NSString *)title;
+@end
+
+@implementation ExteriaClassicProfileAction
+
+- (id)initWithSymbol:(ExteriaSymbol)symbol title:(NSString *)title {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) return nil;
+    _plate = [[UIImageView alloc] initWithImage:ExteriaClassicPlateImage()];
+    _plate.userInteractionEnabled = NO;
+    [self addSubview:_plate];
+    _icon = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(symbol, 24, ExteriaColorAccent())];
+    _icon.contentMode = UIViewContentModeCenter;
+    [self addSubview:_icon];
+    _caption = [[UILabel alloc] init];
+    _caption.backgroundColor = [UIColor clearColor];
+    _caption.textAlignment = ExteriaTextAlignmentCenter;
+    _caption.font = [UIFont boldSystemFontOfSize:12];
+    _caption.textColor = ExteriaThemeIsDark() ? ExteriaColorTitle() : [UIColor blackColor];
+    _caption.adjustsFontSizeToFitWidth = YES;
+    _caption.text = title;
+    [self addSubview:_caption];
+    self.accessibilityLabel = title;
+    return self;
+}
+
+- (void)dealloc {
+    [_plate release];
+    [_icon release];
+    [_caption release];
+    [super dealloc];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGSize size = self.bounds.size;
+    _plate.frame = self.bounds;
+    _icon.frame = CGRectMake(floor((size.width - 28) / 2), 8, 28, 28);
+    _caption.frame = CGRectMake(4, 38, MAX(0, size.width - 8), 16);
+}
+
+/* the plate has no pressed picture of its own, so the whole block dims */
+- (void)setHighlighted:(BOOL)highlighted {
+    [super setHighlighted:highlighted];
+    self.alpha = highlighted ? 0.6 : 1;
+}
+
+@end
+
+/* the song the profile shows first, on the same plate: the cover, the title over the performer; a tap opens the list of the music */
+@interface ExteriaClassicMusicPlate : UIControl {
+    UIImageView *_plate;
+    UIImageView *_cover;
+    UIImageView *_note;
+    ExteriaEmojiLabel *_title;
+    ExteriaEmojiLabel *_performer;
+    ExteriaMedia *_track;
+    ExteriaMediaCache *_media;
+}
+@property (nonatomic, retain) ExteriaMedia *track;
+@property (nonatomic, retain) ExteriaMediaCache *media;
+@end
+
+@implementation ExteriaClassicMusicPlate
+
+@synthesize track = _track;
+@synthesize media = _media;
+
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    BOOL dark = ExteriaThemeIsDark();
+    _plate = [[UIImageView alloc] initWithImage:ExteriaClassicPlateImage()];
+    _plate.userInteractionEnabled = NO;
+    [self addSubview:_plate];
+    _cover = [[UIImageView alloc] init];
+    _cover.contentMode = UIViewContentModeScaleAspectFill;
+    _cover.clipsToBounds = YES;
+    _cover.layer.cornerRadius = 6;
+    _cover.backgroundColor = [UIColor colorWithWhite:dark ? 1 : 0 alpha:0.12];
+    _cover.userInteractionEnabled = NO;
+    [self addSubview:_cover];
+    _note = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMusic, 22, ExteriaColorAccent())];
+    _note.contentMode = UIViewContentModeCenter;
+    _note.userInteractionEnabled = NO;
+    [self addSubview:_note];
+    _title = [[ExteriaEmojiLabel alloc] init];
+    _title.font = [UIFont boldSystemFontOfSize:16];
+    _title.textColor = dark ? ExteriaColorTitle() : [UIColor blackColor];
+    _title.dropsUndrawable = YES;
+    _title.userInteractionEnabled = NO;
+    [self addSubview:_title];
+    _performer = [[ExteriaEmojiLabel alloc] init];
+    _performer.font = [UIFont systemFontOfSize:13];
+    _performer.textColor = dark ? ExteriaColorSecondary() : [UIColor grayColor];
+    _performer.dropsUndrawable = YES;
+    _performer.userInteractionEnabled = NO;
+    [self addSubview:_performer];
+    self.hidden = YES;
+    return self;
+}
+
+- (void)dealloc {
+    [_plate release];
+    [_cover release];
+    [_note release];
+    [_title release];
+    [_performer release];
+    [_track release];
+    [_media release];
+    [super dealloc];
+}
+
+- (void)setTrack:(ExteriaMedia *)track {
+    if (track == _track) return;
+    [_track release];
+    _track = [track retain];
+    self.hidden = track == nil;
+    _title.text = track ? ExteriaTrackTitle(track) : @"";
+    _performer.text = track ? ExteriaTrackPerformer(track) : @"";
+    _cover.image = nil;
+    _note.hidden = NO;
+    self.accessibilityLabel = track ? ExteriaTrackLine(track) : nil;
+    [self setNeedsLayout];
+    if (!track || !_media) return;
+    ExteriaMedia *requested = track;
+    [_media loadCoverForTrack:track maxSide:MUSIC_COVER * ExteriaScreenScale() completion:^(UIImage *image) {
+        if (!image || requested != _track) return;
+        _cover.image = image;
+        _note.hidden = YES;
+    }];
+}
+
+- (BOOL)hasContent { return _track != nil; }
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGSize size = self.bounds.size;
+    _plate.frame = self.bounds;
+    CGFloat inset = floor((size.height - MUSIC_COVER) / 2);
+    _cover.frame = CGRectMake(inset, inset, MUSIC_COVER, MUSIC_COVER);
+    _note.frame = _cover.frame;
+    CGFloat left = CGRectGetMaxX(_cover.frame) + 10;
+    CGFloat width = MAX(0, size.width - left - 12);
+    BOOL hasPerformer = _performer.text.length > 0;
+    _title.frame = CGRectMake(left, hasPerformer ? 9 : floor((size.height - 20) / 2), width, 20);
+    _performer.frame = CGRectMake(left, 29, width, hasPerformer ? 18 : 0);
+}
+
+- (void)setHighlighted:(BOOL)highlighted {
+    [super setHighlighted:highlighted];
+    self.alpha = highlighted ? 0.6 : 1;
+}
+
+@end
 
 /* a row with a value over its caption; the value is the user's own text (a bio, a channel name), so it is drawn by
    the emoji label and not by the cell's textLabel, which shows the system's emoji font */
@@ -163,6 +333,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     ExteriaEmojiLabel *_name;
     UILabel *_detail;
     ExteriaRatingBadge *_ratingBadge;
+    ExteriaClassicProfileAction *_photoAction;
+    ExteriaClassicProfileAction *_editAction;
+    ExteriaClassicProfileAction *_settingsAction;
+    ExteriaClassicMusicPlate *_musicPlate;
     UIActivityIndicatorView *_spinner;
     BOOL _working;
     void (^_signOutHandler)(void (^)(NSString *));
@@ -260,11 +434,67 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     CGFloat wide = [ExteriaProfileHeroView heightForWidth:width screenHeight:self.view.bounds.size.height];
     if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, 0, width, wide) : _heroCircle;
     CGRect frame = header.frame;
-    frame.size.height = _heroOpen ? wide + 10 : HEADER_HEIGHT;
+    frame.size.height = [self layoutBlocksBelow:_heroOpen ? wide : HEADER_HEIGHT width:width];
     header.frame = frame;
     [table beginUpdates];
     table.tableHeaderView = header;
     [table endUpdates];
+}
+
+/* the three blocks and the song stand under the photo, or under the wide photo while it is open; returns the height the header needs */
+- (CGFloat)layoutBlocksBelow:(CGFloat)photoBottom width:(CGFloat)width {
+    CGFloat y = photoBottom + BLOCK_GAP;
+    CGFloat room = MAX(0, width - 2 * BLOCK_MARGIN - 2 * BLOCK_GAP);
+    CGFloat slot = floor(room / 3);
+    _photoAction.frame = CGRectMake(BLOCK_MARGIN, y, slot, ACTION_HEIGHT);
+    _editAction.frame = CGRectMake(BLOCK_MARGIN + slot + BLOCK_GAP, y, slot, ACTION_HEIGHT);
+    _settingsAction.frame = CGRectMake(BLOCK_MARGIN + 2 * (slot + BLOCK_GAP), y, room - 2 * slot, ACTION_HEIGHT);
+    y += ACTION_HEIGHT;
+    if (_musicPlate.hasContent) {
+        y += BLOCK_GAP;
+        _musicPlate.frame = CGRectMake(BLOCK_MARGIN, y, MAX(0, width - 2 * BLOCK_MARGIN), MUSIC_HEIGHT);
+        y += MUSIC_HEIGHT;
+    }
+    return y + 6;
+}
+
+/* the header grows with the song that arrives after the full profile */
+- (void)fitHeader {
+    UITableView *table = self.tableView;
+    UIView *header = table.tableHeaderView;
+    if (!header || _heroMoving) return;
+    CGFloat width = table.bounds.size.width;
+    CGFloat photoBottom = _heroOpen ? [ExteriaProfileHeroView heightForWidth:width screenHeight:self.view.bounds.size.height] : HEADER_HEIGHT;
+    CGFloat height = [self layoutBlocksBelow:photoBottom width:width];
+    if (fabs(header.frame.size.height - height) < 0.5) return;
+    CGRect frame = header.frame;
+    frame.size.height = height;
+    header.frame = frame;
+    table.tableHeaderView = header;
+}
+
+- (void)openSettings {
+    UITabBarController *tabs = self.tabBarController;
+    NSArray *screens = tabs.viewControllers;
+    for (NSUInteger i = 0; i < screens.count; ++i) {
+        UINavigationController *navigation = [screens objectAtIndex:i];
+        if (![navigation isKindOfClass:[UINavigationController class]] || !navigation.viewControllers.count) continue;
+        if ([[navigation.viewControllers objectAtIndex:0] isKindOfClass:[ExteriaSettingsController class]]) {
+            tabs.selectedIndex = i;
+            return;
+        }
+    }
+    /* a layout without a settings tab still has to reach them */
+    ExteriaSettingsController *settings = [[[ExteriaSettingsController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
+    settings.signOutHandler = _signOutHandler;
+    [self.navigationController pushViewController:settings animated:YES];
+}
+
+- (void)openMusic {
+    ExteriaDialog *own = _person && _media ? [ExteriaDialog savedMessagesWithPerson:_person] : nil;
+    if (!own) return;
+    ExteriaMusicListController *list = [[[ExteriaMusicListController alloc] initWithSession:_session dialog:own first:_full.music avatars:_avatars media:_media] autorelease];
+    [self.navigationController pushViewController:list animated:YES];
 }
 
 - (void)editProfile {
@@ -280,6 +510,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [_weak clear];
     [_weak release];
     /* a tab nobody opened has no view, and asking for it here would load one while the controller is being freed */
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaChatSettingsDidChangeNotification object:nil];
     if ([self isViewLoaded]) {
         self.tableView.delegate = nil;
         self.tableView.dataSource = nil;
@@ -299,12 +530,17 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [_name release];
     [_detail release];
     [_ratingBadge release];
+    [_photoAction release];
+    [_editAction release];
+    [_settingsAction release];
+    [_musicPlate release];
     [_spinner release];
     [super dealloc];
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(chatSettingsChanged) name:ExteriaChatSettingsDidChangeNotification object:nil];
     UITableView *table = self.tableView;
     ExteriaClassicStyleTable(table);
     UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, table.bounds.size.width, HEADER_HEIGHT)] autorelease];
@@ -333,6 +569,20 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     _ratingBadge.hidden = YES;
     [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:_ratingBadge];
+    _photoAction = [[ExteriaClassicProfileAction alloc] initWithSymbol:ExteriaSymbolCameraPlus title:NSLocalizedString(@"profile.choosephoto", nil)];
+    [_photoAction addTarget:self action:@selector(choosePhoto) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:_photoAction];
+    _editAction = [[ExteriaClassicProfileAction alloc] initWithSymbol:ExteriaSymbolCompose title:NSLocalizedString(@"profile.edit", nil)];
+    [_editAction addTarget:self action:@selector(editProfile) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:_editAction];
+    _settingsAction = [[ExteriaClassicProfileAction alloc] initWithSymbol:ExteriaSymbolGear title:NSLocalizedString(@"tab.settings", nil)];
+    [_settingsAction addTarget:self action:@selector(openSettings) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:_settingsAction];
+    _musicPlate = [[ExteriaClassicMusicPlate alloc] init];
+    _musicPlate.media = _media;
+    [_musicPlate addTarget:self action:@selector(openMusic) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:_musicPlate];
+    header.frame = CGRectMake(0, 0, table.bounds.size.width, [self layoutBlocksBelow:HEADER_HEIGHT width:table.bounds.size.width]);
     table.tableHeaderView = header;
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
@@ -368,6 +618,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     _detail.frame = CGRectMake(16, 130, MAX(0, width - 32), 18);
     CGFloat detailWidth = MIN(width - 70, ceil([_detail sizeThatFits:CGSizeMake(width - 70, 20)].width));
     _ratingBadge.frame = CGRectMake(floor((width - detailWidth) / 2) - 26, _detail.frame.origin.y, 22, 20);
+    [self fitHeader];
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation {
@@ -375,6 +626,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 }
 
 /* the name, the line under it, the photo and the rows, from the person that is held */
+- (void)chatSettingsChanged {
+    if (_person) [self showPerson];
+}
+
 - (void)showPerson {
     NSArray *hammer = nil;
     /* the mark after the name is the one the lists and the chat show: the status the person chose, or the Premium star */
@@ -441,6 +696,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         _ratingBadge.hidden = !user.hasRating;
         _ratingBadge.level = user.rating.level;
         _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)user.rating.level];
+        _musicPlate.media = _media;
+        _musicPlate.track = user.music;
         [self.view setNeedsLayout];
         [_about release];
         _about = [user.about copy];
@@ -473,8 +730,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [self.tableView reloadData];
 }
 
-/* sections: the photo and the profile, the phone and the bio, the stories and gifts, the way out */
-enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount };
+/* sections: the phone and the bio, the stories and gifts, the way out; the photo, the profile and the settings are the blocks of the header */
+enum { SectionInfo, SectionLists, SectionSignOut, SectionCount };
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     (void)tableView;
@@ -484,7 +741,6 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     (void)tableView;
     switch (section) {
-    case SectionActions: return 2;
     case SectionInfo: return (NSInteger)_infoRows.count;
     case SectionLists: return 5 + (_full.channel ? 1 : 0);
     default: return 1;
@@ -508,9 +764,6 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
     }
     cell.accessoryView = nil;
     switch (indexPath.section) {
-    case SectionActions:
-        cell.textLabel.text = NSLocalizedString(indexPath.row == 0 ? @"profile.photo" : @"profile.edit", nil);
-        break;
     case SectionInfo: {
         NSArray *row = [_infoRows objectAtIndex:(NSUInteger)indexPath.row];
         [(ExteriaClassicInfoCell *)cell setValue:[row objectAtIndex:1] caption:[row objectAtIndex:0]];
@@ -559,17 +812,6 @@ enum { SectionActions, SectionInfo, SectionLists, SectionSignOut, SectionCount }
     UINavigationController *navigation = self.navigationController;
     ExteriaDialog *own = _person && _media ? [ExteriaDialog savedMessagesWithPerson:_person] : nil;
     switch (indexPath.section) {
-    case SectionActions:
-        if (indexPath.row == 0) {
-            [self choosePhoto];
-        } else if (_person) {
-            ExteriaProfileEditController *edit = [[[ExteriaProfileEditController alloc] initWithSession:_session person:_person fullUser:_full
-                                                                                                avatars:_avatars media:_media] autorelease];
-            edit.changedHandler = ^{ [self loadProfile]; };
-            edit.logoutHandler = ^{ [self confirmSignOut]; };
-            [navigation pushViewController:edit animated:YES];
-        }
-        break;
     case SectionInfo: {
         NSArray *row = [_infoRows objectAtIndex:(NSUInteger)indexPath.row];
         [UIPasteboard generalPasteboard].string = [row objectAtIndex:1];

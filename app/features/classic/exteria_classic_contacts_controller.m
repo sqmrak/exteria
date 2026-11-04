@@ -14,6 +14,8 @@
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickers;
     UISearchBar *_search;
+    /* the pill that stands over the bar while nobody types in it: the same drawing as the search of the chat list, whose word stands on the middle of the pill */
+    UIView *_searchFacade;
     UILabel *_status;
     UIActivityIndicatorView *_spinner;
     ExteriaContactList *_list;
@@ -50,6 +52,7 @@
     [_media release];
     [_stickers release];
     [_search release];
+    [_searchFacade release];
     [_status release];
     [_spinner release];
     [_list release];
@@ -70,12 +73,21 @@
             [table setValue:ExteriaColorBar() forKey:@"sectionIndexTrackingBackgroundColor"];
     }
     table.rowHeight = [ExteriaClassicDialogCell rowHeight];
-    _search = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, table.bounds.size.width, 44)];
+    UIView *searchHeader = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, table.bounds.size.width, 44)] autorelease];
+    searchHeader.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    _search = [[UISearchBar alloc] initWithFrame:searchHeader.bounds];
     _search.placeholder = NSLocalizedString(@"contacts.search", nil);
     _search.delegate = self;
     _search.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     ExteriaClassicStyleSearchBar(_search);
-    table.tableHeaderView = _search;
+    /* the bar of the system puts its hint a little below the middle of the pill, and no offset is right on every system; the pill that stands over it is drawn by one view alone,
+       as the one of the chat list is, and is taken away when the person taps it and the bar is used */
+    _search.alpha = 0;
+    [searchHeader addSubview:_search];
+    _searchFacade = [ExteriaClassicSearchFacade(searchHeader.bounds, NSLocalizedString(@"contacts.search", nil)) retain];
+    [_searchFacade addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(beginSearch)] autorelease]];
+    [searchHeader addSubview:_searchFacade];
+    table.tableHeaderView = searchHeader;
     UIView *backdrop = [[[UIView alloc] initWithFrame:table.bounds] autorelease];
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
     _spinner.hidesWhenStopped = YES;
@@ -163,8 +175,36 @@
     [self.tableView reloadData];
 }
 
+/* the bar takes the place of the pill and the keyboard opens */
+- (void)beginSearch {
+    _searchFacade.hidden = YES;
+    _searchFacade.alpha = 1;
+    _search.alpha = 1;
+    [_search becomeFirstResponder];
+}
+
+/* the pill comes back when the bar is left with nothing typed in it */
+- (void)showFacadeIfIdle {
+    if (_search.text.length || [_search isFirstResponder]) return;
+    /* the button of the bar goes with the keyboard, however the keyboard went: its own key on a tablet closes it without the button being touched */
+    [_search setShowsCancelButton:NO animated:YES];
+    _searchFacade.alpha = 0;
+    _searchFacade.hidden = NO;
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.22 animations:^{
+        _searchFacade.alpha = 1;
+        _search.alpha = 0;
+    }];
+}
+
 - (void)searchBarTextDidBeginEditing:(UISearchBar *)searchBar {
+    _searchFacade.hidden = YES;
+    _search.alpha = 1;
     [searchBar setShowsCancelButton:YES animated:YES];
+}
+
+- (void)searchBarTextDidEndEditing:(UISearchBar *)searchBar {
+    (void)searchBar;
+    [self showFacadeIfIdle];
 }
 
 - (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar {
@@ -172,6 +212,7 @@
     [searchBar setShowsCancelButton:NO animated:YES];
     [searchBar resignFirstResponder];
     [self searchBar:searchBar textDidChange:@""];
+    [self showFacadeIfIdle];
 }
 
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
