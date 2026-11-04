@@ -22,6 +22,10 @@ extern NSString *const ExteriaSpoilerTarget;
     UIColor *_ink;
     BOOL _hasSpoilers;
     BOOL _spoilersRevealed;
+    NSData *_marks;
+    NSString *_text;
+    NSString *_highlight;
+    NSArray *_highlightRanges;
 }
 
 /* entities may be nil. maxLines of zero means no limit. flush is 0 for left aligned text, 0.5 for centered and 1
@@ -63,5 +67,19 @@ extern NSString *const ExteriaSpoilerTarget;
 - (long long)customEmojiAtPoint:(CGPoint)point;
 /* where the first custom emoji of this document stands in the layout, in its coordinates; CGRectNull when the text has none */
 - (CGRect)rectOfCustomEmoji:(long long)document;
+
+/* selection: indices count the laid out string, where an emoji is one character */
+- (NSUInteger)length;
+/* the words the layout was made of */
+- (NSString *)text;
+/* words that are drawn on a colored plate wherever they stand in the text, for the result of a search; compared without regard to case or accents. nil or empty for none. A change needs
+   only a redraw, the lines are not touched */
+@property (nonatomic, copy) NSString *highlight;
+- (NSUInteger)characterIndexAtPoint:(CGPoint)point;
+/* the boxes a range fills, one for each line it touches, in the coordinates of the text box */
+- (NSArray *)rectsForRange:(NSRange)range;
+- (NSRange)wordRangeAtIndex:(NSUInteger)index;
+/* the same range in the words, where an emoji is as long as it was written */
+- (NSRange)textRangeForRange:(NSRange)range;
 
 @end

@@ -22,6 +22,10 @@ extern NSString *const ExteriaCustomEmojiDidLoadNotification;
 #define EXTERIA_OFFICIAL_TESTER_DOCUMENT (-10LL)
 /* the shield of the official manager of @sqmrak */
 #define EXTERIA_MANAGER_DOCUMENT (-11LL)
+/* the gear and chevron of ExteriaVideoFix, for its author */
+#define EXTERIA_VIDEO_FIX_DOCUMENT (-12LL)
+/* the magnifier and net full of bugs, for the testers who see flaws in everything */
+#define EXTERIA_FLAW_SEER_DOCUMENT (-13LL)
 #define EXTERIA_CAUTION_BADGE_RATIO 2.7
 
 @interface ExteriaCustomEmoji : NSObject
@@ -29,10 +33,16 @@ extern NSString *const ExteriaCustomEmojiDidLoadNotification;
 /* the picture when it is in memory, nil while it is not loaded */
 + (UIImage *)imageForDocument:(long long)document;
 
-/* whether a loader should fetch the picture now: it is not in memory, not on its way, and did not fail before */
+/* the still picture at full size, even for an animated emoji, whose frames (imageForDocument:) are drawn at half the size of the still to keep a screenful of them light; for a picture
+   that is drawn large and does not move, such as the icon of a forum topic */
++ (UIImage *)stillImageForDocument:(long long)document;
+
+/* whether a loader should fetch the picture now: it is not in memory, not on its way, and did not fail in the last minute */
 + (BOOL)needsLoad:(long long)document;
 + (void)beginLoad:(long long)document;
-/* ends a load; a nil image marks the document as failed */
+/* a load that ended without telling anything about the document, such as a request that failed: it is asked for again at the next need, not after the retry pause */
++ (void)abandonLoad:(long long)document;
+/* ends a load; a nil image marks the document as failed for a minute */
 + (void)finishLoad:(long long)document image:(UIImage *)image;
 
 /* the side in points an emoji is drawn at, times the screen scale, is what a loader should decode to */

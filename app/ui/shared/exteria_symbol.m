@@ -1,4 +1,5 @@
 #import "exteria_symbol.h"
+#import "exteria_platform.h"
 
 /* the bundled mask of a symbol, resources/icons/symbol_*, cut drawables by tools/make_assets.py */
 static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
@@ -135,6 +136,10 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolGhost: return @"symbol_ghost";
     case ExteriaSymbolHammer: return nil;
     case ExteriaSymbolCameraPlus: return nil;
+    case ExteriaSymbolBlur: return nil;
+    case ExteriaSymbolPipette: return nil;
+    case ExteriaSymbolUndo: return nil;
+    case ExteriaSymbolCross: return nil;
     }
     return nil;
 }
@@ -190,10 +195,112 @@ static UIImage *ExteriaCameraPlusImage(CGFloat side, UIColor *color) {
     return image;
 }
 
+/* a drop on a grid of 24 units, with a small clear glint cut into its lower left so it reads as water and not as a pin */
+static UIImage *ExteriaBlurImage(CGFloat side, UIColor *color) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextScaleCTM(context, side / 24, side / 24);
+    [color setFill];
+    UIBezierPath *drop = [UIBezierPath bezierPath];
+    [drop moveToPoint:CGPointMake(12, 2.2)];
+    [drop addCurveToPoint:CGPointMake(18.8, 14) controlPoint1:CGPointMake(13.3, 6.2) controlPoint2:CGPointMake(18.8, 9.6)];
+    [drop addCurveToPoint:CGPointMake(12, 21.4) controlPoint1:CGPointMake(18.8, 18) controlPoint2:CGPointMake(15.8, 21.4)];
+    [drop addCurveToPoint:CGPointMake(5.2, 14) controlPoint1:CGPointMake(8.2, 21.4) controlPoint2:CGPointMake(5.2, 18)];
+    [drop addCurveToPoint:CGPointMake(12, 2.2) controlPoint1:CGPointMake(5.2, 9.6) controlPoint2:CGPointMake(10.7, 6.2)];
+    [drop closePath];
+    [drop fill];
+    CGContextSetBlendMode(context, kCGBlendModeClear);
+    UIBezierPath *glint = [UIBezierPath bezierPath];
+    [glint addArcWithCenter:CGPointMake(12, 14.4) radius:4.3 startAngle:(CGFloat)(M_PI * 0.62) endAngle:(CGFloat)(M_PI * 0.98) clockwise:YES];
+    glint.lineWidth = 1.7;
+    glint.lineCapStyle = kCGLineCapRound;
+    [glint stroke];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
+/* a path in the notation of the vector drawables of the exteraless editor (absolute M, L, H, V, C and Z), on a square grid of the given size; the icons that came from there
+   are kept as their own numbers instead of being redrawn by eye */
+static UIBezierPath *ExteriaVectorPath(const char *d) {
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    CGPoint current = CGPointZero, start = CGPointZero;
+    char command = 0;
+    const char *p = d;
+    while (*p) {
+        while (*p == ' ' || *p == ',' || *p == '\n') ++p;
+        if (!*p) break;
+        if ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z')) {
+            command = *p++;
+            if (command == 'Z' || command == 'z') { [path closePath]; current = start; command = 0; continue; }
+        } else if (!command) break;
+        double v[6];
+        int need = command == 'C' ? 6 : (command == 'H' || command == 'V' ? 1 : 2);
+        if (command != 'C' && command != 'M' && command != 'L' && command != 'H' && command != 'V') break;
+        for (int i = 0; i < need; ++i) {
+            char *end = NULL;
+            v[i] = strtod(p, &end);
+            if (end == p) return path;
+            p = end;
+            while (*p == ' ' || *p == ',') ++p;
+        }
+        if (command == 'M') { current = CGPointMake((CGFloat)v[0], (CGFloat)v[1]); start = current; [path moveToPoint:current]; command = 'L'; }
+        else if (command == 'L') { current = CGPointMake((CGFloat)v[0], (CGFloat)v[1]); [path addLineToPoint:current]; }
+        else if (command == 'H') { current.x = (CGFloat)v[0]; [path addLineToPoint:current]; }
+        else if (command == 'V') { current.y = (CGFloat)v[0]; [path addLineToPoint:current]; }
+        else {
+            [path addCurveToPoint:CGPointMake((CGFloat)v[4], (CGFloat)v[5]) controlPoint1:CGPointMake((CGFloat)v[0], (CGFloat)v[1]) controlPoint2:CGPointMake((CGFloat)v[2], (CGFloat)v[3])];
+            current = CGPointMake((CGFloat)v[4], (CGFloat)v[5]);
+        }
+    }
+    return path;
+}
+
+/* filled when stroke is 0, otherwise a round stroke of that width in grid units */
+static UIImage *ExteriaVectorImage(CGFloat side, UIColor *color, const char *d, CGFloat grid, CGFloat stroke) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    CGContextScaleCTM(UIGraphicsGetCurrentContext(), side / grid, side / grid);
+    UIBezierPath *path = ExteriaVectorPath(d);
+    if (stroke > 0) {
+        path.lineWidth = stroke; path.lineCapStyle = kCGLineCapRound; path.lineJoinStyle = kCGLineJoinRound;
+        [color setStroke]; [path stroke];
+    } else {
+        path.usesEvenOddFillRule = YES;
+        [color setFill]; [path fill];
+    }
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
+/* the @3x bitmap of a mask (or the best one the bundle has) drawn into an alpha only bitmap of side x side pixels; NULL when the bundle has none, and the
+   caller keeps the plain mask */
+static CGImageRef ExteriaCreateScaledMask(NSString *name, size_t side) {
+    if (side < 2 || side > 512) return NULL;
+    UIImage *source = nil;
+    for (NSString *suffix in [NSArray arrayWithObjects:@"@3x", @"@2x", @"", nil]) {
+        NSString *path = [[NSBundle mainBundle] pathForResource:[name stringByAppendingString:suffix] ofType:@"png"];
+        if (path) source = [UIImage imageWithContentsOfFile:path];
+        if (source.CGImage) break;
+    }
+    if (!source.CGImage || CGImageGetWidth(source.CGImage) < side) return NULL;
+    CGContextRef bitmap = CGBitmapContextCreate(NULL, side, side, 8, side, NULL, kCGImageAlphaOnly);
+    if (!bitmap) return NULL;
+    CGContextSetInterpolationQuality(bitmap, kCGInterpolationHigh);
+    CGContextDrawImage(bitmap, CGRectMake(0, 0, side, side), source.CGImage);
+    CGImageRef scaled = CGBitmapContextCreateImage(bitmap);
+    CGContextRelease(bitmap);
+    return scaled;
+}
+
 /* the mask filled with color; a bitmap on every system, so the glyphs look the same from ios 5 to the newest release */
 static UIImage *ExteriaRenderSymbolImage(ExteriaSymbol symbol, CGFloat pointSize, UIColor *color) {
     if (symbol == ExteriaSymbolHammer) return ExteriaHammerImage(pointSize, color);
     if (symbol == ExteriaSymbolCameraPlus) return ExteriaCameraPlusImage(pointSize, color);
+    if (symbol == ExteriaSymbolBlur) return ExteriaBlurImage(pointSize, color);
+    if (symbol == ExteriaSymbolPipette) return ExteriaVectorImage(pointSize, color, "M11.793,7.207L11.293,6.707C10.902,6.317 10.902,5.683 11.293,5.293C11.683,4.902 12.317,4.902 12.707,5.293L13.707,6.293L16.439,3.561C17.025,2.975 17.975,2.975 18.561,3.561L20.439,5.439C21.025,6.025 21.025,6.975 20.439,7.561L17.707,10.293L18.707,11.293C19.098,11.683 19.098,12.317 18.707,12.707C18.317,13.098 17.683,13.098 17.293,12.707L16.793,12.207L8.879,20.121C8.316,20.684 7.553,21 6.757,21H4C3.448,21 3,20.552 3,20V17.243C3,16.447 3.316,15.684 3.879,15.121L5.06,16.302C4.81,16.552 4.67,16.89 4.67,17.243V19.33H6.757C7.11,19.33 7.448,19.19 7.698,18.941L15.612,11.026L12.974,8.388L5.06,16.302L3.879,15.121L11.793,7.207Z", 24, 0);
+    if (symbol == ExteriaSymbolUndo) return ExteriaVectorImage(pointSize, color, "M34 58.5H41.5C50.6127 58.5 58 51.1127 58 42C58 32.8873 50.6127 25.5 41.5 25.5H16M29.5 39L16 25.5L29.5 12", 72, 5);
+    if (symbol == ExteriaSymbolCross) return ExteriaVectorImage(pointSize, color, "M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12Z", 24, 0);
     NSString *name = ExteriaSymbolMaskName(symbol);
     UIImage *mask = name ? [UIImage imageNamed:name] : nil;
     if (!mask) {
@@ -208,7 +315,11 @@ static UIImage *ExteriaRenderSymbolImage(ExteriaSymbol symbol, CGFloat pointSize
     CGContextScaleCTM(context, 1, -1);
     CGRect box = CGRectMake(0, 0, size.width, size.height);
     CGContextSaveGState(context);
-    CGContextClipToMask(context, box, mask.CGImage);
+    /* the largest bitmap of the mask, brought to the exact pixels of the glyph with the best filter; the clip of a mask drawn at its own size and scaled by the
+       context was soft, and the check marks, which are small and thin, showed it */
+    CGImageRef sharp = symbol == ExteriaSymbolTrash ? NULL : ExteriaCreateScaledMask(name, (size_t)lround(pointSize * ExteriaScreenScale()));
+    CGContextClipToMask(context, box, sharp ? sharp : mask.CGImage);
+    if (sharp) CGImageRelease(sharp);
     CGContextFillRect(context, box);
     CGContextRestoreGState(context);
     if (symbol == ExteriaSymbolTrash) {

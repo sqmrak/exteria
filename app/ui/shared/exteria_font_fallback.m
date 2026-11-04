@@ -31,7 +31,8 @@ static NSString *ExteriaCoveragePath(void) {
 
 static NSString *ExteriaCoverageSignature(void) {
     id build = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
-    return [NSString stringWithFormat:@"%@|%@|%@", build ? build : @"", [[NSProcessInfo processInfo] operatingSystemVersionString],
+    /* the revision of the bundled fonts: Unifont lost the ideographs and the rare scripts of the upper planes, and an answer saved before that names glyphs it no longer has */
+    return [NSString stringWithFormat:@"%@|%@|%@|fonts2", build ? build : @"", [[NSProcessInfo processInfo] operatingSystemVersionString],
             [[NSArray arrayWithObjects:ExteriaFallbackFiles count:FALLBACK_COUNT] componentsJoinedByString:@","]];
 }
 

@@ -8,6 +8,10 @@
    the animation is parsed; for the few animations a screen shows on every visit, not for the stickers of a chat. Set before the view is loaded */
 @property (nonatomic, assign) BOOL cachesPoster;
 
+/* runs once, on the main thread after the last frame of a playOnce has been rendered; a view that is taken out of its superview there is safe, since the handler is
+   deferred to the next turn of the run loop. a view that plays with reduced motion on never runs it */
+@property (nonatomic, copy) void (^finishHandler)(void);
+
 - (id)initWithAnimationNamed:(NSString *)name;
 /* a packed sticker held in memory; key only names it in the log */
 - (id)initWithPackedData:(NSData *)packed key:(NSString *)key;

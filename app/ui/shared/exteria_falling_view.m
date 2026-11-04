@@ -1,4 +1,5 @@
 #import "exteria_falling_view.h"
+#import "exteria_window.h"
 #import "exteria_animation.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -32,6 +33,9 @@ typedef struct {
     UIImage *_sprite;
     CGFloat _base;
     BOOL _pad;
+    /* after a shake the pictures drop, bounce off the floor and the walls and each other, and lie there for a while, as the icons of Gravity Board do; the time since the shake */
+    BOOL _gravity;
+    CFTimeInterval _gravityTime;
 }
 @end
 
@@ -192,6 +196,74 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
     for (int i = 0; i < _count; ++i) [self resetFlake:&_flakes[i] scatter:YES];
 }
 
+#define GRAVITY_SECONDS 7.0
+#define GRAVITY_FADE 0.7
+#define GRAVITY_BOUNCE 0.42f
+
+/* a shake throws the pictures up and sideways, and gravity takes them down */
+- (void)shaken {
+    if (!_running || !_sprite || _gravity) return;
+    _gravity = YES;
+    _gravityTime = 0;
+    for (int i = 0; i < _count; ++i) {
+        snow_flake *f = &_flakes[i];
+        f->vx = ExteriaSnowRandom(-280, 280);
+        f->vy = ExteriaSnowRandom(-560, -140);
+        f->spin = ExteriaSnowRandom(-4.5f, 4.5f);
+        f->layer.opacity = (float)f->alpha;
+    }
+}
+
+/* the fall of one step: gravity, the floor and the walls, and the pictures against each other (each is a circle, and they have the same weight) */
+- (void)stepGravity:(CGFloat)dt {
+    CGFloat width = self.bounds.size.width, height = self.bounds.size.height;
+    CGFloat g = _pad ? 2300.0f : 1750.0f;
+    for (int i = 0; i < _count; ++i) {
+        snow_flake *f = &_flakes[i];
+        CGFloat r = f->size * 0.36f;
+        f->vy += g * dt;
+        f->x += f->vx * dt;
+        f->y += f->vy * dt;
+        f->rotation += f->spin * dt;
+        CGFloat floorY = height - r;
+        if (f->y > floorY) {
+            f->y = floorY;
+            f->vy = -f->vy * GRAVITY_BOUNCE;
+            /* what lies on the floor stops sliding and turning */
+            f->vx *= 0.84f;
+            f->spin *= 0.72f;
+            if (fabsf(f->vy) < 45.0f) f->vy = 0;
+        }
+        if (f->x < r) { f->x = r; f->vx = -f->vx * GRAVITY_BOUNCE; }
+        else if (f->x > width - r) { f->x = width - r; f->vx = -f->vx * GRAVITY_BOUNCE; }
+    }
+    for (int i = 0; i < _count; ++i) {
+        for (int j = i + 1; j < _count; ++j) {
+            snow_flake *a = &_flakes[i], *b = &_flakes[j];
+            CGFloat dx = b->x - a->x, dy = b->y - a->y, reach = (a->size + b->size) * 0.36f;
+            CGFloat distance2 = dx * dx + dy * dy;
+            if (distance2 >= reach * reach || distance2 < 0.0001f) continue;
+            CGFloat distance = sqrtf(distance2), nx = dx / distance, ny = dy / distance, overlap = reach - distance;
+            a->x -= nx * overlap / 2; a->y -= ny * overlap / 2;
+            b->x += nx * overlap / 2; b->y += ny * overlap / 2;
+            CGFloat approach = (b->vx - a->vx) * nx + (b->vy - a->vy) * ny;
+            if (approach < 0) {
+                CGFloat push = -(1 + GRAVITY_BOUNCE) * approach / 2;
+                a->vx -= push * nx; a->vy -= push * ny;
+                b->vx += push * nx; b->vy += push * ny;
+            }
+        }
+    }
+    CGFloat rest = (CGFloat)(GRAVITY_SECONDS - _gravityTime);
+    for (int i = 0; i < _count; ++i) {
+        snow_flake *f = &_flakes[i];
+        f->layer.position = CGPointMake(f->x, f->y);
+        f->layer.affineTransform = CGAffineTransformMakeRotation(f->rotation);
+        /* they go out at the end, and the slow fall begins again from the top */
+        if (rest < GRAVITY_FADE) f->layer.opacity = (float)(f->alpha * MAX(0, rest / GRAVITY_FADE));
+    }
+}
+
 - (void)tick:(CADisplayLink *)link {
     CFTimeInterval now = link.timestamp;
     CGFloat dt = _last > 0 ? (CGFloat)(now - _last) : 1.0f / 30.0f;
@@ -199,6 +271,15 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
     if (dt < 1.0f / 90.0f) dt = 1.0f / 90.0f;
     if (dt > 1.0f / 20.0f) dt = 1.0f / 30.0f;
     CGFloat width = self.bounds.size.width, height = self.bounds.size.height;
+    if (_gravity) {
+        _gravityTime += dt;
+        [self stepGravity:dt];
+        if (_gravityTime >= GRAVITY_SECONDS) {
+            _gravity = NO;
+            for (int i = 0; i < _count; ++i) [self resetFlake:&_flakes[i] scatter:NO];
+        }
+        return;
+    }
     for (int i = 0; i < _count; ++i) {
         snow_flake *f = &_flakes[i];
         if (!_sprite) {
@@ -225,14 +306,18 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
     if (_running || ExteriaReduceMotionEnabled() || !ExteriaLiteEnabled(EXTERIA_LITE_PARTICLES)) return;
     _running = YES;
     _last = 0;
+    _gravity = NO;
     self.hidden = NO;
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(shaken) name:ExteriaDeviceDidShakeNotification object:nil];
     _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
     ExteriaSetFrameRate(_link, 30);
     [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 
 - (void)stop {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDeviceDidShakeNotification object:nil];
     _running = NO;
+    _gravity = NO;
     _last = 0;
     [_link invalidate];
     [_link release];

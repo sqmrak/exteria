@@ -92,6 +92,26 @@ void ExteriaAnimateViewAfter(UIView *view, CGAffineTransform transform, CGFloat 
     [layer addAnimation:group forKey:@"exteria.motion"];
 }
 
+void ExteriaCacheForMotion(UIView *view) {
+    if (ExteriaReduceMotionEnabled()) return;
+    view.layer.rasterizationScale = ExteriaScreenScale();
+    view.layer.shouldRasterize = YES;
+}
+
+void ExteriaUncacheAfterMotion(UIView *view) {
+    view.layer.shouldRasterize = NO;
+}
+
+void ExteriaPlaceView(UIView *view, CGRect frame) {
+    CGPoint anchor = view.layer.anchorPoint;
+    view.bounds = CGRectMake(0, 0, frame.size.width, frame.size.height);
+    view.center = CGPointMake(frame.origin.x + frame.size.width * anchor.x, frame.origin.y + frame.size.height * anchor.y);
+}
+
+void ExteriaSetShadowPath(UIView *card, CGFloat radius) {
+    card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:radius].CGPath;
+}
+
 void ExteriaAnimatePosition(UIView *view, CGPoint position, exteria_motion_curve curve) {
     CALayer *layer = view.layer;
     CALayer *visible = [layer animationForKey:@"exteria.position"] ? [layer presentationLayer] : nil;

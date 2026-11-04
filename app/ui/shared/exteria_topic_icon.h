@@ -7,3 +7,6 @@
 
 /* the icon of a forum topic: its custom emoji once the picture is in memory, otherwise a hash in the topic's color */
 UIImage *ExteriaTopicIconImage(ExteriaDialog *topic);
+
+/* the same for an icon named by its parts, as the chat list names the topic of the last message of a forum */
+UIImage *ExteriaTopicIconImageOf(long long emoji, int32_t rgb);

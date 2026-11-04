@@ -59,6 +59,14 @@ static CTRunDelegateRef ExteriaCreateEmojiDelegate(CGFloat side, CGFloat width) 
     return CTRunDelegateCreate(&callbacks, (void *)dimensions);
 }
 
+/* an address is underlined, as in the original client; names, tags and commands are only colored */
+static void ExteriaUnderline(NSMutableAttributedString *string, NSRange range) {
+    int single = kCTUnderlineStyleSingle;
+    CFNumberRef style = CFNumberCreate(NULL, kCFNumberIntType, &single);
+    [string addAttribute:(id)kCTUnderlineStyleAttributeName value:(id)style range:range];
+    CFRelease(style);
+}
+
 static NSString *ExteriaLinkTarget(ExteriaTextEntity *entity, NSString *text) {
     if (entity.url.length) return entity.url;
     NSString *shown = [text substringWithRange:entity.range];
@@ -139,6 +147,7 @@ static NSMutableAttributedString *ExteriaStyledString(NSString *text, NSArray *e
         case ExteriaTextStyleBotCommand:
         case ExteriaTextStyleHashtag: {
             [string addAttribute:(id)kCTForegroundColorAttributeName value:(id)linkColor.CGColor range:range];
+            if (entity.style == ExteriaTextStyleLink) ExteriaUnderline(string, range);
             NSString *target = ExteriaLinkTarget(entity, text);
             if (target) [string addAttribute:ExteriaLinkAttribute value:target range:range];
             break;
@@ -169,7 +178,9 @@ static int ExteriaMarkOrder(const void *a, const void *b) {
 }
 
 /* every emoji becomes one placeholder character each with its own room, back to front so earlier ranges stay put */
-static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text, NSArray *entities, CGFloat fontSize) {
+/* the marks come back as pairs of start and length in the original text, the first mark first */
+static NSData *ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text, NSArray *entities, CGFloat fontSize) {
+    NSMutableData *placed = [NSMutableData data];
     NSUInteger length = text.length;
     uint16_t *units = malloc(sizeof(uint16_t) * (length ? length : 1));
     exteria_emoji_span *spans = malloc(sizeof(exteria_emoji_span) * (length ? length : 1));
@@ -213,10 +224,16 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
             ++total;
         }
         qsort(marks, total, sizeof(*marks), ExteriaMarkOrder);
+        for (size_t i = total; i > 0; --i) {
+            NSUInteger pair[2] = {marks[i - 1].start, marks[i - 1].length};
+            [placed appendBytes:pair length:sizeof(pair)];
+        }
         for (size_t i = 0; i < total; ++i) {
             const ExteriaEmojiMark *mark = &marks[i];
             [string replaceCharactersInRange:NSMakeRange(mark->start, mark->length) withString:@"\uFFFC"];
             NSRange place = NSMakeRange(mark->start, 1);
+            /* the picture is drawn over this character; a font that has no glyph for it (Rubik, a font of the person's own) would show its empty-glyph mark, a letter or a box, under the picture */
+            [string addAttribute:(id)kCTForegroundColorAttributeName value:(id)[UIColor clearColor].CGColor range:place];
             CGFloat side = fontSize * EMOJI_SCALE;
             CGFloat width = mark->document == EXTERIA_CAUTION_DOCUMENT ? side * EXTERIA_CAUTION_BADGE_RATIO : side;
             CTRunDelegateRef delegate = ExteriaCreateEmojiDelegate(side, width);
@@ -229,6 +246,74 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
     free(units);
     free(spans);
     free(marks);
+    return placed;
+}
+
+/* a cheap look before the detector is asked: an address has "://", a "www.", or a dot with letters or digits on both sides; most messages have none of these, and
+   the detector is slow on an old phone, where every row of a chat that opens is laid out at once */
+static BOOL ExteriaMayHaveAddress(NSString *text) {
+    NSUInteger length = text.length;
+    if (length < 4 || length > 6000) return NO;
+    unichar stack[256];
+    unichar *units = length <= 256 ? stack : malloc(length * sizeof(unichar));
+    if (!units) return NO;
+    [text getCharacters:units range:NSMakeRange(0, length)];
+    BOOL may = NO;
+    for (NSUInteger i = 1; i + 1 < length && !may; ++i) {
+        unichar c = units[i];
+        if (c == '.') {
+            unichar before = units[i - 1], after = units[i + 1];
+            BOOL joined = before > ' ' && after > ' ' && before != '.' && after != '.' && !(before == ',' || before == ';' || before == ':' || before == '!' || before == '?' || before == ')') &&
+                          ((after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z') || after >= 0x80);
+            if (joined) may = YES;
+        } else if (c == ':' && units[i + 1] == '/') {
+            may = YES;
+        }
+    }
+    if (units != stack) free(units);
+    return may;
+}
+
+/* addresses written in the words without an entity (a message that has not come back from the server yet, a caption the server left alone) are links as well */
+static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString *text, UIColor *linkColor) {
+    if (!ExteriaMayHaveAddress(text)) return;
+    /* the finds of a text are kept, since the same row is laid out again for every width and every rebuild of the list */
+    static NSCache *found;
+    static NSDataDetector *detector;
+    NSArray *matches = nil;
+    @synchronized([NSDataDetector class]) {
+        if (!found) {
+            found = [[NSCache alloc] init];
+            found.countLimit = 300;
+        }
+        matches = [[[found objectForKey:text] retain] autorelease];
+        if (!matches) {
+            if (!detector) detector = [[NSDataDetector dataDetectorWithTypes:NSTextCheckingTypeLink error:NULL] retain];
+            if (!detector) return;
+            NSMutableArray *kept = [NSMutableArray array];
+            for (NSTextCheckingResult *match in [detector matchesInString:text options:0 range:NSMakeRange(0, text.length)]) {
+                NSString *scheme = match.URL.scheme.lowercaseString;
+                if (!match.URL || !match.range.length) continue;
+                if (!([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"] || [scheme isEqualToString:@"mailto"])) continue;
+                [kept addObject:[NSArray arrayWithObjects:[NSValue valueWithRange:match.range], match.URL.absoluteString, nil]];
+            }
+            matches = kept;
+            [found setObject:matches forKey:text];
+        }
+    }
+    for (NSArray *match in matches) {
+        NSRange range = [[match objectAtIndex:0] rangeValue];
+        if (NSMaxRange(range) > string.length) continue;
+        __block BOOL taken = NO;
+        [string enumerateAttributesInRange:range options:0 usingBlock:^(NSDictionary *attributes, NSRange where, BOOL *stop) {
+            (void)where;
+            if ([attributes objectForKey:ExteriaLinkAttribute] || [attributes objectForKey:ExteriaMonoAttribute] || [attributes objectForKey:ExteriaSpoilerAttribute]) { taken = YES; *stop = YES; }
+        }];
+        if (taken) continue;
+        [string addAttribute:(id)kCTForegroundColorAttributeName value:(id)linkColor.CGColor range:range];
+        ExteriaUnderline(string, range);
+        [string addAttribute:ExteriaLinkAttribute value:[match objectAtIndex:1] range:range];
+    }
 }
 
 + (ExteriaTextLayout *)layoutForText:(NSString *)text entities:(NSArray *)entities font:(UIFont *)font
@@ -251,7 +336,9 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
                             maxLines:(NSUInteger)maxLines flush:(CGFloat)flush dropsUndrawable:(BOOL)drops {
     ExteriaTextLayout *layout = [[[ExteriaTextLayout alloc] init] autorelease];
     NSMutableAttributedString *string = ExteriaStyledString(text, entities, font, color, linkColor);
-    ExteriaPlaceEmoji(string, text, entities, font.pointSize);
+    /* before the emoji become single characters, so the offsets of the matches are those of the text */
+    if (!drops && linkColor) ExteriaAddDetectedLinks(string, text, linkColor);
+    NSData *marks = ExteriaPlaceEmoji(string, text, entities, font.pointSize);
     CTFontRef base = ExteriaCreateFont(font, font.pointSize);
     if (base) {
         /* the entities are offsets into the original text, so only a label that has none may lose characters */
@@ -260,6 +347,8 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
         CFRelease(base);
     }
     layout->_string = [string retain];
+    layout->_marks = [marks retain];
+    layout->_text = [text copy];
     layout->_ink = [color retain];
     layout->_width = width;
     layout->_hasSpoilers = NO;
@@ -340,6 +429,10 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
 }
 
 - (void)dealloc {
+    [_highlight release];
+    [_highlightRanges release];
+    [_marks release];
+    [_text release];
     for (NSUInteger i = 0; i < _lineCount; ++i) CFRelease(_lines[i]);
     free(_lines);
     free(_origins);
@@ -376,6 +469,19 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
     CGContextRef context = UIGraphicsGetCurrentContext();
     BOOL covered = _hasSpoilers && !_spoilersRevealed;
     UIColor *ink = _ink ? _ink : [UIColor blackColor];
+    /* the words of a search stand on a plate, under the letters, so a result is found at a glance among the messages around it */
+    if (_highlight.length && !covered) {
+        [[UIColor colorWithRed:1.0f green:0.80f blue:0.18f alpha:0.62f] setFill];
+        for (NSValue *value in [self highlightRanges]) {
+            NSRange range = [value rangeValue];
+            NSUInteger from = [self layoutIndexOfTextIndex:range.location], to = [self layoutIndexOfTextIndex:NSMaxRange(range)];
+            if (to <= from) to = from + 1;
+            for (NSValue *box in [self rectsForRange:NSMakeRange(from, to - from)]) {
+                CGRect plate = CGRectInset(CGRectOffset(box.CGRectValue, origin.x, origin.y), -1.5f, -0.5f);
+                [[UIBezierPath bezierPathWithRoundedRect:plate cornerRadius:3] fill];
+            }
+        }
+    }
     for (NSUInteger i = 0; i < _lineCount; ++i) {
         CGRect line = CGRectMake(origin.x, origin.y + _origins[i].y - _ascents[i], _width, _ascents[i] + _descents[i]);
         if (_quoted[i]) {
@@ -444,6 +550,124 @@ static void ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *text,
             }
         }
     }
+}
+
+/* ---- selection: the indices here are those of the laid out string, in which an emoji is one character; textRangeForRange: gives the range in the words ---- */
+
+- (NSString *)text { return _text; }
+
+- (NSUInteger)length { return _string.length; }
+
+- (NSUInteger)textIndexOfIndex:(NSUInteger)index {
+    const NSUInteger *pairs = _marks.bytes;
+    NSUInteger shift = 0;
+    for (NSUInteger i = 0; i < _marks.length / (2 * sizeof(NSUInteger)); ++i) {
+        NSUInteger start = pairs[2 * i], length = pairs[2 * i + 1];
+        if (index <= start - shift) break;
+        shift += length - 1;
+    }
+    return index + shift;
+}
+
+- (NSRange)textRangeForRange:(NSRange)range {
+    NSUInteger from = [self textIndexOfIndex:range.location], to = [self textIndexOfIndex:NSMaxRange(range)];
+    return NSMakeRange(from, to > from ? to - from : 0);
+}
+
+/* the place in the laid out string of an index of the words: an emoji is one character here and as many as it was written there */
+- (NSUInteger)layoutIndexOfTextIndex:(NSUInteger)index {
+    const NSUInteger *pairs = _marks.bytes;
+    NSUInteger shift = 0;
+    for (NSUInteger i = 0; i < _marks.length / (2 * sizeof(NSUInteger)); ++i) {
+        NSUInteger start = pairs[2 * i], length = pairs[2 * i + 1];
+        if (index <= start) break;
+        if (index >= start + length) { shift += length - 1; continue; }
+        return start - shift;
+    }
+    return index - shift;
+}
+
+- (void)setHighlight:(NSString *)highlight {
+    if (highlight == _highlight || [highlight isEqualToString:_highlight]) return;
+    [_highlight release];
+    _highlight = [highlight copy];
+    [_highlightRanges release];
+    _highlightRanges = nil;
+}
+
+- (NSString *)highlight { return _highlight; }
+
+/* where the words stand in the laid out string: the whole phrase wherever it occurs, and when it does not (the search matched its words apart) each word of it */
+- (NSArray *)highlightRanges {
+    if (_highlightRanges) return _highlightRanges;
+    NSMutableArray *found = [NSMutableArray array];
+    NSString *words = [_highlight stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (words.length && _text.length) {
+        NSStringCompareOptions options = NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch;
+        NSMutableArray *needles = [NSMutableArray arrayWithObject:words];
+        BOOL phrase = NO;
+        NSUInteger at = 0;
+        while (at < _text.length) {
+            NSRange hit = [_text rangeOfString:words options:options range:NSMakeRange(at, _text.length - at)];
+            if (hit.location == NSNotFound || !hit.length) break;
+            phrase = YES;
+            [found addObject:[NSValue valueWithRange:hit]];
+            at = NSMaxRange(hit);
+        }
+        if (!phrase) {
+            for (NSString *word in [words componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]) {
+                if (word.length < 2) continue;
+                at = 0;
+                while (at < _text.length) {
+                    NSRange hit = [_text rangeOfString:word options:options range:NSMakeRange(at, _text.length - at)];
+                    if (hit.location == NSNotFound || !hit.length) break;
+                    [found addObject:[NSValue valueWithRange:hit]];
+                    at = NSMaxRange(hit);
+                }
+            }
+        }
+        (void)needles;
+    }
+    _highlightRanges = [found copy];
+    return _highlightRanges;
+}
+
+- (NSUInteger)characterIndexAtPoint:(CGPoint)point {
+    if (!_lineCount) return 0;
+    NSUInteger line = _lineCount - 1;
+    for (NSUInteger i = 0; i < _lineCount; ++i) {
+        if (point.y <= _origins[i].y + _descents[i]) { line = i; break; }
+    }
+    CFIndex index = CTLineGetStringIndexForPosition(_lines[line], CGPointMake(point.x - _origins[line].x, 0));
+    if (index == kCFNotFound) return 0;
+    return MIN((NSUInteger)index, _string.length);
+}
+
+- (NSArray *)rectsForRange:(NSRange)range {
+    NSMutableArray *rects = [NSMutableArray array];
+    for (NSUInteger i = 0; i < _lineCount; ++i) {
+        CFRange lineRange = CTLineGetStringRange(_lines[i]);
+        NSUInteger from = MAX(range.location, (NSUInteger)lineRange.location), to = MIN(NSMaxRange(range), (NSUInteger)(lineRange.location + lineRange.length));
+        if (to <= from) continue;
+        CGFloat x1 = CTLineGetOffsetForStringIndex(_lines[i], (CFIndex)from, NULL), x2 = CTLineGetOffsetForStringIndex(_lines[i], (CFIndex)to, NULL);
+        [rects addObject:[NSValue valueWithCGRect:CGRectMake(_origins[i].x + x1, _origins[i].y - _ascents[i], MAX(0, x2 - x1), _ascents[i] + _descents[i])]];
+    }
+    return rects;
+}
+
+- (NSRange)wordRangeAtIndex:(NSUInteger)index {
+    NSString *plain = _string.string;
+    if (!plain.length) return NSMakeRange(0, 0);
+    if (index >= plain.length) index = plain.length - 1;
+    __block NSRange found = NSMakeRange(NSNotFound, 0);
+    [plain enumerateSubstringsInRange:NSMakeRange(0, plain.length) options:NSStringEnumerationByWords | NSStringEnumerationSubstringNotRequired
+                           usingBlock:^(NSString *word, NSRange range, NSRange enclosing, BOOL *stop) {
+        (void)word; (void)enclosing;
+        if (index >= range.location && index < NSMaxRange(range)) { found = range; *stop = YES; }
+        else if (range.location > index) *stop = YES;
+    }];
+    if (found.location == NSNotFound) found = [plain rangeOfComposedCharacterSequenceAtIndex:index];
+    return found;
 }
 
 - (NSString *)linkAtPoint:(CGPoint)point {

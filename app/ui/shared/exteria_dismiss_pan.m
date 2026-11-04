@@ -42,6 +42,8 @@
     for (UIView *view = touch.view; view && view != gesture.view; view = view.superview) {
         if ([view isKindOfClass:[UISlider class]] || [view isKindOfClass:[UIDatePicker class]] ||
             [view isKindOfClass:[UITextField class]] || [view isKindOfClass:[UITextView class]]) return NO;
+        /* a view that is a control of its own, such as the pad of a game, says so */
+        if ([view respondsToSelector:@selector(exteriaBlocksDismissPan)] && [(id)view exteriaBlocksDismissPan]) return NO;
         if (!found && [view isKindOfClass:[UIScrollView class]]) found = (UIScrollView *)view;
     }
     [self setScroll:found];
