@@ -460,12 +460,13 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
     if (![ExteriaStoryCameraController cameraAvailable]) { [self pickFromLibraryIn:host]; return; }
     ExteriaStoryCameraController *camera = [[[ExteriaStoryCameraController alloc] init] autorelease];
     ExteriaWeakReference *weak = _weak;
-    camera.publishHandler = ^(NSString *path, NSString *caption, exteria_story_privacy privacy) {
+    camera.session = _session;
+    camera.publishHandler = ^(NSString *path, NSString *caption, ExteriaStoryAudience *audience) {
         ExteriaStoryStrip *me = weak.target;
         UIViewController *top = me ? me->_host.target : nil;
         [top dismissViewControllerAnimated:YES completion:nil];
         if (!me) { [[NSFileManager defaultManager] removeItemAtPath:path error:NULL]; return; }
-        [me postStoryAtPath:path caption:caption privacy:privacy];
+        [me postStoryAtPath:path caption:caption audience:audience];
     };
     camera.closeHandler = ^{
         ExteriaStoryStrip *me = weak.target;
@@ -510,12 +511,13 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
     }
     ExteriaStoryCameraController *editor = [[[ExteriaStoryCameraController alloc] initWithPhotoPath:path] autorelease];
     ExteriaWeakReference *weak = _weak;
-    editor.publishHandler = ^(NSString *file, NSString *caption, exteria_story_privacy privacy) {
+    editor.session = _session;
+    editor.publishHandler = ^(NSString *file, NSString *caption, ExteriaStoryAudience *audience) {
         ExteriaStoryStrip *me = weak.target;
         UIViewController *top = me ? me->_host.target : nil;
         [top dismissViewControllerAnimated:YES completion:nil];
         if (!me) { [[NSFileManager defaultManager] removeItemAtPath:file error:NULL]; return; }
-        [me postStoryAtPath:file caption:caption privacy:privacy];
+        [me postStoryAtPath:file caption:caption audience:audience];
     };
     editor.closeHandler = ^{
         ExteriaStoryStrip *me = weak.target;
@@ -526,14 +528,14 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
 }
 
 /* the file goes up as a story and is deleted either way; the row is asked again when it is live */
-- (void)postStoryAtPath:(NSString *)path caption:(NSString *)caption privacy:(exteria_story_privacy)privacy {
+- (void)postStoryAtPath:(NSString *)path caption:(NSString *)caption audience:(ExteriaStoryAudience *)audience {
     if (_posting) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         return;
     }
     _posting = YES;
     ExteriaWeakReference *weak = _weak;
-    [_session postStoryPhotoAtPath:path caption:caption privacy:privacy completion:^(NSString *errorName) {
+    [_session postStoryPhotoAtPath:path caption:caption audience:audience completion:^(NSString *errorName) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         ExteriaStoryStrip *again = weak.target;
         if (!again) return;

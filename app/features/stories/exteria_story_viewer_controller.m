@@ -1,5 +1,7 @@
 #import "exteria_name_badge.h"
 #import "exteria_story_viewer_controller.h"
+#import "exteria_story_viewers_controller.h"
+#import "exteria_people_select_controller.h"
 #import "exteria_string_drawing.h"
 
 #import <AVFoundation/AVFoundation.h>
@@ -55,10 +57,15 @@
 
 @interface ExteriaStoryReplyField : UITextField {
     UILabel *_hint;
+    BOOL _lightFill;
 }
+/* the field is a pale pill with dark words, and not a dark one with white words */
+@property (nonatomic, assign) BOOL lightFill;
 @end
 
 @implementation ExteriaStoryReplyField
+
+@synthesize lightFill = _lightFill;
 
 /* the hint is a label of the field: the system placeholder of a subclass is drawn through drawPlaceholderInRect on ios 5 to 12 only,
    and the newer systems leave the pill empty */
@@ -107,7 +114,7 @@
 - (void)layoutSubviews {
     [super layoutSubviews];
     _hint.font = self.font;
-    _hint.textColor = self.borderStyle == UITextBorderStyleRoundedRect ? [UIColor colorWithWhite:0.6 alpha:1] : [UIColor colorWithWhite:1 alpha:0.7];
+    _hint.textColor = _lightFill ? [UIColor colorWithWhite:0.6 alpha:1] : [UIColor colorWithWhite:1 alpha:0.7];
     _hint.frame = [self textAreaForBounds:self.bounds];
     [self textChanged];
 }
@@ -250,6 +257,7 @@
 }
 
 - (void)dealloc {
+    ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(hideBanner) object:nil];
     [_weak clear];
     [_media cancelPathRequest:_pathRequest];
@@ -448,14 +456,20 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _reply.font = ExteriaFontRegular(15);
     _reply.textAlignment = ExteriaTextAlignmentLeft;
     if (_classic) {
-        /* the white rounded field of the old toolbars, with its own sunken edge from the system */
-        _reply.borderStyle = UITextBorderStyleRoundedRect;
+        /* the white rounded field of the old toolbars. The system draws its white fill only up to ios 6: from ios 7 a rounded-rect field has none, and the black words
+           lay straight on the dark story and could not be read, so the fill is the field's own */
+        _reply.lightFill = YES;
         _reply.textColor = [UIColor blackColor];
+        _reply.backgroundColor = [UIColor whiteColor];
+        _reply.layer.cornerRadius = CLASSIC_BUTTON_HEIGHT / 2;
+        _reply.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1].CGColor;
+        _reply.layer.borderWidth = 1;
     } else {
         _reply.textColor = [UIColor whiteColor];
-        _reply.backgroundColor = [UIColor colorWithWhite:1 alpha:0.18];
+        /* the pill is dark: white words on a pale, see-through pill vanished over a light picture, and what was typed could not be read */
+        _reply.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
         _reply.layer.cornerRadius = 18;
-        _reply.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.5].CGColor;
+        _reply.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.35].CGColor;
         _reply.layer.borderWidth = 1;
     }
     _reply.returnKeyType = UIReturnKeySend;
@@ -486,6 +500,9 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _heart.contentMode = UIViewContentModeCenter;
     [_bottom addSubview:_heart];
     _views = [ExteriaStoryLabel(14, NO) retain];
+    /* the count of views opens the list of the people who looked */
+    _views.userInteractionEnabled = YES;
+    [_views addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(viewersTapped)] autorelease]];
     [_bottom addSubview:_views];
     /* the track of the story: a note and "PERFORMER · TITLE" on a dark capsule over the left end of the picture, above the reply bar */
     _chip = [[UIView alloc] init];
@@ -664,9 +681,7 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    UIApplication *application = [UIApplication sharedApplication];
-    _statusWasHidden = application.statusBarHidden;
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarHide(self, UIStatusBarAnimationFade);
     [self takeAudioSession];
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(keyboardWillChange:) name:UIKeyboardWillShowNotification object:nil];
@@ -687,8 +702,7 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     [center removeObserver:self name:UIKeyboardWillShowNotification object:nil];
     [center removeObserver:self name:UIKeyboardWillHideNotification object:nil];
     [center removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
-    UIApplication *application = [UIApplication sharedApplication];
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:_statusWasHidden withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarShow(self, UIStatusBarAnimationFade);
     [self giveBackAudioSession];
 }
 
@@ -874,7 +888,7 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _time.text = ExteriaListTimeText(_current.date);
     _caption.text = _current.caption;
     _caption.hidden = _current.caption.length == 0;
-    _views.text = _current.views ? [NSString stringWithFormat:NSLocalizedString(@"story.views", nil), (int)_current.views] : NSLocalizedString(@"story.noviews", nil);
+    _views.text = _current.views ? [[NSString stringWithFormat:NSLocalizedString(@"story.views", nil), (int)_current.views] stringByAppendingString:@"  \u203A"] : NSLocalizedString(@"story.noviews", nil);
     [self refreshHeart];
     [self markSeen];
     [self.view setNeedsLayout];
@@ -1181,17 +1195,17 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
 
 - (void)chooseAudienceOfStory:(ExteriaStory *)story {
     int32_t storyId = story.storyId;
-    NSArray *buttons = [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"story.privacy.everyone", nil),
-                        NSLocalizedString(@"story.privacy.contacts", nil), NSLocalizedString(@"story.privacy.close", nil), nil];
     ExteriaWeakReference *weak = _weak;
-    ExteriaShowAlert(NSLocalizedString(@"story.manage.privacy", nil), nil, buttons, 0, NO, ^(NSInteger index, NSString *text) {
-        (void)text;
+    /* the people of a list the story has are not known here, so the page starts empty; the plain choices need no people */
+    ExteriaChooseStoryAudience(self, _session, [ExteriaStoryAudience audienceWithBase:story.privacy], ^(ExteriaStoryAudience *audience) {
         ExteriaStoryViewerController *me = weak.target;
         if (!me || me->_closed) return;
-        if (index < 1 || index > 3) { [me resume]; return; }
         [me runManagement:^(void (^done)(NSString *)) {
-            [me->_session editStory:storyId caption:nil privacy:[NSNumber numberWithInt:(int)index - 1] completion:done];
+            [me->_session editStory:storyId caption:nil audience:audience completion:done];
         } stayOn:storyId];
+    }, ^{
+        ExteriaStoryViewerController *me = weak.target;
+        if (me && !me->_closed) [me resume];
     });
 }
 
@@ -1499,6 +1513,16 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
         done(found);
         [done release];
     }];
+}
+
+/* who looked at the story, in a page over it; the story waits under the page and goes on when the page is gone */
+- (void)viewersTapped {
+    ExteriaStory *story = _current;
+    ExteriaStoryPeer *peer = [self peer];
+    if (!story || !story.outgoing || !peer || !story.views || _editing) return;
+    ExteriaStoryViewersController *page = [[[ExteriaStoryViewersController alloc] initWithSession:_session dialog:peer.owner storyId:story.storyId views:story.views] autorelease];
+    [self pause];
+    [self presentViewController:[page presentableNavigation] animated:YES completion:nil];
 }
 
 - (void)heartTapped {

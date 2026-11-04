@@ -123,6 +123,49 @@
     }];
 }
 
+- (void)loadViewersOfStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
+                completion:(void (^)(NSArray *, NSDictionary *, NSString *, int32_t, NSString *))completion {
+    void (^done)(NSArray *, NSDictionary *, NSString *, int32_t, NSString *) = [completion copy];
+    NSString *cursor = [offset copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_story_viewers_request(arena, &peer, storyId, cursor.UTF8String, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        NSMutableArray *items = nil;
+        NSDictionary *people = nil;
+        NSString *next = nil;
+        int32_t total = 0;
+        if (!error) {
+            exteria_story_viewer rows[EXTERIA_STORY_VIEWERS_PAGE];
+            size_t count = 0;
+            char nextOffset[EXTERIA_STORY_VIEWERS_OFFSET_MAX];
+            exteria_status status = exteria_story_viewers_parse(result->value, rows, EXTERIA_STORY_VIEWERS_PAGE, &count, nextOffset, sizeof(nextOffset), &total);
+            /* a page that names itself as the next one would be asked for forever */
+            if (status == EXTERIA_OK && nextOffset[0] && (!count || (cursor.length && !strcmp(cursor.UTF8String, nextOffset)))) nextOffset[0] = 0;
+            if (status != EXTERIA_OK) {
+                NSLog(@"exteria: story viewers rejected: %s", exteria_status_name(status));
+                error = @"MALFORMED";
+            } else {
+                items = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) {
+                    [items addObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:rows[i].user_id], @"peer", [NSNumber numberWithInt:rows[i].date], @"date",
+                                      [NSNumber numberWithBool:rows[i].blocked != 0], @"blocked", nil]];
+                }
+                people = ExteriaPeopleOfAnswer(self, result->value);
+                if (nextOffset[0]) next = [NSString stringWithUTF8String:nextOffset];
+            }
+        }
+        [self noteRpcError:error];
+        NSArray *delivered = [[items copy] autorelease];
+        NSDictionary *names = [[people copy] autorelease];
+        NSString *following = [[next copy] autorelease];
+        NSString *problem = [[error copy] autorelease];
+        [self deliverMain:^{ done(delivered, names, following, total, problem); [done release]; }];
+    }];
+    [cursor release];
+}
+
 - (void)markStoriesSeenOfDialog:(ExteriaDialog *)dialog upTo:(int32_t)storyId {
     /* ghost mode: the story is looked at and its owner is not told */
     if (ExteriaChatFlagGet(ExteriaChatFlagGhostNoStories)) return;
@@ -256,6 +299,19 @@
     exteria_story_privacy audience = (exteria_story_privacy)privacy.intValue;
     [self runStoryCall:^exteria_status(exteria_arena *arena, const exteria_peer_ref *mine, exteria_tl_value **request) {
         return exteria_story_edit_request(arena, mine, storyId, text ? text.UTF8String : NULL, setPrivacy, audience, request);
+    } completion:completion];
+    [text release];
+}
+
+- (void)editStory:(int32_t)storyId caption:(NSString *)caption audience:(ExteriaStoryAudience *)audience completion:(void (^)(NSString *errorName))completion {
+    NSString *text = [caption copy];
+    BOOL setAudience = audience != nil;
+    exteria_story_audience *rules = calloc(1, sizeof(*rules));
+    if (!rules) { [text release]; if (completion) completion(@"NO_MEMORY"); return; }
+    if (audience) [audience fillAudience:rules];
+    NSData *held = [NSData dataWithBytesNoCopy:rules length:sizeof(*rules) freeWhenDone:YES];
+    [self runStoryCall:^exteria_status(exteria_arena *arena, const exteria_peer_ref *mine, exteria_tl_value **request) {
+        return exteria_story_edit_audience_request(arena, mine, storyId, text ? text.UTF8String : NULL, setAudience, (const exteria_story_audience *)held.bytes, request);
     } completion:completion];
     [text release];
 }

@@ -1,4 +1,6 @@
 #import "exteria_story_camera_controller.h"
+#import "exteria_people_select_controller.h"
+#import "exteria_story.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -43,7 +45,8 @@
     UITextField *_captionField;
     UIButton *_textButton;
     UIButton *_audience;
-    exteria_story_privacy _privacy;
+    ExteriaStoryAudience *_audienceChoice;
+    ExteriaSession *_session;
     NSString *_photoPath;
     CGFloat _keyboardShift;
     BOOL _shooting;
@@ -54,6 +57,7 @@
 @implementation ExteriaStoryCameraController
 
 @synthesize publishHandler = _publishHandler;
+@synthesize session = _session;
 @synthesize galleryHandler = _galleryHandler;
 @synthesize closeHandler = _closeHandler;
 
@@ -80,10 +84,12 @@ static AVCaptureDevice *ExteriaStoryCamera(AVCaptureDevicePosition position) {
     if (!self) return nil;
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     _queue = dispatch_queue_create("exteria.story.camera", DISPATCH_QUEUE_SERIAL);
+    _audienceChoice = [[ExteriaStoryAudience audienceWithBase:EXTERIA_STORY_EVERYONE] retain];
     return self;
 }
 
 - (void)dealloc {
+    ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
     [_weak clear];
     [_weak release];
     [_capture stopRunning];
@@ -92,6 +98,8 @@ static AVCaptureDevice *ExteriaStoryCamera(AVCaptureDevicePosition position) {
     if (_heldPath) [[NSFileManager defaultManager] removeItemAtPath:_heldPath error:NULL];
     [_heldPath release];
     [_publishHandler release];
+    [_audienceChoice release];
+    [_session release];
     [_galleryHandler release];
     [_closeHandler release];
     [_stage release];
@@ -239,11 +247,7 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 #pragma mark dressing the shot
 
 - (NSString *)audienceTitle {
-    switch (_privacy) {
-    case EXTERIA_STORY_CONTACTS: return NSLocalizedString(@"story.privacy.contacts", nil);
-    case EXTERIA_STORY_CLOSE_FRIENDS: return NSLocalizedString(@"story.privacy.close", nil);
-    default: return NSLocalizedString(@"story.privacy.everyone", nil);
-    }
+    return ExteriaStoryAudienceTitle(_audienceChoice);
 }
 
 - (void)refreshAudienceTitle {
@@ -254,18 +258,14 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)audienceTapped {
     [self.view endEditing:YES];
-    ExteriaSymbol symbols[3] = {ExteriaSymbolGlobe, ExteriaSymbolPerson, ExteriaSymbolStar};
-    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"story.privacy.everyone", nil), NSLocalizedString(@"story.privacy.contacts", nil),
-                       NSLocalizedString(@"story.privacy.close", nil), nil];
     ExteriaWeakReference *weak = _weak;
-    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
+    ExteriaChooseStoryAudience(self, _session, _audienceChoice, ^(ExteriaStoryAudience *audience) {
         ExteriaStoryCameraController *me = weak.target;
         if (!me) return;
-        me->_privacy = (exteria_story_privacy)index;
+        [me->_audienceChoice release];
+        me->_audienceChoice = [audience retain];
         [me refreshAudienceTitle];
-    }] autorelease];
-    CGPoint anchor = [_audience.superview convertPoint:CGPointMake(CGRectGetMidX(_audience.frame), CGRectGetMaxY(_audience.frame)) toView:self.view];
-    [menu showInView:self.view anchor:anchor];
+    }, nil);
 }
 
 - (void)textTapped {
@@ -434,8 +434,7 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    UIApplication *application = [UIApplication sharedApplication];
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarHide(self, UIStatusBarAnimationFade);
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -447,6 +446,8 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    /* the camera never gave the bar back, and the screens under it stayed without one */
+    ExteriaStatusBarShow(self, UIStatusBarAnimationFade);
     AVCaptureSession *capture = _capture;
     if (capture) dispatch_async(_queue, ^{ [capture stopRunning]; });
 }
@@ -623,7 +624,7 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     if (![path isEqualToString:_heldPath]) [[NSFileManager defaultManager] removeItemAtPath:_heldPath error:NULL];
     [_heldPath release];
     _heldPath = nil;
-    _publishHandler([path autorelease], caption.length ? caption : nil, _privacy);
+    _publishHandler([path autorelease], caption.length ? caption : nil, _audienceChoice);
 }
 
 - (void)galleryTapped {
