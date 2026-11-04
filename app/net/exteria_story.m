@@ -1,10 +1,51 @@
 #import "exteria_story.h"
+#import "exteria_person.h"
 
 /* strings arrive as UTF-8 cut by the core, but a server can still send invalid bytes */
 static NSString *ExteriaUtf8(const char *bytes) {
     NSString *text = [NSString stringWithUTF8String:bytes];
     return text ? text : @"";
 }
+
+@implementation ExteriaStoryAudience
+
+@synthesize base = _base;
+@synthesize allowed = _allowed;
+@synthesize denied = _denied;
+
++ (ExteriaStoryAudience *)audienceWithBase:(exteria_story_privacy)base {
+    ExteriaStoryAudience *audience = [[[ExteriaStoryAudience alloc] init] autorelease];
+    audience->_base = base;
+    return audience;
+}
+
+- (void)dealloc {
+    [_allowed release];
+    [_denied release];
+    [super dealloc];
+}
+
+static uint16_t ExteriaFillStoryUsers(NSArray *people, exteria_story_user *users) {
+    uint16_t count = 0;
+    for (ExteriaPerson *person in people) {
+        if (count >= EXTERIA_STORY_USERS_MAX) break;
+        /* the server names a user by id and access hash, so a person it never gave a hash for cannot be named */
+        if (person.userId <= 0 || !person.accessHash) continue;
+        users[count].id = person.userId;
+        users[count].access_hash = person.accessHash;
+        ++count;
+    }
+    return count;
+}
+
+- (void)fillAudience:(exteria_story_audience *)out {
+    memset(out, 0, sizeof(*out));
+    out->base = _base;
+    if (_base == EXTERIA_STORY_SELECTED) out->allow_count = ExteriaFillStoryUsers(_allowed, out->allow);
+    else if (_base != EXTERIA_STORY_CLOSE_FRIENDS) out->deny_count = ExteriaFillStoryUsers(_denied, out->deny);
+}
+
+@end
 
 @implementation ExteriaStory
 

@@ -7,6 +7,24 @@
 #include "exteria_stories.h"
 
 /* one story as the viewer draws it; built off the main thread */
+@class ExteriaPerson;
+
+/* who sees a story we publish: a base choice, with the people a chosen list holds or the ones left out of everyone or the contacts */
+@interface ExteriaStoryAudience : NSObject {
+    exteria_story_privacy _base;
+    NSArray *_allowed;
+    NSArray *_denied;
+}
++ (ExteriaStoryAudience *)audienceWithBase:(exteria_story_privacy)base;
+@property (nonatomic, assign) exteria_story_privacy base;
+/* ExteriaPerson, the people of a chosen list (base EXTERIA_STORY_SELECTED) */
+@property (nonatomic, copy) NSArray *allowed;
+/* ExteriaPerson, the people left out (base everyone or contacts) */
+@property (nonatomic, copy) NSArray *denied;
+/* the C form the requests take; at most EXTERIA_STORY_USERS_MAX people of each list, and only those with an access hash */
+- (void)fillAudience:(exteria_story_audience *)out;
+@end
+
 @interface ExteriaStory : NSObject {
     exteria_story_row _row;
     NSString *_caption;
@@ -73,6 +91,10 @@ typedef void (^ExteriaStoriesCompletion)(ExteriaStoryPeer *peer, NSArray *storie
 - (void)loadStoriesOfDialog:(ExteriaDialog *)dialog completion:(ExteriaStoriesCompletion)completion;
 /* marks everything up to storyId seen, and counts the view; a failure only shows in the log, the next open says it again */
 - (void)markStoriesSeenOfDialog:(ExteriaDialog *)dialog upTo:(int32_t)storyId;
+/* a page of the people who looked at one of our stories, newest first: each item holds @"peer" (the user id), @"date" and @"blocked"; people is keyed by user id as the other lists are,
+   next is the offset of the following page or nil at the end, total the whole count of views */
+- (void)loadViewersOfStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
+                completion:(void (^)(NSArray *items, NSDictionary *people, NSString *next, int32_t total, NSString *errorName))completion;
 /* a nil reaction takes ours back */
 - (void)reactToStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog reaction:(ExteriaReaction *)reaction
           completion:(void (^)(NSString *errorName))completion;
@@ -87,6 +109,8 @@ typedef void (^ExteriaStoriesCompletion)(ExteriaStoryPeer *peer, NSArray *storie
 /* the management of our own stories; the completion runs on the main thread with the error name or nil */
 /* a nil caption leaves the text as it is, an empty one takes it off; a nil privacy leaves the audience as it is */
 - (void)editStory:(int32_t)storyId caption:(NSString *)caption privacy:(NSNumber *)privacy completion:(void (^)(NSString *errorName))completion;
+/* the same with an audience that may name people; a nil audience leaves it alone */
+- (void)editStory:(int32_t)storyId caption:(NSString *)caption audience:(ExteriaStoryAudience *)audience completion:(void (^)(NSString *errorName))completion;
 - (void)deleteStory:(int32_t)storyId completion:(void (^)(NSString *errorName))completion;
 /* pinned keeps it on the profile after the day, otherwise it only stays in the archive */
 - (void)setStory:(int32_t)storyId pinned:(BOOL)pinned completion:(void (^)(NSString *errorName))completion;

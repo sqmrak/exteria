@@ -285,6 +285,28 @@ static void test_manage(void) {
     roundtrip(request, EXTERIA_TL_ID_stories_sendStory);
     CHECK_EQ_INT(exteria_tl_has(request, "caption"), 0);
     CHECK_EQ_INT(exteria_story_publish_photo_request(&arena, file, 5, NULL, (exteria_story_privacy)9, &request), EXTERIA_E_ARG);
+    {
+        /* an audience with people: everyone but two, only three chosen ones, and the refusals */
+        static exteria_story_audience audience;
+        memset(&audience, 0, sizeof(audience));
+        audience.base = EXTERIA_STORY_EVERYONE;
+        audience.deny_count = 2;
+        audience.deny[0].id = 11; audience.deny[0].access_hash = 111;
+        audience.deny[1].id = 12; audience.deny[1].access_hash = 112;
+        CHECK_EQ_INT(exteria_story_publish_photo_audience_request(&arena, file, 5, NULL, &audience, &request), EXTERIA_OK);
+        roundtrip(request, EXTERIA_TL_ID_stories_sendStory);
+        audience.base = EXTERIA_STORY_SELECTED;
+        CHECK_EQ_INT(exteria_story_publish_photo_audience_request(&arena, file, 5, NULL, &audience, &request), EXTERIA_E_ARG);
+        audience.allow_count = 3;
+        audience.allow[0].id = 21; audience.allow[1].id = 22; audience.allow[2].id = 23;
+        CHECK_EQ_INT(exteria_story_publish_photo_audience_request(&arena, file, 5, "x", &audience, &request), EXTERIA_OK);
+        roundtrip(request, EXTERIA_TL_ID_stories_sendStory);
+        CHECK_EQ_INT(exteria_story_edit_audience_request(&arena, &self, 3, NULL, 1, &audience, &request), EXTERIA_OK);
+        roundtrip(request, EXTERIA_TL_ID_stories_editStory);
+        audience.allow_count = EXTERIA_STORY_USERS_MAX + 1;
+        CHECK_EQ_INT(exteria_story_edit_audience_request(&arena, &self, 3, NULL, 1, &audience, &request), EXTERIA_E_LIMIT);
+        CHECK_EQ_INT(exteria_story_publish_photo_request(&arena, file, 5, NULL, EXTERIA_STORY_SELECTED, &request), EXTERIA_E_ARG);
+    }
     CHECK_EQ_INT(exteria_story_edit_request(&arena, &self, 3, "new", 1, EXTERIA_STORY_CONTACTS, &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_stories_editStory);
     CHECK_EQ_INT(exteria_tl_has(request, "caption"), 1);

@@ -85,17 +85,49 @@ exteria_status exteria_story_send_photo_request(exteria_arena *arena, exteria_tl
 typedef enum exteria_story_privacy {
     EXTERIA_STORY_EVERYONE = 0,
     EXTERIA_STORY_CONTACTS,
-    EXTERIA_STORY_CLOSE_FRIENDS
+    EXTERIA_STORY_CLOSE_FRIENDS,
+    /* a list of chosen people and nobody else; only an audience (below) can name them */
+    EXTERIA_STORY_SELECTED
 } exteria_story_privacy;
+/* who sees a story, with the people the choice names: the chosen ones of SELECTED, or the ones left out of EVERYONE and CONTACTS */
+#define EXTERIA_STORY_USERS_MAX 200
+typedef struct exteria_story_user {
+    int64_t id;
+    int64_t access_hash;
+} exteria_story_user;
+typedef struct exteria_story_audience {
+    exteria_story_privacy base;
+    uint16_t allow_count;
+    uint16_t deny_count;
+    exteria_story_user allow[EXTERIA_STORY_USERS_MAX];
+    exteria_story_user deny[EXTERIA_STORY_USERS_MAX];
+} exteria_story_audience;
 #define EXTERIA_STORY_CAPTION_SEND_MAX 200
 /* the audience of a story row we read */
 exteria_story_privacy exteria_story_row_privacy(const exteria_story_row *row);
 /* stories.sendStory of an uploaded photo with a caption (NULL or empty for none, at most EXTERIA_STORY_CAPTION_SEND_MAX bytes) and an audience */
 exteria_status exteria_story_publish_photo_request(exteria_arena *arena, exteria_tl_value *file, int64_t random_id, const char *caption,
                                                    exteria_story_privacy privacy, exteria_tl_value **out);
+/* the same two calls for an audience that may name people */
+exteria_status exteria_story_publish_photo_audience_request(exteria_arena *arena, exteria_tl_value *file, int64_t random_id, const char *caption,
+                                                            const exteria_story_audience *audience, exteria_tl_value **out);
+exteria_status exteria_story_edit_audience_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, const char *caption, int set_audience,
+                                                   const exteria_story_audience *audience, exteria_tl_value **out);
 /* stories.editStory of one of our stories: a NULL caption leaves the text alone, an empty one takes it off; set_privacy 0 leaves the audience alone */
 exteria_status exteria_story_edit_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, const char *caption, int set_privacy,
                                           exteria_story_privacy privacy, exteria_tl_value **out);
+/* who looked at one of our stories: a page of the answer to stories.getStoryViewsList, newest first; the offset of the next page is empty at the end */
+#define EXTERIA_STORY_VIEWERS_PAGE 50
+#define EXTERIA_STORY_VIEWERS_OFFSET_MAX 256
+typedef struct exteria_story_viewer {
+    int64_t user_id;
+    int32_t date;
+    uint8_t blocked;    /* they cannot see our stories */
+} exteria_story_viewer;
+exteria_status exteria_story_viewers_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t story_id, const char *offset, exteria_tl_value **out);
+/* the viewers in rows (a viewer that is a forward or a repost of the story carries no user and is left out), the next offset in next, and the whole number of views */
+exteria_status exteria_story_viewers_parse(const exteria_tl_value *answer, exteria_story_viewer *rows, size_t capacity, size_t *count, char *next, size_t next_capacity,
+                                           int32_t *total);
 exteria_status exteria_story_delete_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count,
                                             exteria_tl_value **out);
 /* pinned keeps the story on the profile after it expires, unpinned leaves it only in the archive */
