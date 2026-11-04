@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "exteria_tl.h"
+#include "exteria_messages.h"
 
 /* what the live updates say about someone typing */
 
@@ -29,5 +30,6 @@ typedef struct exteria_typing {
 /* 1 for a typing update that was read into out (peer_id, user_id and action filled), 0 for any other object or for one whose peer or action cannot be read.
    out is always initialised */
 int exteria_typing_read(const exteria_tl_value *update, exteria_typing *out);
+exteria_status exteria_typing_request(exteria_arena *arena, const exteria_peer_ref *peer, int cancel, exteria_tl_value **out);
 
 #endif

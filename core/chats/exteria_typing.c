@@ -4,6 +4,23 @@
 
 #include <string.h>
 
+exteria_status exteria_typing_request(exteria_arena *arena, const exteria_peer_ref *peer, int cancel, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *action;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !peer || !out || peer->topic_id < 0) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.setTyping");
+    action = exteria_tl_new_obj(arena, cancel ? "sendMessageCancelAction" : "sendMessageTypingAction");
+    if (!request || !action) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK && peer->topic_id > 1) status = exteria_tl_set_i32(arena, request, "top_msg_id", peer->topic_id);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "action", action);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
 static exteria_typing_action action_of(const exteria_tl_value *action) {
     if (!action || action->kind != EXTERIA_TL_V_OBJ) return EXTERIA_TYPING_CANCEL;
     switch (exteria_tl_id(action)) {
