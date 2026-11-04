@@ -75,7 +75,36 @@ static void test_limits(void) {
     }
 }
 
+/* a symbol made larger than the data needs: the side follows the version, the data is the same, and the fixed parts are where they are */
+static void test_min_version(void) {
+    static uint8_t again[EXTERIA_QR_MAX_MODULES];
+    const char *text = "https://t.me/sqmrak";
+    int side = 0, plain_side = 0, version;
+    CHECK_EQ_INT(exteria_qr_encode((const uint8_t *)text, strlen(text), again, sizeof(again), &plain_side, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(plain_side, 25);
+    CHECK_EQ_INT(exteria_qr_encode_min_version((const uint8_t *)text, strlen(text), 1, modules, sizeof(modules), &side, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(side, plain_side);
+    CHECK_MEM(modules, again, (size_t)side * (size_t)side);
+    for (version = 2; version <= EXTERIA_QR_MAX_VERSION; ++version) {
+        int x, y;
+        CHECK_EQ_INT(exteria_qr_encode_min_version((const uint8_t *)text, strlen(text), version, modules, sizeof(modules), &side, NULL), EXTERIA_OK);
+        CHECK_EQ_INT(side, 17 + 4 * version);
+        for (x = 8; x < side - 8; ++x) CHECK_EQ_INT(modules[6 * side + x], x % 2 == 0);
+        for (y = 8; y < side - 8; ++y) CHECK_EQ_INT(modules[y * side + 6], y % 2 == 0);
+        CHECK_EQ_INT(modules[(side - 8) * side + 8], 1);
+    }
+    /* a version that is too large or too small is refused, and data that does not fit in the version it needs still is */
+    CHECK_EQ_INT(exteria_qr_encode_min_version((const uint8_t *)text, strlen(text), 0, modules, sizeof(modules), &side, NULL), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_qr_encode_min_version((const uint8_t *)text, strlen(text), EXTERIA_QR_MAX_VERSION + 1, modules, sizeof(modules), &side, NULL), EXTERIA_E_ARG);
+    {
+        uint8_t data[214];
+        memset(data, 'q', sizeof(data));
+        CHECK_EQ_INT(exteria_qr_encode_min_version(data, 214, EXTERIA_QR_MAX_VERSION, modules, sizeof(modules), &side, NULL), EXTERIA_E_LIMIT);
+    }
+}
+
 int main(void) {
+    test_min_version();
     test_vectors();
     test_structure();
     test_limits();

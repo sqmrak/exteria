@@ -118,7 +118,7 @@
 }
 
 - (void)tintCommitted:(UIControl<ExteriaTintControl> *)picker {
-    ExteriaThemeStoreCustomTint(picker.hue, picker.saturation);
+    ExteriaThemeStoreCustomTint(picker.hue, picker.saturation, picker.brightness);
     CGPoint origin = [picker convertPoint:CGPointMake(CGRectGetMidX(picker.bounds), CGRectGetMidY(picker.bounds)) toView:nil];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
                                                       userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:origin] forKey:ExteriaThemeOriginKey]];
@@ -150,10 +150,11 @@ static NSUInteger ExteriaChosenPreset(void) {
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:picture]]];
 
     /* the purple of the app until a color is picked; the wallpaper does not give the app its color */
-    float hue = 286, saturation = 0.6f;
-    ExteriaThemeStoredCustomTint(&hue, &saturation);
+    float hue = 286, saturation = 0.6f, brightness = 1;
+    ExteriaThemeStoredCustomTint(&hue, &saturation, &brightness);
     _picker.hue = hue;
     _picker.saturation = saturation;
+    _picker.brightness = brightness;
     UIControl<ExteriaTintControl> *picker = _picker;
     ExteriaSettingsRow *tint = [ExteriaSettingsRow viewRowWithView:picker height:^CGFloat(CGFloat width) { (void)width; return picker.preferredHeight; }];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.tint.header", nil) footer:nil rows:[NSArray arrayWithObject:tint]]];

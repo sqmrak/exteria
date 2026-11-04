@@ -9,6 +9,8 @@ extern NSString *const ExteriaThemeDidChangeNotification;
    as the spot that was touched */
 extern NSString *const ExteriaThemeOriginKey;
 BOOL ExteriaClassicThemeAvailable(void);
+/* developer switch that offers the classic theme on every ios, not only on 10 and older */
+extern NSString *const ExteriaClassicAnywhereKey;
 BOOL ExteriaThemeStoredClassic(void);
 void ExteriaThemeStoreClassic(BOOL classic);
 BOOL ExteriaThemeIsClassic(void);
@@ -19,13 +21,17 @@ void ExteriaThemeApply(BOOL dark);
 /* the status bar style of a tone: light content on dark, black content on light */
 UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark);
 void ExteriaThemeApplyStored(void);
+/* a number that changes whenever the palette does (the dark and the light theme, the style, a hue of one's own, an imported theme): a cache of anything drawn in the colors of the theme
+   keeps it in its key, or compares it, so nothing made before the change is shown after it */
+NSUInteger ExteriaThemeRevision(void);
 
-/* a hue (degrees) and a saturation (0 to 1, of the accent) chosen by the person; while none is stored the palette is the purple of the app.
+/* a hue (degrees), a saturation and a brightness (0 to 1, of the accent; 1 is the accent of the palette, 0 is black) chosen by the person; while none is stored the palette is the purple of the app.
    Storing is silent: the caller posts ExteriaThemeDidChangeNotification */
-BOOL ExteriaThemeStoredCustomTint(float *hue, float *saturation);
-void ExteriaThemeStoreCustomTint(float hue, float saturation);
+/* a color stored before the brightness existed reads as brightness 1 */
+BOOL ExteriaThemeStoredCustomTint(float *hue, float *saturation, float *brightness);
+void ExteriaThemeStoreCustomTint(float hue, float saturation, float brightness);
 /* the accent of the light palette for such a pair, for a swatch that shows it before it is stored */
-UIColor *ExteriaThemeCustomTintColor(float hue, float saturation);
+UIColor *ExteriaThemeCustomTintColor(float hue, float saturation, float brightness);
 /* a color of the palette of the app, or any other color built from fixed numbers, turned the same way; other colors than RGB come back as they are */
 UIColor *ExteriaThemeTinted(UIColor *color);
 /* a color of a palette with a seed hue of its own (the Shiro screens), moved to the accent of the app: the seed hue goes to the hue of the accent, the saturation
@@ -75,6 +81,15 @@ UIFont *ExteriaFontRegular(CGFloat size);
 UIFont *ExteriaFontMedium(CGFloat size);
 UIFont *ExteriaFontSemibold(CGFloat size);
 UIFont *ExteriaFontBold(CGFloat size);
+/* the size of the whole interface, in percent of the designed one. The value is read once when the app starts, so every screen is built at one scale; the stored
+   value is what the next start uses. The fonts of the ExteriaFont and Shiro helpers follow it, and so do the sizes of the rows on the chat list */
+#define EXTERIA_INTERFACE_SCALE_MIN 85
+#define EXTERIA_INTERFACE_SCALE_MAX 125
+CGFloat ExteriaInterfaceScale(void);
+NSInteger ExteriaInterfaceScaleStored(void);
+void ExteriaInterfaceScaleStore(NSInteger percent);
+/* the face the user picked changed: the faces already made are dropped, and the screens ask again when they are built */
+void ExteriaFontsDidChange(void);
 
 /* the ios 5 UITextAlignment values and the ios 6 NSTextAlignment ones are the same numbers on iOS */
 #define ExteriaTextAlignmentCenter 1

@@ -28,6 +28,7 @@ static UIImage *ExteriaSolidImage(UIColor *color) {
 
 @synthesize hue = _hue;
 @synthesize saturation = _saturation;
+@synthesize brightness = _brightness;
 
 - (CGFloat)preferredHeight { return PICKER_HEIGHT; }
 
@@ -35,6 +36,7 @@ static UIImage *ExteriaSolidImage(UIColor *color) {
     self = [super initWithFrame:frame];
     if (!self) return nil;
     self.backgroundColor = [UIColor clearColor];
+    _brightness = 1;
     self.isAccessibilityElement = YES;
     self.accessibilityTraits = UIAccessibilityTraitAdjustable;
     /* both discs are the chrome rim of the QR logo around the color, drawn again whenever the color moves */
@@ -142,7 +144,7 @@ static UIImage *ExteriaSolidImage(UIColor *color) {
     CGRect square = [self squareRect];
     _thumb.bounds = CGRectMake(0, 0, THUMB_SIDE, THUMB_SIDE);
     _thumb.center = CGPointMake(square.origin.x + square.size.width * _hue / 360.0, square.origin.y + square.size.height * (1 - _saturation));
-    _thumb.image = ExteriaClassicMetalDisc(ExteriaSolidImage(ExteriaThemeCustomTintColor(_hue, _saturation)), THUMB_SIDE);
+    _thumb.image = ExteriaClassicMetalDisc(ExteriaSolidImage(ExteriaThemeCustomTintColor(_hue, _saturation, _brightness)), THUMB_SIDE);
     [self showHex];
 }
 
@@ -171,14 +173,14 @@ static UIImage *ExteriaSolidImage(UIColor *color) {
     _field.frame = CGRectMake(16 + hashWidth + gap, 0, fieldWidth, plateHeight);
 }
 
-NSString *ExteriaHexOfTint(float hue, float saturation) {
+NSString *ExteriaHexOfTint(float hue, float saturation, float brightness) {
     CGFloat red, green, blue;
-    ExteriaHSVToRGB(hue, saturation, 0.745, &red, &green, &blue);
+    ExteriaHSVToRGB(hue, saturation, 0.745 * MIN(1, MAX(0, brightness)), &red, &green, &blue);
     return [NSString stringWithFormat:@"%02X%02X%02X", (unsigned)(red * 255 + 0.5), (unsigned)(green * 255 + 0.5), (unsigned)(blue * 255 + 0.5)];
 }
 
 /* three digits are the short form of six; anything else that is not six hex digits is no color */
-BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation) {
+BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation, float *brightness) {
     if (text.length == 3) {
         unichar c[3];
         [text getCharacters:c range:NSMakeRange(0, 3)];
@@ -188,11 +190,12 @@ BOOL ExteriaTintOfHex(NSString *text, float *hue, float *saturation) {
     unsigned rgb = 0;
     NSScanner *scanner = [NSScanner scannerWithString:text];
     if (![scanner scanHexInt:&rgb] || ![scanner isAtEnd]) return NO;
-    CGFloat h, s;
-    ExteriaRGBToHSV(((rgb >> 16) & 0xFF) / 255.0, ((rgb >> 8) & 0xFF) / 255.0, (rgb & 0xFF) / 255.0, &h, &s, NULL);
-    /* a grey has no hue of its own, so the hue stays where the person had it */
-    if (s > 0) *hue = (float)h;
+    CGFloat h, s, v;
+    ExteriaRGBToHSV(((rgb >> 16) & 0xFF) / 255.0, ((rgb >> 8) & 0xFF) / 255.0, (rgb & 0xFF) / 255.0, &h, &s, &v);
+    /* a grey has no hue of its own, so the hue stays where the person had it; so does a black */
+    if (s > 0 && v > 0) *hue = (float)h;
     *saturation = (float)s;
+    *brightness = (float)MIN(1, v / 0.745);
     return YES;
 }
 
@@ -205,15 +208,16 @@ BOOL ExteriaTintHexAllowed(NSString *text) {
 - (CGRect)editingRect { return _plate.frame; }
 
 - (void)showHex {
-    _swatch.image = ExteriaClassicMetalDisc(ExteriaSolidImage(ExteriaThemeCustomTintColor(_hue, _saturation)), SWATCH_SIDE);
-    if (!_field.isFirstResponder) _field.text = ExteriaHexOfTint(_hue, _saturation);
+    _swatch.image = ExteriaClassicMetalDisc(ExteriaSolidImage(ExteriaThemeCustomTintColor(_hue, _saturation, _brightness)), SWATCH_SIDE);
+    if (!_field.isFirstResponder) _field.text = ExteriaHexOfTint(_hue, _saturation, _brightness);
 }
 
 - (void)hexEdited {
-    float hue = _hue, saturation = _saturation;
-    if (!ExteriaTintOfHex(_field.text, &hue, &saturation) || _field.text.length != 6) return;
+    float hue = _hue, saturation = _saturation, brightness = _brightness;
+    if (!ExteriaTintOfHex(_field.text, &hue, &saturation, &brightness) || _field.text.length != 6) return;
     _hue = hue;
     _saturation = saturation;
+    _brightness = brightness;
     [self placeThumb];
     [self sendActionsForControlEvents:UIControlEventValueChanged];
 }
@@ -229,11 +233,12 @@ BOOL ExteriaTintHexAllowed(NSString *text) {
 
 /* the color is taken when the field is done; a short or broken entry goes back to the color shown by the square */
 - (void)textFieldDidEndEditing:(UITextField *)field {
-    float hue = _hue, saturation = _saturation;
-    BOOL valid = ExteriaTintOfHex(field.text, &hue, &saturation);
+    float hue = _hue, saturation = _saturation, brightness = _brightness;
+    BOOL valid = ExteriaTintOfHex(field.text, &hue, &saturation, &brightness);
     if (valid) {
         _hue = hue;
         _saturation = saturation;
+        _brightness = brightness;
         [self placeThumb];
     }
     [self showHex];
@@ -247,6 +252,11 @@ BOOL ExteriaTintHexAllowed(NSString *text) {
 
 - (void)setSaturation:(float)saturation {
     _saturation = MIN(1, MAX(0, saturation));
+    [self placeThumb];
+}
+
+- (void)setBrightness:(float)brightness {
+    _brightness = MIN(1, MAX(0, brightness));
     [self placeThumb];
 }
 

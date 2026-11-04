@@ -232,6 +232,10 @@ static int penalty(const qr_matrix *m) {
 }
 
 exteria_status exteria_qr_encode(const uint8_t *data, size_t len, uint8_t *modules, size_t cap, int *side_out, int *mask_out) {
+    return exteria_qr_encode_min_version(data, len, 1, modules, cap, side_out, mask_out);
+}
+
+exteria_status exteria_qr_encode_min_version(const uint8_t *data, size_t len, int min_version, uint8_t *modules, size_t cap, int *side_out, int *mask_out) {
     static const int capacity_bits[2] = {8, 16};
     uint8_t codewords[400], interleaved[400];
     qr_matrix m;
@@ -240,8 +244,8 @@ exteria_status exteria_qr_encode(const uint8_t *data, size_t len, uint8_t *modul
     int short_blocks, count_bits;
     if (side_out) *side_out = 0;
     if (mask_out) *mask_out = 0;
-    if (!data || !len || !modules || !side_out || cap < (size_t)EXTERIA_QR_MAX_MODULES) return EXTERIA_E_ARG;
-    for (version = 1; version <= EXTERIA_QR_MAX_VERSION; ++version) {
+    if (!data || !len || !modules || !side_out || cap < (size_t)EXTERIA_QR_MAX_MODULES || min_version < 1 || min_version > EXTERIA_QR_MAX_VERSION) return EXTERIA_E_ARG;
+    for (version = min_version; version <= EXTERIA_QR_MAX_VERSION; ++version) {
         count_bits = capacity_bits[version >= 10 ? 1 : 0];
         if (4 + count_bits + (int)len * 8 <= data_codewords(version) * 8) break;
     }
