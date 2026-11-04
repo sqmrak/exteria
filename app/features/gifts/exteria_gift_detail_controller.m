@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_gift_folders.h"
 #import "exteria_weak_reference.h"
 #import "exteria_animation.h"
@@ -40,6 +41,7 @@ enum {
 - (id)initWithDetail:(ExteriaGiftDetailController *)detail;
 - (void)showInHost:(UIViewController *)host;
 - (void)close;
+- (void)closeWithCompletion:(void (^)(void))completion;
 @end
 
 @interface ExteriaGiftPopupController () {
@@ -60,6 +62,9 @@ enum {
     _navigation = [[UINavigationController alloc] initWithRootViewController:detail];
     _navigation.navigationBarHidden = !ExteriaThemeIsClassic();
     if (ExteriaThemeIsClassic()) {
+        /* the bar of the card wears the accent of the classic screens, not the system's pale chrome; it is not translucent, so the card keeps its shape under it */
+        ExteriaClassicStyleNavigationBar(_navigation.navigationBar);
+        _navigation.navigationBar.translucent = NO;
         detail.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"story.close", nil)
             style:UIBarButtonItemStyleDone target:self action:@selector(close)] autorelease];
     }
@@ -118,6 +123,10 @@ enum {
 }
 
 - (void)close {
+    [self closeWithCompletion:nil];
+}
+
+- (void)closeWithCompletion:(void (^)(void))completion {
     if (_closing) return;
     if (![_detail popupCanClose]) {
         _card.transform = CGAffineTransformIdentity;
@@ -133,6 +142,7 @@ enum {
         [self willMoveToParentViewController:nil];
         [self.view removeFromSuperview];
         [self removeFromParentViewController];
+        if (completion) completion();
     });
 }
 
@@ -173,6 +183,8 @@ enum {
     ExteriaDialog *_recipient;
     void (^_changedHandler)(void);
     ExteriaDialog *_folderDialog;
+    NSArray *_pinnedGifts;
+    UIButton *_wearButton;
 }
 @end
 
@@ -180,6 +192,7 @@ enum {
 
 @synthesize changedHandler = _changedHandler;
 @synthesize folderDialog = _folderDialog;
+@synthesize pinnedGifts = _pinnedGifts;
 @synthesize ownerName = _ownerName;
 @synthesize stickers = _stickers;
 
@@ -224,6 +237,7 @@ enum {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshConvertButton) object:nil];
     [_saved release];
+    [_pinnedGifts release];
     [_scroll release];
     [_backdrop release];
     [_picture release];
@@ -420,9 +434,16 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
 - (void)openSender {
     ExteriaDialog *dialog = [ExteriaDialog dialogWithPerson:_saved.fromPerson];
     if (!dialog) return;
+    UIViewController *host = _popup ? _popup.parentViewController : nil;
+    UINavigationController *navigation = _popup ? ([host isKindOfClass:[UINavigationController class]] ? (UINavigationController *)host : host.navigationController) : self.navigationController;
+    if (!navigation) {
+        NSLog(@"exteria: no navigation controller for the gift sender's profile");
+        return;
+    }
     ExteriaUserProfileController *profile = [[[ExteriaUserProfileController alloc] initWithSession:self.session dialog:dialog avatars:self.avatars
                                                                                               media:self.media stickers:_stickers] autorelease];
-    [self.navigationController pushViewController:profile animated:YES];
+    if (_popup) [_popup closeWithCompletion:^{ [navigation pushViewController:profile animated:YES]; }];
+    else [navigation pushViewController:profile animated:YES];
 }
 
 /* "gift is visible on your profile. Hide >": the line says where the gift is, the link moves it */
@@ -491,6 +512,11 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
         [self buttonTitled:title action:@selector(askUpgrade) destructive:NO];
     }
     if (_folderDialog && _saved.messageId > 0) [self buttonTitled:NSLocalizedString(@"gifts.folder.add", nil) action:@selector(chooseFolder) destructive:NO];
+    if (gift.unique && _mine) {
+        _wearButton = [self buttonTitled:@"" action:@selector(toggleWorn) destructive:NO];
+        [self refreshWearTitle];
+        if (_saved.messageId > 0) [self buttonTitled:NSLocalizedString(_saved.pinned ? @"gifts.unpin" : @"gifts.pin", nil) action:@selector(togglePinned) destructive:NO];
+    }
     if (gift.unique) [self buttonTitled:NSLocalizedString(@"gifts.transfer", nil) action:@selector(chooseRecipient) destructive:NO];
     [self refreshConvertButton];
 }
@@ -637,6 +663,57 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
                 ExteriaGiftAlert(nil, [NSString stringWithFormat:NSLocalizedString(@"gifts.folder.added", nil), folder.title]);
             }];
         });
+    }];
+}
+
+- (BOOL)isWorn {
+    long long worn = [self.session ownPerson].emojiStatusCollectible;
+    return worn && worn == _saved.gift.row.id;
+}
+
+- (void)refreshWearTitle {
+    [_wearButton setTitle:NSLocalizedString([self isWorn] ? @"gifts.wear.off" : @"gifts.wear.on", nil) forState:UIControlStateNormal];
+}
+
+/* the status of the account changes on the server first; the cached own profile is read again so the button shows what is stored */
+- (void)toggleWorn {
+    if (_working) return;
+    [self setWorking:YES];
+    long long target = [self isWorn] ? 0 : _saved.gift.row.id;
+    [self retain];
+    [self.session wearGiftWithId:target completion:^(NSString *errorName) {
+        if (errorName) {
+            [self autorelease];
+            [self finishWithError:errorName leave:NO];
+            return;
+        }
+        [self.session loadSelf:^(NSArray *items, NSString *loadError) {
+            [self autorelease];
+            [self refreshWearTitle];
+            [self finishWithError:nil leave:NO];
+        }];
+    }];
+}
+
+/* the server takes the whole list of pinned gifts, so the new list is the current one with this gift added in front or taken out */
+- (void)togglePinned {
+    if (_working) return;
+    NSMutableArray *list = [NSMutableArray array];
+    for (ExteriaSavedGift *other in _pinnedGifts) {
+        if (other.messageId != _saved.messageId) [list addObject:other];
+    }
+    if (!_saved.pinned) {
+        if (list.count >= 6) {
+            ExteriaGiftAlert(nil, NSLocalizedString(@"gifts.pin.full", nil));
+            return;
+        }
+        [list insertObject:_saved atIndex:0];
+    }
+    [self setWorking:YES];
+    [self retain];
+    [self.session pinGifts:list completion:^(NSString *errorName) {
+        [self autorelease];
+        [self finishWithError:errorName leave:YES];
     }];
 }
 

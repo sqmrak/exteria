@@ -20,6 +20,8 @@
     NSString *_titleText;
     NSString *_messageText;
     NSString *_buttonTitle;
+    NSString *_pictureName;
+    CGFloat _pictureHeight;
     void (^_dismissHandler)(void);
     BOOL _shown;
     BOOL _leaving;
@@ -31,6 +33,8 @@
 @synthesize titleText = _titleText;
 @synthesize messageText = _messageText;
 @synthesize buttonTitle = _buttonTitle;
+@synthesize pictureName = _pictureName;
+@synthesize pictureHeight = _pictureHeight;
 @synthesize dismissHandler = _dismissHandler;
 @synthesize isShown = _shown;
 
@@ -89,6 +93,7 @@
     [_titleText release];
     [_messageText release];
     [_buttonTitle release];
+    [_pictureName release];
     [_dismissHandler release];
     [super dealloc];
 }
@@ -108,8 +113,19 @@
     [super layoutSubviews];
     CGFloat width = MIN(self.bounds.size.width - 2 * SIDE_MARGIN, CARD_MAX_WIDTH);
     CGFloat inner = width - 2 * CARD_PAD;
+    if (_pictureName.length) {
+        UIImage *named = [UIImage imageNamed:_pictureName];
+        if (named && named != _picture.image) _picture.image = named;
+    }
     UIImage *image = _picture.image;
     CGFloat pictureHeight = image && image.size.width > 0 ? ceil(inner * image.size.height / image.size.width) : inner;
+    if (_pictureHeight > 0) {
+        /* a sticker keeps its outline: it is shown whole, with no rounded clip around a box it does not fill */
+        pictureHeight = MIN(pictureHeight, _pictureHeight);
+        _picture.contentMode = UIViewContentModeScaleAspectFit;
+        _picture.clipsToBounds = NO;
+        _picture.layer.cornerRadius = 0;
+    }
     _title.text = _titleText;
     _message.text = _messageText;
     [_button setTitle:_buttonTitle forState:UIControlStateNormal];

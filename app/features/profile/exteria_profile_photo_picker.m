@@ -11,6 +11,27 @@
 #define STORY_SIDE 1280.0
 #define PHOTO_QUALITY 0.85
 
+static NSString *ExteriaProfileSquarePath(UIImage *image) {
+    CGSize size = image.size;
+    CGFloat side = MIN(size.width, size.height);
+    CGFloat out = MIN(PHOTO_SIDE, side);
+    if (side <= 0 || !image.CGImage) return nil;
+    CGImageAlphaInfo alpha = CGImageGetAlphaInfo(image.CGImage);
+    BOOL transparent = alpha != kCGImageAlphaNone && alpha != kCGImageAlphaNoneSkipFirst && alpha != kCGImageAlphaNoneSkipLast;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(out, out), !transparent, 1.0);
+    CGFloat scale = out / side;
+    [image drawInRect:CGRectMake(-(size.width - side) / 2 * scale, -(size.height - side) / 2 * scale, size.width * scale, size.height * scale)];
+    UIImage *square = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    NSData *data = transparent ? UIImagePNGRepresentation(square) : UIImageJPEGRepresentation(square, PHOTO_QUALITY);
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"profile-%u.%@", arc4random(), transparent ? @"png" : @"jpg"]];
+    if (!data || ![data writeToFile:path atomically:YES]) {
+        NSLog(@"exteria: the profile photo was not written");
+        return nil;
+    }
+    return path;
+}
+
 @interface ExteriaProfilePhotoPicker () {
     void (^_picked)(NSString *);
     void (^_sheetPicked)(NSString *, BOOL);
@@ -87,7 +108,7 @@
     [self dismissPicker:picker];
     void (^picked)(NSString *) = [_picked retain];
     BOOL whole = _whole;
-    /* off the main thread: the middle square of the picture, or the whole of it for a story, shrunk, written as a jpeg */
+    /* the image work stays off the main thread */
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         CGSize size = image.size;
@@ -107,19 +128,7 @@
                 else NSLog(@"exteria: the story photo was not written");
             }
         } else {
-            CGFloat side = MIN(size.width, size.height);
-            CGFloat out = MIN(PHOTO_SIDE, side);
-            if (side > 0) {
-                UIGraphicsBeginImageContextWithOptions(CGSizeMake(out, out), YES, 1.0);
-                CGFloat scale = out / side;
-                [image drawInRect:CGRectMake(-(size.width - side) / 2 * scale, -(size.height - side) / 2 * scale, size.width * scale, size.height * scale)];
-                UIImage *square = UIGraphicsGetImageFromCurrentImageContext();
-                UIGraphicsEndImageContext();
-                NSData *jpeg = UIImageJPEGRepresentation(square, PHOTO_QUALITY);
-                NSString *candidate = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"profile-%u.jpg", arc4random()]];
-                if (jpeg && [jpeg writeToFile:candidate atomically:YES]) path = [[candidate copy] autorelease];
-                else NSLog(@"exteria: the profile photo was not written");
-            }
+            path = ExteriaProfileSquarePath(image);
         }
         [image release];
         NSString *delivered = [path retain];
@@ -182,21 +191,7 @@ static char ExteriaPickerSheetKey;
     UIImage *source = [image retain];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-        CGSize size = source.size;
-        NSString *path = nil;
-        CGFloat side = MIN(size.width, size.height);
-        CGFloat out = MIN(PHOTO_SIDE, side);
-        if (side > 0) {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(out, out), YES, 1.0);
-            CGFloat scale = out / side;
-            [source drawInRect:CGRectMake(-(size.width - side) / 2 * scale, -(size.height - side) / 2 * scale, size.width * scale, size.height * scale)];
-            UIImage *square = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-            NSData *jpeg = UIImageJPEGRepresentation(square, PHOTO_QUALITY);
-            NSString *candidate = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"profile-%u.jpg", arc4random()]];
-            if (jpeg && [jpeg writeToFile:candidate atomically:YES]) path = [[candidate copy] autorelease];
-            else NSLog(@"exteria: the profile photo was not written");
-        }
+        NSString *path = ExteriaProfileSquarePath(source);
         [source release];
         NSString *delivered = [path retain];
         dispatch_async(dispatch_get_main_queue(), ^{

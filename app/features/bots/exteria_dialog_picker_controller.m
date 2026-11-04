@@ -11,8 +11,10 @@
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
 
-/* the pages of the list the picker asks for before it stops: the chats that matter are among the first ones, and the search reaches the rest on the server */
-#define PICKER_PAGES_MAX 20
+/* the pages of the list the picker asks for after the first page of each folder: the chats that matter are among the first ones, the list the main screen kept already fills the
+   picker, and the search reaches the rest on the server. twenty pages in a row on every opening made the server answer FLOOD_WAIT to the dialog requests of the whole account, and
+   the forward that followed waited behind them for seconds and was refused */
+#define PICKER_PAGES_MAX 2
 
 @interface ExteriaDialogPickerController () {
     ExteriaSession *_session;

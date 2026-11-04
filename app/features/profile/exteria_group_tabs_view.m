@@ -16,6 +16,10 @@
 #import "exteria_session_channels.h"
 
 #define TABS_GAP 10.0
+/* the icon of a row of the person cell: its left margin and its side */
+#define ROW_SIDE 14.0
+#define ROW_ICON 44.0
+#define BAR_HEIGHT 48.0
 #define PAGE 30
 #define COLUMNS 3
 #define CELL_GAP 2.0
@@ -32,6 +36,9 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     ExteriaWeakReference *_weak;
     ExteriaPillTabsView *_tabs;
     UIView *_body;
+    UIView *_bar;
+    UIView *_barLine;
+    CAShapeLayer *_barMask;
     UILabel *_empty;
     NSMutableArray *_items[ExteriaGroupTabCount];
     BOOL _loaded[ExteriaGroupTabCount];
@@ -43,6 +50,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     CGFloat _width;
     CGFloat _bodyHeight;
     NSMutableSet *_selected;
+    NSMutableDictionary *_people;
     BOOL _forwarding;
     id<ExteriaGroupTabsDelegate> _delegate;
 }
@@ -76,6 +84,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     _media = [media retain];
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     _selected = [[NSMutableSet alloc] init];
+    _people = [[NSMutableDictionary alloc] init];
     for (int i = 0; i < ExteriaGroupTabCount; ++i) _items[i] = [[NSMutableArray alloc] init];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(forUser ? @"gifts.title" : @"group.tab.members", nil), NSLocalizedString(@"group.tab.media", nil),
                                                 NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil), nil];
@@ -109,10 +118,13 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     [_dialog release];
     [_avatars release];
     [_media release];
+    [_barMask release];
+    [_bar release];
     [_tabs release];
     [_body release];
     [_empty release];
     [_selected release];
+    [_people release];
     for (int i = 0; i < ExteriaGroupTabCount; ++i) [_items[i] release];
     [super dealloc];
 }
@@ -181,9 +193,9 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     int32_t before = _items[tab].count ? [(ExteriaMessage *)[_items[tab] lastObject] messageId] : 0;
     [_session loadSharedOfDialog:_dialog kind:kind beforeId:before limit:PAGE completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
         [self autorelease];
-        (void)people;
         ExteriaGroupTabsView *view = me.target;
         if (!view) return;
+        [view->_people addEntriesFromDictionary:people];
         /* the server filters by what the message holds, so a page of the links tab can carry a message with no readable link; those are dropped here */
         NSUInteger added = messages.count;
         for (ExteriaMessage *message in messages) {
@@ -233,7 +245,14 @@ static NSString *ExteriaGroupDateText(int32_t date) {
             check.backgroundColor = ExteriaColorAccent();
             check.layer.cornerRadius = 12;
             check.contentMode = UIViewContentModeCenter;
-            check.frame = CGRectMake(MAX(0, frame.size.width - 30), MAX(0, frame.size.height - 30), 24, 24);
+            /* on the icon of a file or link row, the corner of a photo tile */
+            if (_tab == ExteriaGroupTabMedia) {
+                check.frame = CGRectMake(MAX(0, frame.size.width - 30), MAX(0, frame.size.height - 30), 24, 24);
+            } else {
+                check.frame = CGRectMake(ROW_SIDE + ROW_ICON - 20, (frame.size.height + ROW_ICON) / 2 - 20, 24, 24);
+                check.layer.borderWidth = 2;
+                check.layer.borderColor = ExteriaColorCard().CGColor;
+            }
             check.userInteractionEnabled = NO;
             [area addSubview:check];
         }
@@ -251,10 +270,14 @@ static NSString *ExteriaGroupDateText(int32_t date) {
 
 - (void)rebuild {
     for (UIView *view in [[_body.subviews copy] autorelease]) [view removeFromSuperview];
+    [_bar removeFromSuperview];
+    [_bar release];
+    _bar = nil;
+    _barLine = nil;
     NSUInteger tab = _tab;
     NSArray *items = _items[tab];
     CGFloat width = _width;
-    CGFloat y = _selected.count ? 48 : 0;
+    CGFloat y = _selected.count ? BAR_HEIGHT : 0;
     if (_forUser && tab == ExteriaGroupTabMembers) {
         _body.hidden = YES;
         _bodyHeight = 0;
@@ -302,6 +325,21 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     [_delegate groupTabsDidResize:self];
 }
 
+/* a voice message is named by who sent it, as the file name of a recording says nothing; in saved messages the sender is the account itself, so the author of the forward is shown.
+   NO when the history named nobody, and the row keeps the plain title */
+- (BOOL)configureVoiceRow:(ExteriaPersonCell *)cell message:(ExteriaMessage *)message {
+    long long key = _dialog.saved && message.forwardKey ? message.forwardKey : message.senderKey;
+    ExteriaPerson *person = key ? [_people objectForKey:[NSNumber numberWithLongLong:key]] : nil;
+    NSString *name = person.name.length ? person.name : (_dialog.saved ? message.forwardName : nil);
+    if (!name.length) return NO;
+    NSString *detail = [NSString stringWithFormat:@"%@, %@", ExteriaGroupSizeText(message.media.size), ExteriaGroupDateText(message.date)];
+    [cell configureWithName:name initials:person.initials.length ? person.initials : [[name substringToIndex:1] uppercaseString]
+                       seed:(NSUInteger)(person ? person.userId % 1000003 : message.messageId)
+                   subtitle:detail subtitleColor:nil trailing:nil symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
+    cell.avatarDeleted = person.deleted;
+    return YES;
+}
+
 - (UIView *)rowForItem:(id)item tab:(NSUInteger)tab frame:(CGRect)frame {
     ExteriaPersonCell *cell = [self personRowWithFrame:frame];
     if (tab == ExteriaGroupTabMembers) {
@@ -328,9 +366,12 @@ static NSString *ExteriaGroupDateText(int32_t date) {
             subtitle = ExteriaLastSeenText(person.presence, person.seen);
         }
         cell.developer = ExteriaPersonIsDeveloper(person);
+        cell.premium = person.premium;
         [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:color
                        trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
         cell.avatarDeleted = person.deleted;
+    } else if (tab == ExteriaGroupTabVoice && [self configureVoiceRow:cell message:item]) {
+        return cell;
     } else if (tab == ExteriaGroupTabFiles || tab == ExteriaGroupTabAudio || tab == ExteriaGroupTabVoice) {
         ExteriaMessage *message = item;
         NSString *name = message.media.name.length ? message.media.name : (message.media.title.length ? message.media.title : NSLocalizedString(tab == ExteriaGroupTabVoice ? @"group.tab.voice" : @"group.tab.file", nil));
@@ -392,22 +433,59 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     [button setImage:ExteriaSymbolImage(symbol, 22, ExteriaColorTitle()) forState:UIControlStateNormal];
     button.accessibilityLabel = label;
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-    [_body addSubview:button];
+    [_bar addSubview:button];
     return button;
 }
 
 - (void)addSelectionBar:(CGFloat)width {
+    _bar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, BAR_HEIGHT)];
+    _bar.backgroundColor = ExteriaColorCard();
+    _barLine = [[[UIView alloc] initWithFrame:CGRectMake(0, BAR_HEIGHT - 1, width, 1)] autorelease];
+    _barLine.backgroundColor = ExteriaColorHairline();
+    _barLine.hidden = YES;
+    [_bar addSubview:_barLine];
+    [_barMask release];
+    _barMask = [[CAShapeLayer alloc] init];
+    _barMask.path = [UIBezierPath bezierPathWithRoundedRect:_bar.bounds byRoundingCorners:UIRectCornerTopLeft | UIRectCornerTopRight cornerRadii:CGSizeMake(14, 14)].CGPath;
+    _bar.layer.mask = _barMask;
+    [self addSubview:_bar];
     [self selectionButton:ExteriaSymbolClose label:NSLocalizedString(@"chat.msg.cancel", nil) action:@selector(cancelSelection) frame:CGRectMake(4, 0, 44, 48)];
     UILabel *count = [[[UILabel alloc] initWithFrame:CGRectMake(54, 0, 80, 48)] autorelease];
     count.backgroundColor = [UIColor clearColor];
     count.font = ExteriaFontSemibold(17);
     count.textColor = ExteriaColorTitle();
     count.text = [NSString stringWithFormat:@"%lu", (unsigned long)_selected.count];
-    [_body addSubview:count];
+    [_bar addSubview:count];
     UIButton *view = [self selectionButton:ExteriaSymbolEye label:NSLocalizedString(@"chat.msg.details", nil) action:@selector(viewSelection) frame:CGRectMake(width - 96, 0, 44, 48)];
     view.enabled = _selected.count == 1;
     view.alpha = view.enabled ? 1 : 0.35;
     [self selectionButton:ExteriaSymbolForward label:NSLocalizedString(@"chat.msg.forward", nil) action:@selector(forwardSelection) frame:CGRectMake(width - 48, 0, 44, 48)];
+}
+
+- (UIScrollView *)hostScroll {
+    UIView *view = self.superview;
+    while (view && ![view isKindOfClass:[UIScrollView class]]) view = view.superview;
+    return (UIScrollView *)view;
+}
+
+/* the bar waits where the list begins, and once that scrolls under the top bar it stays below the bar, so the buttons are in reach without a scroll back up */
+- (void)hostDidScroll {
+    if (!_bar) return;
+    CGFloat home = 40.0 + TABS_GAP;
+    CGFloat last = MAX(home, self.bounds.size.height - BAR_HEIGHT);
+    CGFloat y = home;
+    UIScrollView *scroll = [self hostScroll];
+    if (scroll) {
+        CGFloat top = [self convertPoint:CGPointMake(0, scroll.contentOffset.y + scroll.contentInset.top) fromView:scroll].y;
+        y = MAX(home, MIN(top, last));
+    }
+    CGRect frame = _bar.frame;
+    frame.origin.y = y;
+    _bar.frame = frame;
+    BOOL pinned = y > home + 0.5;
+    /* the corners follow the card while the bar sits on it, and a line closes the bar over the rows once it floats */
+    _barLine.hidden = !pinned;
+    _bar.layer.mask = pinned ? nil : _barMask;
 }
 
 - (void)cancelSelection {
@@ -524,6 +602,8 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     CGFloat width = self.bounds.size.width;
     _tabs.frame = CGRectMake(0, 0, width, 40.0);
     _body.frame = CGRectMake(0, 40.0 + TABS_GAP, width, _bodyHeight);
+    if (_bar) _bar.frame = CGRectMake(0, _bar.frame.origin.y, width, BAR_HEIGHT);
+    [self hostDidScroll];
 }
 
 @end

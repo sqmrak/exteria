@@ -247,8 +247,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     _appIcon.clipsToBounds = YES;
     [self addSubview:_appIcon];
     _marks = [[NSMutableArray alloc] init];
-    const NSUInteger bits[] = {ExteriaMarkDeveloper, ExteriaMarkLead, ExteriaMarkSenko, ExteriaMarkOfficialTester, ExteriaMarkBugHunter, ExteriaMarkManager, ExteriaMarkPromotion};
-    const long long documents[] = {EXTERIA_DEVELOPER_DOCUMENT, EXTERIA_LEAD_DOCUMENT, EXTERIA_SENKO_DOCUMENT, EXTERIA_OFFICIAL_TESTER_DOCUMENT, EXTERIA_BUG_HUNTER_DOCUMENT, EXTERIA_MANAGER_DOCUMENT, EXTERIA_PROMOTION_DOCUMENT};
+    const NSUInteger bits[] = {ExteriaMarkDeveloper, ExteriaMarkLead, ExteriaMarkSenko, ExteriaMarkOfficialTester, ExteriaMarkBugHunter, ExteriaMarkFlawSeer, ExteriaMarkManager, ExteriaMarkPromotion};
+    const long long documents[] = {EXTERIA_DEVELOPER_DOCUMENT, EXTERIA_LEAD_DOCUMENT, EXTERIA_SENKO_DOCUMENT, EXTERIA_OFFICIAL_TESTER_DOCUMENT, EXTERIA_BUG_HUNTER_DOCUMENT, EXTERIA_FLAW_SEER_DOCUMENT, EXTERIA_MANAGER_DOCUMENT, EXTERIA_PROMOTION_DOCUMENT};
     for (NSUInteger i = 0; i < sizeof(bits) / sizeof(bits[0]); ++i) {
         if (!(marks & bits[i])) continue;
         UIImage *image = [ExteriaCustomEmoji imageForDocument:documents[i]];
@@ -439,9 +439,12 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     pill.text = ExteriaSliceName();
     pill.layer.cornerRadius = PILL_HEIGHT / 2;
     pill.layer.masksToBounds = YES;
-    CGFloat versionWidth = ceil(ExteriaStringSize(version, versionLabel.font).width);
-    CGFloat pillWidth = ceil(ExteriaStringSize(pill.text, pill.font).width) + 18;
-    CGFloat gap = 8, x = floor((width - versionWidth - gap - pillWidth) / 2);
+    /* the widths are the ones the labels themselves ask for: the measure of the string alone came out a point or two short, and the pill sat on the last letter */
+    [versionLabel sizeToFit];
+    [pill sizeToFit];
+    CGFloat versionWidth = ceil(versionLabel.frame.size.width) + 2;
+    CGFloat pillWidth = MAX(ceil(pill.frame.size.width), ceil(ExteriaStringSize(pill.text, pill.font).width)) + 18;
+    CGFloat gap = 10, x = floor((width - versionWidth - gap - pillWidth) / 2);
     CGFloat y = CGRectGetMaxY(name.frame) + 4;
     versionLabel.frame = CGRectMake(x, y, versionWidth, PILL_HEIGHT);
     pill.frame = CGRectMake(x + versionWidth + gap, y, pillWidth, PILL_HEIGHT);

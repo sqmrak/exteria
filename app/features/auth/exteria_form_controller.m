@@ -223,25 +223,8 @@ static UILabel *ExteriaFormLabel(UIColor *color, NSInteger lines, NSInteger alig
     _spinner.hidesWhenStopped = YES;
     [root addSubview:_spinner];
 
-    UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissKeyboard)] autorelease];
-    tap.delegate = self;
-    tap.cancelsTouchesInView = NO;
-    [root addGestureRecognizer:tap];
-
     [self refreshAction];
     [self refreshState];
-}
-
-- (void)dismissKeyboard {
-    [self.view endEditing:YES];
-}
-
-/* only a tap on bare background closes the keyboard; fields and buttons keep their own taps */
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
-    for (UIView *view = touch.view; view && view != self.view; view = view.superview) {
-        if ([view isKindOfClass:[UIControl class]] || [view isKindOfClass:[UITextField class]]) return NO;
-    }
-    return YES;
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation {

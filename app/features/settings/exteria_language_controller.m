@@ -88,19 +88,24 @@
     for (NSString *code in ExteriaInterfaceLanguageCodes()) [languages addObject:[self rowForCode:code]];
     ExteriaSettingsRow *import = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"language.custom.import", nil)
                                                           subtitle:NSLocalizedString(@"language.custom.import.info", nil) value:nil tap:^{ [(ExteriaLanguageSettingsController *)weak.target importLanguageFile]; }];
-    ExteriaSettingsRow *template = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolShare tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"language.custom.template", nil)
-                                                            subtitle:NSLocalizedString(@"language.custom.template.info", nil) value:nil tap:^{
-        ExteriaLanguageSettingsController *me = weak.target;
-        NSString *path = ExteriaCustomLanguageTemplatePath();
-        if (!me) return;
-        if (path) ExteriaShareFile(me, path);
-        else ExteriaShowNotice(nil, NSLocalizedString(@"language.custom.unreadable", nil));
-    }];
+    NSMutableArray *templates = [NSMutableArray arrayWithObject:import];
+    static NSString *const sources[] = {@"en", @"ru"};
+    static NSString *const titles[] = {@"language.custom.template", @"language.custom.template.ru"};
+    for (size_t i = 0; i < 2; ++i) {
+        NSString *source = sources[i];
+        [templates addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolShare tone:ExteriaSettingsToneBlue title:NSLocalizedString(titles[i], nil)
+                                                      subtitle:NSLocalizedString(@"language.custom.template.info", nil) value:nil tap:^{
+            ExteriaLanguageSettingsController *me = weak.target;
+            if (!me) return;
+            NSString *path = ExteriaCustomLanguageTemplatePath(source);
+            if (path) ExteriaShareFile(me, path);
+            else ExteriaShowNotice(nil, NSLocalizedString(@"language.custom.unreadable", nil));
+        }]];
+    }
     self.sections = [NSArray arrayWithObjects:
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"tr.messages", nil) footer:nil rows:[NSArray arrayWithObject:translator]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"language.title", nil) footer:nil rows:languages],
-        [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"language.custom.header", nil) footer:NSLocalizedString(@"language.custom.footer", nil)
-                                             rows:[NSArray arrayWithObjects:import, template, nil]], nil];
+        [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"language.custom.header", nil) footer:nil rows:templates], nil];
     [self reloadSearchResults];
 }
 

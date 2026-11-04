@@ -9,7 +9,7 @@
 #import "exteria_session_profile.h"
 #import "exteria_weak_reference.h"
 
-@interface ExteriaSavedMediaController () <ExteriaGroupTabsDelegate> {
+@interface ExteriaSavedMediaController () <ExteriaGroupTabsDelegate, UIScrollViewDelegate> {
     ExteriaDialog *_dialog;
     UIScrollView *_scroll;
     ExteriaGroupTabsView *_tabs;
@@ -37,6 +37,7 @@
     [_savedTrack release];
     _tabs.delegate = nil;
     [_tabs release];
+    _scroll.delegate = nil;
     [_scroll release];
     [_dialog release];
     [super dealloc];
@@ -44,6 +45,7 @@
 - (void)buildBodyInView:(UIView *)root {
     _scroll = [[UIScrollView alloc] init];
     ExteriaScrollViewOwnsInsets(_scroll);
+    _scroll.delegate = self;
     [root addSubview:_scroll];
     _music = [[ExteriaMusicPill alloc] init];
     _music.media = self.media;
@@ -54,6 +56,10 @@
     _tabs = [[ExteriaGroupTabsView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media forUser:YES];
     _tabs.delegate = self;
     [_scroll addSubview:_tabs];
+}
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    (void)scrollView;
+    [_tabs hostDidScroll];
 }
 - (void)layoutBody:(CGRect)body {
     _scroll.frame = body;
@@ -117,7 +123,8 @@
 }
 - (void)groupTabs:(ExteriaGroupTabsView *)tabs didOpenMedia:(ExteriaMessage *)message among:(NSArray *)messages {
     (void)tabs;
-    ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithMessages:messages selected:message media:self.media] autorelease];
+    ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithMessages:messages selected:message media:self.media
+                                                                     senderNames:nil chatTitle:NSLocalizedString(@"chats.saved", nil)] autorelease];
     [self presentViewController:viewer animated:YES completion:nil];
 }
 @end

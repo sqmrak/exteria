@@ -6,6 +6,9 @@ typedef void (^ExteriaAlertHandler)(NSInteger index, NSString *text);
 /* an alert with any number of buttons that reports the choice to a block */
 void ExteriaShowAlert(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, BOOL secure, ExteriaAlertHandler handler);
 
+/* the same with one plain text field filled with initial; the handler gets the text of the field with the index of the button (any button, the caller decides which ones keep it) */
+void ExteriaShowAlertWithField(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, NSString *initial, NSString *placeholder, ExteriaAlertHandler handler);
+
 /* a message with one button */
 void ExteriaShowNotice(NSString *title, NSString *message);
 
@@ -15,6 +18,9 @@ void ExteriaConfirm(NSString *title, NSString *message, NSString *confirmTitle, 
 /* a list of choices on a sheet, with a cancel at the end; the handler gets the index of the choice, not of the
    cancel */
 void ExteriaChoose(NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index));
+/* the same, opened from a view: on an ipad the sheet is a popover that points at it, where ExteriaChoose puts it in the middle of the screen, far from the button that asked for it; on a
+   phone it is the sheet from the bottom as before */
+void ExteriaChooseFromView(UIView *source, NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index));
 
 /* the same, and cancelled runs when the question is turned down instead (Cancel, or the application going to the background) */
 void ExteriaPromptTextOrCancel(NSString *title, NSString *message, NSString *initial, NSString *placeholder, void (^handler)(NSString *text), void (^cancelled)(void));

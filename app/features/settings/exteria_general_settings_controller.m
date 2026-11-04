@@ -1,5 +1,6 @@
 #import "exteria_general_settings_controller.h"
 
+#import "exteria_browser_settings.h"
 #import "exteria_chat_settings.h"
 #import "exteria_language.h"
 #import "exteria_translate_config.h"
@@ -103,9 +104,10 @@ static ExteriaSettingsRow *ExteriaGeneralFlagRow(NSString *titleKey, NSString *i
     [general addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"time.zone.title", nil) value:ExteriaTimeZoneChoiceText() tap:^{
         [[(ExteriaGeneralSettingsController *)weak.target navigationController] pushViewController:[[[ExteriaTimeZoneController alloc] init] autorelease] animated:YES];
     }]];
-    [general addObject:ExteriaGeneralFlagRow(@"general.relativeseen", nil, ExteriaChatFlagRelativeSeen)];
     [general addObject:ExteriaGeneralFlagRow(@"general.zalgo", nil, ExteriaChatFlagFilterZalgo)];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"general.header", nil) footer:NSLocalizedString(@"general.zalgo.info", nil) rows:general]];
+
+    [sections addObject:ExteriaBrowserChoiceSection(^{ [(ExteriaGeneralSettingsController *)weak.target rebuild]; })];
 
     NSMutableArray *profile = [NSMutableArray array];
     [profile addObject:ExteriaGeneralFlagRow(@"general.hidephone", nil, ExteriaChatFlagHidePhone)];
