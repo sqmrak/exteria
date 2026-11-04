@@ -28,3 +28,5 @@ NSUInteger ExteriaMarkForDocument(long long document);
 
 /* the plate that says why a mark is there, over whatever screen is up */
 void ExteriaShowMarkNotice(NSString *name, NSUInteger mark);
+/* the same for a mark of a known account, whose plate may carry a line of its own (developer.flaw_seer.notice.<id> in the strings) */
+void ExteriaShowMarkNoticeForUser(NSString *name, NSUInteger mark, long long userId);
