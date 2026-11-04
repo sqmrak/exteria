@@ -1,0 +1,36 @@
+__id__ = "voice"
+__name__ = "Voice"
+__description__ = "plays the text of a message through the media player"
+__author__ = "test"
+__version__ = "1.0"
+__min_version__ = "11.9.0"
+__icon__ = "msg_speak"
+
+import time
+
+from base_plugin import BasePlugin, MenuItemData, MenuItemType
+from client_utils import run_on_queue
+from file_utils import get_cache_dir
+
+
+class VoicePlugin(BasePlugin):
+    def on_plugin_load(self):
+        self.add_menu_item(MenuItemData(menu_type=MenuItemType.MESSAGE_CONTEXT_MENU, text="Voice", on_click=self.speak, priority=5))
+
+    def speak(self, context):
+        owner = context["message"].messageOwner
+        self.set_setting("text", owner.message)
+        self.set_setting("id", context["message"].getId())
+        run_on_queue(lambda: self.play(get_cache_dir()))
+
+    def play(self, folder):
+        from android.media import MediaPlayer, AudioManager
+        player = MediaPlayer()
+        player.setAudioStreamType(AudioManager.STREAM_MUSIC)
+        player.setDataSource(folder + "/a.mp3")
+        player.prepare()
+        self.set_setting("duration", player.getDuration())
+        player.start()
+        player.stop()
+        player.release()
+        self.set_setting("played", True)
