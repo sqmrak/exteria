@@ -6,7 +6,7 @@
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 
-#define EDITOR_HEIGHT 372.0
+#define EDITOR_HEIGHT 444.0
 #define MARGIN 16.0
 #define CARD_HEIGHT 112.0
 #define CARD_RADIUS 30.0
@@ -185,14 +185,18 @@ static void ExteriaSpring(void (^changes)(void)) {
 @interface ExteriaTintEditor () {
     float _hue;
     float _saturation;
+    float _brightness;
     UIView *_card;
     CAShapeLayer *_cookie;
     UILabel *_hash;
+    UILabel *_note;
     UITextField *_field;
     UILabel *_hueName;
     UILabel *_saturationName;
+    UILabel *_brightnessName;
     ExteriaTintTrack *_hueTrack;
     ExteriaTintTrack *_saturationTrack;
+    ExteriaTintTrack *_brightnessTrack;
     UIScrollView *_chips;
     NSMutableArray *_chipButtons;
     NSInteger _chosenChip;
@@ -203,6 +207,7 @@ static void ExteriaSpring(void (^changes)(void)) {
 
 @synthesize hue = _hue;
 @synthesize saturation = _saturation;
+@synthesize brightness = _brightness;
 
 - (CGFloat)preferredHeight { return EDITOR_HEIGHT; }
 - (CGRect)editingRect { return _card.frame; }
@@ -227,6 +232,7 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     if (!self) return nil;
     self.backgroundColor = [UIColor clearColor];
     _chosenChip = -1;
+    _brightness = 1;
     _card = [[UIView alloc] init];
     _card.layer.cornerRadius = CARD_RADIUS;
     [self addSubview:_card];
@@ -240,6 +246,11 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     _hash.font = ExteriaFontSemibold(32);
     _hash.backgroundColor = [UIColor clearColor];
     [_card addSubview:_hash];
+    _note = [[UILabel alloc] init];
+    _note.text = NSLocalizedString(@"chatset.tint.note", nil);
+    _note.font = ExteriaFontMedium(15);
+    _note.backgroundColor = [UIColor clearColor];
+    [_card addSubview:_note];
     _field = [[UITextField alloc] init];
     _field.delegate = self;
     _field.backgroundColor = [UIColor clearColor];
@@ -257,7 +268,9 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     _hueName.text = NSLocalizedString(@"chatset.tint.hue", nil);
     _saturationName = [[UILabel alloc] init];
     _saturationName.text = NSLocalizedString(@"chatset.tint.saturation", nil);
-    for (UILabel *label in [NSArray arrayWithObjects:_hueName, _saturationName, nil]) {
+    _brightnessName = [[UILabel alloc] init];
+    _brightnessName.text = NSLocalizedString(@"chatset.tint.brightness", nil);
+    for (UILabel *label in [NSArray arrayWithObjects:_hueName, _saturationName, _brightnessName, nil]) {
         label.font = ExteriaFontMedium(13);
         label.textColor = secondary;
         label.backgroundColor = [UIColor clearColor];
@@ -276,6 +289,11 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     [_saturationTrack addTarget:self action:@selector(saturationMoved) forControlEvents:UIControlEventValueChanged];
     [_saturationTrack addTarget:self action:@selector(released) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:_saturationTrack];
+    _brightnessTrack = [[ExteriaTintTrack alloc] init];
+    _brightnessTrack.spokenName = _brightnessName.text;
+    [_brightnessTrack addTarget:self action:@selector(brightnessMoved) forControlEvents:UIControlEventValueChanged];
+    [_brightnessTrack addTarget:self action:@selector(released) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_brightnessTrack];
 
     _chips = [[UIScrollView alloc] init];
     _chips.showsHorizontalScrollIndicator = NO;
@@ -288,7 +306,7 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
         chip.tag = (NSInteger)i;
         chip.layer.cornerRadius = CHIP_SIDE / 2;
         chip.backgroundColor = ExteriaShown(ExteriaTintPresets[i].hue, ExteriaTintPresets[i].saturation);
-        chip.accessibilityLabel = ExteriaHexOfTint(ExteriaTintPresets[i].hue, ExteriaTintPresets[i].saturation);
+        chip.accessibilityLabel = ExteriaHexOfTint(ExteriaTintPresets[i].hue, ExteriaTintPresets[i].saturation, 1);
         [chip setImage:ExteriaSymbolImage(ExteriaSymbolCheck, 22, [UIColor whiteColor]) forState:UIControlStateSelected];
         [chip addTarget:self action:@selector(chipTapped:) forControlEvents:UIControlEventTouchUpInside];
         [_chips addSubview:chip];
@@ -303,9 +321,12 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     [_card release];
     [_cookie release];
     [_hash release];
+    [_note release];
     [_field release];
     [_hueName release];
     [_saturationName release];
+    [_brightnessName release];
+    [_brightnessTrack release];
     [_hueTrack release];
     [_saturationTrack release];
     [_chips release];
@@ -330,6 +351,8 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     CGFloat hashWidth = _hash.frame.size.width;
     _hash.frame = CGRectMake(24, 18, hashWidth, 44);
     _field.frame = CGRectMake(24 + hashWidth + 1, 18, ceil(digits) + 6, 44);
+    /* the note starts at the left edge of the hash, under the digits */
+    _note.frame = CGRectMake(24, 64, inner - 48 - 68, 22);
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     _cookie.position = CGPointMake(inner - 24 - 34 - 6, CARD_HEIGHT / 2);
@@ -340,6 +363,9 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     y += 20 + SLIDER_ROW + 12;
     _saturationName.frame = CGRectMake(MARGIN + 4, y, inner, 18);
     _saturationTrack.frame = CGRectMake(MARGIN, y + 20, inner, SLIDER_ROW);
+    y += 20 + SLIDER_ROW + 12;
+    _brightnessName.frame = CGRectMake(MARGIN + 4, y, inner, 18);
+    _brightnessTrack.frame = CGRectMake(MARGIN, y + 20, inner, SLIDER_ROW);
     y += 20 + SLIDER_ROW + 22;
     _chips.frame = CGRectMake(0, y, width, CHIP_SIDE + 8);
     for (NSUInteger i = 0; i < _chipButtons.count; ++i) {
@@ -350,13 +376,14 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
 
 /* the card, the hex, the shape, the tracks and the chosen chip all follow the one color */
 - (void)refresh {
-    UIColor *color = ExteriaThemeCustomTintColor(_hue, _saturation);
+    UIColor *color = ExteriaThemeCustomTintColor(_hue, _saturation, _brightness);
     CGFloat red = 0, green = 0, blue = 0;
     [color getRed:&red green:&green blue:&blue alpha:NULL];
     BOOL dark = 0.299f * red + 0.587f * green + 0.114f * blue > 0.62f;
     UIColor *ink = dark ? [UIColor colorWithWhite:0.1f alpha:1] : [UIColor whiteColor];
     _card.backgroundColor = color;
     _hash.textColor = [ink colorWithAlphaComponent:0.6f];
+    _note.textColor = [ink colorWithAlphaComponent:0.6f];
     _field.textColor = ink;
     /* the caret takes the ink on ios 7 and later; the older runtimes have no tintColor on a field and draw a plain caret */
     if ([_field respondsToSelector:@selector(setTintColor:)]) [_field performSelector:@selector(setTintColor:) withObject:ink];
@@ -366,18 +393,21 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     /* the shape turns with the hue */
     _cookie.transform = CATransform3DMakeRotation(_hue / 360.0f * (CGFloat)(M_PI * 2) / LOBES, 0, 0, 1);
     [CATransaction commit];
-    if (!_field.isFirstResponder) _field.text = ExteriaHexOfTint(_hue, _saturation);
+    if (!_field.isFirstResponder) _field.text = ExteriaHexOfTint(_hue, _saturation, _brightness);
     _hueTrack.fraction = _hue / 360.0f;
     _saturationTrack.fraction = _saturation;
     [_hueTrack setHandleColor:ExteriaShown(_hue, MAX(0.78f, _saturation))];
     [_saturationTrack setHandleColor:color];
-    [_saturationTrack setColors:[NSArray arrayWithObjects:ExteriaShown(_hue, 0), ExteriaShown(_hue, 1), nil]];
+    [_saturationTrack setColors:[NSArray arrayWithObjects:ExteriaThemeCustomTintColor(_hue, 0, _brightness), ExteriaThemeCustomTintColor(_hue, 1, _brightness), nil]];
+    _brightnessTrack.fraction = _brightness;
+    [_brightnessTrack setHandleColor:color];
+    [_brightnessTrack setColors:[NSArray arrayWithObjects:[UIColor blackColor], ExteriaThemeCustomTintColor(_hue, _saturation, 1), nil]];
     NSInteger chosen = -1;
     for (NSUInteger i = 0; i < PRESET_COUNT; ++i) {
         float dh = fabsf(ExteriaTintPresets[i].hue - _hue);
         if (dh > 180) dh = 360 - dh;
         BOOL grey = ExteriaTintPresets[i].saturation == 0;
-        if (fabsf(ExteriaTintPresets[i].saturation - _saturation) < 0.03f && (grey || dh < 3)) {
+        if (_brightness > 0.97f && fabsf(ExteriaTintPresets[i].saturation - _saturation) < 0.03f && (grey || dh < 3)) {
             chosen = (NSInteger)i;
             break;
         }
@@ -411,6 +441,11 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     [self refresh];
 }
 
+- (void)setBrightness:(float)brightness {
+    _brightness = MIN(1, MAX(0, brightness));
+    [self refresh];
+}
+
 - (void)hueMoved {
     _hue = _hueTrack.fraction * 360.0f;
     [self refresh];
@@ -423,6 +458,12 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
     [self sendActionsForControlEvents:UIControlEventValueChanged];
 }
 
+- (void)brightnessMoved {
+    _brightness = _brightnessTrack.fraction;
+    [self refresh];
+    [self sendActionsForControlEvents:UIControlEventValueChanged];
+}
+
 - (void)released {
     [self sendActionsForControlEvents:UIControlEventTouchUpInside];
 }
@@ -430,6 +471,7 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
 - (void)chipTapped:(UIButton *)chip {
     _hue = ExteriaTintPresets[chip.tag].hue;
     _saturation = ExteriaTintPresets[chip.tag].saturation;
+    _brightness = 1;
     [self refresh];
     [self sendActionsForControlEvents:UIControlEventTouchUpInside];
 }
@@ -437,10 +479,11 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
 #pragma mark hex
 
 - (void)hexEdited {
-    float hue = _hue, saturation = _saturation;
-    if (_field.text.length != 6 || !ExteriaTintOfHex(_field.text, &hue, &saturation)) return;
+    float hue = _hue, saturation = _saturation, brightness = _brightness;
+    if (_field.text.length != 6 || !ExteriaTintOfHex(_field.text, &hue, &saturation, &brightness)) return;
     _hue = hue;
     _saturation = saturation;
+    _brightness = brightness;
     [self refresh];
     [self sendActionsForControlEvents:UIControlEventValueChanged];
 }
@@ -456,11 +499,12 @@ static CGPathRef ExteriaCookiePath(CGFloat radius) {
 
 /* the color is taken when the field is done; a short or broken entry goes back to the color on the card */
 - (void)textFieldDidEndEditing:(UITextField *)field {
-    float hue = _hue, saturation = _saturation;
-    BOOL valid = ExteriaTintOfHex(field.text, &hue, &saturation);
+    float hue = _hue, saturation = _saturation, brightness = _brightness;
+    BOOL valid = ExteriaTintOfHex(field.text, &hue, &saturation, &brightness);
     if (valid) {
         _hue = hue;
         _saturation = saturation;
+        _brightness = brightness;
     }
     [self refresh];
     if (valid) [self sendActionsForControlEvents:UIControlEventTouchUpInside];

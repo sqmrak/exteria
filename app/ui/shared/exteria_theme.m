@@ -2,6 +2,7 @@
 
 #import <objc/message.h>
 
+#import "exteria_font_choice.h"
 #import "exteria_imported_theme.h"
 
 #include <math.h>
@@ -9,11 +10,17 @@
 /* the palette is purple, and a color of your own can turn every hue of it: the turn in degrees, zero for the purple of the app */
 static CGFloat ExteriaTintShift = 0;
 static BOOL ExteriaDark = NO;
+/* grows with every change of the palette, so what was made in the colors of an earlier one can be told from what was made in these */
+static NSUInteger ExteriaRevision = 1;
+
+NSUInteger ExteriaThemeRevision(void) { return ExteriaRevision; }
 static BOOL ExteriaClassic = NO;
 /* how many times the saturation of the palette is multiplied; a color of your own sets it */
 static CGFloat ExteriaTintScale = 1;
 /* a color of your own is stored: palettes with a seed of their own follow it even when it lands on the hue of the app */
 static BOOL ExteriaCustomTint = NO;
+/* how much of the value of the colors of your own a palette keeps: 1 is the palette, 0 is black. The accents, the screens, the bars, the cards and the bubbles take it (see ExteriaDimRGB); the text colors never do, so the words stay readable */
+static CGFloat ExteriaTintBrightness = 1;
 /* the hue and the saturation of the light accent in the palette below, which a hue and a saturation of your own are measured from */
 #define EXTERIA_PALETTE_HUE 286.0
 #define EXTERIA_PALETTE_SATURATION 0.6
@@ -63,12 +70,33 @@ static UIColor *ExteriaTurnedColor(CGFloat red, CGFloat green, CGFloat blue, CGF
     return [UIColor colorWithRed:red green:green blue:blue alpha:alpha];
 }
 
+/* the brightness of a color of your own taken by a surface. A dark color keeps its share of the value, and a light one is dimmed less, down to six tenths of itself, since the
+   words on it are dark and a light screen turned dark would hide them. At full brightness it does nothing */
+static void ExteriaDimRGB(CGFloat *red, CGFloat *green, CGFloat *blue) {
+    if (ExteriaTintBrightness >= 1) return;
+    CGFloat h, s, v;
+    ExteriaRGBToHSV(*red, *green, *blue, &h, &s, &v);
+    CGFloat scale = v > 0.7 ? 0.6 + 0.4 * ExteriaTintBrightness : ExteriaTintBrightness;
+    ExteriaHSVToRGB(h, s, v * scale, red, green, blue);
+}
+
+/* a surface of the palette: turned to the color of your own, then dimmed by its brightness */
+static UIColor *ExteriaSurface(CGFloat red, CGFloat green, CGFloat blue, CGFloat alpha) {
+    UIColor *turned = ExteriaTurnedColor(red, green, blue, alpha);
+    if (ExteriaTintBrightness >= 1) return turned;
+    const CGFloat *c = CGColorGetComponents(turned.CGColor);
+    if (CGColorGetNumberOfComponents(turned.CGColor) != 4) return turned;
+    CGFloat r = c[0], g = c[1], b = c[2];
+    ExteriaDimRGB(&r, &g, &b);
+    return [UIColor colorWithRed:r green:g blue:b alpha:c[3]];
+}
+
 UIColor *ExteriaThemeTinted(UIColor *color) {
-    if (ExteriaTintShift == 0 && ExteriaTintScale == 1) return color;
+    if (ExteriaTintShift == 0 && ExteriaTintScale == 1 && ExteriaTintBrightness >= 1) return color;
     CGColorRef ref = color.CGColor;
     const CGFloat *c = CGColorGetComponents(ref);
     size_t count = CGColorGetNumberOfComponents(ref);
-    if (count == 4) return ExteriaTurnedColor(c[0], c[1], c[2], c[3]);
+    if (count == 4) return ExteriaSurface(c[0], c[1], c[2], c[3]);
     return color;
 }
 
@@ -104,6 +132,8 @@ UIColor *ExteriaThemeFollowAccent(UIColor *color, CGFloat seedHue) {
     ExteriaRGBToHSV(red, green, blue, &h, &s, &v);
     if (s <= 0) return color;
     ExteriaHSVToRGB(fmod(h + target - seedHue + 720, 360), MIN(1, s * scale), v, &red, &green, &blue);
+    /* a palette that follows a color of your own follows its brightness as well, but not that of an imported theme, which has its own */
+    if (!imported) ExteriaDimRGB(&red, &green, &blue);
     return [UIColor colorWithRed:red green:green blue:blue alpha:c[3]];
 }
 
@@ -111,15 +141,24 @@ static UIColor *ExteriaRGB(CGFloat red, CGFloat green, CGFloat blue) {
     return ExteriaTurnedColor(red / 255.0, green / 255.0, blue / 255.0, 1.0);
 }
 
+/* the same for a surface, which takes the brightness */
+static UIColor *ExteriaSurfaceRGB(CGFloat red, CGFloat green, CGFloat blue) {
+    return ExteriaSurface(red / 255.0, green / 255.0, blue / 255.0, 1.0);
+}
+
 static NSString *const ExteriaClassicThemeKey = @"ExteriaClassicTheme";
 static NSString *const ExteriaDarkThemeKey = @"ExteriaDarkTheme";
 static NSString *const ExteriaCustomTintOnKey = @"ExteriaThemeCustomTintOn";
 static NSString *const ExteriaCustomTintHueKey = @"ExteriaThemeCustomTintHue";
 static NSString *const ExteriaCustomTintSaturationKey = @"ExteriaThemeCustomTintSaturation";
+static NSString *const ExteriaCustomTintBrightnessKey = @"ExteriaThemeCustomTintBrightness";
 NSString *const ExteriaThemeDidChangeNotification = @"ExteriaThemeDidChangeNotification";
 NSString *const ExteriaThemeOriginKey = @"origin";
 
+NSString *const ExteriaClassicAnywhereKey = @"exteria.developer.classicAnywhere";
+
 BOOL ExteriaClassicThemeAvailable(void) {
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:ExteriaClassicAnywhereKey]) return YES;
     return [[[UIDevice currentDevice] systemVersion] integerValue] <= 10;
 }
 
@@ -145,26 +184,28 @@ void ExteriaThemeStoreDark(BOOL dark) {
 
 BOOL ExteriaThemeIsDark(void) { return ExteriaDark; }
 
-BOOL ExteriaThemeStoredCustomTint(float *hue, float *saturation) {
+BOOL ExteriaThemeStoredCustomTint(float *hue, float *saturation, float *brightness) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     if (![defaults boolForKey:ExteriaCustomTintOnKey]) return NO;
     if (hue) *hue = [defaults floatForKey:ExteriaCustomTintHueKey];
     if (saturation) *saturation = [defaults floatForKey:ExteriaCustomTintSaturationKey];
+    if (brightness) *brightness = [defaults objectForKey:ExteriaCustomTintBrightnessKey] ? MIN(1, MAX(0, [defaults floatForKey:ExteriaCustomTintBrightnessKey])) : 1;
     return YES;
 }
 
-void ExteriaThemeStoreCustomTint(float hue, float saturation) {
+void ExteriaThemeStoreCustomTint(float hue, float saturation, float brightness) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setBool:YES forKey:ExteriaCustomTintOnKey];
     [defaults setFloat:fmodf(fmodf(hue, 360) + 360, 360) forKey:ExteriaCustomTintHueKey];
     [defaults setFloat:MIN(1, MAX(0, saturation)) forKey:ExteriaCustomTintSaturationKey];
+    [defaults setFloat:MIN(1, MAX(0, brightness)) forKey:ExteriaCustomTintBrightnessKey];
     if (![defaults synchronize]) NSLog(@"exteria: the custom color was not saved");
 }
 
-UIColor *ExteriaThemeCustomTintColor(float hue, float saturation) {
+UIColor *ExteriaThemeCustomTintColor(float hue, float saturation, float brightness) {
     CGFloat red, green, blue;
     /* the light accent of the palette: value 0.745 */
-    ExteriaHSVToRGB(hue, saturation, 0.745, &red, &green, &blue);
+    ExteriaHSVToRGB(hue, saturation, 0.745 * MIN(1, MAX(0, brightness)), &red, &green, &blue);
     return [UIColor colorWithRed:red green:green blue:blue alpha:1];
 }
 
@@ -177,10 +218,12 @@ UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark) {
 
 /* ios 5 to 6 call style 1 black translucent, ios 7 on call it light content; both are light text on a dark bar */
 void ExteriaThemeApply(BOOL dark) {
+    ++ExteriaRevision;
     ExteriaDark = dark;
     ExteriaTintShift = 0;
     ExteriaTintScale = 1;
     ExteriaCustomTint = NO;
+    ExteriaTintBrightness = 1;
     /* the login keeps its light waves, the signed in root restores the stored style */
     ExteriaClassic = NO;
     UIApplication *application = [UIApplication sharedApplication];
@@ -190,19 +233,22 @@ void ExteriaThemeApply(BOOL dark) {
 }
 
 void ExteriaThemeApplyStored(void) {
+    ++ExteriaRevision;
     ExteriaThemeApply(ExteriaThemeStoredDark());
     ExteriaImportedThemeReload(ExteriaThemeStoredDark());
     ExteriaClassic = ExteriaThemeStoredClassic();
     ExteriaTintScale = 1;
-    float customHue = 0, customSaturation = 0;
-    ExteriaCustomTint = ExteriaThemeStoredCustomTint(&customHue, &customSaturation);
+    float customHue = 0, customSaturation = 0, customBrightness = 1;
+    ExteriaCustomTint = ExteriaThemeStoredCustomTint(&customHue, &customSaturation, &customBrightness);
     if (ExteriaCustomTint) {
+        ExteriaTintBrightness = customBrightness;
         ExteriaTintShift = (CGFloat)customHue - EXTERIA_PALETTE_HUE;
         ExteriaTintScale = (CGFloat)customSaturation / EXTERIA_PALETTE_SATURATION;
     }
     if (!ExteriaClassic && ExteriaImportedThemeSelected(ExteriaDark)) {
         ExteriaTintShift = 0;
         ExteriaTintScale = 1;
+        ExteriaTintBrightness = 1;
     }
     /* the classic bars are dark purple whatever the theme, so the status bar over them is light */
     UIApplication *application = [UIApplication sharedApplication];
@@ -213,14 +259,26 @@ void ExteriaThemeApplyStored(void) {
     }
 }
 
-UIColor *ExteriaColorBackdrop(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.blocksBg"); if (color) return color; } if (ExteriaClassic || ExteriaDark) return ExteriaColorScreen(); return ExteriaRGB(242, 232, 249); }
-UIColor *ExteriaColorScreen(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.plainBg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(24, 21, 32) : ExteriaRGB(247, 245, 251); return ExteriaDark ? ExteriaRGB(21, 18, 31) : ExteriaRGB(251, 250, 254); }
-UIColor *ExteriaColorField(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.itemInputField.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(46, 41, 59) : ExteriaRGB(236, 232, 245); return ExteriaDark ? ExteriaRGB(43, 39, 62) : ExteriaRGB(237, 234, 248); }
-UIColor *ExteriaColorCard(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.itemBlocksBg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(34, 30, 44) : [UIColor whiteColor]; return ExteriaDark ? ExteriaRGB(34, 30, 49) : ExteriaRGB(255, 255, 255); }
-UIColor *ExteriaColorBar(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("root.navBar.background"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(38, 32, 52) : ExteriaRGB(253, 252, 254); return ExteriaDark ? ExteriaRGB(27, 23, 40) : ExteriaRGB(255, 255, 255); }
+/* an accent color of the palette: turned to the color of your own, then dimmed by its brightness */
+static UIColor *ExteriaAccentRGB(CGFloat red, CGFloat green, CGFloat blue) {
+    UIColor *turned = ExteriaRGB(red, green, blue);
+    if (ExteriaTintBrightness >= 1) return turned;
+    const CGFloat *c = CGColorGetComponents(turned.CGColor);
+    if (CGColorGetNumberOfComponents(turned.CGColor) != 4) return turned;
+    CGFloat h, s, v, r, g, b;
+    ExteriaRGBToHSV(c[0], c[1], c[2], &h, &s, &v);
+    ExteriaHSVToRGB(h, s, v * ExteriaTintBrightness, &r, &g, &b);
+    return [UIColor colorWithRed:r green:g blue:b alpha:c[3]];
+}
+
+UIColor *ExteriaColorBackdrop(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.blocksBg"); if (color) return color; } if (ExteriaClassic || ExteriaDark) return ExteriaColorScreen(); return ExteriaSurfaceRGB(242, 232, 249); }
+UIColor *ExteriaColorScreen(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.plainBg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaSurfaceRGB(24, 21, 32) : ExteriaSurfaceRGB(247, 245, 251); return ExteriaDark ? ExteriaSurfaceRGB(21, 18, 31) : ExteriaSurfaceRGB(251, 250, 254); }
+UIColor *ExteriaColorField(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.itemInputField.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaSurfaceRGB(46, 41, 59) : ExteriaSurfaceRGB(236, 232, 245); return ExteriaDark ? ExteriaSurfaceRGB(43, 39, 62) : ExteriaSurfaceRGB(237, 234, 248); }
+UIColor *ExteriaColorCard(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("list.itemBlocksBg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaSurfaceRGB(34, 30, 44) : ExteriaSurfaceRGB(255, 255, 255); return ExteriaDark ? ExteriaSurfaceRGB(34, 30, 49) : ExteriaSurfaceRGB(255, 255, 255); }
+UIColor *ExteriaColorBar(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("root.navBar.background"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaSurfaceRGB(38, 32, 52) : ExteriaSurfaceRGB(253, 252, 254); return ExteriaDark ? ExteriaSurfaceRGB(27, 23, 40) : ExteriaSurfaceRGB(255, 255, 255); }
 UIColor *ExteriaColorHairline(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.plainSeparator") : nil; if (color) return color; return ExteriaDark ? [UIColor colorWithWhite:1 alpha:0.09] : [UIColor colorWithWhite:0 alpha:0.1]; }
-UIColor *ExteriaColorAccent(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.accent") : nil; if (color) return color; return ExteriaDark ? ExteriaRGB(172, 98, 222) : ExteriaRGB(164, 75, 190); }
-UIColor *ExteriaColorAccentDark(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("root.navBar.button") : nil; return color ? color : ExteriaRGB(132, 44, 160); }
+UIColor *ExteriaColorAccent(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.accent") : nil; if (color) return color; return ExteriaDark ? ExteriaAccentRGB(172, 98, 222) : ExteriaAccentRGB(164, 75, 190); }
+UIColor *ExteriaColorAccentDark(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("root.navBar.button") : nil; return color ? color : ExteriaAccentRGB(132, 44, 160); }
 UIColor *ExteriaColorTitle(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.primaryText") : nil; if (color) return color; return ExteriaDark ? ExteriaRGB(240, 238, 248) : ExteriaRGB(34, 34, 38); }
 UIColor *ExteriaColorMessage(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("chatList.messageText") : nil; if (color) return color; return ExteriaDark ? ExteriaRGB(176, 170, 196) : ExteriaRGB(86, 86, 92); }
 UIColor *ExteriaColorDotOff(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("list.placeholderText") : nil; return color ? color : (ExteriaDark ? ExteriaRGB(84, 78, 104) : ExteriaRGB(208, 204, 212)); }
@@ -228,9 +286,9 @@ UIColor *ExteriaColorSecondary(void) { if (!ExteriaClassic) { UIColor *color = E
 UIColor *ExteriaColorMuted(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chatList.muteIcon"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(130, 122, 150) : ExteriaRGB(156, 148, 172); return ExteriaDark ? ExteriaRGB(108, 101, 134) : ExteriaRGB(176, 166, 186); }
 UIColor *ExteriaColorBadgeRed(void) { UIColor *color = !ExteriaClassic ? ExteriaImportedThemeColor("root.tabBar.badgeBackground") : nil; return color ? color : ExteriaRGB(230, 62, 72); }
 UIColor *ExteriaColorQrPaper(void) { return ExteriaRGB(244, 236, 251); }
-UIColor *ExteriaColorBubbleOut(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chat.message.outgoing.bubble.withWp.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(65, 51, 84) : ExteriaRGB(235, 225, 249); return ExteriaDark ? ExteriaRGB(124, 70, 196) : ExteriaRGB(139, 80, 214); }
-UIColor *ExteriaColorBubbleIn(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chat.message.incoming.bubble.withWp.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaRGB(54, 47, 68) : [UIColor whiteColor]; return ExteriaDark ? ExteriaTurnedColor(0.14, 0.125, 0.2, 0.94) : [UIColor colorWithWhite:1 alpha:0.96]; }
-UIColor *ExteriaColorBubbleCapsule(void) { return ExteriaTurnedColor(0.12, 0.1, 0.18, 0.5); }
+UIColor *ExteriaColorBubbleOut(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chat.message.outgoing.bubble.withWp.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaSurfaceRGB(65, 51, 84) : ExteriaSurfaceRGB(235, 225, 249); return ExteriaDark ? ExteriaAccentRGB(124, 70, 196) : ExteriaAccentRGB(139, 80, 214); }
+UIColor *ExteriaColorBubbleIn(void) { if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor("chat.message.incoming.bubble.withWp.bg"); if (color) return color; } if (ExteriaClassic) return ExteriaDark ? ExteriaSurfaceRGB(54, 47, 68) : ExteriaSurfaceRGB(255, 255, 255); return ExteriaDark ? ExteriaSurface(0.14, 0.125, 0.2, 0.94) : ExteriaSurface(1, 1, 1, 0.96); }
+UIColor *ExteriaColorBubbleCapsule(void) { return ExteriaSurface(0.12, 0.1, 0.18, 0.5); }
 
 void ExteriaThemePreviewColors(BOOL classic, BOOL dark, UIColor **incoming, UIColor **outgoing, UIColor **incomingText, UIColor **outgoingText) {
     BOOL wasClassic = ExteriaClassic, wasDark = ExteriaDark;
@@ -288,14 +346,48 @@ static UIFont *ExteriaSystemFont(ExteriaWeight weight, CGFloat size) {
 }
 
 /* fonts are asked for in every cell layout and every bubble draw, and each lookup resolved the family by name again */
+static NSCache *ExteriaFontCache(void) {
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cache = [[NSCache alloc] init]; });
+    return cache;
+}
+
+void ExteriaFontsDidChange(void) {
+    [ExteriaFontCache() removeAllObjects];
+}
+
+static NSString *const ExteriaInterfaceScaleKey = @"exteria.interface.scale";
+
+NSInteger ExteriaInterfaceScaleStored(void) {
+    NSNumber *stored = [[NSUserDefaults standardUserDefaults] objectForKey:ExteriaInterfaceScaleKey];
+    if (![stored isKindOfClass:[NSNumber class]]) return 100;
+    NSInteger percent = stored.integerValue;
+    return percent < EXTERIA_INTERFACE_SCALE_MIN ? EXTERIA_INTERFACE_SCALE_MIN : (percent > EXTERIA_INTERFACE_SCALE_MAX ? EXTERIA_INTERFACE_SCALE_MAX : percent);
+}
+
+void ExteriaInterfaceScaleStore(NSInteger percent) {
+    percent = percent < EXTERIA_INTERFACE_SCALE_MIN ? EXTERIA_INTERFACE_SCALE_MIN : (percent > EXTERIA_INTERFACE_SCALE_MAX ? EXTERIA_INTERFACE_SCALE_MAX : percent);
+    [[NSUserDefaults standardUserDefaults] setInteger:percent forKey:ExteriaInterfaceScaleKey];
+}
+
+/* fonts and the rows made from them are cached and laid out once, so a scale that changed under a running screen would leave half of it at the old size */
+CGFloat ExteriaInterfaceScale(void) {
+    static CGFloat scale;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ scale = (CGFloat)ExteriaInterfaceScaleStored() / 100.0f; });
+    return scale;
+}
+
 static UIFont *ExteriaFont(ExteriaWeight weight, CGFloat size) {
     static NSString *const names[] = {@"Inter-Regular", @"Inter-Medium", @"Inter-SemiBold", @"Inter-Bold"};
-    static NSCache *cache;
-    if (!cache) cache = [[NSCache alloc] init];
+    size *= ExteriaInterfaceScale();
+    NSCache *cache = ExteriaFontCache();
     NSNumber *key = [NSNumber numberWithUnsignedLongLong:(unsigned long long)(size * 100 + 0.5) * 4 + (unsigned long long)weight];
     UIFont *cached = [[[cache objectForKey:key] retain] autorelease];
     if (cached) return cached;
-    UIFont *font = ExteriaSystemFont(weight, size);
+    UIFont *font = ExteriaFontChoiceFont((int)weight, size);
+    if (!font) font = ExteriaSystemFont(weight, size);
     if (!font) font = [UIFont fontWithName:names[weight] size:size];
     if (!font) font = weight == ExteriaWeightRegular ? [UIFont systemFontOfSize:size] : [UIFont boldSystemFontOfSize:size];
     if (font) [cache setObject:font forKey:key];

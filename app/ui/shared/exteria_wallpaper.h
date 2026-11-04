@@ -52,3 +52,12 @@ void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark);
 /* the background the admins gave a channel, at the size of the screen: its gradient with the pattern over it, or the picture of its file; nil when there is
    nothing to paint, or when the paper is a picture whose file has not come yet (file is that picture when it has) */
 UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIImage *file, CGSize size);
+
+/* the finished background of a chat is kept on disk, so the next visit paints it at once instead of waiting for the full channel and, for a picture, decoding the file
+   again. The signature says which paper it was made from (its colors, pattern and file), so a changed background is made anew and an equal one is not */
+NSString *ExteriaChatWallpaperSignature(const exteria_chat_wallpaper *paper, NSString *fileKey);
+/* the kept picture of the chat (peer kind and id) if it has the size; signature may be nil to take whatever is kept, and the one found is returned in found */
+UIImage *ExteriaCachedChatWallpaper(int32_t peerKind, long long peerId, CGSize size, NSString *signature, NSString **found);
+void ExteriaStoreChatWallpaper(int32_t peerKind, long long peerId, CGSize size, NSString *signature, UIImage *image);
+/* the chat has no background of its own any more */
+void ExteriaDropChatWallpaper(int32_t peerKind, long long peerId);

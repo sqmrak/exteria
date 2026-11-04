@@ -252,6 +252,30 @@ static UIImage *ExteriaPatternInColor(UIColor *ink) {
     return kept[slot];
 }
 
+/* the pattern already scaled to the picture it is drawn into: a slider moves the intensity at every step, and scaling the 720 by 1280 file down again each time was what
+   made it stutter on old phones. Only the alpha changes between steps, so the scaled one is kept per ink and size and the system drops it under memory pressure */
+static UIImage *ExteriaPatternScaled(UIColor *ink, CGSize size) {
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 3;
+    });
+    UIImage *pattern = ExteriaPatternInColor(ink);
+    if (!pattern) return nil;
+    CGRect target = ExteriaFillRect(pattern.size, size);
+    NSString *key = [NSString stringWithFormat:@"%d|%.1fx%.1f|%.1f", [ink isEqual:[UIColor blackColor]] ? 0 : 1, (double)size.width, (double)size.height, (double)ExteriaScreenScale()];
+    UIImage *scaled = [cache objectForKey:key];
+    if (scaled) return scaled;
+    UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+    CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationHigh);
+    [pattern drawInRect:target];
+    scaled = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if (scaled) [cache setObject:scaled forKey:key];
+    return scaled;
+}
+
 static UIImage *ExteriaColorsImage(ExteriaWallpaperSetting setting, CGSize size) {
     UIGraphicsBeginImageContextWithOptions(size, YES, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
@@ -269,8 +293,8 @@ static UIImage *ExteriaColorsImage(ExteriaWallpaperSetting setting, CGSize size)
         /* black ink on a light ground, white on a dark one, by the brightness of the middle of the gradient */
         CGFloat mid = ((colors[0] + colors[4]) * 0.299 + (colors[1] + colors[5]) * 0.587 + (colors[2] + colors[6]) * 0.114) / 2;
         UIColor *ink = mid > 0.5 ? [UIColor blackColor] : [UIColor whiteColor];
-        UIImage *pattern = ExteriaPatternInColor(ink);
-        if (pattern) [pattern drawInRect:ExteriaFillRect(pattern.size, size) blendMode:kCGBlendModeNormal alpha:(CGFloat)(setting.intensity / 100.0 * PATTERN_ALPHA_MAX)];
+        UIImage *pattern = ExteriaPatternScaled(ink, size);
+        if (pattern) [pattern drawInRect:CGRectMake(0, 0, size.width, size.height) blendMode:kCGBlendModeNormal alpha:(CGFloat)(setting.intensity / 100.0 * PATTERN_ALPHA_MAX)];
     }
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
@@ -342,6 +366,8 @@ UIImage *ExteriaWallpaperImage(ExteriaWallpaperSetting setting, CGSize size) {
 static UIImage *ExteriaShownWallpaper(void) {
     static UIImage *cached;
     static ExteriaWallpaperSetting cachedSetting;
+    /* the palette the picture was painted in: the same setting is painted in other colors in the other theme */
+    static NSUInteger cachedRevision;
     static BOOL watching;
     static NSObject *lock;
     static dispatch_once_t once;
@@ -359,10 +385,11 @@ static UIImage *ExteriaShownWallpaper(void) {
         }
         ExteriaWallpaperSetting setting = ExteriaWallpaperStored();
         if (setting.kind == ExteriaWallpaperStandard) return nil;
-        if (!cached || memcmp(&setting, &cachedSetting, sizeof(setting)) != 0) {
+        if (!cached || cachedRevision != ExteriaThemeRevision() || memcmp(&setting, &cachedSetting, sizeof(setting)) != 0) {
             [cached release];
             cached = [ExteriaWallpaperImage(setting, [UIScreen mainScreen].bounds.size) retain];
             cachedSetting = setting;
+            cachedRevision = ExteriaThemeRevision();
         }
         return [[cached retain] autorelease];
     }
@@ -387,7 +414,8 @@ static UIImage *ExteriaSizedWallpaper(ExteriaWallpaperSetting setting, CGSize si
             [cache removeAllObjects];
         }];
     });
-    NSString *key = [NSString stringWithFormat:@"%@|%.1fx%.1f", [[NSData dataWithBytes:&setting length:sizeof(setting)] description], (double)size.width, (double)size.height];
+    NSString *key = [NSString stringWithFormat:@"%@|%.1fx%.1f|t%lu", [[NSData dataWithBytes:&setting length:sizeof(setting)] description], (double)size.width, (double)size.height,
+                     (unsigned long)ExteriaThemeRevision()];
     UIImage *image = [cache objectForKey:key];
     if (!image) {
         image = ExteriaWallpaperImage(setting, size);
@@ -451,12 +479,47 @@ static UIImage *ExteriaImportedWallpaperGradientImage(const uint32_t values[4], 
     return image;
 }
 
+/* the hue the bundled pictures are drawn in, the purple of the palette */
+#define STANDARD_SEED_HUE 286.0
+
+/* the bundled picture with its hue turned to the accent of the app: the hue blend keeps the lightness and saturation of the drawing and takes only the hue of the
+   fill, so the paper and the black stay as they are and a grey accent turns the lines grey. The picture the app ships is returned while the accent is the
+   purple of the palette, and the turned one is kept per tone until the palette changes */
+static UIImage *ExteriaStandardWallpaperImage(BOOL dark) {
+    UIImage *original = [UIImage imageNamed:dark ? @"chat_bg_dark.jpg" : @"chat_bg_light.jpg"];
+    if (!original) return nil;
+    UIColor *seed = [UIColor colorWithHue:(CGFloat)(STANDARD_SEED_HUE / 360.0) saturation:1 brightness:1 alpha:1];
+    UIColor *accent = ExteriaThemeFollowAccent(seed, STANDARD_SEED_HUE);
+    CGFloat seedRed = 0, seedGreen = 0, seedBlue = 0, red = 0, green = 0, blue = 0;
+    if (![seed getRed:&seedRed green:&seedGreen blue:&seedBlue alpha:NULL] || ![accent getRed:&red green:&green blue:&blue alpha:NULL]) return original;
+    if (fabs(seedRed - red) + fabs(seedGreen - green) + fabs(seedBlue - blue) < 0.005) return original;
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 2;
+    });
+    NSString *key = [NSString stringWithFormat:@"%d|%lu", dark ? 1 : 0, (unsigned long)ExteriaThemeRevision()];
+    UIImage *turned = [cache objectForKey:key];
+    if (turned) return turned;
+    UIGraphicsBeginImageContextWithOptions(original.size, YES, original.scale);
+    CGRect rect = CGRectMake(0, 0, original.size.width, original.size.height);
+    [original drawInRect:rect];
+    [accent setFill];
+    UIRectFillUsingBlendMode(rect, kCGBlendModeHue);
+    turned = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if (!turned) return original;
+    [cache setObject:turned forKey:key];
+    return turned;
+}
+
 void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
     uint32_t values[4] = {0};
     int angle = 90;
     NSUInteger importedColors = !classic ? ExteriaImportedThemeWallpaperGradient(values, &angle) : 0;
     BOOL importedBackground = !classic && ExteriaImportedThemeColor("chat.defaultWallpaper") != nil;
-    view.image = classic || importedColors || importedBackground ? nil : [UIImage imageNamed:dark ? @"chat_bg_dark.jpg" : @"chat_bg_light.jpg"];
+    view.image = classic || importedColors || importedBackground ? nil : ExteriaStandardWallpaperImage(dark);
     if (importedColors) view.image = ExteriaImportedWallpaperGradientImage(values, importedColors, angle, [UIScreen mainScreen].bounds.size);
     /* the classic wallpaper is a linen tile, laid as a pattern so the system repeats it at any size */
     UIImage *linen = classic ? [UIImage imageNamed:dark ? @"chat_linen_dark.png" : @"chat_linen_light.png"] : nil;
@@ -465,6 +528,89 @@ void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
     view.clipsToBounds = YES;
 }
 
+
+#pragma mark kept chat wallpapers
+
+#define CHAT_WALLPAPER_FILES_MAX 40
+
+static NSString *ExteriaChatWallpaperDirectory(void) {
+    NSArray *roots = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    return roots.count ? [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"chat-wallpapers"] : nil;
+}
+
+static NSString *ExteriaChatWallpaperPath(int32_t peerKind, long long peerId) {
+    NSString *directory = ExteriaChatWallpaperDirectory();
+    return directory ? [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"%d-%lld.plist", (int)peerKind, peerId]] : nil;
+}
+
+NSString *ExteriaChatWallpaperSignature(const exteria_chat_wallpaper *paper, NSString *fileKey) {
+    if (!paper || !paper->present) return nil;
+    return [NSString stringWithFormat:@"%d,%d,%d,%d,%08x,%08x,%08x,%08x,%d,%d,%@", paper->pattern, paper->blur, paper->color_count, paper->has_file, paper->colors[0], paper->colors[1],
+            paper->colors[2], paper->colors[3], (int)paper->rotation, (int)paper->intensity, fileKey ? fileKey : @""];
+}
+
+UIImage *ExteriaCachedChatWallpaper(int32_t peerKind, long long peerId, CGSize size, NSString *signature, NSString **found) {
+    if (found) *found = nil;
+    NSString *path = ExteriaChatWallpaperPath(peerKind, peerId);
+    NSDictionary *kept = path ? [NSDictionary dictionaryWithContentsOfFile:path] : nil;
+    if (![kept isKindOfClass:[NSDictionary class]]) return nil;
+    NSString *kept_signature = [kept objectForKey:@"signature"];
+    NSData *data = [kept objectForKey:@"image"];
+    if (![kept_signature isKindOfClass:[NSString class]] || ![data isKindOfClass:[NSData class]]) return nil;
+    if (signature && ![signature isEqualToString:kept_signature]) return nil;
+    /* a turned screen needs another size, and a picture stretched to it would be soft */
+    if (fabs([[kept objectForKey:@"width"] doubleValue] - size.width) > 1 || fabs([[kept objectForKey:@"height"] doubleValue] - size.height) > 1) return nil;
+    /* imageWithData:scale: came with ios 6, so the scale is given through the bitmap */
+    UIImage *decoded = [UIImage imageWithData:data];
+    UIImage *image = decoded.CGImage ? [UIImage imageWithCGImage:decoded.CGImage scale:ExteriaScreenScale() orientation:UIImageOrientationUp] : nil;
+    if (image && found) *found = kept_signature;
+    return image;
+}
+
+void ExteriaStoreChatWallpaper(int32_t peerKind, long long peerId, CGSize size, NSString *signature, UIImage *image) {
+    NSString *path = ExteriaChatWallpaperPath(peerKind, peerId);
+    if (!path || !signature || !image) return;
+    NSData *data = UIImageJPEGRepresentation(image, 0.85f);
+    if (!data) return;
+    NSDictionary *kept = [NSDictionary dictionaryWithObjectsAndKeys:signature, @"signature", data, @"image", [NSNumber numberWithDouble:size.width], @"width",
+                          [NSNumber numberWithDouble:size.height], @"height", nil];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        @autoreleasepool {
+            NSFileManager *files = [NSFileManager defaultManager];
+            NSString *directory = [path stringByDeletingLastPathComponent];
+            NSError *error = nil;
+            if (![files createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&error]) {
+                NSLog(@"exteria: chat wallpaper folder was not made: %@", error);
+                return;
+            }
+            if (![kept writeToFile:path atomically:YES]) {
+                NSLog(@"exteria: chat wallpaper %@ was not kept", path.lastPathComponent);
+                return;
+            }
+            /* the oldest go first, so the kept pictures stay a few dozen */
+            NSArray *names = [files contentsOfDirectoryAtPath:directory error:NULL];
+            if (names.count <= CHAT_WALLPAPER_FILES_MAX) return;
+            NSMutableArray *dated = [NSMutableArray array];
+            for (NSString *name in names) {
+                NSDate *date = [[files attributesOfItemAtPath:[directory stringByAppendingPathComponent:name] error:NULL] fileModificationDate];
+                [dated addObject:[NSArray arrayWithObjects:name, date ? date : [NSDate distantPast], nil]];
+            }
+            [dated sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) { return [[a objectAtIndex:1] compare:[b objectAtIndex:1]]; }];
+            for (NSUInteger i = 0; i + CHAT_WALLPAPER_FILES_MAX < dated.count; ++i) {
+                NSError *removeError = nil;
+                if (![files removeItemAtPath:[directory stringByAppendingPathComponent:[[dated objectAtIndex:i] objectAtIndex:0]] error:&removeError])
+                    NSLog(@"exteria: old chat wallpaper was not removed: %@", removeError);
+            }
+        }
+    });
+}
+
+void ExteriaDropChatWallpaper(int32_t peerKind, long long peerId) {
+    NSString *path = ExteriaChatWallpaperPath(peerKind, peerId);
+    if (!path || ![[NSFileManager defaultManager] fileExistsAtPath:path]) return;
+    NSError *error = nil;
+    if (![[NSFileManager defaultManager] removeItemAtPath:path error:&error]) NSLog(@"exteria: chat wallpaper was not dropped: %@", error);
+}
 
 UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIImage *file, CGSize size) {
     if (!paper || !paper->present || size.width < 1 || size.height < 1) return nil;

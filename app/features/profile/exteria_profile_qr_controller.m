@@ -31,7 +31,7 @@
 #define PAPER_COUNT 2
 /* viewWithTag: matches the view it is sent to first, and the second tile has tag 1 itself */
 #define PAPER_TAG 100
-/* the key changed when the classic wallpaper became the second tile, which moved every gradient one place along */
+/* the two paper choices keep their positions when the background is changed */
 #define THEME_KEY @"exteria.qr.theme.v3"
 
 /* a backdrop and the ink of the code on it, for the tiles after the first */
@@ -64,6 +64,24 @@ static UIColor *ExteriaQrTextColor(BOOL night) {
     return night ? [UIColor whiteColor] : [UIColor colorWithWhite:0.08 alpha:1];
 }
 
+static UIColor *ExteriaQrPatternColor(CGFloat red, CGFloat green, CGFloat blue) {
+    return ExteriaThemeFollowAccent([UIColor colorWithRed:red green:green blue:blue alpha:1], 286.0);
+}
+
+/* the pattern is a mask, so it stays sharp when the screen changes size */
+static UIView *ExteriaQrPatternView(CGRect frame) {
+    UIView *view = [[[UIView alloc] initWithFrame:frame] autorelease];
+    UIImage *pattern = [UIImage imageNamed:@"chat_pattern.png"];
+    CALayer *mask = [CALayer layer];
+    mask.contents = (id)pattern.CGImage;
+    mask.contentsGravity = kCAGravityResizeAspectFill;
+    mask.frame = view.bounds;
+    view.layer.mask = mask;
+    view.userInteractionEnabled = NO;
+    if (!pattern) NSLog(@"exteria: QR background pattern is missing");
+    return view;
+}
+
 @interface ExteriaProfileQrController () {
     NSString *_url;
     NSString *_caption;
@@ -74,6 +92,7 @@ static UIColor *ExteriaQrTextColor(BOOL night) {
     UIImageView *_wallpaper;
     UIView *_backdropView;
     CAGradientLayer *_backdrop;
+    UIView *_pattern;
     UIScrollView *_scroll;
     UIView *_card;
     CAShapeLayer *_cardMask;
@@ -137,6 +156,7 @@ static UIColor *ExteriaQrTextColor(BOOL night) {
 }
 
 - (void)dealloc {
+    ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
     [_url release];
     [_caption release];
     [_missingText release];
@@ -145,6 +165,7 @@ static UIColor *ExteriaQrTextColor(BOOL night) {
     [_wallpaper release];
     [_backdropView release];
     [_backdrop release];
+    [_pattern release];
     [_scroll release];
     [_card release];
     [_cardMask release];
@@ -180,6 +201,8 @@ static UILabel *ExteriaCodeLabel(UIColor *color, UIFont *font, NSInteger alignme
     _backdrop.startPoint = CGPointMake(0.1, 0);
     _backdrop.endPoint = CGPointMake(0.9, 1);
     [_backdropView.layer addSublayer:_backdrop];
+    _pattern = [ExteriaQrPatternView(CGRectZero) retain];
+    [_backdropView addSubview:_pattern];
     [root addSubview:_backdropView];
 
     /* the card and the photo scroll above the sheet, which stays at the bottom, so a small screen can still bring the whole code
@@ -252,7 +275,7 @@ static UILabel *ExteriaCodeLabel(UIColor *color, UIFont *font, NSInteger alignme
     [self drawCode];
 }
 
-/* the first two tiles show the modern and the classic chat wallpaper, the others a gradient and the emoji of the theme */
+/* the first tile shows the chat wallpaper, the second the patterned background */
 - (void)addTile:(NSUInteger)index {
     CGRect bounds = CGRectMake(0, 0, _tile, _tile);
     CGFloat chipSide = floor(_tile * 0.46);
@@ -261,10 +284,19 @@ static UILabel *ExteriaCodeLabel(UIColor *color, UIFont *font, NSInteger alignme
     tile.layer.cornerRadius = _classic ? 6 : 12;
     tile.layer.masksToBounds = YES;
     UIColor *ink;
-    if (index < PAPER_COUNT) {
+    if (index == 0) {
         UIImageView *paper = [[[UIImageView alloc] initWithFrame:bounds] autorelease];
         paper.tag = PAPER_TAG;
         [tile addSubview:paper];
+        ink = ExteriaColorAccent();
+    } else if (index == 1) {
+        CAGradientLayer *fill = [CAGradientLayer layer];
+        fill.name = @"fill";
+        fill.frame = bounds;
+        [tile.layer addSublayer:fill];
+        UIView *pattern = ExteriaQrPatternView(bounds);
+        pattern.tag = PAPER_TAG;
+        [tile addSubview:pattern];
         ink = ExteriaColorAccent();
     } else {
         CAGradientLayer *fill = [CAGradientLayer layer];
@@ -301,14 +333,23 @@ static void ExteriaQrApplyPaper(UIImageView *view, NSUInteger index, BOOL night)
     else ExteriaApplyWallpaperStyle(view, classic, night);
 }
 
+static NSArray *ExteriaQrPatternColors(BOOL night) {
+    UIColor *top = night ? ExteriaQrPatternColor(0.25, 0.10, 0.24) : ExteriaQrPatternColor(0.85, 0.70, 0.87);
+    UIColor *bottom = night ? ExteriaQrPatternColor(0.09, 0.08, 0.15) : ExteriaQrPatternColor(0.94, 0.87, 0.95);
+    return [NSArray arrayWithObjects:(id)top.CGColor, (id)bottom.CGColor, nil];
+}
+
 /* the backdrop, the ink of the code, the sheet and the tiles follow the chosen theme and the day or night switch */
 - (void)applyTheme {
     BOOL paper = _theme < PAPER_COUNT;
     const ExteriaQrTheme *theme = paper ? NULL : &ExteriaQrThemes[_theme - PAPER_COUNT];
     CGFloat dim = _night ? 0.32 : 1;
-    if (paper) ExteriaQrApplyPaper(_wallpaper, _theme, _night);
-    _wallpaper.hidden = !paper;
-    _backdropView.hidden = paper;
+    if (_theme == 0) ExteriaQrApplyPaper(_wallpaper, 0, _night);
+    _wallpaper.hidden = _theme != 0;
+    _backdropView.hidden = _theme == 0;
+    _pattern.hidden = _theme != 1;
+    _pattern.backgroundColor = _night ? [UIColor colorWithWhite:1 alpha:0.20] : [UIColor colorWithWhite:0 alpha:0.16];
+    if (_theme == 1) _backdrop.colors = ExteriaQrPatternColors(_night);
     if (theme) {
         _backdrop.colors = [NSArray arrayWithObjects:(id)ExteriaQrColor(theme->back[0], dim).CGColor, (id)ExteriaQrColor(theme->back[1], dim).CGColor, nil];
     }
@@ -328,8 +369,14 @@ static void ExteriaQrApplyPaper(UIImageView *view, NSUInteger index, BOOL night)
         [_mode setImage:ExteriaSymbolImage(_night ? ExteriaSymbolSun : ExteriaSymbolMoon, 24, ExteriaColorAccent()) forState:UIControlStateNormal];
     }
     for (UIView *tile in _tileViews) {
-        if (tile.tag < PAPER_COUNT) {
+        if (tile.tag == 0) {
             ExteriaQrApplyPaper((UIImageView *)[tile viewWithTag:PAPER_TAG], (NSUInteger)tile.tag, _night);
+        } else if (tile.tag == 1) {
+            UIView *pattern = [tile viewWithTag:PAPER_TAG];
+            pattern.backgroundColor = _night ? [UIColor colorWithWhite:1 alpha:0.20] : [UIColor colorWithWhite:0 alpha:0.16];
+            for (CALayer *layer in tile.layer.sublayers) {
+                if ([layer.name isEqualToString:@"fill"]) ((CAGradientLayer *)layer).colors = ExteriaQrPatternColors(_night);
+            }
         } else {
             const ExteriaQrTheme *own = &ExteriaQrThemes[tile.tag - PAPER_COUNT];
             for (CALayer *layer in tile.layer.sublayers) {
@@ -364,7 +411,7 @@ static void ExteriaQrApplyPaper(UIImageView *view, NSUInteger index, BOOL night)
     static uint8_t modules[EXTERIA_QR_MAX_MODULES];
     int side = 0;
     const char *text = _url.UTF8String;
-    if (!text || exteria_qr_encode((const uint8_t *)text, strlen(text), modules, sizeof(modules), &side, NULL) != EXTERIA_OK) {
+    if (!text || exteria_qr_encode_min_version((const uint8_t *)text, strlen(text), EXTERIA_QR_LOGO_MIN_VERSION, modules, sizeof(modules), &side, NULL) != EXTERIA_OK) {
         NSLog(@"exteria: the profile link did not encode as a QR code");
         return;
     }
@@ -380,6 +427,8 @@ static void ExteriaQrApplyPaper(UIImageView *view, NSUInteger index, BOOL night)
     _wallpaper.frame = whole;
     _backdropView.frame = whole;
     _backdrop.frame = _backdropView.bounds;
+    _pattern.frame = _backdropView.bounds;
+    _pattern.layer.mask.frame = _pattern.bounds;
     [CATransaction commit];
     _scroll.frame = body;
 
@@ -453,16 +502,13 @@ static void ExteriaQrApplyPaper(UIImageView *view, NSUInteger index, BOOL night)
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     if (_classic) return;
-    UIApplication *application = [UIApplication sharedApplication];
-    _statusWasHidden = application.statusBarHidden;
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarHide(self, UIStatusBarAnimationFade);
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     if (_classic) return;
-    UIApplication *application = [UIApplication sharedApplication];
-    if ([application respondsToSelector:@selector(setStatusBarHidden:withAnimation:)]) [application setStatusBarHidden:_statusWasHidden withAnimation:UIStatusBarAnimationFade];
+    ExteriaStatusBarShow(self, UIStatusBarAnimationFade);
 }
 
 - (BOOL)prefersStatusBarHidden { return !_classic; }
