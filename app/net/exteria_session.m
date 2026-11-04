@@ -2,6 +2,7 @@
 #import "exteria_session.h"
 
 #import "exteria_dialog.h"
+#import "exteria_forum_summaries.h"
 #import "exteria_files.h"
 #import "exteria_media_link.h"
 #import "exteria_proxy_settings.h"
@@ -45,6 +46,8 @@
 /* the longest sleep between ticks; the client names its own next deadline (ping, pong, request timeouts, login
    waits), commands and a stop come through the wake pipe */
 #define POLL_CAP_MS 60000
+#define SYNC_RETRY_FIRST_MS 3000
+#define SYNC_RETRY_MAX_MS 60000
 #define READ_CHUNK 16384
 #define READS_PER_WAKE 64
 /* the server reports an unknown auth key as a transport error with this code */
@@ -147,6 +150,7 @@
     BOOL _started;
     BOOL _stopping;
     BOOL _connected;
+    BOOL _tunneled;
 
     /* everything below belongs to the worker thread */
     exteria_client _client;
@@ -158,6 +162,8 @@
     unsigned _failures;
     uint32_t _pingInterval;
     uint64_t _retryAt;
+    uint64_t _syncRetryAt;
+    uint32_t _syncBackoffMs;
     BOOL _wantLink;
     int32_t _migrateDc;
     BOOL _dropKeyPending;
@@ -172,6 +178,7 @@
     void *_voip;
     ExteriaShiro *_shiro;
     ExteriaTypingBoard *_typing;
+    ExteriaForumSummaries *_forumSummaries;
     NSMutableDictionary *_readOutbox;
     /* worker only: the random ids of pending messages whose upload the person stopped, read by the next step of that upload */
     NSMutableSet *_cancelledSends;
@@ -191,6 +198,7 @@
 @end
 
 NSString *const ExteriaArchiveSummaryDidChangeNotification = @"ExteriaArchiveSummaryDidChange";
+NSString *const ExteriaForumSummariesDidChangeNotification = @"ExteriaForumSummariesDidChange";
 
 NSString *const ExteriaSessionConnectionDidChangeNotification = @"ExteriaSessionConnectionDidChange";
 NSString *const ExteriaSessionDialogsUpdatedNotification = @"ExteriaSessionDialogsUpdated";
@@ -199,6 +207,7 @@ NSString *const ExteriaSessionDialogsUpdatedNotification = @"ExteriaSessionDialo
 
 @synthesize delegate = _delegate;
 @synthesize connected = _connected;
+@synthesize tunneled = _tunneled;
 @synthesize callDelegate = _callDelegate;
 @synthesize groupCallDelegate = _groupCallDelegate;
 @synthesize groupCalls = _groupCalls;
@@ -264,6 +273,7 @@ static NSString *ExteriaMachineName(void) {
     _handlers = [[NSMutableDictionary alloc] init];
     _links = [[NSMutableDictionary alloc] init];
     _typing = [[ExteriaTypingBoard alloc] init];
+    _forumSummaries = [[ExteriaForumSummaries alloc] init];
     _drafts = [[ExteriaDraftBoard alloc] init];
     _calls = [[ExteriaCallEngine alloc] initWithSession:self];
     _groupCalls = [[ExteriaGroupCallEngine alloc] initWithSession:self];
@@ -299,6 +309,7 @@ static NSString *ExteriaMachineName(void) {
     [_handlers release];
     [_links release];
     [_typing release];
+    [_forumSummaries release];
     [_drafts release];
     [_calls release];
     [_groupCalls release];
@@ -749,6 +760,7 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
         if (completion) completion(nil, wait);
         return;
     }
+    NSUInteger draftRevision = self.drafts.revision;
     [self load:"messages.getDialogs" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
         return ExteriaConfigureDialogList(arena, request, folder);
     } parse:^NSArray *(const exteria_tl_value *answer) {
@@ -764,7 +776,7 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
         }
         if (dialogs && folder == 0) [self refreshArchiveSummary];
         if (dialogs) {
-            [self noteDraftsOfDialogsAnswer:answer complete:YES];
+            [self noteDraftsOfDialogsAnswer:answer complete:YES since:draftRevision];
             if (folder == 0) [self requestAllDraftsOnce];
         }
         return dialogs;
@@ -807,6 +819,51 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
     }];
 }
 
+#define REMAINING_DIALOG_PAGES_MAX 10
+
+static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
+    return !item.folder && !item.community && item.topMessage > 0 && item.date > 0 && (item.peerKind == 2 || item.saved || item.peerHash);
+}
+
+- (void)loadRemainingDialogsAfter:(NSArray *)known completion:(void (^)(NSArray *))completion {
+    void (^done)(NSArray *) = [completion copy];
+    NSMutableArray *all = [NSMutableArray arrayWithArray:known];
+    NSMutableSet *keys = [NSMutableSet set];
+    ExteriaDialog *cursor = nil;
+    for (ExteriaDialog *item in known) {
+        [keys addObject:[NSString stringWithFormat:@"%d:%lld", (int)item.peerKind, item.peerId]];
+        if (ExteriaDialogIsPageCursor(item)) cursor = item;
+    }
+    [self walkRemainingDialogs:all keys:keys cursor:cursor pages:0 completion:done];
+    [done release];
+}
+
+- (void)walkRemainingDialogs:(NSMutableArray *)all keys:(NSMutableSet *)keys cursor:(ExteriaDialog *)cursor pages:(NSUInteger)pages completion:(void (^)(NSArray *))done {
+    /* the first page of a list is the one the screen holds, so a list with no cursor has no later page */
+    if (!cursor || pages >= REMAINING_DIALOG_PAGES_MAX) { done(all); return; }
+    void (^finish)(NSArray *) = [done copy];
+    [self loadDialogPageInFolder:0 after:cursor completion:^(NSArray *items, ExteriaDialog *next, NSString *errorName) {
+        if (!items || errorName) {
+            if (errorName) NSLog(@"exteria: the rest of the chat list did not load for the search: %@", errorName);
+            finish(all);
+            [finish release];
+            return;
+        }
+        for (ExteriaDialog *item in items) {
+            NSString *key = [NSString stringWithFormat:@"%d:%lld", (int)item.peerKind, item.peerId];
+            if (item.folder || [keys containsObject:key]) continue;
+            [keys addObject:key];
+            [all addObject:item];
+        }
+        [self walkRemainingDialogs:all keys:keys cursor:next pages:pages + 1 completion:finish];
+        [finish release];
+    }];
+}
+
+- (ExteriaForumSummaries *)forumSummaries {
+    return _forumSummaries;
+}
+
 - (NSArray *)dialogsFromAnswer:(const exteria_tl_value *)answer folder:(int32_t)folder {
     exteria_dialog_row *rows = calloc(EXTERIA_DIALOGS_MAX + 1, sizeof(*rows));
     size_t count = 0;
@@ -828,6 +885,8 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
             if (rows[i].folder && folder != 0) continue;
             [dialogs addObject:[[[ExteriaDialog alloc] initWithRow:&rows[i]] autorelease]];
         }
+        [_forumSummaries applyToDialogs:dialogs];
+        [self refreshForumSummariesOfDialogs:dialogs];
     }
     free(rows);
     return dialogs;
@@ -1536,6 +1595,7 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
     const char *host = exteria_dc_host(_dc);
     BOOL tunneled = NO;
     exteria_status status = ExteriaProxyConnect(_shiro, &_socket, host, exteria_dc_port(), CONNECT_TIMEOUT_MS, &_client.config, &tunneled);
+    _tunneled = status == EXTERIA_OK && tunneled;
     if (status == EXTERIA_OK) {
         _client.mt.config.transport = _client.config.transport;
         _client.mt.config.obfuscation = _client.config.obfuscation;
@@ -1657,8 +1717,30 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
         uint64_t now = ExteriaNowMs();
         if (_wantLink && _socket.fd < 0 && now >= _retryAt) [self openLink];
 
+        /* a failed difference pauses the sync, and the pause lifts after a growing delay: left alone it holds back every new message until the app restarts */
+        if (_clientLive && _client.sync_suspended && _client.sync_retry) {
+            if (!_syncRetryAt) {
+                if (!_syncBackoffMs) _syncBackoffMs = SYNC_RETRY_FIRST_MS;
+                _syncRetryAt = now + _syncBackoffMs;
+                _syncBackoffMs = MIN(_syncBackoffMs * 2, (uint32_t)SYNC_RETRY_MAX_MS);
+            } else if (now >= _syncRetryAt) {
+                _syncRetryAt = 0;
+                exteria_client_resume_sync(&_client);
+            }
+        } else if (_clientLive && !_client.updates.needs_difference) {
+            _syncRetryAt = 0;
+            _syncBackoffMs = 0;
+        }
+
         uint32_t next = POLL_CAP_MS;
         if (_clientLive && exteria_client_tick(&_client, &next) != EXTERIA_OK) next = POLL_CAP_MS;
+        /* a request can fail in this tick, after the retry deadline was checked */
+        if (_clientLive && _client.sync_suspended && _client.sync_retry && !_syncRetryAt) next = 0;
+        if (_syncRetryAt) {
+            now = ExteriaNowMs();
+            uint32_t wait = _syncRetryAt > now ? (uint32_t)MIN(_syncRetryAt - now, (uint64_t)POLL_CAP_MS) : 0;
+            if (wait < next) next = wait;
+        }
         [self settleClient];
         /* a restored key is ready the moment it connects, so only a frame the server sent and the client accepted
            counts as a link that works */

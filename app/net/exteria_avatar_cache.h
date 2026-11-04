@@ -21,8 +21,8 @@
 - (void)pinPhoto:(ExteriaPhoto *)photo;
 
 /* what the photos on disk take, and a way to drop them all; the memory copies go too, and loads still running finish
-   with nil. clear returns after the files are gone, so diskBytes right after it reads zero */
+   with nil. completion runs on main after the queued files have been removed */
 - (unsigned long long)diskBytes;
-- (void)clear;
+- (void)clearWithCompletion:(void (^)(BOOL success))completion;
 
 @end

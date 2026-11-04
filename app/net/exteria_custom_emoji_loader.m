@@ -3,6 +3,7 @@
 #import "exteria_custom_emoji.h"
 #import "exteria_image_decoder.h"
 #import "exteria_lottie.h"
+#import "exteria_video_sticker.h"
 #import "exteria_platform.h"
 
 #define DOCUMENTS_PER_CALL 100
@@ -37,23 +38,30 @@ static void ExteriaEmojiBuilderEnded(void);
 
 @interface ExteriaEmojiFrameBuilder : NSObject {
     long long _document;
-    ExteriaLottie *_lottie;
+    /* the frames come from a lottie file or from a webm one, through the same interface */
+    id<ExteriaFrameAnimation> _lottie;
     NSMutableArray *_frames;
     NSUInteger _step;
     NSUInteger _next;
     NSUInteger _side;
+    void (^_landed)(void);
 }
+/* landed runs on the main thread once the frames are in, so the places that drew the still picture draw the motion */
+@property (nonatomic, copy) void (^landed)(void);
 - (id)initWithDocument:(long long)document data:(NSData *)data key:(NSString *)key;
 - (void)start;
 @end
 
 @implementation ExteriaEmojiFrameBuilder
 
+@synthesize landed = _landed;
+
 - (id)initWithDocument:(long long)document data:(NSData *)data key:(NSString *)key {
     self = [super init];
     if (!self) return nil;
     _document = document;
-    _lottie = [[ExteriaLottie animationWithPackedData:data key:key] retain];
+    _lottie = [(ExteriaFileFormatOfData(data) == ExteriaFileFormatMatroska ? (id<ExteriaFrameAnimation>)[ExteriaVideoSticker animationWithPackedData:data key:key]
+                                                                             : (id<ExteriaFrameAnimation>)[ExteriaLottie animationWithPackedData:data key:key]) retain];
     if (!_lottie) {
         [self release];
         return nil;
@@ -64,6 +72,7 @@ static void ExteriaEmojiBuilderEnded(void);
 }
 
 - (void)dealloc {
+    [_landed release];
     [_lottie invalidate];
     [_lottie release];
     [_frames release];
@@ -107,6 +116,7 @@ static void ExteriaEmojiBuilderEnded(void);
     if (_next >= _lottie.frameCount) {
         double fps = _lottie.framesPerSecond;
         [ExteriaCustomEmoji setAnimationFrames:_frames duration:(double)_lottie.frameCount / fps forDocument:_document];
+        if (_landed) _landed();
         [self finish];
         return;
     }
@@ -158,16 +168,19 @@ static void ExteriaEmojiBuilderSubmit(ExteriaEmojiFrameBuilder *builder) {
     [sPendingBuilders addObject:builder];
 }
 
-/* a lottie emoji gets its frames after its picture landed; webm ones keep the thumbnail, which no system here plays */
-static void ExteriaAnimateDocument(ExteriaCustomEmojiDocument *document, ExteriaMediaCache *media) {
-    if (document.format != EXTERIA_STICKER_ANIMATED || !document.file || ExteriaReduceMotionEnabled()) return;
+/* an animated emoji gets its frames after its picture landed: a lottie one from its file, a webm one (what most animated emoji of the other clients are) from the
+   video decoder of the app, a few frames a second. the thumbnail stays until the frames are in */
+static void ExteriaAnimateDocument(ExteriaCustomEmojiDocument *document, ExteriaMediaCache *media, void (^landed)(void)) {
+    if ((document.format != EXTERIA_STICKER_ANIMATED && document.format != EXTERIA_STICKER_VIDEO) || !document.file || ExteriaReduceMotionEnabled()) return;
     long long identifier = document.documentId;
     if ([ExteriaCustomEmoji hasAnimationForDocument:identifier]) return;
     NSString *key = document.file.key;
     [media loadDataForFile:document.file completion:^(NSData *data) {
         if (!data || [ExteriaCustomEmoji hasAnimationForDocument:identifier]) return;
-        if (ExteriaFileFormatOfData(data) != ExteriaFileFormatGzip) return;
+        ExteriaFileFormat format = ExteriaFileFormatOfData(data);
+        if (format != ExteriaFileFormatGzip && format != ExteriaFileFormatMatroska) return;
         ExteriaEmojiFrameBuilder *builder = [[[ExteriaEmojiFrameBuilder alloc] initWithDocument:identifier data:data key:key] autorelease];
+        builder.landed = landed;
         if (builder) ExteriaEmojiBuilderSubmit(builder);
     }];
 }
@@ -202,22 +215,24 @@ static void ExteriaAnimateDocument(ExteriaCustomEmojiDocument *document, Exteria
     for (NSUInteger from = 0; from < wanted.count; from += DOCUMENTS_PER_CALL) {
         NSArray *batch = [wanted subarrayWithRange:NSMakeRange(from, MIN((NSUInteger)DOCUMENTS_PER_CALL, wanted.count - from))];
         [session loadCustomEmojiDocuments:batch completion:^(NSArray *answered, NSString *errorName) {
+            if (!answered) {
+                /* a failed call says nothing about the documents, so a later screen asks again */
+                NSLog(@"exteria: custom emoji not loaded: %@", errorName);
+                for (NSNumber *key in batch) [ExteriaCustomEmoji abandonLoad:key.longLongValue];
+                return;
+            }
             NSMutableSet *known = [NSMutableSet set];
             for (ExteriaCustomEmojiDocument *document in answered) [known addObject:[NSNumber numberWithLongLong:document.documentId]];
-            /* a document the server did not answer for, or a failed call, ends here and is not asked for again in this run */
+            /* a document the server did not answer for is left alone for a minute */
             for (NSNumber *key in batch) {
                 if (![known containsObject:key]) [ExteriaCustomEmoji finishLoad:key.longLongValue image:nil];
-            }
-            if (!answered) {
-                NSLog(@"exteria: custom emoji not loaded: %@", errorName);
-                return;
             }
             if (knownDocuments) knownDocuments(answered);
             for (ExteriaCustomEmojiDocument *document in answered) {
                 long long identifier = document.documentId;
                 ExteriaLoadPicture(document, media, ^(UIImage *image) {
                     [ExteriaCustomEmoji finishLoad:identifier image:image];
-                    if (image) ExteriaAnimateDocument(document, media);
+                    if (image) ExteriaAnimateDocument(document, media, landed);
                     if (image && landed) landed();
                 });
             }

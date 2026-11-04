@@ -204,10 +204,10 @@ void ExteriaRemoveCustomLanguage(NSString *code) {
     if (inForce) ExteriaSetInterfaceLanguage(@"");
 }
 
-NSString *ExteriaCustomLanguageTemplatePath(void) {
-    NSString *source = [[[NSBundle mainBundle] pathForResource:@"en" ofType:@"lproj"] stringByAppendingPathComponent:@"Localizable.strings"];
+NSString *ExteriaCustomLanguageTemplatePath(NSString *language) {
+    NSString *source = [[[NSBundle mainBundle] pathForResource:language ofType:@"lproj"] stringByAppendingPathComponent:@"Localizable.strings"];
     if (![[NSFileManager defaultManager] fileExistsAtPath:source]) return nil;
-    NSString *target = [NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-template.strings"];
+    NSString *target = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-template-%@.strings", language]];
     [[NSFileManager defaultManager] removeItemAtPath:target error:NULL];
     NSError *error = nil;
     if (![[NSFileManager defaultManager] copyItemAtPath:source toPath:target error:&error]) {

@@ -112,6 +112,8 @@ typedef enum {
 /* posted on the main thread, by the session, each time connected changes */
 /* posted on the main thread with the refreshed archive shortcut under the key "dialog" */
 extern NSString *const ExteriaArchiveSummaryDidChangeNotification;
+/* the topics of some forum were read, so the forum rows of a chat list can name the topic of their last message and count what is unread in all topics */
+extern NSString *const ExteriaForumSummariesDidChangeNotification;
 extern NSString *const ExteriaSessionConnectionDidChangeNotification;
 extern NSString *const ExteriaSessionDialogsUpdatedNotification;
 /* the other side read more of our messages in a chat; userInfo has kind, peer and maxId */
@@ -119,6 +121,8 @@ extern NSString *const ExteriaReadOutboxDidChangeNotification;
 /* the parts of a file sent in a message that the server has taken, on the main thread; userInfo has "randomId" (the NSNumber of the pending message)
    and "fraction" (an NSNumber float from 0 to 1) */
 extern NSString *const ExteriaUploadProgressNotification;
+
+@class ExteriaStoryAudience;
 
 @interface ExteriaSession : NSObject {
     id<ExteriaSessionDelegate> _delegate;
@@ -144,6 +148,7 @@ extern NSString *const ExteriaUploadProgressNotification;
 @property (nonatomic, readonly) ExteriaGroupCallEngine *groupCalls;
 /* main thread only: who is typing in which chat, from the live updates */
 @property (nonatomic, readonly) ExteriaTypingBoard *typing;
+- (void)setTyping:(BOOL)typing inDialog:(ExteriaDialog *)dialog;
 /* main thread only: the drafts of the account's chats, from the chat lists, the live updates and what the person types */
 @property (nonatomic, readonly) ExteriaDraftBoard *drafts;
 /* the newest id of ours the other side is known to have read in a chat since the app started, zero when no update said; main thread */
@@ -152,6 +157,9 @@ extern NSString *const ExteriaUploadProgressNotification;
 /* main thread only: whether the link is up and the server has answered on it since it was opened; screens show
    a connecting title while it is NO */
 @property (nonatomic, readonly) BOOL connected;
+/* any thread: whether the last link was opened through the Shiro tunnel. a stream of the tunnel is a local socket pair, which the system cannot keep alive for the
+   network, so ios 5 and 6 let the app sleep with nothing to wake it unless the notifier plays its silence */
+@property (atomic, readonly) BOOL tunneled;
 
 /* directory holds the session keys, the account file and the database; it is created when missing */
 - (id)initWithDirectory:(NSString *)directory;
@@ -199,6 +207,9 @@ typedef void (^ExteriaListCompletion)(NSArray *items, NSString *errorName);
 - (void)loadDialogs:(ExteriaListCompletion)completion;
 /* folder 0 is the main list, 1 the archive; the main list carries the archive as its own entry */
 - (void)loadDialogsInFolder:(int32_t)folder completion:(ExteriaListCompletion)completion;
+/* the chats of the main list beyond the first request, for a search that has to see every chat and not the hundred the list keeps; known is what the screen already holds, and the answer is
+   known followed by the chats that were not in it. A page that fails ends the walk with what came so far. */
+- (void)loadRemainingDialogsAfter:(NSArray *)known completion:(void (^)(NSArray *all))completion;
 - (void)loadDialogPageInFolder:(int32_t)folder after:(ExteriaDialog *)cursor completion:(void (^)(NSArray *items, ExteriaDialog *next, NSString *errorName))completion;
 /* the list as the last good load left it, so a screen can show it before the network answers; a nil list means
    nothing is kept yet and is not an error */
@@ -263,6 +274,10 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* the topics of a forum as ExteriaDialog items carrying a topicId, pinned ones first and then by last message; at
    most 200 */
 - (void)loadTopicsOfDialog:(ExteriaDialog *)forum completion:(ExteriaListCompletion)completion;
+/* gives the forums of a list the summary kept for them; the list is then complete as far as it is known */
+- (void)applyForumSummariesToDialogs:(NSArray *)dialogs;
+/* the number of messages in a topic, or in the chat when topicId is zero */
+- (void)loadMessageCountOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSInteger count, NSString *errorName))completion;
 /* the favorites split by the chat each message came from, newest first: ExteriaDialog rows, the one for the account's own notes included (its saved is set) */
 - (void)loadSavedDialogs:(ExteriaListCompletion)completion;
 
@@ -295,6 +310,8 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId completion:(ExteriaSendCompletion)completion;
 /* the same as an answer to the message replyTo; zero sends it on its own */
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo completion:(ExteriaSendCompletion)completion;
+/* an answer that quotes words of the message it answers */
+- (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset completion:(ExteriaSendCompletion)completion;
 - (void)sendSticker:(ExteriaMedia *)sticker toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId completion:(ExteriaSendCompletion)completion;
 /* sends a recorded file as a voice note or a round video: the file goes up in parts, then the message names it */
 - (void)sendVoiceAtPath:(NSString *)path durationMs:(int32_t)durationMs waveform:(NSData *)waveform toDialog:(ExteriaDialog *)dialog
@@ -329,6 +346,7 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)postStoryPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
 /* the same with a caption (at most 200 characters, nil for none) and the audience that sees it */
 - (void)postStoryPhotoAtPath:(NSString *)path caption:(NSString *)caption privacy:(exteria_story_privacy)privacy completion:(void (^)(NSString *errorName))completion;
+- (void)postStoryPhotoAtPath:(NSString *)path caption:(NSString *)caption audience:(ExteriaStoryAudience *)audience completion:(void (^)(NSString *errorName))completion;
 /* the custom emoji documents with the ordinary emoji each stands for and the files that draw it, as
    ExteriaCustomEmojiDocument items; a document the server does not know is missing */
 - (void)loadCustomEmojiDocuments:(NSArray *)documentIds completion:(void (^)(NSArray *documents, NSString *errorName))completion;
@@ -337,6 +355,13 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)loadAvailableReactionsForDialog:(ExteriaDialog *)dialog premium:(BOOL)premium completion:(ExteriaListCompletion)completion;
 /* returns the updated stored messages for these ids, including history outside the watched page */
 - (void)refreshReactionsForMessages:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(ExteriaListCompletion)completion;
+/* stars sent to a message as a reaction; the reactions of the message come back as they are after it */
+- (void)sendPaidReactionOfStars:(int32_t)stars messageId:(int32_t)messageId dialog:(ExteriaDialog *)dialog completion:(ExteriaListCompletion)completion;
+/* the pictures the server draws every ordinary reaction with, as ExteriaReactionArtwork items; nil with an error name when the call or the answer failed */
+- (void)loadReactionArt:(ExteriaListCompletion)completion;
+/* how many ordinary reactions one account may leave on a message, from help.getAppConfig; the error name is nil when the server's own numbers
+   arrived, and the documented 1 and 3 stand in otherwise */
+- (void)loadReactionLimits:(void (^)(int32_t standard, int32_t premium, NSString *errorName))completion;
 - (void)sendReactions:(NSArray *)reactions messageId:(int32_t)messageId dialog:(ExteriaDialog *)dialog
            completion:(ExteriaListCompletion)completion;
 /* tells the server everything up to maxId is read; a failure only shows in the log, the next open says it again */

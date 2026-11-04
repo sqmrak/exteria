@@ -15,7 +15,9 @@
     if (!self) return nil;
     _row = *row;
     NSString *name = [NSString stringWithUTF8String:row->name];
-    _name = [(name ? name : @"") copy];
+    /* an account that is gone has no name, and a row of the list with none shows only a ghost; it is named for what it is, and so is a call whose person the server did not describe */
+    if (!name.length) name = NSLocalizedString(@"chats.deleted", nil);
+    _name = [name copy];
     _initials = [(row->deleted ? @"" : ExteriaInitialsOfName(_name)) copy];
     _photo = [[ExteriaPhoto photoWithRef:&row->photo] retain];
     return self;

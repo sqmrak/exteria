@@ -40,6 +40,9 @@
 - (const exteria_privacy_rules *)rules;
 @end
 
+/* posted on the main thread after a block or an unblock went through: userInfo has @"peer" (the id), @"kind" and @"blocked" */
+extern NSString *const ExteriaPeerBlockDidChangeNotification;
+
 /* a person or group the account blocked */
 @interface ExteriaBlockedPeer : NSObject {
     exteria_blocked_row _row;

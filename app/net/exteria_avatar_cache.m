@@ -195,7 +195,7 @@
     return total;
 }
 
-- (void)clear {
+- (void)clearWithCompletion:(void (^)(BOOL))completion {
     ++_generation;
     [_pinnedKey release];
     _pinnedKey = nil;
@@ -205,18 +205,28 @@
     [_waiters removeAllObjects];
     [_memory removeAllObjects];
     [_failures removeAllObjects];
+    void (^done)(BOOL) = [completion copy];
+    dispatch_async(_work, ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        NSFileManager *files = [NSFileManager defaultManager];
+        NSError *scanError = nil;
+        NSArray *names = [files contentsOfDirectoryAtPath:_directory error:&scanError];
+        BOOL success = names != nil;
+        if (!names) NSLog(@"exteria: cannot scan avatars %@: %@", _directory, scanError);
+        for (NSString *name in names) {
+            NSError *error = nil;
+            if (![files removeItemAtPath:[_directory stringByAppendingPathComponent:name] error:&error]) {
+                NSLog(@"exteria: cannot remove %@: %@", name, error);
+                success = NO;
+            }
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{ if (done) done(success); [done release]; });
+        [pool drain];
+    });
     for (NSArray *callbacks in waiting) {
         for (void (^callback)(UIImage *) in callbacks) callback(nil);
     }
     [waiting release];
-    dispatch_sync(_work, ^{
-        NSFileManager *files = [NSFileManager defaultManager];
-        for (NSString *name in [files contentsOfDirectoryAtPath:_directory error:NULL]) {
-            NSError *error = nil;
-            if (![files removeItemAtPath:[_directory stringByAppendingPathComponent:name] error:&error])
-                NSLog(@"exteria: cannot remove %@: %@", name, error);
-        }
-    });
 }
 
 @end

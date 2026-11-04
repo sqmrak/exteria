@@ -268,15 +268,28 @@ static void ExteriaPrivacyDropUser(exteria_privacy_user *users, size_t *count, l
     }];
 }
 
+NSString *const ExteriaPeerBlockDidChangeNotification = @"ExteriaPeerBlockDidChange";
+
 - (void)setBlocked:(BOOL)blocked kind:(int32_t)kind identifier:(long long)identifier hash:(long long)hash completion:(void (^)(NSString *))completion {
     exteria_peer_ref peer;
     memset(&peer, 0, sizeof(peer));
     peer.kind = kind;
     peer.id = identifier;
     peer.access_hash = hash;
+    void (^done)(NSString *) = [completion copy];
+    long long who = identifier;
+    int32_t whoKind = kind;
     [self runPrivacyPlain:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         return exteria_block_request(arena, &peer, blocked, request);
-    } completion:completion];
+    } completion:^(NSString *errorName) {
+        /* every screen that shows the person learns of it, whoever made the change: the profile, the list of the blocked, the button of a chat */
+        if (!errorName) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPeerBlockDidChangeNotification object:nil
+                userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:who], @"peer", [NSNumber numberWithInt:whoKind], @"kind", [NSNumber numberWithBool:blocked], @"blocked", nil]];
+        }
+        if (done) done(errorName);
+        [done release];
+    }];
 }
 
 /* a call whose answer is one number */

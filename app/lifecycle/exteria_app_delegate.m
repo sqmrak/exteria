@@ -1,6 +1,9 @@
 #import "exteria_plugins.h"
 #import "exteria_power_notice.h"
 #import "exteria_app_delegate.h"
+#import "exteria_quick_actions.h"
+#import "exteria_share_intake.h"
+#import "exteria_window.h"
 #import "exteria_crash_log.h"
 #import "exteria_app_icon.h"
 
@@ -126,6 +129,7 @@ static NSString *ExteriaSupportDirectory(void) {
     [_session start];
     _notifier = [[ExteriaNotifier alloc] initWithSession:_session];
     if (signedIn) [_notifier start];
+    else ExteriaQuickActionsUpdate(nil);
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(accountSwitchRequested:) name:ExteriaAccountSwitchNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(proxyChanged:) name:ExteriaProxyDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(accountAddRequested:) name:ExteriaAccountAddNotification object:nil];
@@ -133,7 +137,9 @@ static NSString *ExteriaSupportDirectory(void) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notifySettingsChanged:)
                                                  name:ExteriaNotifySettingsDidChangeNotification object:nil];
 
-    self.window = [[[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
+    /* a shake is a thing the app answers (the pictures of a theme fall), so the system's offer to undo typing on a shake is turned off */
+    application.applicationSupportsShakeToEdit = NO;
+    self.window = [[[ExteriaWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
     self.window.backgroundColor = ExteriaColorBackdrop();
     /* every screen draws its own bar, so the system one stays hidden and only its push animation is used */
     _navigation = [[UINavigationController alloc] initWithRootViewController:signedIn ? [self makeMainController] : [self makeWelcomeController]];
@@ -164,6 +170,21 @@ static NSString *ExteriaSupportDirectory(void) {
     (void)annotation;
     if ([url isFileURL] && [[[url path] pathExtension] caseInsensitiveCompare:@"tgios-theme"] == NSOrderedSame) {
         [ExteriaImportedThemePreviewController openURL:url fromController:_navigation];
+        return YES;
+    }
+    /* a picture, a video or any file from the share sheet or "open in" waits in the inbox of the app until the person picks its chat */
+    if ([url isFileURL]) {
+        if (![ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)]) return NO;
+        NSDictionary *info = [NSDictionary dictionaryWithObject:[NSArray arrayWithObject:url] forKey:@"urls"];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaShareFilesNotification object:self userInfo:info];
+        });
+        return YES;
+    }
+    /* the share extension opens the app with this address after it left the files in the shared folder */
+    if ([url.scheme isEqualToString:@"exteria"] && [url.host isEqualToString:@"share"]) {
+        if (![ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)]) return NO;
+        dispatch_async(dispatch_get_main_queue(), ^{ ExteriaShareCollectPending(); });
         return YES;
     }
     if (!ExteriaIsTelegramLink(url)) return NO;
@@ -267,6 +288,8 @@ static NSString *ExteriaSupportDirectory(void) {
     ExteriaPluginsEvent("resume");
     [_passcodeLock evaluateReturn];
     [_notifier applicationDidBecomeActive:application];
+    /* what the share extension left while the app was away, when the wake address did not reach it */
+    if ([ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)]) ExteriaShareCollectPending();
     ExteriaPowerNoticeStart();
 }
 
@@ -279,6 +302,15 @@ static NSString *ExteriaSupportDirectory(void) {
     [_notifier performFetchWithCompletion:completionHandler];
 }
 #pragma clang diagnostic pop
+
+/* a chat chosen from the menu of the icon (3d touch, ios 9 and later); the item is an id since the sdk of the armv7 slice has no such class */
+- (void)application:(UIApplication *)application performActionForShortcutItem:(id)shortcutItem completionHandler:(void (^)(BOOL succeeded))completionHandler {
+    (void)application;
+    NSDictionary *info = ExteriaQuickActionChatInfo(shortcutItem);
+    BOOL signedIn = [ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)];
+    if (info && signedIn) [_notifier openChatWithInfo:info];
+    completionHandler(info && signedIn);
+}
 
 /* a tap on a notification while the app runs */
 - (void)application:(UIApplication *)application didReceiveLocalNotification:(UILocalNotification *)notification {

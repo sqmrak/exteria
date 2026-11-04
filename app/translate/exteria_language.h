@@ -14,8 +14,8 @@ BOOL ExteriaIsCustomLanguage(NSString *code);
 NSString *ExteriaInstallCustomLanguage(NSString *path, NSUInteger *accepted, NSUInteger *skipped);
 /* forgets a custom language; when it was the one in force, the system language comes back */
 void ExteriaRemoveCustomLanguage(NSString *code);
-/* the English texts as a .strings file the person can translate, copied to a temporary file; nil when the bundle has none */
-NSString *ExteriaCustomLanguageTemplatePath(void);
+/* the texts of a bundled language ("en" or "ru") as a .strings file the person can translate from, copied to a temporary file; nil when the bundle has none */
+NSString *ExteriaCustomLanguageTemplatePath(NSString *language);
 
 /* the lproj codes the app has texts for, in the order the language screen lists them */
 NSArray *ExteriaInterfaceLanguageCodes(void);
