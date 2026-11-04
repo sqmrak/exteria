@@ -1,0 +1,105 @@
+__id__ = "doom"
+__name__ = "Doom"
+__description__ = (
+    "Doom на движке doomgeneric. Кнопка «Играть» на странице настроек плагина открывает игру шторкой, как браузер.\n\n"
+    "Нужен файл **doom1.wad** (shareware подойдёт) в каталоге данных плагина: "
+    "`Documents/Plugins/.data/doom/doom1.wad`. Звука нет."
+)
+__author__ = "exteria"
+__version__ = "1.3"
+__min_version__ = "11.9.0"
+__permissions__ = ["native", "files"]
+
+import os
+
+from android.os import Handler, Looper
+
+from android_utils import log
+from base_plugin import BasePlugin, MenuItemData, MenuItemType
+from file_utils import get_plugin_dir
+from ui.settings import Divider, Header, Text
+
+import exteria_sheet
+
+try:
+    import _doom
+except ImportError:
+    _doom = None
+
+# keys of doomkeys.h
+KEY_RIGHT, KEY_LEFT, KEY_UP, KEY_DOWN = 0xAE, 0xAC, 0xAD, 0xAF
+KEY_USE, KEY_FIRE, KEY_ESCAPE, KEY_ENTER = 0xA2, 0xA3, 27, 13
+KEY_Y, KEY_STRAFE = ord("y"), 0x80 + 0x38
+
+BUTTONS = [
+    {"icon": "up", "key": KEY_UP, "slot": "up"},
+    {"icon": "left", "key": KEY_LEFT, "slot": "left"},
+    {"icon": "right", "key": KEY_RIGHT, "slot": "right"},
+    {"icon": "down", "key": KEY_DOWN, "slot": "down"},
+    {"label": "FIRE", "key": KEY_FIRE, "slot": "a"},
+    {"label": "USE", "key": KEY_USE, "slot": "b"},
+    {"label": "STRAFE", "key": KEY_STRAFE, "slot": "c"},
+    {"label": "ESC", "key": KEY_ESCAPE, "slot": "t1"},
+    {"label": "ENTER", "key": KEY_ENTER, "slot": "t2"},
+    {"label": "Y", "key": KEY_Y, "slot": "t3"},
+]
+
+
+class DoomPlugin(BasePlugin):
+    def on_plugin_load(self):
+        self._sheet = None
+        self._loaded = False
+        self._handler = Handler(Looper.getMainLooper())
+        self.add_menu_item(MenuItemData(menu_type=MenuItemType.MAIN_MENU, text="Doom", on_click=lambda context: self.open()))
+
+    def create_settings(self):
+        return [
+            Header(text="Doom"),
+            Text(text="Играть", subtext="Shareware, 1 эпизод", icon="msg_play", accent=True, on_click=lambda view=None: self.open()),
+            Divider(text="Нужен файл doom1.wad в Documents/Plugins/.data/doom/. Звука нет."),
+        ]
+
+    def on_plugin_unload(self):
+        self._handler.removeCallbacks(self._start)
+        if self._sheet is not None:
+            self._sheet.close()
+
+    def open(self):
+        if self._sheet is not None:
+            return
+        if _doom is None:
+            log("[doom] the engine is not built into this app")
+            return
+        self._sheet = exteria_sheet.present("Doom", "doom", _doom.WIDTH, _doom.HEIGHT, BUTTONS,
+                                            ended="The game ended", on_close=self._on_close, on_end=self._on_end)
+        if self._loaded:
+            self._sheet.ready()
+        else:
+            # the card slides in first: loading the game holds the main thread for a moment
+            self._handler.postDelayed(self._start, 400)
+
+    def _wad_path(self):
+        return os.path.join(get_plugin_dir(), "doom1.wad")
+
+    def _start(self):
+        sheet = self._sheet
+        if sheet is None:
+            return
+        wad = self._wad_path()
+        try:
+            _doom.start(wad, get_plugin_dir())
+        except FileNotFoundError:
+            sheet.fail("Put doom1.wad into\n" + os.path.dirname(wad))
+            return
+        except Exception as e:
+            sheet.fail("Doom did not start: %s" % e)
+            return
+        self._loaded = True
+        sheet.ready()
+
+    def _on_close(self):
+        self._sheet = None
+
+    def _on_end(self):
+        if self._sheet is not None:
+            self._sheet.fail(_doom.error() or "The game ended")

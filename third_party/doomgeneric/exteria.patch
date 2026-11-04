@@ -1,0 +1,30 @@
+--- a/i_system.c
++++ b/i_system.c
+@@ -48,6 +48,9 @@
+ 
+ #include "i_system.h"
+ 
++/* exteria: the host keeps the text of the error, see core/doom/exteria_doom.c */
++void exteria_doom_report(const char *message);
++
+ #include "w_wad.h"
+ #include "z_zone.h"
+ 
+@@ -264,7 +267,7 @@
+ #endif
+ }
+ 
+-#if !defined(_WIN32) && !defined(__MACOSX__) && !defined(__DJGPP__)
++#if 0 /* exteria: the zenity box runs system(), which does not exist on ios */
+ #define ZENITY_BINARY "/usr/bin/zenity"
+ 
+ // returns non-zero if zenity is available
+@@ -456,7 +459,7 @@
+ 
+ #else
+     {
+-        ZenityErrorBox(msgbuf);
++        exteria_doom_report(msgbuf);
+     }
+ #endif
+ 

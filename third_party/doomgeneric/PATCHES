@@ -1,0 +1,12 @@
+doomgeneric, from https://github.com/ozkl/doomgeneric
+commit e257a09527062bfb986b6e5e0780839b6cbd5b71, gpl-2.0 (the doom source is gpl-2.0 or later), see LICENSE
+
+copied: the sources the upstream makefile builds, without the platform file doomgeneric_xlib.c, and all headers.
+the platform side is core/doom/exteria_doom.c.
+
+local change, exteria.patch, i_system.c only: the zenity error box runs system(), which does not exist on ios, so it is
+compiled out and I_Error hands the text to exteria_doom_report. the build passes -Dexit=exteria_doom_exit so that I_Error,
+I_Quit and every other exit leave the game instead of the app; see core/doom/exteria_doom.c.
+
+the build also renames SHA1_Init, SHA1_Update and SHA1_Final of sha1.c (-DSHA1_Init=exteria_doom_SHA1_Init and so on): openssl in the
+same binary exports those names with a different context struct, and the linker would pick one of the two for both.
