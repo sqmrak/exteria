@@ -6,6 +6,7 @@
 #import "exteria_emoji_label.h"
 #import "exteria_name_badge.h"
 #import "exteria_ayu.h"
+#import "exteria_platform.h"
 #import "exteria_plugins.h"
 #import "exteria_chat_item.h"
 #import "exteria_message_cell.h"
@@ -241,12 +242,12 @@ static NSArray *ExteriaPeekOrdered(NSArray *messages) {
     [super layoutSubviews];
     _dim.frame = self.bounds;
     UIEdgeInsets insets = ExteriaSafeInsets(self);
-    CGFloat width = MAX(100, MIN(350, self.bounds.size.width - insets.left - insets.right - 32));
+    CGFloat width = MAX(100, MIN(ExteriaIsPad() ? 520 : 350, self.bounds.size.width - insets.left - insets.right - 32));
     CGFloat available = MAX(100, self.bounds.size.height - insets.top - insets.bottom - 32);
     CGFloat menuHeight = _buttons.count * PEEK_ACTION_HEIGHT;
-    CGFloat cardHeight = MAX(100, MIN(440, available - menuHeight - 12));
+    CGFloat cardHeight = MAX(100, MIN(ExteriaIsPad() ? 620 : 440, available - menuHeight - 12));
     CGFloat top = insets.top + MAX(0, floor((available - cardHeight - menuHeight - 12) / 2)) + 16;
-    _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), top, width, cardHeight);
+    ExteriaPlaceView(_card, CGRectMake(floor((self.bounds.size.width - width) / 2), top, width, cardHeight));
     _header.frame = CGRectMake(0, 0, width, 56); _avatar.frame = CGRectMake(12, 9, 38, 38);
     _title.frame = CGRectMake(60, 0, width - 72, 56);
     _table.frame = CGRectMake(0, 56, width, MAX(0, cardHeight - 56));
@@ -257,7 +258,9 @@ static NSArray *ExteriaPeekOrdered(NSArray *messages) {
         [_table setContentOffset:CGPointMake(0, MAX(0, _table.contentSize.height - _table.bounds.size.height)) animated:NO];
     }
     _status.frame = CGRectMake(16, 56, width - 32, MAX(0, cardHeight - 56));
-    _menu.frame = CGRectMake(CGRectGetMaxX(_card.frame) - MIN(width, 230), CGRectGetMaxY(_card.frame) + 12, MIN(width, 230), menuHeight);
+    /* the card is scaled while it opens and closes, so its frame is not where it rests; the place is worked out from the numbers above */
+    CGRect cardFrame = CGRectMake(floor((self.bounds.size.width - width) / 2), top, width, cardHeight);
+    ExteriaPlaceView(_menu, CGRectMake(CGRectGetMaxX(cardFrame) - MIN(width, 230), CGRectGetMaxY(cardFrame) + 12, MIN(width, 230), menuHeight));
     for (NSUInteger i = 0; i < _buttons.count; ++i) ((UIView *)[_buttons objectAtIndex:i]).frame = CGRectMake(0, i * PEEK_ACTION_HEIGHT, _menu.bounds.size.width, PEEK_ACTION_HEIGHT);
 }
 - (NSInteger)tableView:(UITableView *)table numberOfRowsInSection:(NSInteger)section { (void)table; (void)section; return (NSInteger)_items.count; }
@@ -275,6 +278,9 @@ static NSArray *ExteriaPeekOrdered(NSArray *messages) {
     if (_closing) return;
     _closing = YES; self.userInteractionEnabled = NO;
     void (^handler)(ExteriaChatPeekAction) = [_handler copy];
+    /* the card clips a table of message cells with rounded corners, which is drawn off screen on every frame of the way out; a bitmap of it fades and shrinks smoothly */
+    ExteriaCacheForMotion(_card);
+    ExteriaCacheForMotion(_menu);
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 animations:^{ _dim.alpha = 0; }];
     ExteriaAnimateView(_menu, CGAffineTransformMakeTranslation(0, 10), 0, EXTERIA_MOTION_DISMISS, nil);
     ExteriaAnimateView(_card, CGAffineTransformMakeScale(0.94, 0.94), 0, EXTERIA_MOTION_DISMISS, ^(BOOL finished) {
