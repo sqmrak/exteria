@@ -36,6 +36,9 @@
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
+#import "exteria_custom_emoji_loader.h"
+#import "exteria_plural.h"
+#import "exteria_topic_icon.h"
 
 #define AVATAR 96.0
 #define ACTION_HEIGHT 66.0
@@ -63,6 +66,7 @@
     _picture.circular = YES;
     [self addSubview:_picture];
     _title = [[ExteriaEmojiLabel alloc] init];
+    _title.dropsUndrawable = YES;
     _title.textColor = ExteriaColorTitle();
     _title.font = ExteriaFontSemibold(17);
     [self addSubview:_title];
@@ -117,6 +121,10 @@
     ExteriaGiftGridView *_grid;
     UIView *_head;
     ExteriaAvatarView *_avatar;
+    /* the profile of a forum topic shows the icon of the topic where a group shows its photo, and counts messages where a group counts nothing */
+    UIImageView *_topicIcon;
+    NSInteger _topicMessages;
+    BOOL _topicMessagesKnown;
     ExteriaProfileHeroView *_hero;
     /* the photo opened wide in the head: the frame it was a circle in, the height it grows to, and whether it is open */
     CGRect _heroCircle;
@@ -298,6 +306,7 @@
     [_hero release];
     [_head release];
     [_avatar release];
+    [_topicIcon release];
     [_storyRing release];
     [_storyPeer release];
     [_name release];
@@ -349,7 +358,15 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _avatar.userInteractionEnabled = YES;
     [_avatar addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(avatarTapped)] autorelease]];
     [_head addSubview:_avatar];
+    if ([self isTopic]) {
+        _avatar.hidden = YES;
+        _topicIcon = [[UIImageView alloc] init];
+        _topicIcon.contentMode = UIViewContentModeScaleAspectFit;
+        _topicIcon.image = ExteriaTopicIconImage(_dialog);
+        [_head addSubview:_topicIcon];
+    }
     _name = [[ExteriaEmojiLabel alloc] init];
+    _name.dropsUndrawable = YES;
     _name.textColor = ExteriaColorTitle();
     _name.textAlignment = ExteriaTextAlignmentCenter;
     _name.text = _dialog.title;
@@ -420,10 +437,43 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     [super viewDidLoad];
     [self refreshMenu];
     [self load];
+    [self loadTopic];
     [self loadStories];
 }
 
+/* a topic of a forum: its dialog has the forum flag cleared and a topic id, and the comments of a post carry the discussion flag on top of that */
+- (BOOL)isTopic {
+    return _dialog.topicId > 0 && !_dialog.discussion && !_dialog.saved;
+}
+
+- (void)loadTopic {
+    if (![self isTopic]) return;
+    ExteriaWeakReference *me = _weak;
+    if (_dialog.topicIconEmoji) {
+        [ExteriaCustomEmojiLoader loadDocuments:[NSArray arrayWithObject:[NSNumber numberWithLongLong:_dialog.topicIconEmoji]] session:self.session media:self.media
+                                      documents:nil picture:^{
+            ExteriaChannelProfileController *profile = me.target;
+            if (profile && profile->_topicIcon) profile->_topicIcon.image = ExteriaTopicIconImage(profile->_dialog);
+        }];
+    }
+    [self.session loadMessageCountOfDialog:_dialog completion:^(NSInteger count, NSString *errorName) {
+        ExteriaChannelProfileController *profile = me.target;
+        if (!profile) return;
+        if (errorName) {
+            NSLog(@"exteria: the messages of topic %d were not counted: %@", (int)profile->_dialog.topicId, errorName);
+            return;
+        }
+        profile->_topicMessages = count;
+        profile->_topicMessagesKnown = YES;
+        profile->_status.text = [profile kindText];
+    }];
+}
+
 - (NSString *)kindText {
+    if ([self isTopic]) {
+        if (!_topicMessagesKnown) return @"";
+        return [NSString stringWithFormat:NSLocalizedString([@"topic.messages." stringByAppendingString:ExteriaPluralForm(_topicMessages)], nil), (long)_topicMessages];
+    }
     if (_full.megagroup || _dialog.kind == EXTERIA_DIALOG_GROUP) return NSLocalizedString(@"channel.kind.group", nil);
     return NSLocalizedString(_full.username.length ? @"channel.kind.public" : @"channel.kind.private", nil);
 }
@@ -547,6 +597,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
 /* a pull of the list down past its top takes the wide photo away */
 - (void)giftGrid:(ExteriaGiftGridView *)grid didScrollToOffset:(CGFloat)offset {
     (void)grid;
+    [_groupTabs hostDidScroll];
     [self heroFollowsPull:-(offset + _grid.topInset)];
 }
 
@@ -560,6 +611,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     /* the photo reaches up under the bar and the status bar: its frame begins above the head by the inset of the list */
     if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, -_grid.topInset, width, _grid.topInset + wideHeight) : _heroCircle;
     _avatar.frame = CGRectMake((width - AVATAR) / 2, y, AVATAR, AVATAR);
+    _topicIcon.frame = _avatar.frame;
     _storyRing.frame = CGRectInset(_avatar.frame, -[ExteriaStoryRing outset], -[ExteriaStoryRing outset]);
     y += AVATAR + 12;
     _name.font = ExteriaFontBold(22);

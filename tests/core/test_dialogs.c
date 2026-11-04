@@ -796,6 +796,54 @@ static void test_forum_topics(void) {
     CHECK_EQ_INT(exteria_topics_parse(a, NULL, SELF, 1000, rows, 4, &count), EXTERIA_E_ARG);
 }
 
+static void test_forum_summary(void) {
+    exteria_dialog_row rows[3];
+    exteria_forum_summary summary;
+    memset(rows, 0, sizeof(rows));
+    rows[0].topic_id = 1; rows[0].top_message = 40; rows[0].unread_count = 0;
+    snprintf(rows[0].title, sizeof(rows[0].title), "General");
+    rows[1].topic_id = 5; rows[1].top_message = 90; rows[1].unread_count = 4; rows[1].mentions = 1; rows[1].topic_icon_emoji = 777; rows[1].topic_icon_color = 0x6FB9F0;
+    snprintf(rows[1].title, sizeof(rows[1].title), "bugs");
+    rows[2].topic_id = 8; rows[2].top_message = 0; rows[2].unread_count = 3; rows[2].reactions = 2;
+    snprintf(rows[2].title, sizeof(rows[2].title), "empty");
+    /* the topic that holds the last message of the forum is named, and the counts are those of every topic */
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 3, 90, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.topic_id, 5);
+    CHECK(summary.topic_icon_emoji == 777);
+    CHECK_EQ_INT(summary.topic_icon_color, 0x6FB9F0);
+    CHECK(strcmp(summary.topic_title, "bugs") == 0);
+    CHECK_EQ_INT(summary.unread_count, 7);
+    CHECK_EQ_INT(summary.mentions, 1);
+    CHECK_EQ_INT(summary.reactions, 2);
+    /* the second is the newest of the others; a topic without a message is never named */
+    CHECK_EQ_INT(summary.second_topic_id, 1);
+    CHECK(strcmp(summary.second_title, "General") == 0);
+    /* a last message that no topic holds falls back to the newest topic */
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 3, 500, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.topic_id, 5);
+    /* an exact match stands over a newer topic: the list row says where its own preview is from */
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 3, 40, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.topic_id, 1);
+    /* all read: the forum shows no count */
+    rows[1].unread_count = rows[2].unread_count = 0;
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 3, 90, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.unread_count, 0);
+    /* no topics: nothing is named and the counts are zero */
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 0, 90, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.topic_id, 0);
+    CHECK_EQ_INT(summary.second_topic_id, 0);
+    /* one topic with messages has no second */
+    CHECK_EQ_INT(exteria_forum_summarize(rows + 1, 2, 90, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.topic_id, 5);
+    CHECK_EQ_INT(summary.second_topic_id, 0);
+    CHECK_EQ_INT(exteria_forum_summarize(NULL, 1, 90, &summary), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 3, 90, NULL), EXTERIA_E_ARG);
+    /* counts add up without overflowing */
+    rows[0].unread_count = INT32_MAX; rows[1].unread_count = 5;
+    CHECK_EQ_INT(exteria_forum_summarize(rows, 3, 90, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.unread_count, INT32_MAX);
+}
+
 static void test_forum_topic_request(void) {
     exteria_tl_value *request = NULL;
     exteria_writer w;
@@ -900,6 +948,7 @@ static void test_community_chats(void) {
     set_i64(joined, "access_hash", 70);
     set_str(joined, "title", "Survival");
     set_flag(joined, "megagroup");
+    set_flag(joined, "join_to_send");
     viewed = obj("channel");
     set_i64(viewed, "id", 8);
     set_i64(viewed, "access_hash", 80);
@@ -933,6 +982,9 @@ static void test_community_chats(void) {
     CHECK_EQ_INT(rows[0].peer_id, 7);
     CHECK_EQ_INT(rows[0].kind, EXTERIA_DIALOG_GROUP);
     CHECK_EQ_INT(rows[0].left, 0);
+    /* the flag of a group that asks its writers to join, which the comments under a post need to know */
+    CHECK_EQ_INT(rows[0].join_to_send, 1);
+    CHECK_EQ_INT(rows[1].join_to_send, 0);
     CHECK_EQ_INT(rows[0].peer_hash, 70);
     CHECK_EQ_INT(rows[1].peer_id, 8);
     CHECK_EQ_INT(rows[1].kind, EXTERIA_DIALOG_CHANNEL);
@@ -1222,6 +1274,7 @@ int main(void) {
     test_folder_and_hash();
     test_forum_topics();
     test_forum_topic_request();
+    test_forum_summary();
     test_community_row();
     test_community_chats();
     test_community_collapse_request();

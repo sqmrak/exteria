@@ -30,6 +30,7 @@
 @synthesize community = _community;
 @synthesize communityCollapsed = _communityCollapsed;
 @synthesize left = _left;
+@synthesize joinToSend = _joinToSend;
 @synthesize topicId = _topicId;
 @synthesize discussion = _discussion;
 @synthesize discussionChannel = _discussionChannel;
@@ -62,6 +63,15 @@
 @synthesize unreadCount = _unreadCount;
 @synthesize mentions = _mentions;
 @synthesize reactions = _reactions;
+@synthesize forumSummarized = _forumSummarized;
+@synthesize forumTopicId = _forumTopicId;
+@synthesize forumTopicEmoji = _forumTopicEmoji;
+@synthesize forumTopicColor = _forumTopicColor;
+@synthesize forumTopicTitle = _forumTopicTitle;
+@synthesize forumSecondEmoji = _forumSecondEmoji;
+@synthesize forumSecondColor = _forumSecondColor;
+@synthesize forumSecondTitle = _forumSecondTitle;
+@synthesize communityChats = _communityChats;
 @synthesize participantsCount = _participantsCount;
 @synthesize title = _title;
 @synthesize preview = _preview;
@@ -116,6 +126,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _linkedCommunityHash = row->linked_community_hash;
     _linkedCommunityTitle = [[NSString stringWithUTF8String:row->linked_community_title] copy];
     _left = row->left;
+    _joinToSend = row->join_to_send;
     _topicId = row->topic_id;
     _topicIconEmoji = row->topic_icon_emoji;
     _topicIconColor = row->topic_icon_color;
@@ -143,6 +154,8 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _unreadCount = row->unread_count;
     _mentions = row->mentions;
     _reactions = row->reactions;
+    /* the server counts a forum's unread messages from the read mark of the General topic, so after every topic was read the row still claims unread messages */
+    if (row->forum) _unreadCount = _mentions = _reactions = 0;
     _participantsCount = row->participants_count;
     if (row->folder) _title = [NSLocalizedString(@"chats.archive", nil) copy];
     else if (row->saved) _title = [NSLocalizedString(@"chats.saved", nil) copy];
@@ -162,7 +175,11 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     /* our own last message stands without a name before it; the name of another sender is kept in a group */
     if (row->preview != EXTERIA_PREVIEW_NONE && row->preview != EXTERIA_PREVIEW_SERVICE && row->sender[0] &&
         !(row->sender_is_self && row->kind != EXTERIA_DIALOG_CHANNEL && !row->saved)) {
-        body = [NSString stringWithFormat:@"%@: %@", ExteriaUtf8(row->sender), body];
+        NSString *sender = ExteriaUtf8(row->sender);
+        /* the capsule of a forum row is narrow, so it names the sender by the first name */
+        NSRange space = [sender rangeOfString:@" "];
+        if (row->forum && space.location != NSNotFound && space.location > 0) sender = [sender substringToIndex:space.location];
+        body = [NSString stringWithFormat:@"%@: %@", sender, body];
         _showsSender = YES;
         _senderId = row->sender_id;
         _senderInitials = [ExteriaInitialsOfName(ExteriaUtf8(row->sender)) copy];
@@ -267,7 +284,72 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     return _presence == EXTERIA_PRESENCE_DELETED;
 }
 
+- (void)applyForumSummary:(const exteria_forum_summary *)summary {
+    if (!_forum || !summary) return;
+    _forumSummarized = YES;
+    _forumTopicId = summary->topic_id;
+    _forumTopicEmoji = summary->topic_icon_emoji;
+    _forumTopicColor = summary->topic_icon_color;
+    [_forumTopicTitle release];
+    _forumTopicTitle = summary->topic_id > 0 ? [ExteriaFilteredText(ExteriaUtf8(summary->topic_title)) copy] : nil;
+    _forumSecondId = summary->second_topic_id;
+    _forumSecondEmoji = summary->second_icon_emoji;
+    _forumSecondColor = summary->second_icon_color;
+    [_forumSecondTitle release];
+    _forumSecondTitle = summary->second_topic_id > 0 ? [ExteriaFilteredText(ExteriaUtf8(summary->second_title)) copy] : nil;
+    _unreadCount = summary->unread_count;
+    _mentions = summary->mentions;
+    _reactions = summary->reactions;
+}
+
+- (void)applyCommunityChats:(NSArray *)chats {
+    if (!_community) return;
+    [_communityChats release];
+    _communityChats = chats.count ? [chats copy] : nil;
+    [_forumTopicTitle release];
+    [_forumSecondTitle release];
+    _forumTopicTitle = nil;
+    _forumSecondTitle = nil;
+    if (!_communityChats) return;
+    ExteriaDialog *newest = [_communityChats objectAtIndex:0];
+    _forumTopicTitle = [newest.title copy];
+    if (_communityChats.count > 1) _forumSecondTitle = [[[_communityChats objectAtIndex:1] title] copy];
+    /* the line of the row is the newest message of the chats, with the time it came */
+    _date = newest.date;
+    _topMessage = newest.topMessage;
+    _outgoing = newest.outgoing;
+    _forwarded = newest.forwarded;
+    _read = newest.read;
+    _showsSender = newest.showsSender;
+    _senderId = newest.senderId;
+    [_senderInitials release];
+    _senderInitials = [newest.senderInitials copy];
+    [_senderPhoto release];
+    _senderPhoto = [newest.senderPhoto retain];
+    [_preview release];
+    _preview = [newest.preview copy];
+    [_previewEntities release];
+    _previewEntities = [newest.previewEntities copy];
+    [_previewFile release];
+    _previewFile = [newest.previewFile retain];
+    /* a muted chat counts in grey and does not make the row loud, so the count is of the chats that are not muted, and a row of muted chats only counts them all in grey */
+    NSInteger loud = 0, all = 0, mentions = 0, reactions = 0;
+    for (ExteriaDialog *chat in _communityChats) {
+        all += chat.unreadCount;
+        if (!chat.muted) loud += chat.unreadCount;
+        mentions += chat.mentions;
+        reactions += chat.reactions;
+    }
+    _muted = loud == 0;
+    _unreadCount = loud ? loud : all;
+    _mentions = mentions;
+    _reactions = reactions;
+}
+
 - (void)dealloc {
+    [_communityChats release];
+    [_forumTopicTitle release];
+    [_forumSecondTitle release];
     [_discussionMessages release];
     [_discussionPeople release];
     [_linkedCommunityTitle release];
@@ -301,4 +383,37 @@ NSArray *ExteriaDialogsReplacingArchive(NSArray *dialogs, ExteriaDialog *summary
         if (dialog.folder && dialog.folderId == summary.folderId) [updated replaceObjectAtIndex:i withObject:summary];
     }
     return updated;
+}
+
+NSArray *ExteriaDialogsFoldingCommunities(NSArray *dialogs) {
+    NSMutableDictionary *folded = [NSMutableDictionary dictionary];
+    for (ExteriaDialog *dialog in dialogs) {
+        if (dialog.community && dialog.communityCollapsed) [folded setObject:[NSMutableArray array] forKey:[NSNumber numberWithLongLong:dialog.peerId]];
+    }
+    if (!folded.count) return dialogs;
+    NSMutableArray *rest = [NSMutableArray arrayWithCapacity:dialogs.count];
+    for (ExteriaDialog *dialog in dialogs) {
+        NSMutableArray *chats = dialog.folder || !dialog.linkedCommunityId ? nil : [folded objectForKey:[NSNumber numberWithLongLong:dialog.linkedCommunityId]];
+        /* the chats come newest first, as the list gives them, and stay under the community */
+        if (chats) [chats addObject:dialog];
+        else [rest addObject:dialog];
+    }
+    NSMutableArray *moved = [NSMutableArray array];
+    for (ExteriaDialog *dialog in rest) {
+        if (!dialog.community) continue;
+        NSArray *chats = [folded objectForKey:[NSNumber numberWithLongLong:dialog.peerId]];
+        [dialog applyCommunityChats:chats];
+        /* a folded community takes the time of its newest chat, so its row moves to where that time belongs; a pinned one keeps the place the server gave it */
+        if (chats.count && !dialog.pinned) [moved addObject:dialog];
+    }
+    for (ExteriaDialog *community in moved) {
+        [rest removeObject:community];
+        NSUInteger at = rest.count;
+        for (NSUInteger i = 0; i < rest.count; ++i) {
+            ExteriaDialog *other = [rest objectAtIndex:i];
+            if (!other.folder && !other.pinned && other.date < community.date) { at = i; break; }
+        }
+        [rest insertObject:community atIndex:at];
+    }
+    return rest;
 }

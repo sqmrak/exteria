@@ -301,6 +301,7 @@ typedef enum {
     }
     ExteriaPerson *person = member.person;
     cell.developer = ExteriaPersonIsDeveloper(person);
+    cell.premium = person.premium;
     [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:subtitleColor
                    trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:self.avatars];
     cell.avatarDeleted = person.deleted;
