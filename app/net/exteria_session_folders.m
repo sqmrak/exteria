@@ -66,6 +66,71 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     return folders;
 }
 
+#pragma mark kept folders
+
+/* a file per folder: a header, then the rows of the newest chats as the parser made them. the rows hold no pointers, so a file of another build is told by the size of a row */
+#define FOLDER_CACHE_MAGIC 0x45464443u
+#define FOLDER_CACHE_VERSION 1u
+#define FOLDER_CACHE_ROWS_MAX 300u
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t row_size;
+    uint32_t count;
+    uint64_t signature;
+    int64_t saved;
+} folder_cache_header;
+
+/* what decides who is in the folder: a change of any of it makes the kept chats wrong */
+static uint64_t folder_signature(ExteriaChatFolder *folder) {
+    uint64_t hash = 1469598103934665603ull;
+    uint32_t head[2] = {(uint32_t)folder.folderId, folder.flags};
+    NSData *parts[3] = {folder.included, folder.excluded, folder.pinned};
+    const uint8_t *bytes = (const uint8_t *)head;
+    for (size_t i = 0; i < sizeof(head); ++i) hash = (hash ^ bytes[i]) * 1099511628211ull;
+    for (int k = 0; k < 3; ++k) {
+        uint64_t length = parts[k].length;
+        const uint8_t *size = (const uint8_t *)&length;
+        for (size_t i = 0; i < sizeof(length); ++i) hash = (hash ^ size[i]) * 1099511628211ull;
+        const uint8_t *data = parts[k].bytes;
+        for (NSUInteger i = 0; i < parts[k].length; ++i) hash = (hash ^ data[i]) * 1099511628211ull;
+    }
+    return hash;
+}
+
+static NSString *folder_cache_path(ExteriaSession *session, int32_t folderId) {
+    return [session.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"folder-%d.dialogs", (int)folderId]];
+}
+
+static BOOL folder_cache_header_valid(const folder_cache_header *header, ExteriaChatFolder *folder) {
+    return header->magic == FOLDER_CACHE_MAGIC && header->version == FOLDER_CACHE_VERSION && header->row_size == sizeof(exteria_dialog_row) &&
+           header->count <= FOLDER_CACHE_ROWS_MAX && header->signature == folder_signature(folder);
+}
+
+static void folder_cache_store(ExteriaSession *session, ExteriaChatFolder *folder, NSArray *rows) {
+    NSString *path = folder_cache_path(session, folder.folderId);
+    uint64_t signature = folder_signature(folder);
+    NSMutableData *data = [NSMutableData dataWithLength:sizeof(folder_cache_header)];
+    NSUInteger count = MIN(rows.count, (NSUInteger)FOLDER_CACHE_ROWS_MAX);
+    for (NSUInteger i = 0; i < count; ++i) [data appendData:[rows objectAtIndex:i]];
+    folder_cache_header header = {FOLDER_CACHE_MAGIC, FOLDER_CACHE_VERSION, (uint32_t)sizeof(exteria_dialog_row), (uint32_t)count, signature,
+                                  (int64_t)[[NSDate date] timeIntervalSince1970]};
+    [data replaceBytesInRange:NSMakeRange(0, sizeof(header)) withBytes:&header];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        @autoreleasepool {
+            if (![data writeToFile:path atomically:YES]) {
+                NSLog(@"exteria: the chats of folder %d were not kept", (int)folder.folderId);
+                return;
+            }
+            NSError *error = nil;
+            if (![[NSFileManager defaultManager] setAttributes:[NSDictionary dictionaryWithObject:[NSNumber numberWithUnsignedInt:0600] forKey:NSFilePosixPermissions]
+                                                  ofItemAtPath:path error:&error])
+                NSLog(@"exteria: permissions of the kept chats of folder %d were not set: %@", (int)folder.folderId, error);
+        }
+    });
+}
+
 /* custom folders need the older pages too, since a category can have no chats in the newest hundred */
 @interface ExteriaFolderDialogsLoad : NSObject <ExteriaFolderDialogRequest> {
     ExteriaSession *_session;
@@ -73,6 +138,8 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     ExteriaListCompletion _completion;
     void (^_progress)(NSArray *);
     NSMutableDictionary *_dialogs;
+    /* the parsed row of each chat in _dialogs, for the copy that is kept on disk */
+    NSMutableDictionary *_rows;
     exteria_peer_ref _offset;
     int32_t _offsetId;
     int32_t _offsetDate;
@@ -96,6 +163,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
         _completion = [completion copy];
         _progress = [progress copy];
         _dialogs = [[NSMutableDictionary alloc] init];
+        _rows = [[NSMutableDictionary alloc] init];
         NSMutableData *extra = [NSMutableData dataWithData:folder.included];
         [extra appendData:folder.pinned];
         _extraPeers = [extra copy];
@@ -108,6 +176,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
     [_completion release];
     [_progress release];
     [_dialogs release];
+    [_rows release];
     [_extraPeers release];
     [super dealloc];
 }
@@ -142,8 +211,17 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
         _finished = YES;
     }
     NSArray *result = nil;
-    if (!errorName)
+    if (!errorName) {
         result = [self sortedDialogs];
+        /* only a scan that reached the end is kept, so a half list never stands in for the folder */
+        NSMutableArray *kept = [NSMutableArray arrayWithCapacity:MIN(result.count, (NSUInteger)FOLDER_CACHE_ROWS_MAX)];
+        for (ExteriaDialog *dialog in result) {
+            NSData *row = [_rows objectForKey:[NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId]];
+            if (row) [kept addObject:row];
+            if (kept.count == FOLDER_CACHE_ROWS_MAX) break;
+        }
+        folder_cache_store(_session, _filter, kept);
+    }
     ExteriaListCompletion done = [_completion copy];
     [_completion release];
     _completion = nil;
@@ -203,11 +281,14 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                 [self finish:@"MALFORMED"];
                 return;
             }
-            [_session noteDraftsOfDialogsAnswer:result->value complete:YES];
+            [_session noteDraftsOfDialogsAnswer:result->value complete:NO];
             for (size_t i = 0; i < found; ++i) {
                 ExteriaDialog *dialog = [_filter dialogWithRow:&rows[i]];
-                if ([_filter containsDialog:dialog])
-                    [_dialogs setObject:dialog forKey:[NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId]];
+                if ([_filter containsDialog:dialog]) {
+                    NSString *key = [NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId];
+                    [_dialogs setObject:dialog forKey:key];
+                    [_rows setObject:[NSData dataWithBytes:&rows[i] length:sizeof(rows[i])] forKey:key];
+                }
             }
             free(rows);
             [self reportProgress];
@@ -287,7 +368,7 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                 [self finish:@"MALFORMED"];
                 return;
             }
-            [_session noteDraftsOfDialogsAnswer:result->value complete:YES];
+            [_session noteDraftsOfDialogsAnswer:result->value complete:NO];
             exteria_dialog_row last;
             memset(&last, 0, sizeof(last));
             for (size_t i = 0; i < count; ++i) {
@@ -296,8 +377,11 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                 if (rows[i].top_message > 0)
                     last = rows[i];
                 ExteriaDialog *dialog = [_filter dialogWithRow:&rows[i]];
-                if ([_filter containsDialog:dialog])
-                    [_dialogs setObject:dialog forKey:[NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId]];
+                if ([_filter containsDialog:dialog]) {
+                    NSString *key = [NSString stringWithFormat:@"%d/%lld", dialog.peerKind, dialog.peerId];
+                    [_dialogs setObject:dialog forKey:key];
+                    [_rows setObject:[NSData dataWithBytes:&rows[i] length:sizeof(rows[i])] forKey:key];
+                }
             }
             free(rows);
             [self reportProgress];
@@ -424,6 +508,18 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                 if (!failure && generation == _chatFolderGeneration) {
                     [_chatFolders release];
                     _chatFolders = [delivered retain];
+                    /* the kept chats of a folder that is gone are not wanted any more */
+                    NSMutableSet *present = [NSMutableSet set];
+                    for (ExteriaChatFolder *folder in delivered) [present addObject:[NSString stringWithFormat:@"folder-%d.dialogs", (int)folder.folderId]];
+                    NSString *directory = self.directory;
+                    [self post:^{
+                        NSFileManager *files = [NSFileManager defaultManager];
+                        for (NSString *name in [files contentsOfDirectoryAtPath:directory error:NULL]) {
+                            if (![name hasPrefix:@"folder-"] || ![name hasSuffix:@".dialogs"] || [present containsObject:name]) continue;
+                            NSError *removeError = nil;
+                            if (![files removeItemAtPath:[directory stringByAppendingPathComponent:name] error:&removeError]) NSLog(@"exteria: kept folder %@ was not removed: %@", name, removeError);
+                        }
+                    }];
                     if (cacheData)
                         [self post:^{
                             if (![cacheData writeToFile:path atomically:YES])
@@ -567,6 +663,56 @@ static NSArray *folders_read(const exteria_tl_value *answer) {
                     }];
             }];
         }];
+}
+
+- (NSTimeInterval)keptAgeOfChatFolder:(ExteriaChatFolder *)folder {
+    if (!folder.folderId) return -1;
+    NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:folder_cache_path(self, folder.folderId)];
+    NSData *head = [file readDataOfLength:sizeof(folder_cache_header)];
+    [file closeFile];
+    if (head.length != sizeof(folder_cache_header)) return -1;
+    folder_cache_header header;
+    memcpy(&header, head.bytes, sizeof(header));
+    if (!folder_cache_header_valid(&header, folder)) return -1;
+    NSTimeInterval age = [[NSDate date] timeIntervalSince1970] - (NSTimeInterval)header.saved;
+    return age < 0 ? 0 : age;
+}
+
+- (void)loadKeptDialogsForChatFolder:(ExteriaChatFolder *)folder completion:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    ExteriaChatFolder *rules = [folder copy];
+    NSString *path = folder_cache_path(self, folder.folderId);
+    [self post:^{
+        NSArray *dialogs = nil;
+        NSData *data = rules.folderId ? [NSData dataWithContentsOfFile:path] : nil;
+        folder_cache_header header;
+        if (data.length >= sizeof(header)) {
+            memcpy(&header, data.bytes, sizeof(header));
+            if (folder_cache_header_valid(&header, rules) && data.length == sizeof(header) + (size_t)header.count * header.row_size) {
+                NSMutableArray *list = [NSMutableArray arrayWithCapacity:header.count];
+                for (uint32_t i = 0; i < header.count; ++i) {
+                    exteria_dialog_row row;
+                    memcpy(&row, (const uint8_t *)data.bytes + sizeof(header) + (size_t)i * header.row_size, sizeof(row));
+                    ExteriaDialog *dialog = [rules dialogWithRow:&row];
+                    if ([rules containsDialog:dialog]) [list addObject:dialog];
+                }
+                /* the same order as a scan gives */
+                dialogs = [list sortedArrayUsingComparator:^NSComparisonResult(ExteriaDialog *a, ExteriaDialog *b) {
+                    NSUInteger ai = [rules pinIndexForDialog:a], bi = [rules pinIndexForDialog:b];
+                    if (ai != bi) return ai < bi ? NSOrderedAscending : NSOrderedDescending;
+                    if (a.date != b.date) return a.date > b.date ? NSOrderedAscending : NSOrderedDescending;
+                    if (a.peerKind != b.peerKind) return a.peerKind < b.peerKind ? NSOrderedAscending : NSOrderedDescending;
+                    return a.peerId < b.peerId ? NSOrderedAscending : (a.peerId > b.peerId ? NSOrderedDescending : NSOrderedSame);
+                }];
+            } else if (data.length) {
+                NSLog(@"exteria: the kept chats of folder %d are of another build or other rules", (int)rules.folderId);
+            }
+        }
+        /* nothing kept is not an error, the screen waits for the scan */
+        [self finishLoad:dialogs error:nil completion:done];
+        [done release];
+    }];
+    [rules release];
 }
 
 - (id<ExteriaFolderDialogRequest>)loadDialogsForChatFolder:(ExteriaChatFolder *)folder completion:(ExteriaListCompletion)completion {
