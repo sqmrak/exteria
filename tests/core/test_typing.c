@@ -112,12 +112,31 @@ static void anything_else_is_ignored(void) {
     CHECK_EQ_INT(t.action, EXTERIA_TYPING_CANCEL);
 }
 
+static void sends_typing(void) {
+    exteria_peer_ref peer = {3, 500, 7, 0, 300};
+    exteria_tl_value *request = NULL;
+    int32_t top = 0;
+    CHECK_EQ_INT(exteria_typing_request(&arena, &peer, 0, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(request, EXTERIA_TL_ID_messages_setTyping));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "action"), EXTERIA_TL_ID_sendMessageTypingAction));
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &top), EXTERIA_OK);
+    CHECK_EQ_INT(top, 300);
+    peer.topic_id = 1;
+    CHECK_EQ_INT(exteria_typing_request(&arena, &peer, 1, &request), EXTERIA_OK);
+    CHECK(!exteria_tl_has(request, "top_msg_id"));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "action"), EXTERIA_TL_ID_sendMessageCancelAction));
+    peer.topic_id = -1;
+    CHECK_EQ_INT(exteria_typing_request(&arena, &peer, 0, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+}
+
 int main(void) {
     exteria_arena_init(&arena, 1u << 20);
     person_in_a_chat();
     member_of_a_group();
     member_of_a_supergroup_topic();
     anything_else_is_ignored();
+    sends_typing();
     exteria_arena_free(&arena);
     return test_finish("test_typing");
 }
