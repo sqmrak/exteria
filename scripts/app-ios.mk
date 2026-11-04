@@ -5,6 +5,9 @@ EXTERIA_OPENSSL_V7 ?= $(error set EXTERIA_OPENSSL_V7 to an armv7 openssl prefix)
 EXTERIA_OPENSSL_V64 ?= $(error set EXTERIA_OPENSSL_V64 to an arm64 openssl prefix)
 EXTERIA_VIDEO_V7 ?= $(error set EXTERIA_VIDEO_V7 to the armv7 ffmpeg and libvpx prefix)
 EXTERIA_VIDEO_V64 ?= $(error set EXTERIA_VIDEO_V64 to the arm64 ffmpeg and libvpx prefix)
+EXTERIA_PYTHON_V7 ?= $(error set EXTERIA_PYTHON_V7 to the armv7 cpython prefix of scripts/build_python.sh)
+EXTERIA_PYTHON_V64 ?= $(error set EXTERIA_PYTHON_V64 to the arm64 cpython prefix of scripts/build_python.sh)
+EXTERIA_PYTHON_BUNDLE ?= $(error set EXTERIA_PYTHON_BUNDLE to the bundle directory of scripts/build_python.sh)
 EXTERIA_CRT_V7 ?=
 EXTERIA_LDID ?= $(EXTERIA_TC)/ldid
 EXTERIA_IOS_BUILD ?= build/ios
@@ -14,12 +17,16 @@ APP := $(EXTERIA_IOS_BUILD)/$(APP_NAME).app
 
 APP_M := $(sort $(wildcard app/*/*.m app/*/*/*.m))
 APP_C := $(sort $(wildcard core/*/*.c core/tl/generated/*.c))
+PY_LIB_V7 := $(EXTERIA_PYTHON_V7)/lib/libpython3.11.a
+PY_LIB_V64 := $(EXTERIA_PYTHON_V64)/lib/libpython3.11.a
+# the bundle is copied whole, so a changed file in it rebuilds the app
+PY_BUNDLE := $(shell find $(EXTERIA_PYTHON_BUNDLE)/python -type f 2>/dev/null)
 CREDENTIALS := $(EXTERIA_IOS_BUILD)/generated/exteria_credentials.h
 WEBP_C := $(sort $(wildcard third_party/libwebp/src/*/*.c))
 OPUS_C := $(addprefix third_party/opus/,$(shell cat third_party/opus/SOURCES))
 OGG_C := $(sort $(wildcard third_party/ogg/src/*.c))
-# lua runs the plugins of core/plugins, vendored with one local patch, see third_party/lua/PATCHES
-LUA_C := $(addprefix third_party/lua/src/,$(shell cat third_party/lua/SOURCES))
+# doom for the plugins: doomgeneric as vendored, see third_party/doomgeneric/PATCHES, with the platform layer in core/doom
+DOOM_C := $(sort $(wildcard third_party/doomgeneric/*.c))
 # the QR reader of the devices screen: the listed files of zbar are its QR-only build
 ZBAR_C := $(addprefix third_party/zbar/zbar/,config.c error.c symbol.c image.c refcnt.c img_scanner.c scanner.c decoder.c misc.c decoder/qr_finder.c \
   qrcode/qrdec.c qrcode/qrdectxt.c qrcode/rs.c qrcode/isaac.c qrcode/bch15_5.c qrcode/binarize.c qrcode/util.c)
@@ -28,14 +35,13 @@ TGV_CPP := $(sort $(wildcard third_party/libtgvoip/*.cpp third_party/libtgvoip/a
   third_party/libtgvoip/os/darwin/*.cpp))
 RL_CPP := $(sort $(wildcard third_party/rlottie/src/*/*.cpp third_party/rlottie/src/*/*/*.cpp))
 RES := $(sort $(wildcard resources/icons/*.png resources/launch/*.png resources/animations/*.tgs \
-  resources/phone/*.png resources/phone/*.txt resources/popup/*.jpg resources/fonts/*.ttf resources/fonts/*.otf resources/fonts/*.txt \
+  resources/phone/*.png resources/phone/*.txt resources/popup/*.jpg resources/popup/*.png resources/fonts/*.ttf resources/fonts/*.otf resources/fonts/*.txt \
   resources/chat/*.jpg resources/chat/*.png resources/emoji/*.pack resources/emoji/*.txt resources/licenses/*.txt resources/shiro/*.pem resources/maps/*.pem resources/web/*.pem resources/sounds/*.caf resources/sounds/*.mp3))
 STRINGS := $(sort $(wildcard resources/localization/*.lproj/Localizable.strings))
 
 APP_INC := $(addprefix -I,$(sort $(dir $(APP_M)))) $(addprefix -I,$(wildcard core/*)) -Icore/tl/generated \
            -I$(dir $(CREDENTIALS)) -Ithird_party/rlottie/inc -Ithird_party/libwebp \
-           -Ithird_party/opus/include -Ithird_party/ogg/include -Ithird_party/libtgvoip -Ithird_party/zbar/include \
-           -isystem third_party/lua/src
+           -Ithird_party/opus/include -Ithird_party/ogg/include -Ithird_party/libtgvoip -Ithird_party/zbar/include
 RL_INC := -Ithird_party/rlottie/config -Ithird_party/rlottie/inc -Ithird_party/rlottie/src/vector \
           -Ithird_party/rlottie/src/vector/freetype -Ithird_party/rlottie/src/vector/pixman \
           -Ithird_party/rlottie/src/lottie -Ithird_party/rlottie/src/binding/c
@@ -54,8 +60,9 @@ WEBP_FLAGS := -std=c99 -O2 -g -w -Ithird_party/libwebp -MMD -MP
 # zbar is vendored as upstream ships it, so it builds without the project's strict warnings; SENKO_ZBAR_IOS keeps its timer off the POSIX timers ios lacks
 ZBAR_FLAGS := -std=gnu99 -O2 -g -w -DSENKO_ZBAR_IOS -Ithird_party/zbar/include -Ithird_party/zbar/zbar -Ithird_party/zbar/zbar/decoder -Ithird_party/zbar/zbar/qrcode -MMD -MP
 
-# lua is vendored as upstream ships it, so it builds without the project's strict warnings
-LUA_FLAGS := -std=c99 -O2 -g -w -Ithird_party/lua/src -MMD -MP
+# doomgeneric is vendored as upstream ships it. its sha1 gets other names, since openssl in the same binary exports SHA1_Init and the others with a context of its own
+# layout; its exits leave the game (core/doom/exteria_doom.c), and the screen is 320x200, the size of the game itself
+DOOM_FLAGS := -std=gnu99 -O2 -g -w -DNORMALUNIX -D_DEFAULT_SOURCE -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -Dexit=exteria_doom_exit -DSHA1_Init=exteria_doom_SHA1_Init -DSHA1_Update=exteria_doom_SHA1_Update -DSHA1_Final=exteria_doom_SHA1_Final -include core/doom/exteria_doom_exit.h -MMD -MP
 
 # opus is the fixed point build without asm, so both slices run the same portable code; ogg needs no flags
 OPUS_FLAGS := -std=c99 -O2 -g -w -DOPUS_BUILD -DFIXED_POINT -DDISABLE_FLOAT_API -DVAR_ARRAYS -DPACKAGE_VERSION=\"1.5.2\" \
@@ -69,20 +76,20 @@ TGV_FLAGS := -std=c++14 -stdlib=libc++ -fvisibility=hidden -O2 -g -w -DTGVOIP_NO
 V7_TARGET := -target armv7-apple-ios5.0 -isysroot $(EXTERIA_SDK_V7)
 V64_TARGET := -target arm64-apple-ios7.0 -isysroot $(EXTERIA_SDK_V64)
 # the core reaches openssl by its own headers on each slice
-V7_CC := -isystem $(EXTERIA_VIDEO_V7)/include $(V7_TARGET) -I$(EXTERIA_OPENSSL_V7)/include
-V64_CC := -isystem $(EXTERIA_VIDEO_V64)/include $(V64_TARGET) -I$(EXTERIA_OPENSSL_V64)/include
-LINK_LIBS := -framework UIKit -framework Foundation -framework Security -framework CoreGraphics -framework QuartzCore -framework ImageIO -framework CoreText -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AudioToolbox -framework CoreLocation -framework Accelerate -weak_framework CoreMotion -framework MobileCoreServices -framework CFNetwork -weak_framework AssetsLibrary -weak_framework AddressBook -weak_framework AddressBookUI -weak_framework MediaPlayer -lz -lc++ -lsqlite3 -liconv
+V7_CC := -isystem $(EXTERIA_VIDEO_V7)/include -isystem $(EXTERIA_PYTHON_V7)/include/python3.11 $(V7_TARGET) -I$(EXTERIA_OPENSSL_V7)/include
+V64_CC := -isystem $(EXTERIA_VIDEO_V64)/include -isystem $(EXTERIA_PYTHON_V64)/include/python3.11 $(V64_TARGET) -I$(EXTERIA_OPENSSL_V64)/include
+LINK_LIBS := -framework UIKit -framework Foundation -framework Security -framework CoreGraphics -framework QuartzCore -weak_framework OpenGLES -framework ImageIO -framework CoreText -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AudioToolbox -framework CoreLocation -framework Accelerate -weak_framework CoreMotion -framework MobileCoreServices -framework CFNetwork -weak_framework AssetsLibrary -weak_framework AddressBook -weak_framework AddressBookUI -weak_framework MediaPlayer -lz -lc++ -lsqlite3 -liconv -Wl,-dead_strip
 
 VIDEO_LIB_NAMES := libavformat.a libavcodec.a libswresample.a libavutil.a libvpx.a
 VIDEO_V7_LIBS := $(addprefix $(EXTERIA_VIDEO_V7)/lib/,$(VIDEO_LIB_NAMES))
 VIDEO_V64_LIBS := $(addprefix $(EXTERIA_VIDEO_V64)/lib/,$(VIDEO_LIB_NAMES))
 SLICES := armv7 arm64
-OBJ_SRC := $(APP_M) $(APP_C) $(RL_CPP) $(WEBP_C) $(OPUS_C) $(OGG_C) $(LUA_C) $(ZBAR_C) $(TGV_CPP)
+OBJ_SRC := $(APP_M) $(APP_C) $(RL_CPP) $(WEBP_C) $(OPUS_C) $(OGG_C) $(DOOM_C) $(ZBAR_C) $(TGV_CPP)
 # every object lives under its slice: $(B)/armv7/app/ui/shared/x.m.o
 objects = $(addprefix $(EXTERIA_IOS_BUILD)/$(1)/,$(addsuffix .o,$(OBJ_SRC)))
 
 STAMP := $(EXTERIA_IOS_BUILD)/flags.stamp
-FLAGS_TEXT := $(EXTERIA_TC) $(V7_CC) $(V64_CC) $(EXTERIA_CRT_V7) $(OBJC_FLAGS) $(C_FLAGS) $(CXX_FLAGS) $(V7_CXX_FLAGS) $(WEBP_FLAGS) $(OPUS_FLAGS) $(LUA_FLAGS) $(ZBAR_FLAGS) $(TGV_FLAGS)
+FLAGS_TEXT := $(EXTERIA_TC) $(V7_CC) $(V64_CC) $(EXTERIA_CRT_V7) $(OBJC_FLAGS) $(C_FLAGS) $(CXX_FLAGS) $(V7_CXX_FLAGS) $(WEBP_FLAGS) $(OPUS_FLAGS) $(DOOM_FLAGS) $(ZBAR_FLAGS) $(TGV_FLAGS)
 
 .PHONY: app app-unsigned inspect-unsigned inputs force inspect-app check-legacy-symbols check-legacy-api
 app: $(EXTERIA_IOS_BUILD)/app-signed.stamp
@@ -95,6 +102,7 @@ inputs:
 	@test -f "$(EXTERIA_SDK_V7)/usr/include/stdlib.h" -a -f "$(EXTERIA_SDK_V64)/usr/include/stdlib.h" || { echo "missing iphoneos sdk headers" >&2; exit 1; }
 	@$(if $(EXTERIA_CRT_V7),test -f "$(EXTERIA_CRT_V7)" || { echo "missing EXTERIA_CRT_V7 startup object" >&2; exit 1; },:)
 	@test -f "$(EXTERIA_OPENSSL_V7)/lib/libcrypto.a" -a -f "$(EXTERIA_OPENSSL_V64)/lib/libcrypto.a" -a -f "$(EXTERIA_OPENSSL_V7)/lib/libssl.a" -a -f "$(EXTERIA_OPENSSL_V64)/lib/libssl.a" || { echo "missing openssl static libraries" >&2; exit 1; }
+	@test -f "$(PY_LIB_V7)" -a -f "$(PY_LIB_V64)" -a -d "$(EXTERIA_PYTHON_BUNDLE)/python/stdlib" || { echo "missing python build, run scripts/build_python.sh" >&2; exit 1; }
 	@test -f "$(EXTERIA_VIDEO_V7)/lib/libswresample.a" -a -f "$(EXTERIA_VIDEO_V64)/lib/libswresample.a" || { echo "missing ffmpeg audio libraries, rebuild the codecs with scripts/build_sticker_codecs.sh" >&2; exit 1; }
 
 # a changed sdk or flag set must not reuse objects from a previous invocation
@@ -128,9 +136,9 @@ $(EXTERIA_IOS_BUILD)/$(1)/third_party/opus/%.c.o: third_party/opus/%.c $(STAMP)
 $(EXTERIA_IOS_BUILD)/$(1)/third_party/ogg/%.c.o: third_party/ogg/%.c $(STAMP)
 	@mkdir -p $$(dir $$@)
 	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $$(OPUS_FLAGS) $(2) -c $$< -o $$@
-$(EXTERIA_IOS_BUILD)/$(1)/third_party/lua/%.c.o: third_party/lua/%.c $(STAMP)
+$(EXTERIA_IOS_BUILD)/$(1)/third_party/doomgeneric/%.c.o: third_party/doomgeneric/%.c $(STAMP)
 	@mkdir -p $$(dir $$@)
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $$(LUA_FLAGS) $(2) -c $$< -o $$@
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $$(DOOM_FLAGS) $(2) -c $$< -o $$@
 $(EXTERIA_IOS_BUILD)/$(1)/third_party/libtgvoip/%.cpp.o: third_party/libtgvoip/%.cpp $(STAMP)
 	@mkdir -p $$(dir $$@)
 	"$(EXTERIA_TC)/clang++" -B"$(EXTERIA_TC)" $$(TGV_FLAGS) $(3) $(2) -c $$< -o $$@
@@ -144,28 +152,56 @@ endef
 $(eval $(call slice_rules,armv7,$(V7_CC),$(V7_CXX_FLAGS)))
 $(eval $(call slice_rules,arm64,$(V64_CC),))
 
-$(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME): $(call objects,armv7) $(VIDEO_V7_LIBS) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V7_TARGET) $(call objects,armv7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a $(VIDEO_V7_LIBS) $(LINK_LIBS) \
+$(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME): $(call objects,armv7) $(VIDEO_V7_LIBS) $(PY_LIB_V7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V7_TARGET) $(call objects,armv7) $(PY_LIB_V7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a $(VIDEO_V7_LIBS) $(LINK_LIBS) \
 	  $(if $(EXTERIA_CRT_V7),-nostartfiles $(EXTERIA_CRT_V7),) -o $@
 
-$(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME): $(call objects,arm64) $(VIDEO_V64_LIBS) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V64_TARGET) $(call objects,arm64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a $(VIDEO_V64_LIBS) $(LINK_LIBS) -o $@
+$(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME): $(call objects,arm64) $(VIDEO_V64_LIBS) $(PY_LIB_V64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V64_TARGET) $(call objects,arm64) $(PY_LIB_V64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a $(VIDEO_V64_LIBS) $(LINK_LIBS) -o $@
+
+# the share sheet extension is its own small executable. It starts at _NSExtensionMain, which dyld calls as main only from ios 6 on (the older load command starts a
+# program the way crt1 expects), so both slices carry a deployment target of 8.0, the first system with extensions
+SHARE_SRC := extension/share/exteria_share_extension.m
+SHARE_NAME := ExteriaShare
+SHARE_APPEX := PlugIns/$(SHARE_NAME).appex
+SHARE_FLAGS := -std=gnu99 -fno-objc-arc -fblocks -fapplication-extension -O2 -g -Wall -Wextra -Werror
+# _NSExtensionMain is in Foundation from ios 8 and not in the stubs of the 6.1 sdk, so it is left to dyld; the 6.1 headers and stubs also lack objc_alloc, which clang
+# emits for an 8.0 target, so the armv7 slice sends alloc as a plain message
+SHARE_LINK := -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore -Wl,-e,_NSExtensionMain -Wl,-U,_NSExtensionMain
+SHARE_V7 := -target armv7-apple-ios8.0 -isysroot $(EXTERIA_SDK_V7) -fno-objc-convert-messages-to-runtime-calls
+SHARE_V64 := -target arm64-apple-ios8.0 -isysroot $(EXTERIA_SDK_V64)
+
+define share_slice
+$(EXTERIA_IOS_BUILD)/share/$(1)/$(SHARE_NAME): $(SHARE_SRC) $(STAMP)
+	@mkdir -p $$(dir $$@)
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $$(SHARE_FLAGS) $(2) $$(SHARE_SRC) $$(SHARE_LINK) -o $$@
+endef
+$(eval $(call share_slice,armv7,$(SHARE_V7)))
+$(eval $(call share_slice,arm64,$(SHARE_V64)))
 
 # staged from scratch so a removed resource cannot survive a rebuild
-$(APP)/$(APP_NAME): $(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME) $(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME) packaging/Info.plist $(RES) $(STRINGS)
+$(APP)/$(APP_NAME): $(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME) $(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME) $(EXTERIA_IOS_BUILD)/share/armv7/$(SHARE_NAME) $(EXTERIA_IOS_BUILD)/share/arm64/$(SHARE_NAME) packaging/Info.plist extension/share/Info.plist $(RES) $(STRINGS) $(PY_LIB_V7) $(PY_BUNDLE)
 	rm -rf $(APP)
 	mkdir -p $(APP)
 	"$(EXTERIA_TC)/lipo" -create $(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME) $(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME) -output $@
 	cp packaging/Info.plist $(APP)/Info.plist
+	mkdir -p $(APP)/$(SHARE_APPEX)
+	"$(EXTERIA_TC)/lipo" -create $(EXTERIA_IOS_BUILD)/share/armv7/$(SHARE_NAME) $(EXTERIA_IOS_BUILD)/share/arm64/$(SHARE_NAME) -output $(APP)/$(SHARE_APPEX)/$(SHARE_NAME)
+	cp extension/share/Info.plist $(APP)/$(SHARE_APPEX)/Info.plist
 	cp $(RES) $(APP)/
+	cp -R $(EXTERIA_PYTHON_BUNDLE)/python $(APP)/python
 	mkdir -p $(APP)/exteria-original-icons
 	cp resources/icons/Icon*.png $(APP)/exteria-original-icons/
 	for dir in $(sort $(dir $(STRINGS))); do mkdir -p $(APP)/$$(basename $$dir) && cp $$dir/Localizable.strings $(APP)/$$(basename $$dir)/; done
 
 $(EXTERIA_IOS_BUILD)/app-signed.stamp: $(APP)/$(APP_NAME)
 	@test -x "$(EXTERIA_LDID)" || { echo "missing signer in EXTERIA_LDID" >&2; exit 1; }
-	"$(EXTERIA_LDID)" -S $(APP)/$(APP_NAME)
 	@sh scripts/keep_symbols.sh $(APP)/$(APP_NAME)
+	@# the copy kept above has every symbol and names a crash log's frames; the shipped binary keeps only what it exports. the signature is made last, since stripping breaks it
+	"$(EXTERIA_TC)/strip" -x -S $(APP)/$(APP_NAME)
+	@# both carry the app group, which is how the extension hands what was shared to the app
+	"$(EXTERIA_LDID)" -Spackaging/entitlements.plist $(APP)/$(SHARE_APPEX)/$(SHARE_NAME)
+	"$(EXTERIA_LDID)" -Spackaging/entitlements.plist $(APP)/$(APP_NAME)
 	@touch $@
 
 inspect-app: app
@@ -173,8 +209,10 @@ inspect-unsigned: app-unsigned
 
 inspect-app inspect-unsigned:
 	"$(EXTERIA_TC)/lipo" -info $(APP)/$(APP_NAME)
+	"$(EXTERIA_TC)/lipo" -info $(APP)/$(SHARE_APPEX)/$(SHARE_NAME)
 	for slice in $(SLICES); do \
 	  echo "== $$slice"; \
+	  "$(EXTERIA_TC)/otool" -arch $$slice -L $(APP)/$(SHARE_APPEX)/$(SHARE_NAME); \
 	  "$(EXTERIA_TC)/otool" -arch $$slice -L $(APP)/$(APP_NAME); \
 	  "$(EXTERIA_TC)/otool" -arch $$slice -l $(APP)/$(APP_NAME) | grep -A3 -E 'LC_VERSION_MIN_IPHONEOS|LC_BUILD_VERSION'; \
 	done

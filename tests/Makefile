@@ -3,7 +3,7 @@ BUILD   ?= ../build/host
 ROOT    := ..
 INCLUDE := -I$(ROOT)/core/base -I$(ROOT)/core/crypto -I$(ROOT)/core/tl -I$(ROOT)/core/tl/generated \
            -I$(ROOT)/core/client -I$(ROOT)/core/mtproto -I$(ROOT)/core/auth -I$(ROOT)/core/updates \
-           -I$(ROOT)/core/storage -I$(ROOT)/core/secret_chats -I$(ROOT)/core/layout -I$(ROOT)/core/phone -I$(ROOT)/core/session -I$(ROOT)/core/chats -I$(ROOT)/core/emoji -I$(ROOT)/core/media -I$(ROOT)/core/notify -I$(ROOT)/core/calls -I$(ROOT)/core/tgcalls -I$(ROOT)/core/video -I$(ROOT)/core/shiro -I$(ROOT)/core/plugins -isystem $(ROOT)/third_party/lua/src \
+           -I$(ROOT)/core/storage -I$(ROOT)/core/secret_chats -I$(ROOT)/core/layout -I$(ROOT)/core/phone -I$(ROOT)/core/session -I$(ROOT)/core/chats -I$(ROOT)/core/emoji -I$(ROOT)/core/media -I$(ROOT)/core/notify -I$(ROOT)/core/calls -I$(ROOT)/core/tgcalls -I$(ROOT)/core/video -I$(ROOT)/core/shiro -I$(ROOT)/core/pyhost \
            -I$(ROOT)/third_party/opus/include -I$(ROOT)/third_party/ogg/include -Icore
 WARN    := -Wall -Wextra -Werror -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wconversion -Wno-sign-conversion
 OPT     ?= -O2 -g
@@ -18,10 +18,8 @@ OGG_SRC    := $(wildcard $(ROOT)/third_party/ogg/src/*.c)
 OPUS_FLAGS := -std=c99 -O2 -w -DOPUS_BUILD -DFIXED_POINT -DDISABLE_FLOAT_API -DVAR_ARRAYS -DPACKAGE_VERSION=\"1.5.2\" \
               -I$(ROOT)/third_party/opus/include -I$(ROOT)/third_party/opus/celt -I$(ROOT)/third_party/opus/silk \
               -I$(ROOT)/third_party/opus/silk/fixed -I$(ROOT)/third_party/opus/src -I$(ROOT)/third_party/ogg/include
-# lua is vendored with one local patch, see third_party/lua/PATCHES
-LUA_SRC    := $(addprefix $(ROOT)/third_party/lua/src/,$(shell cat $(ROOT)/third_party/lua/SOURCES))
-LUA_FLAGS  := -std=c99 -O2 -w -I$(ROOT)/third_party/lua/src
-TESTS      := $(patsubst core/%.c,%,$(wildcard core/test_*.c))
+# test_pyhost needs a host libpython 3.11 and the stdlib, see PYHOST below
+TESTS      := $(filter-out test_pyhost test_doom,$(patsubst core/%.c,%,$(wildcard core/test_*.c)))
 HELPER_OBJ := $(patsubst core/%.c,$(BUILD)/helpers/%.o,$(wildcard core/fake_*.c))
 
 # linking the whole core catches missing subsystem dependencies
@@ -31,21 +29,62 @@ CORE_SRC := $(BASE_SRC) $(CRYPTO_SRC) $(wildcard $(ROOT)/core/tl/*.c) $(wildcard
             $(wildcard $(ROOT)/core/secret_chats/*.c) $(wildcard $(ROOT)/core/client/*.c) \
             $(wildcard $(ROOT)/core/layout/*.c) $(wildcard $(ROOT)/core/phone/*.c) \
             $(wildcard $(ROOT)/core/session/*.c) $(wildcard $(ROOT)/core/chats/*.c) $(wildcard $(ROOT)/core/emoji/*.c) \
-            $(wildcard $(ROOT)/core/media/*.c) $(wildcard $(ROOT)/core/notify/*.c) $(wildcard $(ROOT)/core/calls/*.c) $(wildcard $(ROOT)/core/tgcalls/*.c) $(wildcard $(ROOT)/core/shiro/*.c) $(wildcard $(ROOT)/core/plugins/*.c) $(ROOT)/core/video/exteria_yuv.c $(OPUS_SRC) $(OGG_SRC) $(LUA_SRC)
+            $(wildcard $(ROOT)/core/media/*.c) $(wildcard $(ROOT)/core/notify/*.c) $(wildcard $(ROOT)/core/calls/*.c) $(wildcard $(ROOT)/core/tgcalls/*.c) $(wildcard $(ROOT)/core/shiro/*.c) $(ROOT)/core/video/exteria_yuv.c $(ROOT)/core/video/exteria_video_edit.c $(OPUS_SRC) $(OGG_SRC)
 CORE_OBJ := $(patsubst $(ROOT)/%.c,$(BUILD)/%.o,$(CORE_SRC))
 
-.PHONY: test sanitize
+# the python host test embeds a real interpreter: EXTERIA_PYTHON_HOST_PREFIX is an install prefix of cpython 3.11
+# (include/python3.11, lib/libpython3.11.a) and EXTERIA_PYTHON_STDLIB the Lib directory of the same version.
+# build/python/host from scripts/build_python.sh is such a prefix
+PYHOST_TEST := $(if $(EXTERIA_PYTHON_HOST_PREFIX),$(BUILD)/test_pyhost)
 
-test: $(addprefix $(BUILD)/,$(TESTS))
+.PHONY: test sanitize test-pyhost test-doom test-python
+
+# the game under test is the real engine: it runs without a wad for the error cases, and with one, EXTERIA_DOOM_WAD, for play
+DOOM_SRC   := $(sort $(wildcard $(ROOT)/third_party/doomgeneric/*.c))
+DOOM_FLAGS := -std=gnu99 -O1 -g -w -DNORMALUNIX -D_DEFAULT_SOURCE -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 -Dexit=exteria_doom_exit -DSHA1_Init=exteria_doom_SHA1_Init -DSHA1_Update=exteria_doom_SHA1_Update -DSHA1_Final=exteria_doom_SHA1_Final \
+              -include $(ROOT)/core/doom/exteria_doom_exit.h
+DOOM_OBJ   := $(patsubst $(ROOT)/%.c,$(BUILD)/doom/%.o,$(DOOM_SRC))
+
+$(BUILD)/doom/third_party/doomgeneric/%.o: $(ROOT)/third_party/doomgeneric/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(DOOM_FLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/test_doom: core/test_doom.c $(ROOT)/core/doom/exteria_doom.c $(ROOT)/core/base/exteria_status.c $(DOOM_OBJ) core/test_util.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/core/doom core/test_doom.c $(ROOT)/core/doom/exteria_doom.c $(ROOT)/core/base/exteria_status.c $(DOOM_OBJ) -lm -o $@
+
+test-doom: $(BUILD)/test_doom
+	$(BUILD)/test_doom missing
+	$(BUILD)/test_doom corrupt
+	@$(if $(EXTERIA_DOOM_WAD),$(BUILD)/test_doom play $(EXTERIA_DOOM_WAD),echo "test_doom play skipped: set EXTERIA_DOOM_WAD to doom1.wad")
+
+
+test: $(addprefix $(BUILD)/,$(TESTS)) $(PYHOST_TEST)
 	@set -e; for t in $(TESTS); do $(BUILD)/$$t; done
+	@$(if $(PYHOST_TEST),$(PYHOST_TEST),echo "test_pyhost skipped: set EXTERIA_PYTHON_HOST_PREFIX and EXTERIA_PYTHON_STDLIB")
+	@$(MAKE) test-doom
+	@$(if $(EXTERIA_PYTHON_HOST),$(MAKE) test-python,echo "python tests skipped: set EXTERIA_PYTHON_HOST to a python3.11")
+
+# the plugin sdk, the shims and the plugins of this repository, run by cpython 3.11 with a stand-in for the app (tests/python/fakeapp.py)
+test-python:
+	@test -x "$(EXTERIA_PYTHON_HOST)" || { echo "set EXTERIA_PYTHON_HOST to a python3.11" >&2; exit 1; }
+	$(EXTERIA_PYTHON_HOST) -I -m unittest discover -s python
+
+test-pyhost: $(BUILD)/test_pyhost
+	$(BUILD)/test_pyhost
+
+$(BUILD)/test_pyhost: core/test_pyhost.c $(ROOT)/core/pyhost/exteria_pyhost.c $(ROOT)/core/base/exteria_status.c core/test_util.h
+	@test -f "$(EXTERIA_PYTHON_HOST_PREFIX)/lib/libpython3.11.a" || { echo "set EXTERIA_PYTHON_HOST_PREFIX to a cpython 3.11 prefix" >&2; exit 1; }
+	@test -f "$(EXTERIA_PYTHON_STDLIB)/encodings/__init__.py" || { echo "set EXTERIA_PYTHON_STDLIB to the Lib directory of cpython 3.11" >&2; exit 1; }
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -isystem $(EXTERIA_PYTHON_HOST_PREFIX)/include/python3.11 \
+	    -DFIXTURE_DIR='"$(abspath core/pyhost)"' -DPY_STDLIB='"$(abspath $(EXTERIA_PYTHON_STDLIB))"' \
+	    core/test_pyhost.c $(ROOT)/core/pyhost/exteria_pyhost.c $(ROOT)/core/base/exteria_status.c \
+	    $(EXTERIA_PYTHON_HOST_PREFIX)/lib/libpython3.11.a -lpthread -ldl -lutil -lm -o $@
 
 sanitize:
 	$(MAKE) BUILD=$(BUILD)-asan OPT="-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
 	    LDFLAGS="-fsanitize=address,undefined" test
-
-$(BUILD)/third_party/lua/%.o: $(ROOT)/third_party/lua/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(LUA_FLAGS) -MMD -MP -c $< -o $@
 
 $(BUILD)/third_party/%.o: $(ROOT)/third_party/%.c
 	@mkdir -p $(dir $@)

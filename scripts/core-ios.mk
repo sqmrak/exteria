@@ -6,19 +6,17 @@ EXTERIA_OPENSSL_V64 ?= $(error set EXTERIA_OPENSSL_V64 to an arm64 openssl prefi
 EXTERIA_CRT_V7 ?=
 EXTERIA_IOS_BUILD ?= build/ios
 
-CORE_SRC := $(sort $(wildcard core/*/*.c core/tl/generated/*.c))
+# the python host links libpython and is built by the app makefile
+CORE_SRC := $(filter-out core/pyhost/% core/doom/%,$(sort $(wildcard core/*/*.c core/tl/generated/*.c)))
 OPUS_C := $(addprefix third_party/opus/,$(shell cat third_party/opus/SOURCES))
 OGG_C := $(sort $(wildcard third_party/ogg/src/*.c))
-# lua runs the plugins of core/plugins, vendored with one local patch, see third_party/lua/PATCHES
-LUA_C := $(addprefix third_party/lua/src/,$(shell cat third_party/lua/SOURCES))
-CODEC_SRC := $(OPUS_C) $(OGG_C) $(LUA_C)
+CODEC_SRC := $(OPUS_C) $(OGG_C)
 # core/media includes the vendored codec headers
-INCLUDE := $(addprefix -I,$(wildcard core/*)) -Icore/tl/generated -Ithird_party/opus/include -Ithird_party/ogg/include -isystem third_party/lua/src
+INCLUDE := $(addprefix -I,$(wildcard core/*)) -Icore/tl/generated -Ithird_party/opus/include -Ithird_party/ogg/include
 # same flags as the app, the test binaries link the codec objects the core calls into
 CODEC_FLAGS := -std=c99 -O2 -g -w -DOPUS_BUILD -DFIXED_POINT -DDISABLE_FLOAT_API -DVAR_ARRAYS -DPACKAGE_VERSION=\"1.5.2\" \
                -Ithird_party/opus/include -Ithird_party/opus/celt -Ithird_party/opus/silk -Ithird_party/opus/silk/fixed \
                -Ithird_party/opus/src -Ithird_party/ogg/include -MMD -MP
-LUA_FLAGS := -std=c99 -O2 -g -w -Ithird_party/lua/src -MMD -MP
 WARN := -Wall -Wextra -Werror -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wconversion -Wno-sign-conversion
 FLAGS := -std=c99 -O2 -g $(WARN) $(INCLUDE) -MMD -MP
 V7_FLAGS := -target armv7-apple-ios5.0 -isysroot $(EXTERIA_SDK_V7) -I$(EXTERIA_OPENSSL_V7)/include
@@ -28,7 +26,7 @@ V64_OBJ := $(patsubst %.c,$(EXTERIA_IOS_BUILD)/arm64/%.o,$(CORE_SRC))
 V7_CODEC := $(patsubst %.c,$(EXTERIA_IOS_BUILD)/armv7/%.o,$(CODEC_SRC))
 V64_CODEC := $(patsubst %.c,$(EXTERIA_IOS_BUILD)/arm64/%.o,$(CODEC_SRC))
 CODEC_STAMP := $(EXTERIA_IOS_BUILD)/codec.stamp
-CODEC_STAMP_TEXT := $(EXTERIA_TC) $(V7_FLAGS) $(V64_FLAGS) $(CODEC_FLAGS) $(LUA_FLAGS)
+CODEC_STAMP_TEXT := $(EXTERIA_TC) $(V7_FLAGS) $(V64_FLAGS) $(CODEC_FLAGS)
 
 .PHONY: all inputs inspect force
 all: $(EXTERIA_IOS_BUILD)/libexteria-core.a $(EXTERIA_IOS_BUILD)/armv7/test_mt_client $(EXTERIA_IOS_BUILD)/arm64/test_mt_client
@@ -48,17 +46,9 @@ $(CODEC_STAMP): force | inputs
 	@mkdir -p $(dir $@)
 	@echo '$(CODEC_STAMP_TEXT)' | cmp -s - $@ || echo '$(CODEC_STAMP_TEXT)' > $@
 
-$(EXTERIA_IOS_BUILD)/armv7/third_party/lua/%.o: third_party/lua/%.c $(CODEC_STAMP)
-	@mkdir -p $(dir $@)
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(LUA_FLAGS) $(V7_FLAGS) -c $< -o $@
-
 $(EXTERIA_IOS_BUILD)/armv7/third_party/%.o: third_party/%.c $(CODEC_STAMP)
 	@mkdir -p $(dir $@)
 	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(CODEC_FLAGS) $(V7_FLAGS) -c $< -o $@
-
-$(EXTERIA_IOS_BUILD)/arm64/third_party/lua/%.o: third_party/lua/%.c $(CODEC_STAMP)
-	@mkdir -p $(dir $@)
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(LUA_FLAGS) $(V64_FLAGS) -c $< -o $@
 
 $(EXTERIA_IOS_BUILD)/arm64/third_party/%.o: third_party/%.c $(CODEC_STAMP)
 	@mkdir -p $(dir $@)

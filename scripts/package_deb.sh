@@ -17,9 +17,18 @@ mkdir -p "${STAGE}/var/jb/Applications" "${STAGE}/DEBIAN" "${STAGE}/unzip"
 unzip -q "${IPA}" -d "${STAGE}/unzip"
 mv "${STAGE}/unzip/Payload/Exteria.app" "${STAGE}/var/jb/Applications/"
 rm -rf "${STAGE}/unzip"
+# ios 6 does not mask every icon chosen for an app in /Applications
+for name in Icon-60@3x.png Icon-76.png Icon-76@2x.png Icon-83.5@2x.png \
+            Icon-Small-40.png Icon-Small-40@2x.png Icon-Small-50.png Icon-Small-50@2x.png \
+            Icon-Small.png Icon-Small@2x.png Icon-Small@3x.png; do
+  icon="${ROOT}/resources/deb-icons/${name}"
+  [[ -f "${icon}" ]] || { echo "missing deb icons, run tools/make_assets.py debicons" >&2; exit 1; }
+  cmp -s "${ROOT}/resources/icons/${name}" "${STAGE}/var/jb/Applications/Exteria.app/${name}" || { echo "${name} in the ipa differs from the icon source" >&2; exit 1; }
+  cp "${icon}" "${STAGE}/var/jb/Applications/Exteria.app/${name}"
+done
 find "${STAGE}/var" -type d -exec chmod 755 {} +
 find "${STAGE}/var" -type f -exec chmod 644 {} +
-chmod 755 "${STAGE}/var/jb/Applications/Exteria.app/Exteria"
+chmod 755 "${STAGE}/var/jb/Applications/Exteria.app/Exteria" "${STAGE}/var/jb/Applications/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare"
 install -m 755 "${ROOT}/packaging/deb/postinst" "${ROOT}/packaging/deb/postrm" "${STAGE}/DEBIAN/"
 SIZE="$(du -sk "${STAGE}/var" | cut -f1)"
 cat > "${STAGE}/DEBIAN/control" <<CONTROL

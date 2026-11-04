@@ -22,9 +22,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0.0-stable</string>
+	<string>2.1.0-stable</string>
 	<key>CFBundleVersion</key>
-	<string>2.0.0</string>
+	<string>2.1.0</string>
 	<key>CFBundleIconFiles</key>
 	<array>
 		<string>Icon-57.png</string>
@@ -659,6 +659,18 @@
 			<key>CFBundleTypeRole</key><string>Viewer</string>
 			<key>LSHandlerRank</key><string>Alternate</string>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key><string>Files to send</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.image</string>
+				<string>public.movie</string>
+				<string>public.audio</string>
+				<string>public.data</string>
+			</array>
+			<key>CFBundleTypeRole</key><string>Viewer</string>
+			<key>LSHandlerRank</key><string>Alternate</string>
+		</dict>
 	</array>
 	<key>UIFileSharingEnabled</key><true/>
 	<key>CFBundleURLTypes</key>
@@ -669,6 +681,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>tg</string>
+				<string>exteria</string>
 			</array>
 		</dict>
 	</array>
@@ -685,6 +698,9 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>senko</string>
+		<string>googlechrome</string>
+		<string>firefox</string>
+		<string>brave</string>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Exteria records voice messages and the sound of round videos, and carries your voice in calls.</string>

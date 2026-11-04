@@ -16,7 +16,7 @@ mkdir -p "${STAGE}/Payload"
 cp -R "${APP}" "${STAGE}/Payload/"
 find "${STAGE}/Payload" -type d -exec chmod 755 {} +
 find "${STAGE}/Payload" -type f -exec chmod 644 {} +
-chmod 755 "${STAGE}/Payload/Exteria.app/Exteria"
+chmod 755 "${STAGE}/Payload/Exteria.app/Exteria" "${STAGE}/Payload/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare"
 (cd "${STAGE}" && zip -qrX "${OUT}" Payload)
 rm -rf "${STAGE}"
 unzip -tq "${OUT}"
