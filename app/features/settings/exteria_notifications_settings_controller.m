@@ -294,7 +294,7 @@ static ExteriaSettingsRow *ExteriaFlagRow(NSString *key, BOOL on, void (^set)(BO
     NSMutableArray *other = [NSMutableArray array];
     [other addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"notif.master", nil) subtitle:NSLocalizedString(@"notif.master.info", nil) on:ExteriaNotifyEnabled()
                                                      toggle:^(BOOL on) { ExteriaNotifySetEnabled(on); }]];
-    if (ExteriaNotifySavingAvailable()) {
+    if (ExteriaNotifySavingAvailable(_session)) {
         [other addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"settings.notify.saving", nil) subtitle:NSLocalizedString(@"settings.notify.saving.subtitle", nil)
                                                              on:ExteriaNotifySaving() toggle:^(BOOL on) { ExteriaNotifySetSaving(on); }]];
     }

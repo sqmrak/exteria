@@ -9,7 +9,7 @@ void ExteriaNotifySetEnabled(BOOL on);
 
 /* the economy mode of the background: the app is not kept awake with a silent sound, so news come when the system
    wakes it for a look instead of at once */
-BOOL ExteriaNotifySavingAvailable(void);
+BOOL ExteriaNotifySavingAvailable(ExteriaSession *session);
 BOOL ExteriaNotifySaving(void);
 void ExteriaNotifySetSaving(BOOL on);
 
