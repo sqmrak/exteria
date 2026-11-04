@@ -195,6 +195,8 @@ static NSString *refusal_text(ExteriaPluginEntry *entry) {
         default: base = NSLocalizedString(@"plugins.err.failed", nil); break;
     }
     if (!entry.error.length) return base;
+    if ([entry.error rangeOfString:@"Traceback (most recent call last):"].location != NSNotFound)
+        return [NSString stringWithFormat:@"%@\n%@", base, friendly_fault(entry.error)];
     NSString *reason = [entry.error stringByReplacingOccurrencesOfString:[ExteriaPluginsDirectory() stringByAppendingString:@"/"] withString:@""];
     if (reason.length > 160) reason = [[reason substringToIndex:160] stringByAppendingString:@"…"];
     return [NSString stringWithFormat:@"%@\n%@", base, reason];
@@ -280,7 +282,15 @@ static NSString *failure_text(NSDictionary *why) {
 
 - (ExteriaSettingsRow *)rowForEntry:(ExteriaPluginEntry *)entry {
     if (entry.status != 0) {
-        return [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneGray title:entry.file subtitle:refusal_text(entry) value:nil tap:nil];
+        NSString *report = entry.error;
+        NSString *title = entry.file;
+        return [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneGray title:title subtitle:refusal_text(entry) value:nil tap:report.length ? ^{
+            ExteriaShowAlert(title, report, [NSArray arrayWithObjects:NSLocalizedString(@"notice.ok", nil), NSLocalizedString(@"devices.copy", nil), nil], 0, NO,
+                             ^(NSInteger index, NSString *text) {
+                (void)text;
+                if (index == 1) [UIPasteboard generalPasteboard].string = report;
+            });
+        } : nil];
     }
     BOOL starting = [_starting containsObject:entry.file];
     NSMutableArray *lines = [NSMutableArray array];

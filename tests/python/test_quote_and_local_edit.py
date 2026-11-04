@@ -332,6 +332,10 @@ class WhyNotLoaded(unittest.TestCase):
         why = self.explain("x = 1\n", "\nValueError: broken\nmore")
         self.assertEqual(why, {"kind": "other", "detail": "ValueError: broken"})
 
+    def test_traceback_shows_the_exception_instead_of_the_header(self):
+        error = 'Traceback (most recent call last):\n  File "/private/var/Exteria.app/python/shim/exteria_host.py", line 25\nValueError: broken\n'
+        self.assertEqual(self.explain("x = 1\n", error), {"kind": "other", "detail": "ValueError: broken"})
+
     def test_the_host_adds_the_reason_to_a_refused_load(self):
         path = write("lacking", HEADER + "from android.graphics import Shader\n")
         result = exteria_host.load(path, "lacking")

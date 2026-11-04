@@ -81,6 +81,10 @@ def _present(name):
 
 def _last_line(text):
     lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+    if any(line.startswith("Traceback (most recent call last):") for line in lines):
+        for line in reversed(lines):
+            if re.match(r"^[\w.]+(?:Error|Exception|Exit|Interrupt)(?::|$)", line):
+                return line
     return lines[0] if lines else ""
 
 
