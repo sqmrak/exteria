@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_animation.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
@@ -97,7 +98,9 @@ NSUInteger ExteriaPersonIsDeveloper(ExteriaPerson *person) {
 }
 
 NSUInteger ExteriaMarkForDocument(long long document) {
+    if (document == EXTERIA_FLAW_SEER_DOCUMENT) return ExteriaMarkFlawSeer;
     if (document == EXTERIA_MANAGER_DOCUMENT) return ExteriaMarkManager;
+    if (document == EXTERIA_VIDEO_FIX_DOCUMENT) return ExteriaMarkVideoFix;
     if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaMarkPromotion;
     if (document == EXTERIA_BUG_HUNTER_DOCUMENT) return ExteriaMarkBugHunter;
     if (document == EXTERIA_DEVELOPER_DOCUMENT) return ExteriaMarkDeveloper;
@@ -119,6 +122,7 @@ static void ExteriaHidePlate(UIView *plate) {
     if (ExteriaPlate != plate) return;
     ExteriaPlate = nil;
     [NSObject cancelPreviousPerformRequestsWithTarget:[ExteriaDeveloperPlateTarget class]];
+    ExteriaCacheForMotion(plate);
     [UIView animateWithDuration:0.18 animations:^{
         plate.alpha = 0;
         plate.transform = CGAffineTransformMakeScale(0.94, 0.94);
@@ -134,7 +138,21 @@ static void ExteriaHidePlate(UIView *plate) {
 + (void)tapped:(UITapGestureRecognizer *)tap { if (tap.view == ExteriaPlate) ExteriaHidePlate(ExteriaPlate); }
 @end
 
+/* the line under the nickname of a flaw seer: the account may have one of its own in the strings, and the rest share the common one */
+static NSString *ExteriaFlawSeerNotice(long long userId) {
+    if (userId > 0) {
+        NSString *key = [NSString stringWithFormat:@"developer.flaw_seer.notice.%lld", userId];
+        NSString *own = [[NSBundle mainBundle] localizedStringForKey:key value:@"" table:nil];
+        if (own.length && ![own isEqualToString:key]) return own;
+    }
+    return NSLocalizedString(@"developer.flaw_seer.notice", nil);
+}
+
 void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
+    ExteriaShowMarkNoticeForUser(name, mark, 0);
+}
+
+void ExteriaShowMarkNoticeForUser(NSString *name, NSUInteger mark, long long userId) {
     UIView *window = ExteriaOverlayHost();
     if (!window) return;
     if (ExteriaPlate) {
@@ -154,7 +172,7 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     plate.layer.shadowOpacity = 0.28f;
     plate.layer.shadowRadius = 14;
     plate.layer.shadowOffset = CGSizeMake(0, 4);
-    UIImage *badge = mark == ExteriaMarkManager ? [ExteriaCustomEmoji imageForDocument:EXTERIA_MANAGER_DOCUMENT] : mark == ExteriaMarkOfficialTester ? [ExteriaCustomEmoji imageForDocument:EXTERIA_OFFICIAL_TESTER_DOCUMENT] : mark == ExteriaMarkBugHunter ? [ExteriaCustomEmoji imageForDocument:EXTERIA_BUG_HUNTER_DOCUMENT] : mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] : mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
+    UIImage *badge = mark == ExteriaMarkFlawSeer ? [ExteriaCustomEmoji imageForDocument:EXTERIA_FLAW_SEER_DOCUMENT] : mark == ExteriaMarkVideoFix ? [ExteriaCustomEmoji imageForDocument:EXTERIA_VIDEO_FIX_DOCUMENT] : mark == ExteriaMarkManager ? [ExteriaCustomEmoji imageForDocument:EXTERIA_MANAGER_DOCUMENT] : mark == ExteriaMarkOfficialTester ? [ExteriaCustomEmoji imageForDocument:EXTERIA_OFFICIAL_TESTER_DOCUMENT] : mark == ExteriaMarkBugHunter ? [ExteriaCustomEmoji imageForDocument:EXTERIA_BUG_HUNTER_DOCUMENT] : mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] : mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
         [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:mark == ExteriaMarkTester ? @"badge_tester" : (mark == ExteriaMarkSenko ? @"badge_senko" : (mark == ExteriaMarkLead ? @"badge_lead" : @"badge_developer")) ofType:@"png"]];
     UIImageView *hammer = [[[UIImageView alloc] initWithImage:badge] autorelease];
     hammer.contentMode = UIViewContentModeScaleAspectFit;
@@ -163,7 +181,8 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     who.font = ExteriaFontSemibold(17);
     who.textColor = ExteriaColorTitle();
     who.dropsUndrawable = YES;
-    who.text = mark == ExteriaMarkBugHunter ? NSLocalizedString(@"developer.bug_hunter.title", nil) : (name.length ? name : NSLocalizedString(@"developer.someone", nil));
+    /* the elite testers wear their own nickname on the plate */
+    who.text = name.length ? name : NSLocalizedString(@"developer.someone", nil);
     who.frame = CGRectMake(textX, 17, textWidth, 22);
     [plate addSubview:who];
     UILabel *what = [[[UILabel alloc] init] autorelease];
@@ -172,12 +191,13 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     what.textColor = ExteriaColorSecondary();
     what.numberOfLines = 0;
     what.lineBreakMode = UILineBreakModeWordWrap;
-    what.text = NSLocalizedString(mark == ExteriaMarkManager ? @"developer.manager" : mark == ExteriaMarkOfficialTester ? @"developer.official_tester" : mark == ExteriaMarkBugHunter ? @"developer.bug_hunter.notice" : (mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice"))))), nil);
+    what.text = mark == ExteriaMarkFlawSeer ? ExteriaFlawSeerNotice(userId) : NSLocalizedString(mark == ExteriaMarkVideoFix ? @"developer.videofix" : mark == ExteriaMarkManager ? @"developer.manager" : mark == ExteriaMarkOfficialTester ? @"developer.official_tester" : mark == ExteriaMarkBugHunter ? @"developer.bug_hunter.notice" : (mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice"))))), nil);
     CGFloat textHeight = MAX(34, ceil([what sizeThatFits:CGSizeMake(textWidth, CGFLOAT_MAX)].height));
     CGFloat height = MAX(84, 41 + textHeight + 9);
     what.frame = CGRectMake(textX, 41, textWidth, textHeight);
     [plate addSubview:what];
     plate.bounds = CGRectMake(0, 0, width, height);
+    ExteriaSetShadowPath(plate, 20);
     hammer.frame = CGRectMake(16, (height - PLATE_SIDE) / 2, PLATE_SIDE, PLATE_SIDE);
     CGFloat top = ExteriaStatusBarHeight() + 10;
     plate.center = CGPointMake(CGRectGetMidX(window.bounds), top + height / 2);
@@ -187,9 +207,13 @@ void ExteriaShowMarkNotice(NSString *name, NSUInteger mark) {
     ExteriaPlate = plate;
     plate.alpha = 0;
     plate.transform = CGAffineTransformMakeTranslation(0, -24);
+    ExteriaCacheForMotion(plate);
     [UIView animateWithDuration:0.24 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
         plate.alpha = 1;
         plate.transform = CGAffineTransformIdentity;
-    } completion:nil];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        if (ExteriaPlate == plate) ExteriaUncacheAfterMotion(plate);
+    }];
     [[ExteriaDeveloperPlateTarget class] performSelector:@selector(hide) withObject:nil afterDelay:PLATE_SECONDS];
 }

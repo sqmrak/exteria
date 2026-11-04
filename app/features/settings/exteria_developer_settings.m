@@ -157,8 +157,8 @@ static UIView *ExteriaDeveloperHost(void) {
 - (void)showMarkNotices {
     static const struct { NSUInteger mark; NSString *key; } marks[] = {
         {ExteriaMarkDeveloper, @"developer.mark.developer"}, {ExteriaMarkLead, @"developer.mark.lead"}, {ExteriaMarkSenko, @"developer.mark.senko"},
-        {ExteriaMarkTester, @"developer.mark.tester"}, {ExteriaMarkOfficialTester, @"developer.mark.official"}, {ExteriaMarkBugHunter, @"developer.mark.hunter"},
-        {ExteriaMarkManager, @"developer.mark.manager"}, {ExteriaMarkPromotion, @"developer.mark.promotion"}, {ExteriaMarkCaution, @"developer.mark.caution"}
+        {ExteriaMarkTester, @"developer.mark.tester"}, {ExteriaMarkOfficialTester, @"developer.mark.official"}, {ExteriaMarkBugHunter, @"developer.mark.hunter"}, {ExteriaMarkFlawSeer, @"developer.mark.flawseer"},
+        {ExteriaMarkManager, @"developer.mark.manager"}, {ExteriaMarkVideoFix, @"developer.mark.videofix"}, {ExteriaMarkPromotion, @"developer.mark.promotion"}, {ExteriaMarkCaution, @"developer.mark.caution"}
     };
     NSMutableArray *titles = [NSMutableArray array];
     for (size_t i = 0; i < sizeof(marks) / sizeof(marks[0]); ++i) [titles addObject:NSLocalizedString(marks[i].key, nil)];
@@ -247,7 +247,28 @@ static UIView *ExteriaDeveloperHost(void) {
             if (again) [again markEverythingRead];
         });
     }];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    ExteriaSettingsRow *classic = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"developer.classic", nil) subtitle:NSLocalizedString(@"developer.classic.info", nil)
+                                                                      on:[defaults boolForKey:ExteriaClassicAnywhereKey] toggle:^(BOOL on) {
+        [[NSUserDefaults standardUserDefaults] setBool:on forKey:ExteriaClassicAnywhereKey];
+        /* the stored choice is dropped by the theme when the classic style is gone, and the screens are rebuilt */
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil];
+    }];
+    ExteriaSettingsRow *pad = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"developer.pad", nil) subtitle:NSLocalizedString(@"developer.pad.info", nil)
+                                                                  on:[defaults boolForKey:ExteriaPadInterfaceKey] toggle:^(BOOL on) {
+        [[NSUserDefaults standardUserDefaults] setBool:on forKey:ExteriaPadInterfaceKey];
+        /* the two switches name opposite interfaces, so one that goes on puts the other off */
+        if (on) [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaPhoneInterfaceKey];
+        [(ExteriaDeveloperSettingsController *)weak.target rebuild];
+    }];
+    ExteriaSettingsRow *phone = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"developer.phone", nil) subtitle:NSLocalizedString(@"developer.phone.info", nil)
+                                                                    on:[defaults boolForKey:ExteriaPhoneInterfaceKey] toggle:^(BOOL on) {
+        [[NSUserDefaults standardUserDefaults] setBool:on forKey:ExteriaPhoneInterfaceKey];
+        if (on) [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaPadInterfaceKey];
+        [(ExteriaDeveloperSettingsController *)weak.target rebuild];
+    }];
     self.sections = [NSArray arrayWithObjects:
+        [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.interface.header", nil) footer:NSLocalizedString(@"developer.interface.footer", nil) rows:[NSArray arrayWithObjects:classic, pad, phone, nil]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"logs.header", nil) footer:nil rows:[NSArray arrayWithObject:logs]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.readall.header", nil) footer:nil rows:[NSArray arrayWithObject:readAll]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.badges.header", nil) footer:nil rows:[NSArray arrayWithObject:badges]],
@@ -256,6 +277,10 @@ static UIView *ExteriaDeveloperHost(void) {
         [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:
             [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolClose title:NSLocalizedString(@"developer.hide", nil) destructive:YES tap:^{
                 ExteriaDeveloperModeSet(NO);
+                /* the switches belong to the page, so hiding it puts the interface back */
+                [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaClassicAnywhereKey];
+                [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaPadInterfaceKey];
+                [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaPhoneInterfaceKey];
                 [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDeveloperModeDidChangeNotification object:nil];
                 [((ExteriaDeveloperSettingsController *)weak.target).navigationController popViewControllerAnimated:YES];
             }]]], nil];

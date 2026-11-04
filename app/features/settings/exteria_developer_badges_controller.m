@@ -26,7 +26,9 @@ static const ExteriaBadgeEntry ExteriaBadgeEntries[] = {
     {ExteriaMarkTester, EXTERIA_TESTER_DOCUMENT, @"developer.mark.tester", @"developer.tester"},
     {ExteriaMarkOfficialTester, EXTERIA_OFFICIAL_TESTER_DOCUMENT, @"developer.mark.official", @"developer.official_tester"},
     {ExteriaMarkBugHunter, EXTERIA_BUG_HUNTER_DOCUMENT, @"developer.mark.hunter", @"developer.bug_hunter.notice"},
+    {ExteriaMarkFlawSeer, EXTERIA_FLAW_SEER_DOCUMENT, @"developer.mark.flawseer", @"developer.flaw_seer.notice"},
     {ExteriaMarkManager, EXTERIA_MANAGER_DOCUMENT, @"developer.mark.manager", @"developer.manager"},
+    {ExteriaMarkVideoFix, EXTERIA_VIDEO_FIX_DOCUMENT, @"developer.mark.videofix", @"developer.videofix"},
     {ExteriaMarkPromotion, EXTERIA_PROMOTION_DOCUMENT, @"developer.mark.promotion", @"developer.promotion"},
     {ExteriaMarkCaution, EXTERIA_CAUTION_DOCUMENT, @"developer.mark.caution", @"developer.caution"},
 };

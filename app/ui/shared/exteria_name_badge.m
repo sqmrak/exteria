@@ -36,12 +36,12 @@ NSString *ExteriaNameWithBadges(NSString *name, long long document, NSUInteger m
     if ((!document && !marks) || !name.length) return name;
     NSMutableString *text = [NSMutableString stringWithString:name];
     NSMutableArray *list = [NSMutableArray array];
-    long long documents[10] = {document, marks & ExteriaMarkDeveloper ? EXTERIA_DEVELOPER_DOCUMENT : 0, marks & ExteriaMarkLead ? EXTERIA_LEAD_DOCUMENT : 0,
+    long long documents[12] = {document, marks & ExteriaMarkDeveloper ? EXTERIA_DEVELOPER_DOCUMENT : 0, marks & ExteriaMarkLead ? EXTERIA_LEAD_DOCUMENT : 0,
                               marks & ExteriaMarkSenko ? EXTERIA_SENKO_DOCUMENT : 0, marks & ExteriaMarkTester ? EXTERIA_TESTER_DOCUMENT : 0,
                               marks & ExteriaMarkCaution ? EXTERIA_CAUTION_DOCUMENT : 0, marks & ExteriaMarkPromotion ? EXTERIA_PROMOTION_DOCUMENT : 0,
                               marks & ExteriaMarkBugHunter ? EXTERIA_BUG_HUNTER_DOCUMENT : 0, marks & ExteriaMarkOfficialTester ? EXTERIA_OFFICIAL_TESTER_DOCUMENT : 0,
-                               marks & ExteriaMarkManager ? EXTERIA_MANAGER_DOCUMENT : 0};
-    for (int i = 0; i < 10; ++i) {
+                               marks & ExteriaMarkManager ? EXTERIA_MANAGER_DOCUMENT : 0, marks & ExteriaMarkVideoFix ? EXTERIA_VIDEO_FIX_DOCUMENT : 0, marks & ExteriaMarkFlawSeer ? EXTERIA_FLAW_SEER_DOCUMENT : 0};
+    for (int i = 0; i < 12; ++i) {
         if (!documents[i]) continue;
         [text appendString:@" "];
         ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
