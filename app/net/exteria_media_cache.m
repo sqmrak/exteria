@@ -6,10 +6,13 @@
 #import "exteria_message.h"
 #import "exteria_remote_file.h"
 #import "exteria_session_actions.h"
+#include "exteria_cache_kind.h"
 #include "exteria_id3.h"
 #include "exteria_mt_files.h"
 
 #include <stdio.h>
+#include <errno.h>
+#include <string.h>
 
 /* about two screens of stickers and photos at the sizes the app shows them */
 #define MEMORY_BYTES (10 * 1024 * 1024)
@@ -359,7 +362,8 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
 }
 
 - (void)loadEmbeddedCoverOfFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
-    NSString *coverKey = [@"cover-" stringByAppendingString:file.key];
+    /* old empty cache files also recorded truncated and unsupported tags as absent */
+    NSString *coverKey = [@"cover-v2-" stringByAppendingString:file.key];
     NSString *imageKey = ExteriaImageKey(file, maxSide);
     imageKey = [@"cover-" stringByAppendingString:imageKey];
     UIImage *cached = [_memory objectForKey:imageKey];
@@ -392,13 +396,13 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         [done release];
     };
     void (^deliverCopy)(UIImage *, BOOL) = [deliver copy];
-    /* work queue: keeps the picture on disk, an empty file for a track that has none, and decodes it for this size */
+    /* only a decoded picture is durable; a failed or incomplete read can be tried again */
     void (^settle)(NSData *) = ^(NSData *picture) {
         dispatch_async(_work, ^{
             NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-            if (![(picture ? picture : [NSData data]) writeToFile:path atomically:YES]) NSLog(@"exteria: cannot cache the cover of %@", file.key);
             UIImage *image = picture ? ExteriaDecodeImage(picture, maxSide) : nil;
-            dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, NO); [deliverCopy release]; });
+            if (image && ![picture writeToFile:path atomically:YES]) NSLog(@"exteria: cannot cache the cover of %@", file.key);
+            dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, image == nil); [deliverCopy release]; });
             [pool drain];
         });
     };
@@ -442,13 +446,15 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
                                     NSAutoreleasePool *wholePool = [[NSAutoreleasePool alloc] init];
                                     NSData *found = nil;
                                     size_t again = 0;
-                                    ExteriaCoverOfHead(whole, &found, &again);
+                                    exteria_status parsed = ExteriaCoverOfHead(whole, &found, &again);
+                                    if (parsed != EXTERIA_OK && parsed != EXTERIA_E_NOTFOUND) NSLog(@"exteria: cover tag of %@: %s", file.key, exteria_status_name(parsed));
                                     dispatch_async(dispatch_get_main_queue(), ^{ settleCopy(found); [settleCopy release]; });
                                     [wholePool drain];
                                 });
                             }];
                         });
                     } else {
+                        if (status != EXTERIA_OK && status != EXTERIA_E_NOTFOUND) NSLog(@"exteria: cover tag of %@: %s", file.key, exteria_status_name(status));
                         dispatch_async(dispatch_get_main_queue(), ^{ settleCopy(picture); [settleCopy release]; });
                     }
                     [headPool drain];
@@ -638,12 +644,58 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     }];
 }
 
+#define UPLOADED_NOTE_SUFFIX @".uploaded"
+
+/* whether a file of stored bytes is the whole file the server describes with size. a file of our own upload may weigh something else than the document the server made of it, so the
+   upload leaves a note beside it with the size it was stored at, and that size counts as whole; a copy cut short by a crash matches neither */
+- (BOOL)storedSize:(unsigned long long)stored isWholeAt:(NSString *)final size:(long long)size {
+    if (stored == 0) return NO;
+    if (size == 0) return stored > FILE_BYTES_MAX;
+    if (stored == (unsigned long long)size) return YES;
+    NSString *note = [NSString stringWithContentsOfFile:[final stringByAppendingString:UPLOADED_NOTE_SUFFIX] encoding:NSUTF8StringEncoding error:NULL];
+    return note.length && (unsigned long long)[note longLongValue] == stored;
+}
+
+- (void)cacheUploadedPath:(NSString *)path forFile:(ExteriaRemoteFile *)file size:(long long)size temporary:(BOOL)temporary completion:(void (^)(BOOL))completion {
+    NSString *destination = file.key ? [self pathForFile:file] : nil;
+    dispatch_async(_work, ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        NSFileManager *files = [NSFileManager defaultManager];
+        NSDictionary *attributes = [files attributesOfItemAtPath:path error:NULL];
+        unsigned long long actual = [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
+        BOOL valid = destination && actual > 0 && actual <= (unsigned long long)PATH_BYTES_MAX;
+        BOOL stored = NO;
+        if (valid) {
+            NSString *partial = [destination stringByAppendingFormat:@".%llu.part", (unsigned long long)exteria_file_temporary_token()];
+            NSError *error = nil;
+            if ([files copyItemAtPath:path toPath:partial error:&error]) {
+                stored = rename(partial.fileSystemRepresentation, destination.fileSystemRepresentation) == 0;
+                if (!stored) NSLog(@"exteria: cannot place uploaded file in cache: %s", strerror(errno));
+                if (stored && actual != (unsigned long long)size) {
+                    NSLog(@"exteria: the server describes the upload as %lld bytes and it weighs %llu; the stored file is kept at its own size", size, actual);
+                    NSError *noteError = nil;
+                    if (![[NSString stringWithFormat:@"%llu", actual] writeToFile:[destination stringByAppendingString:UPLOADED_NOTE_SUFFIX] atomically:YES encoding:NSUTF8StringEncoding error:&noteError]) {
+                        NSLog(@"exteria: the note of the uploaded size was not written: %@", noteError);
+                        [files removeItemAtPath:destination error:NULL];
+                        stored = NO;
+                    }
+                }
+                if (stored) [self trimDiskKeepingPath:destination removePartials:NO];
+                else [files removeItemAtPath:partial error:NULL];
+            } else NSLog(@"exteria: cannot copy uploaded file to cache: %@", error);
+        }
+        if (temporary && ![files removeItemAtPath:path error:NULL]) NSLog(@"exteria: cannot remove uploaded temporary file %@", path);
+        if (completion) dispatch_async(dispatch_get_main_queue(), ^{ completion(stored); });
+        [pool drain];
+    });
+}
+
 - (NSString *)cachedPathForFile:(ExteriaRemoteFile *)file size:(long long)size {
     if (!file.key || size < 0 || [_pathWaiters objectForKey:file.key]) return nil;
     NSString *final = [self pathForFile:file];
     NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:final error:NULL];
     unsigned long long stored = [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
-    return stored > 0 && (size == 0 ? stored > FILE_BYTES_MAX : stored == (unsigned long long)size) ? final : nil;
+    return [self storedSize:stored isWholeAt:final size:size] ? final : nil;
 }
 
 - (NSUInteger)loadPathForFile:(ExteriaRemoteFile *)file size:(long long)size progress:(void (^)(float))progress completion:(void (^)(NSString *))completion {
@@ -661,7 +713,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         /* a finished copy from an earlier ask is the file; one cut short by a crash is not, so only a size match counts */
         NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:final error:NULL];
         unsigned long long stored = [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
-        if (stored > 0 && (size == 0 ? stored > FILE_BYTES_MAX : stored == (unsigned long long)size)) {
+        if ([self storedSize:stored isWholeAt:final size:size]) {
             completion(final);
             return 0;
         }
@@ -798,6 +850,67 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         total += [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
     }
     return total;
+}
+
+/* the kind of one file by its first bytes; a file that cannot be read counts as other */
+static exteria_cache_kind ExteriaCacheKindOfFile(NSString *directory, NSString *name) {
+    uint8_t head[16];
+    size_t got = 0;
+    FILE *file = fopen([[directory stringByAppendingPathComponent:name] fileSystemRepresentation], "rb");
+    if (file) {
+        got = fread(head, 1, sizeof(head), file);
+        fclose(file);
+    }
+    return exteria_cache_classify(name.UTF8String, head, got);
+}
+
+- (void)loadKindBytes:(void (^)(const unsigned long long *bytes))completion {
+    void (^done)(const unsigned long long *) = [completion copy];
+    NSString *directory = [[_directory copy] autorelease];
+    dispatch_async(_work, ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        unsigned long long totals[EXTERIA_CACHE_KIND_COUNT];
+        memset(totals, 0, sizeof(totals));
+        NSFileManager *files = [NSFileManager defaultManager];
+        for (NSString *name in [files contentsOfDirectoryAtPath:directory error:NULL]) {
+            if ([name hasSuffix:@".part"]) continue;
+            NSDictionary *attributes = [files attributesOfItemAtPath:[directory stringByAppendingPathComponent:name] error:NULL];
+            if (!attributes) continue;
+            totals[ExteriaCacheKindOfFile(directory, name)] += [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
+        }
+        NSData *packed = [NSData dataWithBytes:totals length:sizeof(totals)];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            done((const unsigned long long *)packed.bytes);
+            [done release];
+        });
+        [pool drain];
+    });
+}
+
+- (void)clearKindsMask:(unsigned)mask completion:(void (^)(BOOL))completion {
+    [_memory removeAllObjects];
+    [_failures removeAllObjects];
+    void (^done)(BOOL) = [completion copy];
+    dispatch_async(_work, ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        NSFileManager *files = [NSFileManager defaultManager];
+        NSError *scanError = nil;
+        NSArray *names = [files contentsOfDirectoryAtPath:_directory error:&scanError];
+        BOOL success = names != nil;
+        if (!names) NSLog(@"exteria: cannot scan cache %@: %@", _directory, scanError);
+        for (NSString *name in names) {
+            if ([name hasSuffix:@".part"]) continue;
+            if (!(mask & (1u << ExteriaCacheKindOfFile(_directory, name)))) continue;
+            NSError *error = nil;
+            if (![files removeItemAtPath:[_directory stringByAppendingPathComponent:name] error:&error]) {
+                NSLog(@"exteria: cannot remove %@: %@", name, error);
+                success = NO;
+            }
+        }
+        _diskBytesUntilTrim = 0;
+        dispatch_async(dispatch_get_main_queue(), ^{ if (done) done(success); [done release]; });
+        [pool drain];
+    });
 }
 
 - (void)clear {
