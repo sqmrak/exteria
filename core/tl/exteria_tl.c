@@ -656,6 +656,18 @@ exteria_status exteria_tl_set(exteria_tl_value *obj, const char *field, exteria_
     return EXTERIA_OK;
 }
 
+exteria_status exteria_tl_clear(exteria_tl_value *obj, const char *field) {
+    const exteria_tl_field *f;
+    int idx;
+    if (!obj || obj->kind != EXTERIA_TL_V_OBJ) return EXTERIA_E_ARG;
+    idx = exteria_tl_field_index(obj->u.obj.ctor, field);
+    if (idx < 0) return EXTERIA_E_NOTFOUND;
+    f = &exteria_tl_ctor_fields(obj->u.obj.ctor)[idx];
+    if (type_at(f->type)->kind == EXTERIA_TL_K_FLAGS) return EXTERIA_E_ARG;
+    obj->u.obj.fields[idx] = NULL;
+    return EXTERIA_OK;
+}
+
 exteria_status exteria_tl_set_i32(exteria_arena *a, exteria_tl_value *obj, const char *field, int32_t x) {
     exteria_tl_value *v = exteria_tl_new_i32(a, x);
     return v ? exteria_tl_set(obj, field, v) : EXTERIA_E_NOMEM;

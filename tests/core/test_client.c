@@ -15,6 +15,8 @@ typedef struct fixture {
     exteria_status save_error;
     unsigned calls;
     unsigned folders;
+    unsigned typings;
+    exteria_typing last_typing;
     int64_t last_call;
 } fixture;
 
@@ -44,6 +46,11 @@ static void error(void *ctx, exteria_status status, const char *boundary) {
     ++f->errors;
 }
 static void folders_changed(void *ctx) { ++((fixture *)ctx)->folders; }
+static void on_typing(void *ctx, const exteria_typing *typing) {
+    fixture *f = ctx;
+    ++f->typings;
+    f->last_typing = *typing;
+}
 static void on_call(void *ctx, const exteria_tl_value *call) {
     fixture *f = ctx;
     CHECK(exteria_tl_is(call, EXTERIA_TL_ID_phoneCallRequested));
@@ -70,6 +77,7 @@ static void start(fixture *f, int first) {
     memset(&events, 0, sizeof(events)); memset(&config, 0, sizeof(config));
     events.ctx = f; events.send = send_bytes; events.load_session = load; events.save_session = save;
     events.auth = auth; events.changed = changed; events.error = error; events.phone_call = on_call; events.folders_changed = folders_changed;
+    events.typing = on_typing;
     config.dc_id = 2; config.api_id = 12345; config.clock = &f->clock; config.transport = EXTERIA_MT_INTERMEDIATE;
     exteria_mt_transport_init(&f->server);
     CHECK_EQ_INT(exteria_mt_transport_start_server(&f->server, NULL), EXTERIA_OK);
@@ -226,6 +234,18 @@ int main(void) {
     start(&f, 1);
     CHECK_EQ_INT(exteria_store_open(&s, ":memory:", 1), EXTERIA_OK);
     CHECK_EQ_INT(exteria_client_attach_store(&f.client, s, 1), EXTERIA_OK);
+    /* a full transport queue must not leave update recovery suspended forever */
+    {
+        uint32_t limit = f.client.mt.config.max_pending;
+        f.client.mt.config.max_pending = 0;
+        CHECK_EQ_INT(exteria_client_tick(&f.client, &ms), EXTERIA_E_LIMIT);
+        CHECK(f.client.sync_suspended && f.client.sync_retry);
+        f.client.mt.config.max_pending = limit;
+        exteria_client_resume_sync(&f.client);
+        CHECK(!f.client.sync_suspended && !f.client.sync_retry);
+        CHECK_EQ_INT(f.errors, 1);
+        f.errors = 0;
+    }
     CHECK_EQ_INT(exteria_client_tick(&f.client, &ms), EXTERIA_OK);
     msg_id = pop(&f, &a, &request);
     CHECK(exteria_tl_is(request, EXTERIA_TL_ID_updates_getState));
@@ -236,6 +256,19 @@ int main(void) {
     CHECK_EQ_INT(exteria_tl_set_i32(&a, v, "date", 100), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_set_i32(&a, v, "unread_count", 0), EXTERIA_OK);
     reply(&f, msg_id, v);
+    {
+        exteria_tl_value *short_update = exteria_tl_new_obj(&a, "updateShort");
+        exteria_tl_value *typing = exteria_tl_new_obj(&a, "updateUserTyping");
+        CHECK_EQ_INT(exteria_tl_set_i64(&a, typing, "user_id", 2), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set(typing, "action", exteria_tl_new_obj(&a, "sendMessageTypingAction")), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set(short_update, "update", typing), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(&a, short_update, "date", 100), EXTERIA_OK);
+        push(&f, short_update);
+        CHECK_EQ_INT(f.typings, 1);
+        CHECK_EQ_INT(f.last_typing.peer_kind, 1);
+        CHECK_EQ_INT(f.last_typing.peer_id, 2);
+        CHECK_EQ_INT(f.last_typing.action, EXTERIA_TYPING_TEXT);
+    }
     CHECK_EQ_INT(exteria_client_send(&f.client, peer, send_request(&a, INT64_MIN + 90)), EXTERIA_OK);
     CHECK_EQ_INT(exteria_client_tick(&f.client, &ms), EXTERIA_OK);
     msg_id = pop(&f, &a, &request);

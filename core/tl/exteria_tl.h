@@ -90,6 +90,8 @@ exteria_status exteria_tl_set_f64(exteria_arena *a, exteria_tl_value *obj, const
 exteria_status exteria_tl_set_bytes(exteria_arena *a, exteria_tl_value *obj, const char *field, const void *data, size_t len);
 exteria_status exteria_tl_set_str(exteria_arena *a, exteria_tl_value *obj, const char *field, const char *s);
 exteria_status exteria_tl_set_flag(exteria_tl_value *obj, const char *field);
+/* takes an optional field or a flag off the object, as if the sender had not set it; EXTERIA_E_NOTFOUND for a field the constructor does not have */
+exteria_status exteria_tl_clear(exteria_tl_value *obj, const char *field);
 exteria_status exteria_tl_set_i64_vec(exteria_arena *a, exteria_tl_value *obj, const char *field, const int64_t *v, uint32_t count);
 exteria_status exteria_tl_set_i32_vec(exteria_arena *a, exteria_tl_value *obj, const char *field, const int32_t *v, uint32_t count);
 

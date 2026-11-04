@@ -169,6 +169,7 @@ static void rpc_result(void *ctx, uint64_t id, const exteria_mt_rpc_result *r) {
             exteria_updates_state(&c->updates, r->value) : exteria_updates_difference(&c->updates, c->sync_channel, r->value);
         if (status != EXTERIA_OK) {
             c->sync_suspended = 1;
+            c->sync_retry = 1;
             report(c, status, "updates difference");
         } else {
             if (c->sync_again) {
@@ -356,7 +357,9 @@ exteria_status exteria_client_send(exteria_client *c, exteria_peer peer, const e
 }
 
 void exteria_client_resume_sync(exteria_client *c) {
-    if (c) c->sync_suspended = 0;
+    if (!c) return;
+    c->sync_suspended = 0;
+    c->sync_retry = 0;
 }
 
 static exteria_status sync_start(exteria_client *c, exteria_arena *arena) {
@@ -423,7 +426,10 @@ exteria_status exteria_client_tick(exteria_client *c, uint32_t *next_ms) {
             if (status != EXTERIA_OK) {
                 c->sync_suspended = 1;
                 if (status == EXTERIA_E_NOTFOUND && c->events.recover_history) c->events.recover_history(c->events.ctx, c->updates.gap_channel);
-                else report(c, status, "updates request");
+                else {
+                    c->sync_retry = 1;
+                    report(c, status, "updates request");
+                }
             }
         }
         if (status == EXTERIA_OK && !c->outbox_id) status = outbox_start(c, &arena);

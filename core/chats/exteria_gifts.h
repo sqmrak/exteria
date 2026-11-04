@@ -117,5 +117,7 @@ exteria_status exteria_gift_convert_request(exteria_arena *arena, int32_t msg_id
 exteria_status exteria_gift_upgrade_request(exteria_arena *arena, int32_t msg_id, int keep_details, exteria_tl_value **out);
 exteria_status exteria_gift_transfer_request(exteria_arena *arena, int32_t msg_id, const exteria_peer_ref *to, exteria_tl_value **out);
 exteria_status exteria_gift_pin_request(exteria_arena *arena, const int32_t *msg_ids, size_t count, exteria_tl_value **out);
+/* account.updateEmojiStatus: the unique gift with this id worn after the name of the account, or, with zero, whatever status there is taken off */
+exteria_status exteria_gift_wear_request(exteria_arena *arena, int64_t collectible_id, exteria_tl_value **out);
 
 #endif

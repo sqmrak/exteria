@@ -102,6 +102,7 @@ exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_f
         out->about[len] = 0;
     }
     out->require_premium = exteria_tl_has(full, "contact_require_premium") ? 1 : 0;
+    out->blocked = exteria_tl_has(full, "blocked") ? 1 : 0;
     out->sharing_restricted = exteria_tl_has(full, "noforwards_my_enabled") || exteria_tl_has(full, "noforwards_peer_enabled");
     users = exteria_tl_get(answer, "users");
     chats = exteria_tl_get(answer, "chats");

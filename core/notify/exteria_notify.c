@@ -44,9 +44,8 @@ static const char *plain_word(int russian) {
 }
 
 static void write_event(exteria_notify_event *event, const exteria_dialog_row *row, const exteria_notify_settings *settings, const exteria_notify_decision *decision, int32_t fresh_count) {
-    char lead[16] = "";
-    /* room for the count, a sender, the text and the separator whole; copy_clean then cuts to the field */
-    char body[sizeof(lead) + EXTERIA_DIALOG_SENDER_MAX + EXTERIA_DIALOG_TEXT_MAX + 8];
+    /* room for a sender, the text and the separator whole; copy_clean then cuts to the field */
+    char body[EXTERIA_DIALOG_SENDER_MAX + EXTERIA_DIALOG_TEXT_MAX + 8];
     const char *text;
     memset(event, 0, sizeof(*event));
     event->peer_kind = row->peer_kind;
@@ -55,14 +54,13 @@ static void write_event(exteria_notify_event *event, const exteria_dialog_row *r
     event->count = fresh_count > 0 ? fresh_count : 1;
     copy_clean(event->title, sizeof(event->title), row->title[0] ? row->title : "Telegram");
     event->sound = decision->sound;
-    if (event->count > 1) snprintf(lead, sizeof(lead), "(%d) ", (int)event->count);
     if (decision->previews) {
         text = row->text[0] ? row->text : media_word(row->preview, settings->russian);
         if (!text[0]) text = plain_word(settings->russian);
-        if (row->sender[0] && (row->kind == EXTERIA_DIALOG_GROUP || row->kind == EXTERIA_DIALOG_CHANNEL)) snprintf(body, sizeof(body), "%s%s: %s", lead, row->sender, text);
-        else snprintf(body, sizeof(body), "%s%s", lead, text);
+        if (row->sender[0] && (row->kind == EXTERIA_DIALOG_GROUP || row->kind == EXTERIA_DIALOG_CHANNEL)) snprintf(body, sizeof(body), "%s: %s", row->sender, text);
+        else snprintf(body, sizeof(body), "%s", text);
     } else {
-        snprintf(body, sizeof(body), "%s%s", lead, plain_word(settings->russian));
+        snprintf(body, sizeof(body), "%s", plain_word(settings->russian));
     }
     copy_clean(event->body, sizeof(event->body), body);
 }

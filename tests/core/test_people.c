@@ -139,7 +139,11 @@ static void test_emoji_status(void) {
 
     status = obj("emojiStatusCollectible");
     set_i64(status, "document_id", 88);
+    set_i64(status, "collectible_id", 4242);
     set(u, "emoji_status", status);
+    CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.emoji_status_collectible, 4242);
+    CHECK_EQ_INT(exteria_emoji_status_collectible(u), 4242);
     exteria_emoji_status_read(u, &doc, &until);
     CHECK_EQ_INT(doc, 88);
     CHECK_EQ_INT(until, 0);

@@ -26,6 +26,7 @@ double exteria_motion_duration(exteria_motion_curve curve) {
     case EXTERIA_MOTION_NAVIGATION: return 0.32;
     case EXTERIA_MOTION_LIST_MOVE: return 0.25;
     case EXTERIA_MOTION_DISMISS: return 0.2;
+    case EXTERIA_MOTION_SHEET_DISMISS: return 0.25;
     }
     return 0.0;
 }
@@ -61,6 +62,9 @@ double exteria_motion_progress(exteria_motion_curve curve, double time) {
         double remaining = 1.0 - time;
         return 1.0 - remaining * remaining;
     }
+    /* BottomSheet.dismiss: 250 ms on CubicBezierInterpolator.EASE_OUT. The quint of the way in is the wrong curve for a sheet that leaves: it covers most of the
+       distance in the first frames and then crawls, which reads as a jerk */
+    case EXTERIA_MOTION_SHEET_DISMISS: return bezier(time, 0.0, 0.0, 0.58, 1.0);
     }
     return 0.0;
 }

@@ -73,6 +73,13 @@ void exteria_emoji_status_read(const exteria_tl_value *user, int64_t *document, 
     if (until) *until = id ? end : 0;
 }
 
+int64_t exteria_emoji_status_collectible(const exteria_tl_value *user) {
+    const exteria_tl_value *status = exteria_tl_get(user, "emoji_status");
+    int64_t id = 0;
+    if (!exteria_tl_is(status, EXTERIA_TL_ID_emojiStatusCollectible) || exteria_tl_get_i64(status, "collectible_id", &id) != EXTERIA_OK || id <= 0) return 0;
+    return id;
+}
+
 static int vec_i32(const exteria_tl_value *vec, uint32_t index, int32_t *out) {
     if (!vec || vec->kind != EXTERIA_TL_V_VEC || index >= vec->u.vec.count) return 0;
     if (!vec->u.vec.items[index] || vec->u.vec.items[index]->kind != EXTERIA_TL_V_I32) return 0;
@@ -160,6 +167,7 @@ exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person
     out->mutual = exteria_tl_has(user, "mutual_contact") ? 1 : 0;
     out->premium = exteria_tl_has(user, "premium") ? 1 : 0;
     exteria_emoji_status_read(user, &out->emoji_status, &out->emoji_status_until);
+    out->emoji_status_collectible = exteria_emoji_status_collectible(user);
     backdrop_read(user, out);
     profile_color_read(user, out);
     out->deleted = exteria_tl_has(user, "deleted") ? 1 : 0;

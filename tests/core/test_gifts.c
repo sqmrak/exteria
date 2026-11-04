@@ -415,6 +415,20 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_gift_pin_request(&arena, NULL, 0, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_gift_pin_request(&arena, zero, 2, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_gift_pin_request(&arena, ids, 7, &request), EXTERIA_E_ARG);
+    /* a gift worn as the status, and the status taken off */
+    CHECK_EQ_INT(exteria_gift_wear_request(&arena, INT64_C(5000000000), &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_account_updateEmojiStatus);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "emoji_status"), EXTERIA_TL_ID_inputEmojiStatusCollectible));
+    {
+        int64_t id = 0;
+        CHECK_EQ_INT(exteria_tl_get_i64(exteria_tl_get(request, "emoji_status"), "collectible_id", &id), EXTERIA_OK);
+        CHECK_EQ_INT(id, INT64_C(5000000000));
+    }
+    CHECK_EQ_INT(exteria_gift_wear_request(&arena, 0, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_account_updateEmojiStatus);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "emoji_status"), EXTERIA_TL_ID_emojiStatusEmpty));
+    CHECK_EQ_INT(exteria_gift_wear_request(&arena, -1, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
     CHECK_EQ_INT(exteria_gift_convert_request(&arena, -1, &request), EXTERIA_E_ARG);
     CHECK(request == NULL);
 }

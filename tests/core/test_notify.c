@@ -59,6 +59,11 @@ static void test_baseline_and_new(void) {
     CHECK_EQ_INT(events[0].message_id, 101);
     CHECK(!strcmp(events[0].title, "Ann"));
     CHECK(!strcmp(events[0].body, "second"));
+    /* several new messages of one chat are still one line with the last words: no count stands before them */
+    rows[0] = row(10, 103, "Ann", "fourth");
+    rows[0].unread_count = 6;
+    CHECK_EQ_INT(run(&state, &s, rows, 2, events, 4, &more), 1);
+    CHECK(!strcmp(events[0].body, "fourth"));
     /* and only once */
     CHECK_EQ_INT(run(&state, &s, rows, 2, events, 4, &more), 0);
     /* a chat the first look did not know that brings a message now is new */
