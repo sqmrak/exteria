@@ -271,8 +271,14 @@
     if (!_inputEnabled || _typed.length >= EXTERIA_PASSCODE_PIN_LEN) return;
     [_typed appendFormat:@"%ld", (long)key.tag];
     [self refreshDots];
-    /* the last dot shows before the owner judges the code, which may answer with a shake at once */
-    if (_typed.length == EXTERIA_PASSCODE_PIN_LEN) [self performSelector:@selector(submitTyped) withObject:nil afterDelay:0.1];
+    if (_typed.length == EXTERIA_PASSCODE_PIN_LEN) [self scheduleSubmit];
+}
+
+/* the last dot shows before the owner judges the code, which may answer with a shake at once. the pad stops taking touches meanwhile: a key pressed in
+   this gap is still down when a correct code takes the lock window away, and ios 6 then calls the delegate of a gesture recognizer that was freed with it */
+- (void)scheduleSubmit {
+    self.inputEnabled = NO;
+    [self performSelector:@selector(submitTyped) withObject:nil afterDelay:0.1];
 }
 
 - (void)deletePressed {
@@ -283,7 +289,12 @@
 
 - (void)submitTyped {
     NSString *code = [[_typed copy] autorelease];
+    [self retain];
     if (code.length && _submit) _submit(code);
+    /* a rejected code clears the digits and leaves the pad in its window to be used again; an accepted one takes the view out of the window or leaves the
+       digits in place while the screen moves on */
+    if (self.window && !_holdTimer && !_inputEnabled && _typed.length < EXTERIA_PASSCODE_PIN_LEN) self.inputEnabled = YES;
+    [self release];
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField *)field {

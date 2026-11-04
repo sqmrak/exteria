@@ -67,6 +67,8 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
 
 + (void)presentInView:(UIView *)host title:(NSString *)title message:(NSString *)message options:(NSArray *)options destructive:(NSIndexSet *)destructive
           cancelTitle:(NSString *)cancelTitle handler:(void (^)(NSUInteger))handler {
+    /* a view put in the window itself keeps the turn of the device before ios 8, and on an ipad held sideways the sheet lay on its side: the screen on top turns with the interface */
+    if ([host isKindOfClass:[UIWindow class]] && ExteriaOverlayHost()) host = ExteriaOverlayHost();
     ExteriaSheet *sheet = [[[ExteriaSheet alloc] initWithFrame:host.bounds] autorelease];
     sheet.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     sheet->_handler = [handler copy];
@@ -148,8 +150,14 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
 - (void)enter {
     CGFloat shift = _stack.frame.size.height + 40;
     _stack.transform = CGAffineTransformMakeTranslation(0, shift);
+    /* the two cards clip their rows with rounded corners, which is drawn off screen on every frame of the slide; as a bitmap it slides as a picture */
+    ExteriaCacheForMotion(_stack);
+    UIView *stack = _stack;
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.42, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_stack, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_stack, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, ^(BOOL finished) {
+        (void)finished;
+        ExteriaUncacheAfterMotion(stack);
+    });
 }
 
 - (void)leaveThen:(void (^)(void))after {
@@ -158,6 +166,7 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     self.userInteractionEnabled = NO;
     void (^next)(void) = [after copy];
     [self retain];
+    ExteriaCacheForMotion(_stack);
     ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
     ExteriaAnimateView(_stack, CGAffineTransformMakeTranslation(0, _stack.frame.size.height + 40), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
         (void)finished;

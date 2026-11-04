@@ -10,8 +10,12 @@
 #include "exteria_typing.h"
 
 #define DOT_COUNT 3
-#define DOT_PERIOD 1.2
-#define DOT_STAGGER 0.2
+/* the beat of the typing dots of the intro of the app: sin(8 t - i), so a period of 2 pi / 8 seconds and a delay of one eighth of a second between the dots; the half of the wave
+   below zero is a rest, the dot rises 2.4 points at a size of 3 and is dimmest at 0.45 */
+#define DOT_PERIOD 0.7854
+#define DOT_STAGGER 0.125
+#define DOT_REST_ALPHA 0.45f
+#define DOT_RISE 0.8
 #define STATUS_MIN_SIZE 10.0
 
 static NSString *const ExteriaDotKey = @"exteria.status.dot";
@@ -98,7 +102,7 @@ static NSString *const ExteriaDotKey = @"exteria.status.dot";
     for (int i = 0; i < DOT_COUNT; ++i) {
         CALayer *dot = [CALayer layer];
         dot.backgroundColor = _activeColor.CGColor;
-        dot.opacity = 0.3f;
+        dot.opacity = DOT_REST_ALPHA;
         [self.layer addSublayer:dot];
         [dots addObject:dot];
     }
@@ -117,17 +121,27 @@ static NSString *const ExteriaDotKey = @"exteria.status.dot";
     CFTimeInterval now = CACurrentMediaTime();
     for (NSUInteger i = 0; i < _dots.count; ++i) {
         CALayer *dot = [_dots objectAtIndex:i];
+        NSArray *keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.25f], [NSNumber numberWithFloat:0.5f], [NSNumber numberWithFloat:1], nil];
+        NSArray *eases = [NSArray arrayWithObjects:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut], [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn],
+                          [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear], nil];
         CAKeyframeAnimation *light = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
-        light.values = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0.3f], [NSNumber numberWithFloat:1], [NSNumber numberWithFloat:0.3f],
-                        [NSNumber numberWithFloat:0.3f], nil];
-        light.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.25f], [NSNumber numberWithFloat:0.5f],
-                          [NSNumber numberWithFloat:1], nil];
-        light.duration = DOT_PERIOD;
-        light.repeatCount = HUGE_VALF;
-        light.beginTime = now + i * DOT_STAGGER;
-        light.fillMode = kCAFillModeBackwards;
+        light.values = [NSArray arrayWithObjects:[NSNumber numberWithFloat:DOT_REST_ALPHA], [NSNumber numberWithFloat:1], [NSNumber numberWithFloat:DOT_REST_ALPHA],
+                        [NSNumber numberWithFloat:DOT_REST_ALPHA], nil];
+        light.keyTimes = keyTimes;
+        light.timingFunctions = eases;
+        CAKeyframeAnimation *rise = [CAKeyframeAnimation animationWithKeyPath:@"transform.translation.y"];
+        CGFloat lift = -[self dotSide] * DOT_RISE;
+        rise.values = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:(float)lift], [NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0], nil];
+        rise.keyTimes = keyTimes;
+        rise.timingFunctions = eases;
+        CAAnimationGroup *beat = [CAAnimationGroup animation];
+        beat.animations = [NSArray arrayWithObjects:light, rise, nil];
+        beat.duration = DOT_PERIOD;
+        beat.repeatCount = HUGE_VALF;
+        beat.beginTime = now + i * DOT_STAGGER;
+        beat.fillMode = kCAFillModeBackwards;
         [dot removeAnimationForKey:ExteriaDotKey];
-        [dot addAnimation:light forKey:ExteriaDotKey];
+        [dot addAnimation:beat forKey:ExteriaDotKey];
     }
 }
 
@@ -159,9 +173,10 @@ static NSString *const ExteriaDotKey = @"exteria.status.dot";
 - (void)drawTextInRect:(CGRect)rect {
     if (!self.text.length) return;
     CGRect area = self.bounds;
+    /* the dots stand before the words, as the line of a chat that someone types in starts with them: the room they need is taken off the left of the area */
     CGFloat dots = MIN([self dotsWidth], area.size.width);
-    area.size.width -= dots;
     area.origin.x += dots;
+    area.size.width -= dots;
     ExteriaTextLayout *layout = [self layoutForWidth:area.size.width];
     NSUInteger misses = ExteriaEmojiMissCount();
     [layout drawAtPoint:[self textRectInArea:area layout:layout].origin];

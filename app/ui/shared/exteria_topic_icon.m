@@ -30,10 +30,15 @@ static UIImage *ExteriaHashImage(int32_t rgb) {
     return image;
 }
 
-UIImage *ExteriaTopicIconImage(ExteriaDialog *topic) {
-    if (topic.topicIconEmoji) {
-        UIImage *emoji = [ExteriaCustomEmoji imageForDocument:topic.topicIconEmoji];
-        if (emoji) return emoji;
+UIImage *ExteriaTopicIconImageOf(long long emoji, int32_t rgb) {
+    if (emoji) {
+        /* drawn 48 points wide, so the still at full size and not the half-size frame of an animated emoji, which was stretched to twice its pixels */
+        UIImage *picture = [ExteriaCustomEmoji stillImageForDocument:emoji];
+        if (picture) return picture;
     }
-    return ExteriaHashImage(topic.topicIconColor);
+    return ExteriaHashImage(rgb);
+}
+
+UIImage *ExteriaTopicIconImage(ExteriaDialog *topic) {
+    return ExteriaTopicIconImageOf(topic.topicIconEmoji, topic.topicIconColor);
 }

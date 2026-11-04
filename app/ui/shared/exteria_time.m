@@ -153,6 +153,16 @@ NSString *ExteriaDayText(int32_t unixDate) {
     return [ExteriaCachedFormatter(@"day", @"dMMMMyyyy", NSDateFormatterNoStyle) stringFromDate:date];
 }
 
+/* the list text drops the clock once the day is not today, but an exact last seen time has to keep it */
+static NSString *ExteriaExactSeenText(int32_t seen) {
+    NSString *day = ExteriaListTimeText(seen);
+    ExteriaRefreshDayBounds();
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:seen];
+    if ([date compare:sToday] != NSOrderedAscending) return day;
+    NSString *clock = [ExteriaCachedFormatter(@"clock", @"jmm", NSDateFormatterNoStyle) stringFromDate:date];
+    return [NSString stringWithFormat:@"%@, %@", day, clock];
+}
+
 NSString *ExteriaLastSeenText(int presence, int32_t seen) {
     switch ((exteria_presence)presence) {
     case EXTERIA_PRESENCE_ONLINE:
@@ -166,7 +176,7 @@ NSString *ExteriaLastSeenText(int presence, int32_t seen) {
             if (age >= 60 && age < 3600) return [NSString stringWithFormat:NSLocalizedString(@"seen.ago.minutes", nil), (int)(age / 60)];
             if (age >= 3600 && age < 86400) return [NSString stringWithFormat:NSLocalizedString(@"seen.ago.hours", nil), (int)(age / 3600)];
         }
-        return [NSString stringWithFormat:NSLocalizedString(@"seen.at", nil), ExteriaListTimeText(seen)];
+        return [NSString stringWithFormat:NSLocalizedString(@"seen.at", nil), ExteriaExactSeenText(seen)];
     }
     case EXTERIA_PRESENCE_RECENTLY:
         return NSLocalizedString(@"seen.recently", nil);

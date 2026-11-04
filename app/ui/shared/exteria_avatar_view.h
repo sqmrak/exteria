@@ -12,11 +12,13 @@
 /* a symbol replaces the initials when it is set */
 @property (nonatomic, assign) BOOL showsSymbol;
 @property (nonatomic, assign) ExteriaSymbol symbol;
-/* the accent gradient instead of one of the seeded colors */
+/* the accent gradient instead of one of the seeded colors; it is made of the accent color of the app, so it follows a change of it */
 @property (nonatomic, assign) BOOL accent;
 @property (nonatomic, assign) NSUInteger seed;
 /* a circle instead of the rounded square */
 @property (nonatomic, assign) BOOL circular;
+/* a transparent photo shows the view behind it */
+@property (nonatomic, assign) BOOL transparentPhoto;
 /* the ghost stands in for the initials of an account that is gone; a photo or a symbol still wins */
 @property (nonatomic, assign) BOOL deleted;
 

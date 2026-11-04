@@ -134,7 +134,13 @@ typedef enum {
     /* drawn by code, not cut from a bitmap: the hammer of the developer settings */
     ExteriaSymbolHammer,
     /* a camera with a plus at its corner, drawn by code: the button that picks a photo for the profile */
-    ExteriaSymbolCameraPlus
+    ExteriaSymbolCameraPlus,
+    /* drawn by code, for the photo and video editors: a drop for the blur brush; the dropper, the undo arrow and the cross are the vector paths of the exteraless editor */
+    ExteriaSymbolBlur,
+    ExteriaSymbolPipette,
+    ExteriaSymbolUndo,
+    /* the cross of the exteraless editors, which closes the photo and video editors */
+    ExteriaSymbolCross
 } ExteriaSymbol;
 
 /* the glyph in one color, a square of pointSize points; every symbol is a mask cut drawables, so the look is the

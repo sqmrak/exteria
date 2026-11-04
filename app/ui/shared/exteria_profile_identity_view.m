@@ -20,12 +20,14 @@
     UIActivityIndicatorView *_spinner;
     ExteriaEmojiLabel *_name;
     NSString *_developerName;
+    long long _userId;
     UILabel *_line;
 }
 @end
 
 @implementation ExteriaProfileIdentityView
 
+@synthesize userId = _userId;
 @synthesize avatar = _avatar;
 @synthesize avatarHit = _avatarHit;
 @synthesize badge = _badge;
@@ -37,6 +39,7 @@
     if (!self) return nil;
     _avatar = [[ExteriaAvatarView alloc] init];
     _avatar.circular = YES;
+    _avatar.transparentPhoto = YES;
     _avatar.accent = YES;
     _avatar.userInteractionEnabled = NO;
     [self addSubview:_avatar];
@@ -88,8 +91,16 @@
 }
 
 - (void)setName:(NSString *)name developer:(NSUInteger)marks {
+    [self setName:name badge:0 developer:marks];
+}
+
+- (void)redrawName {
+    [_name setNeedsDisplay];
+}
+
+- (void)setName:(NSString *)name badge:(long long)badge developer:(NSUInteger)marks {
     NSArray *entities = nil;
-    _name.text = ExteriaNameWithBadges(name, 0, marks, &entities);
+    _name.text = ExteriaNameWithBadges(name, badge, marks, &entities);
     _name.entities = entities;
     [_developerName release];
     _developerName = marks ? [name copy] : nil;
@@ -106,7 +117,7 @@
     CGPoint point = [tap locationInView:_name];
     NSUInteger mark = ExteriaMarkForDocument([_name customEmojiAtPoint:point]);
     if (point.y < -8 || point.y > _name.bounds.size.height + 8 || !mark) return;
-    ExteriaShowMarkNotice(_developerName, mark);
+    ExteriaShowMarkNoticeForUser(_developerName, mark, self.userId);
 }
 
 - (void)dealloc {

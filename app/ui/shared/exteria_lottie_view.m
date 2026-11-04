@@ -22,6 +22,7 @@
     BOOL _clockStarted;
     BOOL _playing;
     BOOL _once;
+    BOOL _finishPending;
     NSUInteger _lastFrame;
     BOOL _needsPoster;
     BOOL _posterRequested;
@@ -30,6 +31,7 @@
     /* the frame in flight is the first one, not a frame of the play that follows */
     BOOL _posterFrameInFlight;
     void (^_firstFrameHandler)(void);
+    void (^_finishHandler)(void);
 }
 @end
 
@@ -37,6 +39,7 @@
 
 @synthesize lastFrame = _lastFrame;
 @synthesize firstFrameHandler = _firstFrameHandler;
+@synthesize finishHandler = _finishHandler;
 @synthesize cachesPoster = _cachesPoster;
 
 static NSMutableDictionary *ExteriaPosterMemory(void) {
@@ -113,6 +116,7 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
     [_name release];
     [_packed release];
     [_firstFrameHandler release];
+    [_finishHandler release];
     [super dealloc];
 }
 
@@ -128,6 +132,7 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
         [self showCachedPoster];
     } else if (!loaded && _animation) {
         _playing = NO;
+        _finishPending = NO;
         [_animation invalidate];
         [_animation release];
         _animation = nil;
@@ -170,6 +175,8 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
 }
 
 - (void)setPlaying:(BOOL)playing {
+    /* asked to play, the view loops: the stop on the last frame belongs to playOnce alone, and left set it made an animation that was played once by a tap play once on every later start */
+    if (playing) { _once = NO; _finishPending = NO; }
     playing = playing && !ExteriaReduceMotionEnabled();
     if (playing) [self setLoaded:YES];
     playing = playing && _animation;
@@ -185,14 +192,15 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
         [self rewind];
         return;
     }
-    _once = YES;
     _requestedFrame = NSUIntegerMax;
     [self setPlaying:NO];
     [self setPlaying:YES];
+    _once = YES;
 }
 
 - (void)rewind {
     _once = NO;
+    _finishPending = NO;
     _playing = NO;
     [self setLoaded:YES];
     _needsPoster = _animation != nil;
@@ -228,6 +236,14 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
             ready();
             [ready release];
         }
+        if (_finishPending) {
+            _finishPending = NO;
+            if (_finishHandler) {
+                void (^finished)(void) = [_finishHandler autorelease];
+                _finishHandler = nil;
+                dispatch_async(dispatch_get_main_queue(), finished);
+            }
+        }
     }
     if (_playing) {
         if (!_clockStarted) {
@@ -247,6 +263,7 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
             _playing = NO;
             _needsPoster = YES;
             _posterRequested = YES;
+            _finishPending = YES;
         }
         return;
     }

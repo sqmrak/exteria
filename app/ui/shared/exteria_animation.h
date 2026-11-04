@@ -7,6 +7,15 @@ void ExteriaAnimateView(UIView *view, CGAffineTransform transform, CGFloat alpha
                         exteria_motion_curve curve, void (^completion)(BOOL finished));
 void ExteriaAnimateViewAfter(UIView *view, CGAffineTransform transform, CGFloat alpha,
                              exteria_motion_curve curve, NSTimeInterval delay, void (^completion)(BOOL finished));
+/* a card with rounded corners that clip its rows, or with a shadow, is drawn off screen again on every frame it moves, and an old gpu cannot keep up with that. drawn once
+   into a bitmap it moves and fades as a picture; the bitmap is dropped when the move ends, because a card that changes inside a cache is drawn twice */
+void ExteriaCacheForMotion(UIView *view);
+void ExteriaUncacheAfterMotion(UIView *view);
+/* gives the shadow of a card its shape, so it is not worked out from the alpha of the card and its rows on every frame */
+void ExteriaSetShadowPath(UIView *card, CGFloat radius);
+/* puts a view where frame says without disturbing its transform: the frame of a view that is being scaled or moved by an animation is not the place it stands in, and a layout pass
+   that wrote it moved the card by the size of the move for one frame. bounds and center do not depend on the transform */
+void ExteriaPlaceView(UIView *view, CGRect frame);
 void ExteriaAnimatePosition(UIView *view, CGPoint position, exteria_motion_curve curve);
 /* the view is already in its final state; this plays the way in from the given transform and alpha without
    touching it, the way ChatListItemAnimator brings in a new row */

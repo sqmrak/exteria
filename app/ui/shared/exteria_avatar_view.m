@@ -3,7 +3,9 @@
 
 #import "exteria_chat_settings.h"
 #import "exteria_emoji_label.h"
+#import "exteria_platform.h"
 #import "exteria_theme.h"
+#import <QuartzCore/QuartzCore.h>
 #import "exteria_wave.h"
 
 #define AVATAR_COLORS 7
@@ -26,6 +28,7 @@
 @synthesize accent = _accent;
 @synthesize seed = _seed;
 @synthesize circular = _circular;
+@synthesize transparentPhoto = _transparentPhoto;
 @synthesize deleted = _deleted;
 
 - (id)initWithFrame:(CGRect)frame {
@@ -76,10 +79,9 @@
     if (image == _image) return;
     [_image release];
     _image = [image retain];
-    /* a photo with see-through parts (an emoji or a sticker used as the picture) stands on the gradient of the person, as Telegram draws it, and not on the bare screen */
     CGImageAlphaInfo alpha = image.CGImage ? CGImageGetAlphaInfo(image.CGImage) : kCGImageAlphaNone;
-    _imageIsRound = image && ExteriaImageIsRound(image);
     _imageHasAlpha = alpha != kCGImageAlphaNone && alpha != kCGImageAlphaNoneSkipFirst && alpha != kCGImageAlphaNoneSkipLast;
+    _imageIsRound = image && ExteriaImageIsRound(image);
     _label.hidden = _showsSymbol || _image != nil;
     [self setNeedsDisplay];
 }
@@ -100,7 +102,15 @@
     [self retain];
     [cache loadImageForPhoto:photo completion:^(UIImage *image) {
         [self autorelease];
-        if (image && [key isEqualToString:_photoKey]) [self showImage:image];
+        if (!image || ![key isEqualToString:_photoKey]) return;
+        /* a photo that came after the row was shown fades over the initials; one the cache already held was there with the row and appears with it */
+        if (self.window && !ExteriaReduceMotionEnabled()) {
+            CATransition *fade = [CATransition animation];
+            fade.type = kCATransitionFade;
+            fade.duration = 0.2;
+            [self.layer addAnimation:fade forKey:@"photo"];
+        }
+        [self showImage:image];
     }];
 }
 - (void)setSymbol:(ExteriaSymbol)symbol { if (symbol == _symbol) return; _symbol = symbol; [self setNeedsDisplay]; }
@@ -108,6 +118,17 @@
 - (void)setSeed:(NSUInteger)seed { if (seed == _seed) return; _seed = seed; [self setNeedsDisplay]; }
 - (void)setDeleted:(BOOL)deleted { if (deleted == _deleted) return; _deleted = deleted; [self setNeedsDisplay]; }
 - (void)setCircular:(BOOL)circular { if (circular == _circular) return; _circular = circular; [self setNeedsDisplay]; }
+- (void)setTransparentPhoto:(BOOL)transparentPhoto { if (transparentPhoto == _transparentPhoto) return; _transparentPhoto = transparentPhoto; [self setNeedsDisplay]; }
+
+/* the accent color of the app as the two ends of the gradient: a lighter top over the color itself */
+static void ExteriaAccentGradient(CGFloat out[8]) {
+    CGColorRef color = ExteriaColorAccent().CGColor;
+    const CGFloat *c = CGColorGetComponents(color);
+    size_t count = CGColorGetNumberOfComponents(color);
+    CGFloat r = c[0], g = count >= 3 ? c[1] : c[0], b = count >= 3 ? c[2] : c[0];
+    out[0] = r + (1 - r) * 0.28f; out[1] = g + (1 - g) * 0.28f; out[2] = b + (1 - b) * 0.28f; out[3] = 1;
+    out[4] = r; out[5] = g; out[6] = b; out[7] = 1;
+}
 
 - (void)drawRect:(CGRect)rect {
     (void)rect;
@@ -120,7 +141,9 @@
         {0.43, 0.69, 1.00, 1, 0.26, 0.52, 0.96, 1},
         {1.00, 0.49, 0.78, 1, 0.86, 0.33, 0.67, 1},
     };
-    static const CGFloat accent[8] = {0.78, 0.50, 0.84, 1, 0.58, 0.22, 0.68, 1};
+    /* the gradient of the special avatars is the accent of the app, lighter at the top */
+    CGFloat accent[8];
+    ExteriaAccentGradient(accent);
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGRect bounds = self.bounds;
     CGFloat side = MIN(bounds.size.width, bounds.size.height);
@@ -141,7 +164,7 @@
     }
     CGContextClip(context);
     if (_image) {
-        if (_imageHasAlpha) {
+        if (_imageHasAlpha && !_transparentPhoto) {
             ExteriaFillGradient(context, CGPointMake(0, 0), CGPointMake(0, bounds.size.height), _accent ? accent : palette[_seed % AVATAR_COLORS], 2);
         }
         /* the photo fills the square, cropped to its middle */

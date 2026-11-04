@@ -6,6 +6,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #define PICTURE_POINTS 24.0
+#define BADGE_POINTS 48.0
 #define PICTURE_COUNT_MAX 400
 
 NSString *const ExteriaCustomEmojiDidLoadNotification = @"ExteriaCustomEmojiDidLoad";
@@ -27,7 +28,10 @@ static NSMutableSet *ExteriaCustomSet(NSMutableSet **slot) {
 }
 
 static NSMutableSet *ExteriaLoading;
-static NSMutableSet *ExteriaFailed;
+/* the documents that did not come, with the time they failed: a lost packet, a flood wait or a dead connection looks the same as a document the server does not have,
+   and a failure that stayed for the whole run left emoji blank until the app was restarted */
+static NSMutableDictionary *ExteriaFailed;
+#define FAILED_RETRY_SECONDS 60.0
 
 static UIImage *ExteriaTelegramVerifiedImage(void) {
     static UIImage *image;
@@ -57,32 +61,24 @@ static UIImage *ExteriaTelegramVerifiedImage(void) {
     return image;
 }
 
-/* a five pointed star with rounded corners in the blue to violet of the Premium mark, drawn once at the size the pictures use */
+/* the Premium star of Telegram for Android (the white shape of its list star), filled with the blue to violet of the Premium mark and drawn once at the size the pictures use */
 static UIImage *ExteriaPremiumStarImage(void) {
     static UIImage *star;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
+        NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_premium_star" ofType:@"png"];
+        UIImage *shape = path ? [UIImage imageWithContentsOfFile:path] : nil;
+        if (!shape) {
+            NSLog(@"exteria: the premium star picture is missing from the bundle");
+            return;
+        }
         CGFloat side = PICTURE_POINTS;
         UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, ExteriaScreenScale());
         CGContextRef context = UIGraphicsGetCurrentContext();
-        CGFloat radius = side * 0.40, inner = radius * 0.50, round = side * 0.05;
-        CGMutablePathRef path = CGPathCreateMutable();
-        for (int i = 0; i < 10; ++i) {
-            CGFloat angle = -M_PI_2 + (CGFloat)i * M_PI / 5;
-            CGFloat r = (i % 2 ? inner : radius) - round;
-            CGPoint point = CGPointMake(side / 2 + cos(angle) * r, side / 2 + sin(angle) * r + side * 0.02);
-            if (i) CGPathAddLineToPoint(path, NULL, point.x, point.y);
-            else CGPathMoveToPoint(path, NULL, point.x, point.y);
-        }
-        CGPathCloseSubpath(path);
-        /* the shape goes down in white, and the gradient is drawn over it where it already has paint */
-        CGContextSetLineJoin(context, kCGLineJoinRound);
-        CGContextSetLineWidth(context, round * 2);
-        CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
-        CGContextSetStrokeColorWithColor(context, [UIColor whiteColor].CGColor);
-        CGContextAddPath(context, path);
-        CGContextDrawPath(context, kCGPathFillStroke);
-        CGPathRelease(path);
+        CGContextSetInterpolationQuality(context, kCGInterpolationHigh);
+        /* the shape goes down first, and the gradient is drawn over it where it already has paint */
+        CGFloat width = side * 0.86, height = width * shape.size.height / shape.size.width;
+        [shape drawInRect:CGRectMake((side - width) / 2, (side - height) / 2, width, height)];
         CGContextSetBlendMode(context, kCGBlendModeSourceIn);
         CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
         CGFloat colors[8] = {0.33, 0.62, 1.0, 1.0, 0.74, 0.36, 1.0, 1.0};
@@ -106,7 +102,7 @@ static UIImage *ExteriaBundledBadge(NSString *name, UIImage **slot) {
         NSLog(@"exteria: the badge picture %@ is missing from the bundle", name);
         return nil;
     }
-    CGFloat side = PICTURE_POINTS;
+    CGFloat side = BADGE_POINTS;
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, ExteriaScreenScale());
     CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationHigh);
     [source drawInRect:CGRectMake(0, 0, side, side)];
@@ -221,23 +217,25 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
 + (UIImage *)imageForDocument:(long long)document {
     if (document == EXTERIA_TELEGRAM_VERIFIED_DOCUMENT) return ExteriaTelegramVerifiedImage();
     if (document == EXTERIA_PREMIUM_STAR_DOCUMENT) return ExteriaPremiumStarImage();
-    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion, *bugHunter, *officialTester, *manager;
+    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion, *bugHunter, *officialTester, *manager, *videoFix, *flawSeer;
     if (document == EXTERIA_BUG_HUNTER_DOCUMENT) {
         if (!bugHunter) {
             NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_bug_hunter" ofType:@"png"];
-            if (path) bugHunter = [ExteriaDecodeImageAtURL([NSURL fileURLWithPath:path], PICTURE_POINTS * ExteriaScreenScale()) retain];
+            if (path) bugHunter = [ExteriaDecodeImageAtURL([NSURL fileURLWithPath:path], BADGE_POINTS * ExteriaScreenScale()) retain];
             if (!bugHunter) NSLog(@"exteria: the bug hunter badge picture could not be decoded");
         }
         return bugHunter;
     }
     if (document == EXTERIA_OFFICIAL_TESTER_DOCUMENT) return ExteriaBundledBadge(@"badge_official_tester", &officialTester);
+    if (document == EXTERIA_FLAW_SEER_DOCUMENT) return ExteriaBundledBadge(@"badge_flaw_seer", &flawSeer);
     if (document == EXTERIA_MANAGER_DOCUMENT) return ExteriaBundledBadge(@"badge_manager", &manager);
+    if (document == EXTERIA_VIDEO_FIX_DOCUMENT) return ExteriaBundledBadge(@"badge_videofix", &videoFix);
     if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaBundledBadge(@"badge_promotion", &promotion);
     if (document == EXTERIA_CAUTION_DOCUMENT) {
         if (!caution) {
             NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_caution" ofType:@"png"];
             if (path) caution = [ExteriaDecodeImageAtURL([NSURL fileURLWithPath:path],
-                PICTURE_POINTS * EXTERIA_CAUTION_BADGE_RATIO * ExteriaScreenScale()) retain];
+                BADGE_POINTS * EXTERIA_CAUTION_BADGE_RATIO * ExteriaScreenScale()) retain];
             if (!caution) NSLog(@"exteria: the caution badge picture could not be decoded");
         }
         return caution;
@@ -257,10 +255,23 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
     return [ExteriaCustomPictures() objectForKey:[NSNumber numberWithLongLong:document]];
 }
 
++ (UIImage *)stillImageForDocument:(long long)document {
+    UIImage *still = [ExteriaCustomPictures() objectForKey:[NSNumber numberWithLongLong:document]];
+    return still ? still : [self imageForDocument:document];
+}
+
 + (BOOL)needsLoad:(long long)document {
     NSNumber *key = [NSNumber numberWithLongLong:document];
-    return ![ExteriaCustomPictures() objectForKey:key] && ![ExteriaCustomSet(&ExteriaLoading) containsObject:key] &&
-           ![ExteriaCustomSet(&ExteriaFailed) containsObject:key];
+    if ([ExteriaCustomPictures() objectForKey:key] || [ExteriaCustomSet(&ExteriaLoading) containsObject:key]) return NO;
+    NSDate *failed = [ExteriaFailed objectForKey:key];
+    if (!failed) return YES;
+    if (-[failed timeIntervalSinceNow] < FAILED_RETRY_SECONDS) return NO;
+    [ExteriaFailed removeObjectForKey:key];
+    return YES;
+}
+
++ (void)abandonLoad:(long long)document {
+    [ExteriaCustomSet(&ExteriaLoading) removeObject:[NSNumber numberWithLongLong:document]];
 }
 
 + (void)beginLoad:(long long)document {
@@ -278,7 +289,10 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
         [ExteriaCustomPictures() setObject:fitted forKey:key cost:cost];
         [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaCustomEmojiDidLoadNotification object:key];
     }
-    else [ExteriaCustomSet(&ExteriaFailed) addObject:key];
+    else {
+        if (!ExteriaFailed) ExteriaFailed = [[NSMutableDictionary alloc] init];
+        [ExteriaFailed setObject:[NSDate date] forKey:key];
+    }
 }
 
 + (CGFloat)pictureSide {

@@ -155,6 +155,8 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     NSMutableString *key = [NSMutableString stringWithFormat:@"%.2f|%ld|%ld|%d|%@ %.2f|%@|%@|%@|%lu %@", width, (long)_textAlignment, (long)_numberOfLines, _dropsUndrawable,
                      _font.fontName, _font.pointSize, _textColor, custom, _text, (unsigned long)_prefixLength, _prefixColor];
     [key appendFormat:@"|%@", _linkColor];
+    /* the colors inside a layout (a name, a link, a code block) come from the theme and are not all in the key above, so a layout of an earlier palette is never found */
+    [key appendFormat:@"|t%lu", (unsigned long)ExteriaThemeRevision()];
     ExteriaTextLayout *layout = [ExteriaLabelLayoutCache() objectForKey:key];
     if (!layout) {
         CGFloat flush = _textAlignment == ExteriaTextAlignmentCenter ? 0.5 : (_textAlignment == ExteriaTextAlignmentRight ? 1.0 : 0.0);
