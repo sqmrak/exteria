@@ -84,6 +84,20 @@ class PluginHost(unittest.TestCase):
         finally:
             audit_gate._runtime_prefixes = saved
 
+    def test_runtime_directories_accept_frozen_os_without_a_file(self):
+        from unittest import mock
+        from extera_utils import audit_gate
+        saved = audit_gate._runtime_prefixes
+        audit_gate._runtime_prefixes = None
+        try:
+            with mock.patch.dict(os.__dict__):
+                del os.__file__
+                self.assertIn(sys.prefix.rstrip(os.sep) or os.sep, audit_gate._runtime_paths())
+                self.assertTrue(audit_gate._is_runtime_file(os.path.join(sys.prefix, "random.pyc")))
+                self.assertFalse(audit_gate._is_runtime_file("/etc/hosts"))
+        finally:
+            audit_gate._runtime_prefixes = saved
+
     def test_bad_plugin_is_refused(self):
         with tempfile.NamedTemporaryFile("w", suffix=".plugin", delete=False) as f:
             f.write("def broken(:\n")

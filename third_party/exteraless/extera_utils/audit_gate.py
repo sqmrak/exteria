@@ -356,7 +356,9 @@ def _runtime_paths():
         except Exception:
             pass
 
-    for path in (sys.prefix, sys.base_prefix, os.path.dirname(os.__file__)):
+    # an embedded python can load os as a frozen module without __file__
+    os_file = getattr(os, "__file__", None)
+    for path in (sys.prefix, sys.base_prefix, os.path.dirname(os_file) if os_file else None):
         add(path)
     for entry in list(sys.path):
         add(entry)
