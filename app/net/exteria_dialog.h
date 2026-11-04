@@ -29,6 +29,7 @@
     BOOL _community;
     BOOL _communityCollapsed;
     BOOL _left;
+    BOOL _joinToSend;
     int32_t _topicId;
     BOOL _discussion;
     long long _discussionChannel;
@@ -40,6 +41,15 @@
     long long _topicIconEmoji;
     int32_t _topicIconColor;
     BOOL _topicClosed;
+    BOOL _forumSummarized;
+    int32_t _forumTopicId;
+    long long _forumTopicEmoji;
+    int32_t _forumTopicColor;
+    NSString *_forumTopicTitle;
+    int32_t _forumSecondId;
+    long long _forumSecondEmoji;
+    int32_t _forumSecondColor;
+    NSString *_forumSecondTitle;
     int32_t _folderId;
     long long _peerHash;
     int32_t _date;
@@ -66,6 +76,7 @@
     long long _linkedCommunityId;
     long long _linkedCommunityHash;
     NSString *_linkedCommunityTitle;
+    NSArray *_communityChats;
 }
 /* the preview names who wrote the last message: the person it was, with the initials and the photo for a small picture in front of the line */
 @property (nonatomic, readonly) BOOL showsSender;
@@ -90,6 +101,8 @@
 @property (nonatomic, readonly) BOOL communityCollapsed;
 /* the account is not a member of this group or channel */
 @property (nonatomic, readonly) BOOL left;
+/* only members may write in the group; the comments of a post under it are open to anyone while this is off */
+@property (nonatomic, readonly) BOOL joinToSend;
 /* a topic of a forum, which reads, sends and marks read inside that thread alone; zero for a whole chat */
 @property (nonatomic, readonly) int32_t topicId;
 @property (nonatomic, assign) BOOL discussion;
@@ -106,6 +119,17 @@
 @property (nonatomic, readonly) long long topicIconEmoji;
 @property (nonatomic, readonly) int32_t topicIconColor;
 @property (nonatomic, readonly) BOOL topicClosed;
+/* the topic the last message of a forum is in, once the topics were read: its id, the custom emoji of its icon (zero for the colored hash) and its name. a forum
+   row carries the unread counts of the General topic alone, so they stay zero until the topics are read and then become the sum over all topics */
+@property (nonatomic, readonly) BOOL forumSummarized;
+@property (nonatomic, readonly) int32_t forumTopicId;
+@property (nonatomic, readonly) long long forumTopicEmoji;
+@property (nonatomic, readonly) int32_t forumTopicColor;
+@property (nonatomic, readonly, copy) NSString *forumTopicTitle;
+/* the topic with the next newest message, shown beside the first; nil when there is none */
+@property (nonatomic, readonly) long long forumSecondEmoji;
+@property (nonatomic, readonly) int32_t forumSecondColor;
+@property (nonatomic, readonly, copy) NSString *forumSecondTitle;
 /* the access hash an input peer for this chat needs, zero when it needs none or none is known */
 @property (nonatomic, readonly) long long peerHash;
 @property (nonatomic, readonly) BOOL verified;
@@ -152,6 +176,12 @@
 @property (nonatomic, readonly) BOOL unread;
 
 - (id)initWithRow:(const exteria_dialog_row *)row;
+/* the chats a folded community stands for, newest first, ExteriaDialog items: the row of the community then shows the newest two as capsules and takes the last message, the
+   time and the unread count from them. A call on anything but a community does nothing, and an empty list gives the plain row back */
+- (void)applyCommunityChats:(NSArray *)chats;
+@property (nonatomic, readonly, copy) NSArray *communityChats;
+/* takes what the topics of a forum say of it; a call on a chat that is not a forum does nothing */
+- (void)applyForumSummary:(const exteria_forum_summary *)summary;
 /* the chat with a contact, for a person who has no chat in the list yet; nil when no access hash is known */
 + (ExteriaDialog *)dialogWithPerson:(ExteriaPerson *)person;
 /* the chat with oneself, which the server reaches as the chat with the signed in user */
@@ -168,6 +198,10 @@
 @property (nonatomic, readonly, retain) ExteriaDialog *savedSource;
 
 @end
+
+/* the list with every community that is shown as one chat folded: the chats added to it leave the list, and its row takes the newest two for its capsules and the last
+   message, the time and the unread count from them. The list is returned as it is when no community is folded */
+NSArray *ExteriaDialogsFoldingCommunities(NSArray *dialogs);
 
 /* replaces only the archive shortcut, keeping the current order and every chat model */
 NSArray *ExteriaDialogsReplacingArchive(NSArray *dialogs, ExteriaDialog *summary);

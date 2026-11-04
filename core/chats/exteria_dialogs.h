@@ -81,6 +81,7 @@ typedef struct exteria_dialog_row {
     int64_t linked_community_hash;
     char linked_community_title[EXTERIA_DIALOG_TITLE_MAX];
     uint8_t left;           /* the account is not a member of this group or channel */
+    uint8_t join_to_send;   /* the group lets only its members write, which includes the comments of the channel it is linked to */
     /* a topic row: the forum above names the peer fields, topic_id the thread (1 is General) */
     int32_t topic_id;
     int64_t topic_icon_emoji;   /* the custom emoji document of the icon, zero for the plain colored hash */
@@ -184,6 +185,27 @@ exteria_status exteria_topics_request(exteria_arena *arena, int32_t peer_kind, i
    at most cap rows. forum is the row of the forum itself */
 exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteria_dialog_row *forum, int64_t self_id, int32_t now,
                                     exteria_dialog_row *rows, size_t cap, size_t *count);
+
+/* what the chat list shows of a forum that the forum's own row does not carry: the topic its last message is in, and the unread counts of all topics, since the
+   count the server keeps on the forum row follows the General topic alone and stays high after every topic was read */
+typedef struct {
+    int32_t topic_id;           /* zero when no topic matches the last message */
+    int64_t topic_icon_emoji;
+    int32_t topic_icon_color;
+    char topic_title[EXTERIA_DIALOG_TITLE_MAX];
+    /* the topic with the next newest message, which the row shows beside the first; zero when the forum has no second one */
+    int32_t second_topic_id;
+    int64_t second_icon_emoji;
+    int32_t second_icon_color;
+    char second_title[EXTERIA_DIALOG_TITLE_MAX];
+    int32_t unread_count;
+    int32_t mentions;
+    int32_t reactions;
+} exteria_forum_summary;
+
+/* folds the rows of exteria_topics_parse into one summary; last_message is the top message of the forum row, and the topic that holds it is named,
+   or the one with the newest message when none holds it exactly; the second is the newest of the rest */
+exteria_status exteria_forum_summarize(const exteria_dialog_row *topics, size_t count, int32_t last_message, exteria_forum_summary *out);
 
 /* folder-filtered getDialogs may omit dialogFolder, but archive remains a valid destination */
 exteria_status exteria_dialogs_ensure_archive(exteria_dialog_row *rows, size_t cap, size_t *count);

@@ -236,6 +236,7 @@ static void fill_chat(exteria_dialog_row *row, const exteria_tl_value *chats) {
         row->community_collapsed = exteria_tl_has(chat, "collapsed_in_dialogs") ? 1 : 0;
     }
     row->left = exteria_tl_has(chat, "left") ? 1 : 0;
+    row->join_to_send = exteria_tl_has(chat, "join_to_send") ? 1 : 0;
     exteria_photo_ref_read(chat, row->peer_kind, row->peer_id, &row->photo);
     if (row->peer_kind == 3) read_hash(row, chat);
     read_linked_community(row, chat, chats);
@@ -568,6 +569,46 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
         ++n;
     }
     *count = n;
+    return EXTERIA_OK;
+}
+
+static int32_t sum_counts(int32_t total, int32_t add) {
+    if (add <= 0) return total;
+    return total > INT32_MAX - add ? INT32_MAX : total + add;
+}
+
+exteria_status exteria_forum_summarize(const exteria_dialog_row *topics, size_t count, int32_t last_message, exteria_forum_summary *out) {
+    const exteria_dialog_row *named = NULL, *second = NULL;
+    size_t i;
+    if (!out) return EXTERIA_E_ARG;
+    memset(out, 0, sizeof(*out));
+    if (!topics && count) return EXTERIA_E_ARG;
+    for (i = 0; i < count; ++i) {
+        const exteria_dialog_row *topic = &topics[i];
+        if (topic->topic_id <= 0) continue;
+        out->unread_count = sum_counts(out->unread_count, topic->unread_count);
+        out->mentions = sum_counts(out->mentions, topic->mentions);
+        out->reactions = sum_counts(out->reactions, topic->reactions);
+        if (topic->top_message <= 0) continue;
+        if (!named || (named->top_message != last_message && topic->top_message > named->top_message)) named = topic;
+    }
+    for (i = 0; named && i < count; ++i) {
+        const exteria_dialog_row *topic = &topics[i];
+        if (topic == named || topic->topic_id <= 0 || topic->top_message <= 0) continue;
+        if (!second || topic->top_message > second->top_message) second = topic;
+    }
+    if (named) {
+        out->topic_id = named->topic_id;
+        out->topic_icon_emoji = named->topic_icon_emoji;
+        out->topic_icon_color = named->topic_icon_color;
+        memcpy(out->topic_title, named->title, sizeof(out->topic_title));
+    }
+    if (second) {
+        out->second_topic_id = second->topic_id;
+        out->second_icon_emoji = second->topic_icon_emoji;
+        out->second_icon_color = second->topic_icon_color;
+        memcpy(out->second_title, second->title, sizeof(out->second_title));
+    }
     return EXTERIA_OK;
 }
 
