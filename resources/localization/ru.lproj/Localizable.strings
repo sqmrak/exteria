@@ -2517,6 +2517,7 @@
 "developer.mark.flawseer" = "Видит недоработки во всём";
 "developer.flaw_seer.notice" = "Этот человек видит недоработки во всём…";
 "developer.flaw_seer.notice.1415625115" = "Даже во снах баги видит :D";
+"developer.flaw_seer.notice.5586697397" = "Даже в нативном Telegram нашел баги 0_0";
 "chat.send.toolong" = "Текст слишком длинный для отправки: понадобилось бы больше 256 сообщений.";
 "plugins.import.denied" = "Папка Documents закрыта для приложения, записать в неё нельзя. Переустановите пакет Exteria или выполните: chown -R mobile /var/mobile/Documents";
 "settings.remove" = "Удалить";

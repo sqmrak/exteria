@@ -2,7 +2,6 @@
 
 #define DEV ExteriaMarkDeveloper
 #define OFF ExteriaMarkOfficialTester
-#define BUG ExteriaMarkBugHunter
 #define PROMO ExteriaMarkPromotion
 #define MANAGER ExteriaMarkManager
 #define VIDEOFIX ExteriaMarkVideoFix
@@ -17,7 +16,7 @@ static const exteria_team_member members[] = {
     {INT64_C(6392973712), "Lineysom", OFF, 1},
     {INT64_C(749971450), "shizotoaster", OFF, 1},
     {INT64_C(5191291829), "loveiOS6", DEV | OFF, 1},
-    {INT64_C(5586697397), "xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", OFF | BUG, 1},
+    {INT64_C(5586697397), "xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", OFF | SEER, 1},
     {INT64_C(7118797604), "merwleem", OFF | MANAGER | PROMO, 1},
     {INT64_C(8256044236), "s3dativee", OFF, 1},
     {INT64_C(1415625115), "not_a_modder", OFF | SEER, 1},

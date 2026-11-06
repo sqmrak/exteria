@@ -2512,6 +2512,7 @@
 "developer.mark.flawseer" = "Sees flaws in everything";
 "developer.flaw_seer.notice" = "This person sees flaws in everything…";
 "developer.flaw_seer.notice.1415625115" = "Sees bugs even in dreams :D";
+"developer.flaw_seer.notice.5586697397" = "Found bugs even in native Telegram 0_0";
 "chat.send.toolong" = "The text is too long to send, it would need more than 256 messages.";
 "plugins.import.denied" = "The Documents folder of the app is closed to it, so nothing can be written there. Reinstall the Exteria package, or run: chown -R mobile /var/mobile/Documents";
 "settings.remove" = "Remove";
