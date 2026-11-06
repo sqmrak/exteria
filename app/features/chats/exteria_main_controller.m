@@ -18,6 +18,7 @@
 #import "exteria_language.h"
 #import "exteria_lite_mode.h"
 #import "exteria_link_router.h"
+#import "exteria_mini_player.h"
 #import "exteria_developers.h"
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
@@ -93,6 +94,9 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     UITabBarController *_classicTabs;
     /* the tab that wears the profile photo in the classic bar; the tab controller owns it */
     UITabBarItem *_classicProfileItem;
+    /* the strip of the song for the screens of the tabs: over the tab bar in the modern style, over the navigation bars in the classic one; the chat list has its own in its header */
+    ExteriaMiniPlayer *_dock;
+    UIImageView *_dockCap;
     UIImageView *_veil;
     ExteriaThemeBusyView *_busy;
     BOOL _busyShown;
@@ -165,6 +169,13 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [_classicTabs release];
     _classicTabs = nil;
     _classicProfileItem = nil;
+    _dock.changeHandler = nil;
+    [_dock removeFromSuperview];
+    [_dock release];
+    _dock = nil;
+    [_dockCap removeFromSuperview];
+    [_dockCap release];
+    _dockCap = nil;
     _tabBar.delegate = nil;
     [_tabBar removeFromSuperview];
     [_tabBar release];
@@ -384,6 +395,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     _classicTabs.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:_classicTabs.view];
     [_classicTabs didMoveToParentViewController:self];
+    [self installDock];
 
     /* the profile tab, when the layout has one, wears the profile photo once it is here */
     NSInteger profileIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabProfile);
@@ -489,6 +501,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     _tabBar.selectedIndex = tab;
     _currentTab = tab;
     [root addSubview:_tabBar];
+    [self installDock];
     [self showTab:tab];
     [self loadProfileTab];
 }
@@ -727,9 +740,54 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
     }];
 }
 
-- (BOOL)showsPlayerStrip {
+/* the classic dock stands over every page of the tabs, a pushed chat among them, and the modern one only over the tab screens that are not the chat list */
+- (void)installDock {
+    BOOL classic = _classicTabs != nil;
+    _dock = [[ExteriaMiniPlayer alloc] init];
+    if (!classic) {
+        _dock.wearsBarColor = YES;
+        _dock.standsOnBar = YES;
+    }
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    _dock.changeHandler = ^{
+        UIView *view = [(ExteriaMainController *)weak.target view];
+        [view setNeedsLayout];
+        [view layoutIfNeeded];
+    };
+    if (classic) {
+        /* the strip takes the place of the status bar's neighbor, so the plate under the status bar is the bar's own picture and the status text stays on a bar color */
+        _dockCap = [ExteriaClassicStripBackdrop() retain];
+        [self.view addSubview:_dockCap];
+    }
+    [self.view addSubview:_dock];
+}
+
+- (BOOL)currentScreenIsChatList {
     UIViewController *screen = _classicTabs ? [(UINavigationController *)_classicTabs.selectedViewController topViewController] : _current;
-    return [screen isKindOfClass:[ExteriaChatsController class]] && [(ExteriaChatsController *)screen playerStripShowing];
+    return [screen isKindOfClass:[ExteriaChatsController class]];
+}
+
+- (BOOL)showsPlayerStrip {
+    if (_classicTabs) return [ExteriaMiniPlayer isActive];
+    UIViewController *screen = _current;
+    if ([screen isKindOfClass:[ExteriaChatsController class]]) return [(ExteriaChatsController *)screen playerStripShowing];
+    return _dock.showing;
+}
+
+/* the height the modern dock takes over the tab bar, which the screens leave as room at their foot */
+- (CGFloat)modernDockHeight {
+    return !_classicTabs && _dock.showing && ![self currentScreenIsChatList] ? [ExteriaMiniPlayer height] : 0;
+}
+
+/* the classic tabs start under the strip, which stands where the status bar overlap was, so the navigation bars of the tabs see no status bar and sit at the top of their own view */
+- (void)layoutClassicDock {
+    CGSize size = self.view.bounds.size;
+    CGFloat cap = _dock.showing ? ExteriaLayoutInsets(self).top : 0;
+    CGFloat strip = _dock.showing ? [ExteriaMiniPlayer height] : 0;
+    _dockCap.frame = CGRectMake(0, 0, size.width, cap);
+    _dock.frame = CGRectMake(0, cap, size.width, strip);
+    CGRect tabs = CGRectMake(0, cap + strip, size.width, MAX(0, size.height - cap - strip));
+    if (!CGRectEqualToRect(_classicTabs.view.frame, tabs)) _classicTabs.view.frame = tabs;
 }
 
 - (UIViewController *)screenForTab:(NSInteger)tab {
@@ -850,14 +908,18 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
     CGFloat height = [ExteriaTabBar barHeight] + insets.bottom;
     _tabBar.frame = CGRectMake(0, size.height - height, size.width, height);
     _tabBar.itemArea = ExteriaContentColumn(size, insets, EXTERIA_COLUMN_LIST);
+    CGFloat dock = [self modernDockHeight];
+    CGRect column = ExteriaContentColumn(size, insets, EXTERIA_COLUMN_LIST);
+    _dock.frame = CGRectMake(column.origin.x, size.height - height - dock, column.size.width, dock);
     for (UIViewController *screen in _screens) {
-        if (screen != (id)[NSNull null]) [self setBottomInsetOf:screen to:height];
+        if (screen != (id)[NSNull null]) [self setBottomInsetOf:screen to:height + dock];
     }
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     [self layoutTabBar];
+    if (_classicTabs) [self layoutClassicDock];
     if (_classicTabs) ExteriaPlaceClassicBadge(_classicTabs.tabBar, self.view.bounds.size.width, ExteriaTabIndexOfKind(_kinds, ExteriaTabChats));
 }
 

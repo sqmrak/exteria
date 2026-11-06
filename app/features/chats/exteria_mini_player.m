@@ -48,6 +48,7 @@
     CGFloat _fraction;
     BOOL _showing;
     BOOL _wearsBarColor;
+    BOOL _standsOnBar;
     void (^_changeHandler)(void);
 }
 @end
@@ -56,7 +57,14 @@
 
 @synthesize showing = _showing;
 @synthesize wearsBarColor = _wearsBarColor;
+@synthesize standsOnBar = _standsOnBar;
 @synthesize changeHandler = _changeHandler;
+
++ (BOOL)isActive {
+    ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
+    /* a video message that plays holds the output, so the strip is its and not the one of the song it paused */
+    return [ExteriaRoundPlayback sharedPlayback].active || (player.state != ExteriaMusicStateIdle && player.track != nil);
+}
 
 + (CGFloat)height { return ExteriaThemeIsClassic() ? STRIP_HEIGHT : CARD_HEIGHT + CARD_GUTTER; }
 
@@ -102,6 +110,11 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     button.accessibilityLabel = NSLocalizedString(label, nil);
     return button;
+}
+
+- (void)setStandsOnBar:(BOOL)stands {
+    _standsOnBar = stands;
+    [self setNeedsLayout];
 }
 
 - (void)setWearsBarColor:(BOOL)wears {
@@ -216,8 +229,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 - (void)refresh {
     ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
     ExteriaRoundPlayback *round = [ExteriaRoundPlayback sharedPlayback];
-    /* a video message that plays holds the output, so the strip is its and not the one of the song it paused */
-    BOOL showing = round.active || (player.state != ExteriaMusicStateIdle && player.track != nil);
+    BOOL showing = [ExteriaMiniPlayer isActive];
     if (showing) {
         BOOL playing = round.active ? round.playing : (player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading);
         if (ExteriaThemeIsClassic()) {
@@ -371,15 +383,15 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 /* the card keeps its own height while the owner animates the strip open or shut, and the strip's clipping hides the rest, so the content does not squeeze */
 - (void)layoutCard {
     CGFloat width = self.bounds.size.width;
-    _card.frame = CGRectMake(CARD_SIDE, 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
-    /* only the lower corners are round, since the upper edge stands against the bar above */
+    _card.frame = CGRectMake(CARD_SIDE, _standsOnBar ? CARD_GUTTER : 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
+    /* only the corners away from the bar are round: the lower ones under a header, the upper ones over the tab bar */
     CAShapeLayer *shape = (CAShapeLayer *)_card.layer.mask;
     if (![shape isKindOfClass:[CAShapeLayer class]]) {
         shape = [CAShapeLayer layer];
         _card.layer.mask = shape;
     }
     shape.frame = _card.bounds;
-    shape.path = [UIBezierPath bezierPathWithRoundedRect:_card.bounds byRoundingCorners:UIRectCornerBottomLeft | UIRectCornerBottomRight
+    shape.path = [UIBezierPath bezierPathWithRoundedRect:_card.bounds byRoundingCorners:_standsOnBar ? (UIRectCornerTopLeft | UIRectCornerTopRight) : (UIRectCornerBottomLeft | UIRectCornerBottomRight)
                                              cornerRadii:CGSizeMake(CARD_RADIUS, CARD_RADIUS)].CGPath;
     CGFloat cardWidth = _card.bounds.size.width;
     BOOL narrow = cardWidth < CARD_NARROW;

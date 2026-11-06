@@ -7,6 +7,7 @@
 #import "exteria_classic_chrome.h"
 #import "exteria_classic_search_controller.h"
 #import "exteria_main_controller.h"
+#import "exteria_mini_player.h"
 #import "exteria_platform.h"
 #import "exteria_search_controller.h"
 #import "exteria_settings_kit.h"
@@ -198,6 +199,8 @@
 
 BOOL ExteriaListShowsPlayer(UIViewController *screen) {
     UINavigationController *navigation = screen.navigationController;
+    /* the classic strip stands over the tabs of the phone, so a chat pushed in them is under it */
+    if ([navigation isKindOfClass:[ExteriaSplitNavigationController class]]) return ExteriaThemeIsClassic() && [ExteriaMiniPlayer isActive];
     if (![navigation isKindOfClass:[ExteriaDetailNavigationController class]]) return NO;
     return [[[(ExteriaDetailNavigationController *)navigation detailHost] main] showsPlayerStrip];
 }

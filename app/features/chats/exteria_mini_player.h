@@ -5,10 +5,14 @@
 @interface ExteriaMiniPlayer : UIView
 
 + (CGFloat)height;
+/* whether a song or a video message holds the output, which is when any strip of the app has a height */
++ (BOOL)isActive;
 /* whether a song is the current one, which is what gives the strip its height */
 @property (nonatomic, readonly) BOOL showing;
 @property (nonatomic, copy) void (^changeHandler)(void);
 /* the strip wears the color of the bars of a chat (its header and the pinned message under it) and not the color of the cards of the chat list, so the stack of them reads as one */
 @property (nonatomic, assign) BOOL wearsBarColor;
+/* the modern card stands on the tab bar and not under a header: its upper corners are round and the gutter is above it */
+@property (nonatomic, assign) BOOL standsOnBar;
 
 @end
