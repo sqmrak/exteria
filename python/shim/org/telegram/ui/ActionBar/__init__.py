@@ -23,6 +23,10 @@ class Theme(metaclass=_ThemeMeta):
     def isCurrentThemeDark():
         return bool((_ui.ask("theme.dark") or {}).get("value"))
 
+    @staticmethod
+    def unrefAudioVisualizeDrawable(_message):
+        """the android client counts the visualizer drawables of the songs and frees one when its song goes; the app draws none, so none is held"""
+
 
 class AlertDialog:
     """the dialog of the android app, shown by the dialogs of the host app. buttons and lists report back by token (see _alert_result)"""
@@ -205,6 +209,31 @@ class BottomSheet:
 
     DIM = 0x99000000
     SLIDE_MS = 220
+
+    class Builder:
+        """BottomSheet.Builder: the view goes in with setCustomView, create() gives the sheet and show() opens it"""
+
+        def __init__(self, context=None, *flags):
+            self._sheet = BottomSheet(context, *flags)
+
+        def setCustomView(self, view):
+            self._sheet.setCustomView(view)
+            return self
+
+        def setCancelable(self, value):
+            self._sheet.setCancelable(value)
+            return self
+
+        def setOnDismissListener(self, listener):
+            self._sheet.setOnDismissListener(listener)
+            return self
+
+        def create(self):
+            return self._sheet
+
+        def show(self):
+            self._sheet.show()
+            return self._sheet
 
     def __init__(self, context=None, *_flags):
         self._context = context

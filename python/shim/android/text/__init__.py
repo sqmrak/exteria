@@ -10,3 +10,15 @@ class InputType:
     TYPE_TEXT_FLAG_MULTI_LINE = 131072
     TYPE_TEXT_VARIATION_PASSWORD = 128
     TYPE_TEXT_VARIATION_URI = 16
+
+
+class TextUtils:
+    class TruncateAt:
+        START = "START"
+        MIDDLE = "MIDDLE"
+        END = "END"
+        MARQUEE = "MARQUEE"
+
+    @staticmethod
+    def isEmpty(text):
+        return text is None or len(text) == 0

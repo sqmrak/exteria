@@ -51,9 +51,12 @@ class HashMap(dict):
 
 
 class Locale:
+    def __init__(self, language="en"):
+        self._language = str(language)
+
     @staticmethod
     def getDefault():
         return Locale()
 
     def getLanguage(self):
-        return "en"
+        return self._language

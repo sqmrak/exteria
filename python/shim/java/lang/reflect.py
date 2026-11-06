@@ -88,6 +88,37 @@ class Field(Member):
     def set(self, obj, value):
         setattr(self._declaring._py if obj is None else obj, self._name, value)
 
+    # the typed accessors of java.lang.reflect.Field: a python value is its own primitive, the conversion is the one java does
+    def getBoolean(self, obj):
+        return bool(self.get(obj))
+
+    def getInt(self, obj):
+        return int(self.get(obj))
+
+    def getLong(self, obj):
+        return int(self.get(obj))
+
+    def getFloat(self, obj):
+        return float(self.get(obj))
+
+    def getDouble(self, obj):
+        return float(self.get(obj))
+
+    def setBoolean(self, obj, value):
+        self.set(obj, bool(value))
+
+    def setInt(self, obj, value):
+        self.set(obj, int(value))
+
+    def setLong(self, obj, value):
+        self.set(obj, int(value))
+
+    def setFloat(self, obj, value):
+        self.set(obj, float(value))
+
+    def setDouble(self, obj, value):
+        self.set(obj, float(value))
+
 
 def _methods_of(declaring):
     found = []

@@ -21,3 +21,10 @@ calling file, which is where exteraGram runs the code of an .elyx archive from.
 local change for the ios 12 sandbox:
 - extera_utils/audit_gate.py: _runtime_paths adds every path on its own, as given and resolved, and _is_runtime_file also compares the normalized path as given. one path the sandbox refuses to resolve used to empty the cached list, and a plugin's `import random` was then refused as a file open without the files permission
 - extera_utils/audit_gate.py: frozen os in the embedded interpreter may have no __file__, so _runtime_paths uses the interpreter prefixes and sys.path without it
+
+- client_utils.py: send_request lets the NotImplementedError of PluginServices.sendRequest through. the fallback to the connections manager answers every plugin with the same refusal of getConnectionsManager, and the text of the host, which names the request class that is not allowed, never reached the plugin
+
+- base_plugin.py: BasePlugin.logger, a logging.Logger whose records go to self.log. the exteraGram sdk of 1.4.5 has it and story_scheduler calls it; this exteraless commit does not
+
+local change found on a phone:
+- extera_utils/plugin_loader.py: _sandboxed_open reads <plugins>/<id>.py from <plugins>/<id>.plugin when only the second exists. zwylib builds that name for every plugin (PluginUtils.get_plugin_path) and logged a FileNotFoundError traceback for each one

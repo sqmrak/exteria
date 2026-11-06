@@ -111,6 +111,19 @@ static NSArray *ExteriaUnreportedCrashes(NSString *text, long long *newest) {
 /* the developer's account, asked for once and kept */
 static ExteriaDialog *ExteriaReportTarget;
 
+static void ExteriaWithReportTarget(ExteriaSession *session, void (^found)(ExteriaDialog *target)) {
+    if (ExteriaReportTarget) {
+        found(ExteriaReportTarget);
+        return;
+    }
+    [session resolveUsername:REPORT_USERNAME completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
+        (void)person;
+        if (!dialog) NSLog(@"exteria: the developer for the problem reports was not found: %@", errorName);
+        else ExteriaReportTarget = [dialog retain];
+        found(dialog);
+    }];
+}
+
 static void ExteriaSendReport(ExteriaSession *session, NSString *body, void (^done)(BOOL sent)) {
     if (!ExteriaChatFlagGet(ExteriaChatFlagCrashReports) || !body.length) {
         if (done) done(NO);
@@ -140,21 +153,14 @@ static void ExteriaSendReport(ExteriaSession *session, NSString *body, void (^do
             [finish release];
         }];
     };
-    if (ExteriaReportTarget) {
-        send(ExteriaReportTarget);
-        return;
-    }
-    [session resolveUsername:REPORT_USERNAME completion:^(ExteriaDialog *dialog, ExteriaPerson *person, NSString *errorName) {
-        (void)person;
-        if (!dialog) {
-            NSLog(@"exteria: the developer for the problem reports was not found: %@", errorName);
-            if (finish) finish(NO);
-            [finish release];
+    ExteriaWithReportTarget(session, ^(ExteriaDialog *target) {
+        if (target) {
+            send(target);
             return;
         }
-        ExteriaReportTarget = [dialog retain];
-        send(dialog);
-    }];
+        if (finish) finish(NO);
+        [finish release];
+    });
 }
 
 void ExteriaProblemReportsStart(ExteriaSession *session) {
@@ -180,4 +186,28 @@ void ExteriaProblemReportCallFailure(ExteriaSession *session) {
     NSString *trace = data.length && data.length < 512 * 1024 ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : nil;
     if (trace.length > 2800) trace = [trace substringFromIndex:trace.length - 2800];
     ExteriaSendReport(session, [NSString stringWithFormat:@"a call did not connect, trace:\n%@", trace.length ? trace : @"(no trace)"], nil);
+}
+
+BOOL ExteriaProblemReportIsDeveloper(ExteriaSession *session) {
+    return [[[session ownPerson].username lowercaseString] isEqualToString:REPORT_USERNAME];
+}
+
+void ExteriaProblemReportSendArchive(ExteriaSession *session, NSString *path, void (^done)(BOOL sent)) {
+    void (^finish)(BOOL) = [done copy];
+    /* the person pressed export, so neither the crash report switch nor the pause between reports applies */
+    ExteriaWithReportTarget(session, ^(ExteriaDialog *target) {
+        if (!target) {
+            if (finish) finish(NO);
+            [finish release];
+            return;
+        }
+        long long randomId = ((long long)arc4random() << 32) | arc4random();
+        [session sendDocumentAtPath:path name:[path lastPathComponent] mime:@"application/zip" caption:ExteriaProblemReportHeader() toDialog:target randomId:randomId
+                         completion:^(int32_t messageId, NSString *errorName) {
+            BOOL sent = messageId > 0 && !errorName;
+            if (!sent) NSLog(@"exteria: the logs were not sent to the developer: %@", errorName);
+            if (finish) finish(sent);
+            [finish release];
+        }];
+    });
 }

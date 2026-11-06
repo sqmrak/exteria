@@ -293,6 +293,9 @@ def send_request(request, fn, account=None) -> int:
                 safe_call(fn, response, error)
         try:
             return int(services.sendRequest(resolved, request, _run))
+        except NotImplementedError:
+            # the host names what it cannot send; the proxy below would only hide that behind its own refusal
+            raise
         except Exception as exc:
             _log(f"send_request: java delegate unavailable ({exc}), falling back to proxy")
     return int(get_connections_manager(resolved).sendRequest(

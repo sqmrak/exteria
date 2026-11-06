@@ -1,8 +1,11 @@
 """android.graphics: a bitmap is a python rgba buffer, the canvas fills rectangles into it. text, paths and shaders are not here"""
 
 import base64
+import json
 
-from java.lang import Object
+import _exteria
+from android import _ui
+from java.lang import IllegalArgumentException, Object
 
 
 def _argb(color):
@@ -109,6 +112,15 @@ class Paint(Object):
     def setFilterBitmap(self, value):
         pass
 
+    def setColorFilter(self, color_filter):
+        if color_filter is not None and not isinstance(color_filter, ColorFilter):
+            raise TypeError("not a color filter: %r" % (color_filter,))
+        self._filter = color_filter
+        return color_filter
+
+    def getColorFilter(self):
+        return getattr(self, "_filter", None)
+
 
 class Rect(Object):
     def __init__(self, left=0, top=0, right=0, bottom=0):
@@ -175,6 +187,46 @@ class PorterDuffColorFilter(ColorFilter):
         self._mode = mode
 
 
+class ColorMatrix(Object):
+    """20 numbers, four rows of r, g, b, a and an offset, as the android class. a color is multiplied by the matrix"""
+
+    def __init__(self, source=None):
+        self._m = []
+        self.reset()
+        if source is not None:
+            self.set(source)
+
+    def reset(self):
+        self._m = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+    def set(self, source):
+        values = source._m if isinstance(source, ColorMatrix) else list(source)
+        if len(values) != 20:
+            raise IllegalArgumentException("a color matrix has 20 values, not %d" % len(values))
+        self._m = [float(value) for value in values]
+
+    def getArray(self):
+        return self._m
+
+    def setScale(self, r_scale, g_scale, b_scale, a_scale):
+        self._m = [0.0] * 20
+        self._m[0], self._m[6], self._m[12], self._m[18] = float(r_scale), float(g_scale), float(b_scale), float(a_scale)
+
+
+class ColorMatrixColorFilter(ColorFilter):
+    def __init__(self, matrix):
+        self._matrix = ColorMatrix(matrix)
+
+    def _alpha_scale(self):
+        """how much the filter keeps of the alpha of what it covers, when it only scales alpha (the way a plugin makes a card see-through),
+        None for any other matrix"""
+        m = self._matrix._m
+        rest = [value for index, value in enumerate(m) if index not in (0, 6, 12, 18)]
+        if any(rest) or m[0] != 1.0 or m[6] != 1.0 or m[12] != 1.0:
+            return None
+        return min(1.0, max(0.0, m[18]))
+
+
 class Point(Object):
     def __init__(self, x=0, y=0):
         self.x, self.y = x, y
@@ -190,8 +242,22 @@ class Bitmap(Object):
         self._w, self._h = int(width), int(height)
         self._pixels = bytearray(self._w * self._h * 4)
 
+    class CompressFormat:
+        JPEG = "JPEG"
+        PNG = "PNG"
+        WEBP = "WEBP"
+
     @staticmethod
-    def createBitmap(width, height, config=None):
+    def createBitmap(*args):
+        """createBitmap(width, height[, config]) is a blank picture; createBitmap(source, x, y, width, height) the part of a picture that BitmapFactory decoded"""
+        if args and isinstance(args[0], Bitmap):
+            if len(args) != 5:
+                raise NotImplementedError("only createBitmap(source, x, y, width, height) cuts a picture")
+            source, x, y, width, height = args
+            if not isinstance(source, _NativeBitmap):
+                raise NotImplementedError("a part can be cut from a picture decoded by BitmapFactory only")
+            return source._cut(x, y, width, height)
+        width, height = args[0], args[1]
         if width <= 0 or height <= 0:
             raise ValueError("width and height must be > 0")
         return Bitmap(width, height)
@@ -204,6 +270,9 @@ class Bitmap(Object):
 
     def isRecycled(self):
         return False
+
+    def isMutable(self):
+        return True
 
     def recycle(self):
         pass
@@ -293,3 +362,128 @@ def tint_pixels(pixels, color, mode):
             r, g, b, a = [(m * sa + dc * (255 - sa)) // 255 for m, dc in zip(mixed, (dr, dg, db))] + [da]
         out[i:i + 4] = bytes((r, g, b, a))
     return out
+
+
+_released = []
+_NATIVE_BITMAP_SIDE = 2048
+
+
+def _release_native():
+    """the bitmaps python let go of since the last flush are let go of in the app too; a finalizer cannot ask the app itself"""
+    if _released:
+        handles = _released[:]
+        del _released[:len(handles)]
+        _exteria.service("bitmap.release", json.dumps({"handles": handles}))
+
+
+_ui.on_flush(_release_native)
+
+
+class _NativeBitmap(Bitmap):
+    """a picture the app decoded and keeps: python holds its size and a handle, the pixels stay in the app, so a photo does not pass
+    through python as a megabyte of text. it is mutable (the blur works on it) and has no pixel access"""
+
+    def __init__(self, handle, width, height):
+        Object.__init__(self)
+        self._handle = int(handle)
+        self._w, self._h = int(width), int(height)
+        self._gone = False
+
+    def __del__(self):
+        if not self._gone:
+            _released.append(self._handle)
+
+    def _live(self):
+        if self._gone:
+            raise IllegalArgumentException("the bitmap was recycled")
+        return self._handle
+
+    def isRecycled(self):
+        return self._gone
+
+    def recycle(self):
+        if not self._gone:
+            self._gone = True
+            _released.append(self._handle)
+
+    def copy(self, config=None, mutable=True):
+        reply = _ui.ask("bitmap.copy", handle=self._live())
+        return _NativeBitmap(reply["handle"], reply["w"], reply["h"])
+
+    def _scaled(self, width, height):
+        reply = _ui.ask("bitmap.scale", handle=self._live(), w=int(width), h=int(height))
+        return _NativeBitmap(reply["handle"], reply["w"], reply["h"])
+
+    def _cut(self, x, y, width, height):
+        reply = _ui.ask("bitmap.crop", handle=self._live(), x=int(x), y=int(y), w=int(width), h=int(height))
+        return _NativeBitmap(reply["handle"], reply["w"], reply["h"])
+
+    def compress(self, format, quality, stream):
+        """writes the picture to a FileOutputStream, as a jpeg or a png. the app writes the file, so the stream has to be one over a file in the folder the
+        plugin may write pictures to. True when it was written"""
+        from java.io import FileOutputStream
+        if not isinstance(stream, FileOutputStream):
+            raise NotImplementedError("a picture is compressed into a FileOutputStream only")
+        if format not in (Bitmap.CompressFormat.JPEG, Bitmap.CompressFormat.PNG):
+            raise NotImplementedError("a picture is compressed as JPEG or PNG, not %s" % (format,))
+        _ui.ask("bitmap.encode", handle=self._live(), png=format == Bitmap.CompressFormat.PNG, quality=max(1, min(100, int(quality))), path=stream._path)
+        stream._written = True
+        return True
+
+    def _blur(self, radius):
+        _ui.ask("bitmap.blur", handle=self._live(), radius=int(radius))
+
+    def _unsupported(self, *_args):
+        raise NotImplementedError("the pixels of a decoded picture stay in the app, they cannot be read or drawn on from python")
+
+    getPixel = setPixel = eraseColor = _base64 = _unsupported
+
+
+def _create_scaled(source, width, height, _filter=True):
+    if width <= 0 or height <= 0:
+        raise IllegalArgumentException("width and height must be > 0")
+    if not isinstance(source, _NativeBitmap):
+        raise NotImplementedError("scaling is available for pictures decoded by BitmapFactory")
+    return source._scaled(width, height)
+
+
+Bitmap.createScaledBitmap = staticmethod(_create_scaled)
+
+
+class BitmapFactory(Object):
+    """decodes the picture the person chose in the picker of the app (see android.content.ContentResolver). the app reads the file and
+    shrinks it while it decodes, to 2048 points on the long side, so a photo of the camera does not fill the memory of an old phone"""
+
+    @staticmethod
+    def decodeFile(path, options=None):
+        """a picture file of the plugin (its files folder): decoded in the app like a stream, None when it is not a picture"""
+        from android_utils import log
+        from file_utils import _require_files
+        if options is not None:
+            raise NotImplementedError("decode options are not available, the app picks the size itself")
+        _require_files(path, "decode a picture")
+        try:
+            reply = _ui.ask("bitmap.decode", path=str(path), side=_NATIVE_BITMAP_SIDE)
+        except (RuntimeError, ValueError, LookupError, PermissionError) as error:
+            log("BitmapFactory.decodeFile: %s" % error)
+            return None
+        return _NativeBitmap(reply["handle"], reply["w"], reply["h"])
+
+    @staticmethod
+    def decodeStream(stream, outside_padding=None, options=None):
+        from android.content import _PickedStream
+        from android_utils import log
+        if options is not None or outside_padding is not None:
+            raise NotImplementedError("decode options are not available, the app picks the size itself")
+        if not isinstance(stream, _PickedStream):
+            raise NotImplementedError("only the stream of a picture the person chose can be decoded")
+        if stream._closed:
+            log("BitmapFactory.decodeStream: the stream is closed")
+            return None
+        try:
+            reply = _ui.ask("bitmap.decode", path=stream._path, side=_NATIVE_BITMAP_SIDE)
+        except (RuntimeError, ValueError, LookupError, PermissionError) as error:
+            # android answers null for a file that is not a picture, and the plugin handles that; the reason goes to the log
+            log("BitmapFactory.decodeStream: %s" % error)
+            return None
+        return _NativeBitmap(reply["handle"], reply["w"], reply["h"])

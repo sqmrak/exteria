@@ -34,6 +34,12 @@ class Class(Object):
         self._py = target
 
     @staticmethod
+    def forName(name, *_loader):
+        """the class the shims answer for under that java name; ClassNotFoundException for any other, the way a plugin tells a client without it"""
+        from java import jclass
+        return Class._of(jclass(str(name)))
+
+    @staticmethod
     def _of(target):
         found = Class._cache.get(target)
         if found is None:
@@ -135,6 +141,18 @@ class RuntimeException(_JavaException):
     pass
 
 
+class NullPointerException(RuntimeException):
+    pass
+
+
+class IllegalArgumentException(RuntimeException):
+    pass
+
+
+class SecurityException(RuntimeException):
+    pass
+
+
 class ReflectiveOperationException(_JavaException):
     pass
 
@@ -225,6 +243,11 @@ class Integer(int):
         return Integer(int(text))
 
 
+# the class object of the primitive int, which a plugin passes to getDeclaredMethod as a parameter type
+Integer.TYPE = Class._of(int)
+Long.TYPE = Class._of(int)
+
+
 class Boolean:
     TRUE = True
     FALSE = False
@@ -236,6 +259,9 @@ class Boolean:
     @staticmethod
     def parseBoolean(text):
         return str(text).lower() == "true"
+
+
+Boolean.TYPE = Class._of(bool)
 
 
 class Float(float):

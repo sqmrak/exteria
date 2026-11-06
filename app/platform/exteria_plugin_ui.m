@@ -1,5 +1,6 @@
 #import "exteria_plugin_ui.h"
 
+#import <CFNetwork/CFNetwork.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
@@ -8,11 +9,20 @@
 #import "exteria_dialog.h"
 #import "exteria_emoji_label.h"
 #import "exteria_language.h"
+#import "exteria_plugin_account.h"
+#import "exteria_platform.h"
+#import "exteria_plugin_bitmap.h"
 #import "exteria_plugin_sheet.h"
+#import "exteria_profile_photo_picker.h"
+#import "exteria_settings_controller.h"
 #import "exteria_plugin_audio.h"
+#import "exteria_plugin_music.h"
+#import "exteria_plugin_story.h"
+#import "exteria_date_time_picker.h"
 #import "exteria_plugins.h"
 #import "exteria_theme.h"
 #include "exteria_surface.h"
+#include "exteria_tl_schema.h"
 
 /* a view a plugin made. it draws a background, optionally a label or an image, and forwards touches to python */
 @protocol ExteriaPluginSurface <NSObject>
@@ -55,6 +65,7 @@ static void forward_touch(UIView *view, long long viewId, int action, NSSet *tou
     BOOL _wantsTouch;
 @public
     ExteriaEmojiLabel *label;
+    CALayer *tint;
     PluginState state;
 }
 @end
@@ -75,6 +86,7 @@ static void forward_touch(UIView *view, long long viewId, int action, NSSet *tou
 
 - (void)dealloc {
     [label release];
+    [tint release];
     [super dealloc];
 }
 
@@ -138,22 +150,24 @@ static UIFont *font_of(CGFloat size, BOOL bold) {
     return bold ? ExteriaFontBold(size) : ExteriaFontRegular(size);
 }
 
+/* the overlay lives in the view of the top controller, like every popup of the app: before ios 8 the window stays in portrait and only that view is turned
+   with the interface, so a view added to the window itself shows sideways on an ipad held wide. a controller that is presented later takes the overlay
+   along on the next call of a plugin, since the view under the presented one would hide it */
 static UIView *overlay(void) {
-    UIWindow *window = [[UIApplication sharedApplication] keyWindow];
-    if (!window) window = [[[UIApplication sharedApplication] windows] lastObject];
-    if (!window) return nil;
+    UIView *host = ExteriaOverlayHost();
+    if (!host) return nil;
     if (!g_overlay) {
-        g_overlay = [[ExteriaPluginOverlay alloc] initWithFrame:window.bounds];
+        g_overlay = [[ExteriaPluginOverlay alloc] initWithFrame:host.bounds];
         g_overlay.backgroundColor = [UIColor clearColor];
         g_overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     }
-    /* the overlay stays on top of whatever the app puts on its window later */
-    if (g_overlay.superview != window) {
+    /* the overlay stays on top of whatever the app puts on the same view later */
+    if (g_overlay.superview != host) {
         [g_overlay removeFromSuperview];
-        g_overlay.frame = window.bounds;
-        [window addSubview:g_overlay];
-    } else if ([window.subviews lastObject] != g_overlay) {
-        [window bringSubviewToFront:g_overlay];
+        g_overlay.frame = host.bounds;
+        [host addSubview:g_overlay];
+    } else if ([host.subviews lastObject] != g_overlay) {
+        [host bringSubviewToFront:g_overlay];
     }
     return g_overlay;
 }
@@ -179,7 +193,32 @@ static void apply_geometry(UIView *view) {
         ExteriaPluginView *v = (ExteriaPluginView *)view;
         if (st->oval) v.layer.cornerRadius = MIN(size.width, size.height) / 2;
         if (v->label) v->label.frame = CGRectMake(st->pad[0], st->pad[1], MAX(0, size.width - st->pad[0] - st->pad[2]), MAX(0, size.height - st->pad[1] - st->pad[3]));
+        if (v->tint) {
+            [CATransaction begin];
+            [CATransaction setDisableActions:YES];
+            v->tint.frame = CGRectMake(0, 0, size.width, size.height);
+            [CATransaction commit];
+        }
     }
+}
+
+/* the color a plugin lays over a picture with setColorFilter (SRC_ATOP, SRC_OVER): a layer above the picture and under the text. alpha 0 takes it away */
+static void apply_tint(ExteriaPluginView *view, unsigned long long argb) {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (!((argb >> 24) & 255)) {
+        [view->tint removeFromSuperlayer];
+        [view->tint release];
+        view->tint = nil;
+    } else {
+        if (!view->tint) {
+            view->tint = [[CALayer alloc] init];
+            [view.layer insertSublayer:view->tint atIndex:0];
+        }
+        view->tint.backgroundColor = color_of(argb).CGColor;
+        view->tint.frame = CGRectMake(0, 0, state_of(view)->frame.size.width, state_of(view)->frame.size.height);
+    }
+    [CATransaction commit];
 }
 
 /* clipToOutline with a round rect: the picture on the layer and the children are cut at the corners */
@@ -252,7 +291,7 @@ static void apply_props(UIView *view, NSDictionary *props) {
     if (flat) {
         /* the text kinds carry a label, made when one of its properties first arrives */
         id text = [props objectForKey:@"text"];
-        BOOL styled = text || [props objectForKey:@"color"] || [props objectForKey:@"size"] || [props objectForKey:@"bold"] || [props objectForKey:@"gravity"];
+        BOOL styled = text || [props objectForKey:@"color"] || [props objectForKey:@"size"] || [props objectForKey:@"bold"] || [props objectForKey:@"gravity"] || [props objectForKey:@"lines"];
         if (styled) {
             if (!flat->label) {
                 /* the label of the app: it draws the emoji of its own pack, which a UILabel shows as boxes on older systems */
@@ -264,6 +303,8 @@ static void apply_props(UIView *view, NSDictionary *props) {
             }
             ExteriaEmojiLabel *label = flat->label;
             if (text) label.text = text;
+            /* setMaxLines and setSingleLine: the lines the label may take, 0 for as many as the text needs */
+            if ([props objectForKey:@"lines"]) label.numberOfLines = (NSInteger)num(props, @"lines", 0);
             if ([props objectForKey:@"color"]) label.textColor = color_of([[props objectForKey:@"color"] unsignedLongLongValue]);
             if ([props objectForKey:@"size"] || [props objectForKey:@"bold"]) {
                 CGFloat size = [props objectForKey:@"size"] ? num(props, @"size", 14) : label.font.pointSize;
@@ -287,6 +328,8 @@ static void apply_props(UIView *view, NSDictionary *props) {
             else flat.layer.contentsGravity = kCAGravityResizeAspect;
         }
         if ([[props objectForKey:@"image"] isEqual:[NSNumber numberWithBool:NO]]) flat.layer.contents = nil;
+        id tint = [props objectForKey:@"tint"];
+        if ([tint isKindOfClass:[NSNumber class]]) apply_tint(flat, [tint unsignedLongLongValue]);
     }
     if (moved) apply_geometry(view);
 }
@@ -366,6 +409,23 @@ static void apply_native(UIView *view, NSString *name) {
     CGImageRelease(image);
 }
 
+/* a picture the app holds for python (exteria_plugin_bitmap.h) on the layer of a view */
+static void apply_bitmap(UIView *view, long long handle) {
+    if (![view isKindOfClass:[ExteriaPluginView class]]) return;
+    CGImageRef image = ExteriaPluginBitmapCreateImage(handle);
+    if (!image) {
+        ExteriaPluginsLog(@"exteria: a plugin showed picture %lld, which the app does not hold", handle);
+        return;
+    }
+    view.layer.contents = (id)image;
+    CGImageRelease(image);
+}
+
+/* a page of the app lays out again when what a plugin put in its layer changed, so it can hide the background the views now cover */
+static void page_layer_changed(UIView *layer) {
+    if ([layer isKindOfClass:[ExteriaPluginView class]] && ((ExteriaPluginView *)layer).viewId < 0) [layer.superview setNeedsLayout];
+}
+
 static void purge(UIView *view) {
     if ([view conformsToProtocol:@protocol(ExteriaPluginSurface)]) {
         [g_views removeObjectForKey:[NSNumber numberWithLongLong:((id<ExteriaPluginSurface>)view).viewId]];
@@ -402,14 +462,20 @@ static void apply_operation(NSArray *op) {
         /* a scroll view or a plain view holds its children directly */
         if (index >= 0 && (NSUInteger)index < parent.subviews.count) [parent insertSubview:child atIndex:(NSInteger)index];
         else [parent addSubview:child];
+        page_layer_changed(parent);
     } else if ([kind isEqualToString:@"rm"] && op.count == 2) {
         UIView *child = view_for([[op objectAtIndex:1] longLongValue]);
         if (!child) return;
+        UIView *old_parent = child.superview;
         [child removeFromSuperview];
         purge(child);
+        if (old_parent) page_layer_changed(old_parent);
     } else if ([kind isEqualToString:@"img"] && op.count == 5) {
         UIView *view = view_for([[op objectAtIndex:1] longLongValue]);
         if (view) apply_image(view, [[op objectAtIndex:2] intValue], [[op objectAtIndex:3] intValue], [op objectAtIndex:4]);
+    } else if ([kind isEqualToString:@"nimg"] && op.count == 3) {
+        UIView *view = view_for([[op objectAtIndex:1] longLongValue]);
+        if (view) apply_bitmap(view, [[op objectAtIndex:2] longLongValue]);
     } else if ([kind isEqualToString:@"native"] && op.count == 3) {
         UIView *view = view_for([[op objectAtIndex:1] longLongValue]);
         if (view) apply_native(view, [op objectAtIndex:2]);
@@ -439,6 +505,40 @@ static void forward_touch(UIView *view, long long viewId, int action, NSSet *tou
 
 NSString *const ExteriaPluginPickNotification = @"ExteriaPluginPick";
 
+#pragma mark pages
+
+NSString *const ExteriaPluginCardsNotification = @"ExteriaPluginCards";
+static CGFloat g_card_alpha = 1;
+
+CGFloat ExteriaPluginCardAlpha(void) {
+    return g_card_alpha;
+}
+
+static void set_card_alpha(CGFloat alpha) {
+    CGFloat clamped = alpha < 0 ? 0 : (alpha > 1 ? 1 : alpha);
+    if (clamped == g_card_alpha) return;
+    g_card_alpha = clamped;
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPluginCardsNotification object:nil];
+}
+
+UIView *ExteriaPluginPageLayer(long long pageId) {
+    if (!g_views) g_views = [[NSMutableDictionary alloc] init];
+    ExteriaPluginView *layer = [[[ExteriaPluginView alloc] initWithFrame:CGRectZero] autorelease];
+    layer.viewId = pageId;
+    layer.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [g_views setObject:layer forKey:[NSNumber numberWithLongLong:pageId]];
+    return layer;
+}
+
+static long long g_own_user;
+static NSString *g_own_name;
+
+void ExteriaPluginUISetOwnUser(long long userId, NSString *firstName) {
+    g_own_user = userId;
+    [g_own_name release];
+    g_own_name = [firstName copy];
+}
+
 #pragma mark services
 
 static UIViewController *top_controller(void) {
@@ -466,7 +566,8 @@ static UIColor *theme_color(NSString *key) {
             @"hairline", @"divider", @"bar", @"actionBarDefault", @"title", @"actionBarDefaultTitle", @"field", @"chat_messagePanelBackground",
             @"title", @"chat_messagePanelText", @"in", @"chat_inBubble", @"out", @"chat_outBubble", @"message", @"chat_messageTextIn",
             @"message", @"chat_messageTextOut", @"card", @"dialogBackground", @"title", @"dialogTextBlack", @"secondary", @"dialogTextGray",
-            @"accent", @"dialogTextBlue", @"accent", @"chats_actionBackground", @"accent", @"featuredStickers_addButton", nil];
+            @"accent", @"dialogTextBlue", @"accent", @"chats_actionBackground", @"accent", @"featuredStickers_addButton", @"secondary", @"dialogTextGray2", @"onaccent", @"featuredStickers_buttonText",
+            @"red", @"text_RedBold", nil];
     }
     NSString *name = [table objectForKey:key];
     if (!name) return nil;
@@ -481,6 +582,8 @@ static UIColor *theme_color(NSString *key) {
     if ([name isEqualToString:@"in"]) return ExteriaColorBubbleIn();
     if ([name isEqualToString:@"out"]) return ExteriaColorBubbleOut();
     if ([name isEqualToString:@"message"]) return ExteriaColorMessage();
+    if ([name isEqualToString:@"onaccent"]) return [UIColor whiteColor];
+    if ([name isEqualToString:@"red"]) return ExteriaColorBadgeRed();
     return ExteriaColorCard();
 }
 
@@ -553,6 +656,36 @@ static void show_banner(NSString *text) {
             if (serial == g_banner_serial) [card removeFromSuperview];
         }];
     });
+}
+
+/* the answer of the picture picker to python: Activity.RESULT_OK (-1) with the file: address of the kept picture, or RESULT_CANCELED (0) with none */
+static void answer_picker(NSNumber *code, int result, NSString *address) {
+    ExteriaPluginsCallHost(@"activity_result", [NSArray arrayWithObjects:code, [NSNumber numberWithInt:result], address ? address : @"", nil]);
+}
+
+/* the photo library, for a plugin that opened the picker of pictures (Activity.startActivityForResult in python). the picture is kept in the folder of the app and python is given its address */
+static void pick_picture_for_plugin(NSNumber *code) {
+    UIViewController *host = top_controller();
+    if (!host) {
+        ExteriaPluginsLog(@"exteria: a plugin asked for a picture while no screen is up");
+        answer_picker(code, 0, nil);
+        return;
+    }
+    [ExteriaProfilePhotoPicker pickWholeFrom:host picked:^(NSString *path) {
+        NSString *reason = nil;
+        NSString *kept = path ? ExteriaPluginPicksAdopt(path, &reason) : nil;
+        if (!kept) {
+            ExteriaPluginsLog(@"exteria: the picture a plugin asked for was not kept: %@", reason ? reason : @"the choice could not be written");
+            answer_picker(code, 0, nil);
+            return;
+        }
+        answer_picker(code, -1, [[NSURL fileURLWithPath:kept] absoluteString]);
+    } cancelled:^{
+        answer_picker(code, 0, nil);
+    } unavailable:^{
+        ExteriaPluginsLog(@"exteria: the photo library is not available for a plugin");
+        answer_picker(code, 0, nil);
+    }];
 }
 
 static exteria_status fail(NSString **failure, NSString *text, exteria_status status) {
@@ -679,8 +812,121 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
             [info setObject:party forKey:dialog.kind == 0 ? @"user" : @"chat"];
             *reply = info;
         } else {
-            *reply = [NSDictionary dictionaryWithObject:controller ? @"other" : @"none" forKey:@"kind"];
+            *reply = [NSDictionary dictionaryWithObject:[controller isKindOfClass:[ExteriaSettingsController class]] ? @"settings" : (controller ? @"other" : @"none") forKey:@"kind"];
         }
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.pick_time"]) {
+        NSNumber *token = [request objectForKey:@"token"];
+        NSString *mode = [request objectForKey:@"mode"];
+        /* the day and the time the wheel starts on as the phone's calendar reads them: year, month, day, hour, minute. python's own clock may not know the phone's zone */
+        NSArray *initial = [request objectForKey:@"initial"];
+        NSNumber *minimum = [request objectForKey:@"minimum"];
+        if (![token isKindOfClass:[NSNumber class]] || ![mode isKindOfClass:[NSString class]]) return fail(failure, @"no token or mode", EXTERIA_E_ARG);
+        NSDate *start = nil;
+        if ([initial isKindOfClass:[NSArray class]] && initial.count == 5) {
+            NSDateComponents *parts = [[[NSDateComponents alloc] init] autorelease];
+            parts.year = [[initial objectAtIndex:0] integerValue];
+            parts.month = [[initial objectAtIndex:1] integerValue];
+            parts.day = [[initial objectAtIndex:2] integerValue];
+            parts.hour = [[initial objectAtIndex:3] integerValue];
+            parts.minute = [[initial objectAtIndex:4] integerValue];
+            start = [[NSCalendar currentCalendar] dateFromComponents:parts];
+        }
+        UIDatePickerMode wheel;
+        if ([mode isEqualToString:@"date"]) wheel = UIDatePickerModeDate;
+        else if ([mode isEqualToString:@"time"]) wheel = UIDatePickerModeTime;
+        else if ([mode isEqualToString:@"datetime"]) wheel = UIDatePickerModeDateAndTime;
+        else return fail(failure, @"no such mode", EXTERIA_E_ARG);
+        NSDate *earliest = [minimum isKindOfClass:[NSNumber class]] ? [NSDate dateWithTimeIntervalSince1970:[minimum doubleValue]] : nil;
+        /* the wheel is shown after this call returns: python is still running, and the answer is a new call into python */
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIViewController *host = top_controller();
+            if (!host) {
+                ExteriaPluginsLog(@"exteria: a plugin asked for a date while no screen is up");
+                ExteriaPluginsCallHost(@"time_picked", [NSArray arrayWithObjects:token, [NSNull null], nil]);
+                return;
+            }
+            ExteriaDateTimePicker *picker = [[[ExteriaDateTimePicker alloc] initWithFrame:host.view.bounds mode:wheel initialDate:start minimumDate:earliest done:^(NSDate *date) {
+                NSDateComponents *parts = [[NSCalendar currentCalendar] components:NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit | NSHourCalendarUnit | NSMinuteCalendarUnit fromDate:date];
+                NSArray *chosen = [NSArray arrayWithObjects:[NSNumber numberWithLongLong:(long long)[date timeIntervalSince1970]], [NSNumber numberWithInteger:parts.year],
+                                   [NSNumber numberWithInteger:parts.month], [NSNumber numberWithInteger:parts.day], [NSNumber numberWithInteger:parts.hour], [NSNumber numberWithInteger:parts.minute], nil];
+                ExteriaPluginsCallHost(@"time_picked", [NSArray arrayWithObjects:token, chosen, nil]);
+            } cancelled:^{
+                ExteriaPluginsCallHost(@"time_picked", [NSArray arrayWithObjects:token, [NSNull null], nil]);
+            }] autorelease];
+            [host.view addSubview:picker];
+        });
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.pick_root"]) {
+        *reply = [NSDictionary dictionaryWithObject:ExteriaPluginPicksDirectory() forKey:@"value"];
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.pick_image"]) {
+        NSNumber *code = [request objectForKey:@"request"];
+        if (![code isKindOfClass:[NSNumber class]]) return fail(failure, @"no request code", EXTERIA_E_ARG);
+        /* the picker is shown after this call returns: python is still running, and its answer is a new call into python */
+        dispatch_async(dispatch_get_main_queue(), ^{ pick_picture_for_plugin(code); });
+        return EXTERIA_OK;
+    }
+    if ([name hasPrefix:@"account."]) {
+        /* the main screen owns the session and answers through exteria_host.account_result once the server has */
+        NSNumber *token = [request objectForKey:@"token"];
+        if (![token isKindOfClass:[NSNumber class]]) return fail(failure, @"no token", EXTERIA_E_ARG);
+        NSMutableDictionary *info = [NSMutableDictionary dictionaryWithDictionary:request];
+        [info setObject:[name substringFromIndex:[@"account." length]] forKey:@"op"];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPluginAccountNotification object:nil userInfo:info];
+        });
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"page.cards"]) {
+        id alpha = [request objectForKey:@"alpha"];
+        if (![alpha isKindOfClass:[NSNumber class]] || !isfinite([alpha doubleValue])) return fail(failure, @"no alpha", EXTERIA_E_ARG);
+        set_card_alpha((CGFloat)[alpha doubleValue]);
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"bitmap.decode"]) {
+        id path = [request objectForKey:@"path"];
+        id side = [request objectForKey:@"side"];
+        if (![path isKindOfClass:[NSString class]] || ![side isKindOfClass:[NSNumber class]]) return fail(failure, @"no path or side", EXTERIA_E_ARG);
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginBitmapDecode(path, [side intValue], reply, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name isEqualToString:@"bitmap.scale"]) {
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginBitmapScale([[request objectForKey:@"handle"] longLongValue], [[request objectForKey:@"w"] intValue], [[request objectForKey:@"h"] intValue], reply, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name isEqualToString:@"bitmap.crop"]) {
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginBitmapCrop([[request objectForKey:@"handle"] longLongValue], [[request objectForKey:@"x"] intValue], [[request objectForKey:@"y"] intValue],
+                                                        [[request objectForKey:@"w"] intValue], [[request objectForKey:@"h"] intValue], reply, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name isEqualToString:@"bitmap.encode"]) {
+        id path = [request objectForKey:@"path"];
+        if (![path isKindOfClass:[NSString class]]) return fail(failure, @"no path", EXTERIA_E_ARG);
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginBitmapEncode([[request objectForKey:@"handle"] longLongValue], [[request objectForKey:@"png"] boolValue], [[request objectForKey:@"quality"] intValue], path, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name isEqualToString:@"bitmap.copy"]) {
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginBitmapCopy([[request objectForKey:@"handle"] longLongValue], reply, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name isEqualToString:@"bitmap.blur"]) {
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginBitmapBlur([[request objectForKey:@"handle"] longLongValue], [[request objectForKey:@"radius"] intValue], &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name isEqualToString:@"bitmap.release"]) {
+        NSArray *handles = [request objectForKey:@"handles"];
+        if (![handles isKindOfClass:[NSArray class]]) return fail(failure, @"no handles", EXTERIA_E_ARG);
+        for (id handle in handles) if ([handle isKindOfClass:[NSNumber class]]) ExteriaPluginBitmapRelease([handle longLongValue]);
         return EXTERIA_OK;
     }
     if ([name isEqualToString:@"sheet.open"]) {
@@ -703,7 +949,7 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         return EXTERIA_OK;
     }
     if ([name isEqualToString:@"app.me"]) {
-        *reply = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:0], @"id", @"", @"first_name", nil];
+        *reply = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:g_own_user], @"id", g_own_name ? g_own_name : @"", @"first_name", nil];
         return EXTERIA_OK;
     }
     if ([name isEqualToString:@"chat.rebuild"]) {
@@ -720,6 +966,34 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         NSString *version = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"];
         if (![version isKindOfClass:[NSString class]]) return fail(failure, @"the bundle has no version", EXTERIA_E_NOTFOUND);
         *reply = [NSDictionary dictionaryWithObject:version forKey:@"value"];
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"net.proxies"]) {
+        /* the proxies of the system settings, which urllib and requests read through _scproxy: for each scheme the host and port when it is switched on */
+        NSDictionary *system = [(NSDictionary *)CFNetworkCopySystemProxySettings() autorelease];
+        NSMutableDictionary *answer = [NSMutableDictionary dictionary];
+        NSArray *schemes = [NSArray arrayWithObjects:@"HTTP", @"HTTPS", @"FTP", nil];
+        for (NSString *scheme in schemes) {
+            NSNumber *enabled = [system objectForKey:[scheme stringByAppendingString:@"Enable"]];
+            NSString *host = [system objectForKey:[scheme stringByAppendingString:@"Proxy"]];
+            NSNumber *port = [system objectForKey:[scheme stringByAppendingString:@"Port"]];
+            if (![enabled isKindOfClass:[NSNumber class]] || ![enabled boolValue] || ![host isKindOfClass:[NSString class]] || !host.length) continue;
+            NSMutableDictionary *entry = [NSMutableDictionary dictionaryWithObject:host forKey:@"host"];
+            if ([port isKindOfClass:[NSNumber class]]) [entry setObject:port forKey:@"port"];
+            [answer setObject:entry forKey:[scheme lowercaseString]];
+        }
+        NSNumber *simple = [system objectForKey:@"ExcludeSimpleHostnames"];
+        [answer setObject:[NSNumber numberWithBool:[simple isKindOfClass:[NSNumber class]] && [simple boolValue]] forKey:@"exclude_simple"];
+        NSArray *exceptions = [system objectForKey:@"ExceptionsList"];
+        NSMutableArray *names = [NSMutableArray array];
+        for (id one in [exceptions isKindOfClass:[NSArray class]] ? exceptions : [NSArray array]) if ([one isKindOfClass:[NSString class]]) [names addObject:one];
+        [answer setObject:names forKey:@"exceptions"];
+        *reply = answer;
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.protocol"]) {
+        /* the layer the core speaks; the api id stays with the app */
+        *reply = [NSDictionary dictionaryWithObject:[NSNumber numberWithUnsignedInt:exteria_tl_layer] forKey:@"layer"];
         return EXTERIA_OK;
     }
     if ([name isEqualToString:@"app.muted"]) {
@@ -743,7 +1017,9 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         [chat sendPluginText:text replyTo:(int32_t)[[request objectForKey:@"reply"] intValue]];
         return EXTERIA_OK;
     }
+    if ([name hasPrefix:@"story."]) return ExteriaPluginStoryService(name, request, reply, failure);
     if ([name hasPrefix:@"audio."]) return ExteriaPluginAudioService(name, request, reply, failure);
+    if ([name hasPrefix:@"music."]) return ExteriaPluginMusicService(name, request, reply, failure);
     if ([name isEqualToString:@"chat.send_photo"]) {
         UIViewController *controller = top_controller();
         NSString *path = [request objectForKey:@"path"];
@@ -762,8 +1038,18 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
 
 void ExteriaPluginUIReset(void) {
     ExteriaPluginAudioReset();
+    ExteriaPluginMusicReset();
     ExteriaPluginSheetCloseAll();
     [g_motion stopAccelerometerUpdates];
     for (UIView *child in [[g_overlay.subviews copy] autorelease]) [child removeFromSuperview];
+    /* the layers of the pages belong to the pages, which keep them: they are emptied and stay registered for the next plugin */
+    NSMutableDictionary *pages = [NSMutableDictionary dictionary];
+    for (NSNumber *key in g_views) if ([key longLongValue] < 0) [pages setObject:[g_views objectForKey:key] forKey:key];
+    for (UIView *layer in pages.allValues) {
+        for (UIView *child in [[layer.subviews copy] autorelease]) [child removeFromSuperview];
+        page_layer_changed(layer);
+    }
     [g_views removeAllObjects];
+    [g_views addEntriesFromDictionary:pages];
+    set_card_alpha(1);
 }

@@ -109,7 +109,9 @@ def unload(plugin_id):
     if not plugin_loader.plugins:
         # a plugin that crashed in its unload hook leaves its views on the overlay
         from android.app import activity
+        from org.telegram.ui import reset_pages
         activity()._decor.removeAllViews()
+        reset_pages()
 
 
 @_flushed
@@ -169,12 +171,42 @@ def update_hook(plugin_id, account, name, update):
     return _outcome(plugin_loader.call_update_hook(plugin_id, account, name, Record(update)), "update")
 
 
+# the key of a row that stands for a UItem.asSlideView of the plugin; the page has no slider with stops of text, so the row is a list of choices
+_SLIDE_KEY = "__slide:"
+
+
+def _slide_rows(plugin_id, items):
+    """a Custom row that holds a slide view becomes a row of choices. the header above it, if there is one, is its title, as the rows of a list
+    of choices have theirs. the choice goes back to the callback of the view and is not stored here: the plugin keeps its own settings"""
+    record = plugin_loader.plugins.get(plugin_id)
+    shown = []
+    for item in items:
+        view = getattr(record.custom_views.get(item.get("view_id")), "item", None) if record and item.get("type") == "custom" else None
+        if getattr(view, "kind", None) != "slide":
+            shown.append(item)
+            continue
+        row = {"type": "selector", "key": _SLIDE_KEY + item["view_id"], "text": "", "items": list(view.choices), "value": view.chosen}
+        if shown and shown[-1].get("type") == "header":
+            row["text"] = shown.pop()["text"]
+        shown.append(row)
+    return shown
+
+
 def settings(plugin_id):
-    return json.loads(plugin_loader.get_settings_json(plugin_id))
+    return _slide_rows(plugin_id, json.loads(plugin_loader.get_settings_json(plugin_id)))
 
 
 @_flushed
 def setting_changed(plugin_id, key, value_json):
+    if key.startswith(_SLIDE_KEY):
+        record = plugin_loader.plugins.get(plugin_id)
+        view = getattr(record.custom_views.get(key[len(_SLIDE_KEY):]), "item", None) if record else None
+        choice = json.loads(value_json)
+        if getattr(view, "kind", None) != "slide" or not isinstance(choice, int) or not 0 <= choice < len(view.choices):
+            raise ValueError("%s is not a choice of a row of this plugin" % (value_json,))
+        with plugin_loader.plugin_context(plugin_id):
+            view.whenChose.run(choice)
+        return
     plugin_loader.notify_setting_changed(plugin_id, key, value_json)
 
 
@@ -293,6 +325,55 @@ def pick_result(token, chosen):
 
 
 @_flushed
+def music_play(index):
+    """a song is about to start in the music player: True when a plugin that hooks playMessage has started it"""
+    from org.telegram.messenger.music import play_routed
+    return play_routed(index)
+
+
+@_flushed
+def music_pause():
+    """a song is about to be paused in the music player: True when a plugin that hooks pauseMessage has paused it"""
+    from org.telegram.messenger.music import pause_routed
+    return pause_routed()
+
+
+@_flushed
+def pick_cancelled(token):
+    """the person went back from the picker of the app without choosing"""
+    from org.telegram.ui import _pick_cancelled
+    _pick_cancelled(token)
+
+
+@_flushed
+def time_picked(token, chosen):
+    """the person answered the wheel of a date or a time a plugin asked for: chosen is [epoch, year, month, day, hour, minute], or None after Cancel"""
+    from android.app import _time_picked
+    _time_picked(token, chosen)
+
+
+@_flushed
+def story_page():
+    """the story screen holds a picture: the words of the button a plugin put beside publish, {"title"}, or None"""
+    from org.telegram.ui.Stories.recorder import story_page
+    return story_page()
+
+
+@_flushed
+def story_schedule(long_press):
+    """the button of a plugin beside publish was tapped, or publish was held"""
+    from org.telegram.ui.Stories.recorder import story_schedule
+    story_schedule(bool(long_press))
+
+
+@_flushed
+def story_intercept(path, caption, token):
+    """a story is about to go up: the plugins that hook StoriesController.uploadStory may hold it back. {"taken", "keep"}"""
+    from org.telegram.ui.Stories.recorder import story_intercept
+    return story_intercept(str(path), str(caption), int(token))
+
+
+@_flushed
 def alert_result(token, index, text=""):
     """the person answered a dialog a plugin showed; text is what a field in it held"""
     from org.telegram.ui.ActionBar import _alert_result
@@ -301,3 +382,31 @@ def alert_result(token, index, text=""):
     if display_hooks_active():
         # a hook that shows other words for a message may have been told something by the answer: the chat is laid out again
         _ui.ask("chat.rebuild")
+
+
+@_flushed
+def fragment_event(page, event, width, height):
+    """a page of the app that plugins hook was built ("create"), came on screen ("resume"), went away ("pause") or changed its size
+    ("layout"); width and height are the size of its layer in points. only the settings tab is such a page"""
+    if page != "settings":
+        raise ValueError("no such page: %r" % (page,))
+    from org.telegram.ui import SettingsActivity
+    SettingsActivity.instance()._event(str(event), int(width), int(height))
+
+
+@_flushed
+def activity_result(request_code, result_code, address):
+    """the picker a plugin opened with startActivityForResult answered: result_code is Activity.RESULT_OK or RESULT_CANCELED, address the
+    file: address of the chosen picture, empty when the person cancelled. the hooks on LaunchActivity.onActivityResult take it from here"""
+    from android.content import Intent
+    from android.net import Uri
+    from org.telegram.ui import LaunchActivity
+    data = Intent().setData(Uri.parse(address)) if address else None
+    LaunchActivity.instance.onActivityResult(int(request_code), int(result_code), data)
+
+
+@_flushed
+def account_result(token, error, payload):
+    """the app answered a request a plugin sent with send_request (see org/telegram/tgnet/requests.py): error is the name of the failure or None"""
+    from org.telegram.tgnet import requests
+    requests.account_result(token, error, payload)

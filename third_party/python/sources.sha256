@@ -1,0 +1,9 @@
+# the c libraries behind the extension modules of the plugin host that the ios sdks do not carry in a form that runs on ios 5: bzip2 (_bz2), xz (_lzma) and
+# the sqlite amalgamation (_sqlite3). scripts/build_python.sh checks each file against this list and builds them static for each slice. fetch them into the
+# directory EXTERIA_PYTHON_SOURCES names:
+#   bzip2   https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz                                (bsd-style)
+#   xz      https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.xz      (public domain, 0bsd)
+#   sqlite  https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip                         (public domain)
+ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269  bzip2-1.0.8.tar.gz
+b92d4e3a438affcf13362a1305cd9d94ed47ddda22e456a42791e630a5644f5c  xz-5.4.6.tar.xz
+77823cb110929c2bcb0f5d48e4833b5c59a8a6e40cdea3936b99e199dbbe5784  sqlite-amalgamation-3460100.zip

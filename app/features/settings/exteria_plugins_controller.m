@@ -24,6 +24,9 @@
     /* the files whose switch is on and whose plugin is still being started */
     NSMutableSet *_starting;
     ExteriaSenkoPopup *_failurePopup;
+    /* the plugin files whose list of permissions or of errors is open */
+    NSMutableSet *_openPermissions;
+    NSMutableSet *_openErrors;
 }
 @end
 
@@ -34,6 +37,8 @@
     if (!self) return nil;
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     _starting = [[NSMutableSet alloc] init];
+    _openPermissions = [[NSMutableSet alloc] init];
+    _openErrors = [[NSMutableSet alloc] init];
     self.pageTitle = NSLocalizedString(@"plugins.title", nil);
     return self;
 }
@@ -43,6 +48,8 @@
     [_weak release];
     [_sticker release];
     [_starting release];
+    [_openPermissions release];
+    [_openErrors release];
     [_failurePopup release];
     [super dealloc];
 }
@@ -119,15 +126,36 @@
 #pragma mark scripts
 
 /* the words for a permission key; a key the app has no words for shows as it is written, so nothing is hidden from the person */
-static NSString *permission_names(NSArray *permissions) {
+/* the readable line of every permission key, the key itself when no text is known */
+static NSArray *permission_lines(NSArray *permissions) {
     NSMutableArray *names = [NSMutableArray array];
     for (NSString *key in permissions) {
         NSString *token = [@"plugins.perm." stringByAppendingString:key];
         NSString *text = NSLocalizedString(token, nil);
         [names addObject:[text isEqualToString:token] ? key : text];
     }
-    if (!names.count) return NSLocalizedString(@"plugins.perm.none", nil);
-    return [names componentsJoinedByString:@", "];
+    return names;
+}
+
+/* "3 permissions", "1 error": the keys base.0, base.1 and base.2 hold the singular, the few and the many. English has no few, and the languages that count in the
+   Slavic way say so with plugins.plural.slavic, since a .strings file cannot hold plural rules */
+static NSString *counted(NSString *base, NSUInteger count) {
+    int form;
+    if ([NSLocalizedString(@"plugins.plural.slavic", nil) isEqualToString:@"1"]) {
+        NSUInteger ones = count % 10, tens = count % 100;
+        form = ones == 1 && tens != 11 ? 0 : (ones >= 2 && ones <= 4 && !(tens >= 12 && tens <= 14) ? 1 : 2);
+    } else {
+        form = count == 1 ? 0 : 2;
+    }
+    NSString *key = [NSString stringWithFormat:@"%@.%d", base, form];
+    return [NSString stringWithFormat:NSLocalizedString(key, nil), (unsigned long)count];
+}
+
+/* the arrow at the end of a row that opens a list, turned over while the list is open */
+static UIImage *disclosure_arrow(BOOL open) {
+    UIImage *arrow = ExteriaSymbolImage(ExteriaSymbolArrowDown, 20, ExteriaColorSecondary());
+    if (!open || !arrow.CGImage) return arrow;
+    return [UIImage imageWithCGImage:arrow.CGImage scale:arrow.scale orientation:UIImageOrientationDown];
 }
 
 /* the failure of a plugin as a person can read it: what is missing or wrong, in a line. the traceback is behind a tap, and in the log */
@@ -280,51 +308,104 @@ static NSString *failure_text(NSDictionary *why) {
     });
 }
 
-- (ExteriaSettingsRow *)rowForEntry:(ExteriaPluginEntry *)entry {
+/* a long press (modern) or a swipe (classic) removes the plugin: its file goes, and the list shrinks with the animation of the page */
+- (void)makeRemovable:(ExteriaSettingsRow *)row file:(NSString *)file {
+    ExteriaWeakReference *weak = _weak;
+    NSString *name = [[file copy] autorelease];
+    row.removesSection = YES;
+    row.remove = ^NSString *{
+        return ExteriaPluginsRemove(name);
+    };
+    row.removed = ^{
+        ExteriaPluginsController *me = weak.target;
+        if (!me) return;
+        /* the list has already shrunk with the animation; this drops the action rows of the plugin that went and brings the card back when the last file is gone */
+        [me rebuild];
+    };
+}
+
+/* a row that opens a list under its count: the permissions or the errors of a plugin. a tap turns the arrow and shows the lines */
+- (ExteriaSettingsRow *)disclosureRowWithTitle:(NSString *)title lines:(NSArray *)lines file:(NSString *)file open:(BOOL)open set:(NSMutableSet *)set {
+    ExteriaWeakReference *weak = _weak;
+    NSString *name = [[file copy] autorelease];
+    NSString *subtitle = open ? [lines componentsJoinedByString:@"\n"] : nil;
+    ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTitle:title subtitle:subtitle value:nil tap:^{
+        ExteriaPluginsController *me = weak.target;
+        if (!me) return;
+        if ([set containsObject:name]) [set removeObject:name];
+        else [set addObject:name];
+        [me crossfade];
+    }];
+    row.trailingImage = disclosure_arrow(open);
+    row.trailingImageUnclipped = YES;
+    return row;
+}
+
+/* a plugin is a card of its own: the row with the switch, then the errors and the permissions, each as a count with an arrow that opens the lines */
+- (NSArray *)rowsForEntry:(ExteriaPluginEntry *)entry {
+    NSMutableArray *group = [NSMutableArray array];
+    NSArray *errors = nil;
+    NSArray *permissions = nil;
+    ExteriaSettingsRow *main = nil;
     if (entry.status != 0) {
         NSString *report = entry.error;
         NSString *title = entry.file;
-        return [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneGray title:title subtitle:refusal_text(entry) value:nil tap:report.length ? ^{
+        /* the text of a refusal is a line of its own and the reason under it; the reason is the error */
+        NSArray *parts = [refusal_text(entry) componentsSeparatedByString:@"\n"];
+        if (parts.count > 1) errors = [NSArray arrayWithObject:[[parts subarrayWithRange:NSMakeRange(1, parts.count - 1)] componentsJoinedByString:@"\n"]];
+        main = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneGray title:title subtitle:[parts objectAtIndex:0] value:nil tap:report.length ? ^{
             ExteriaShowAlert(title, report, [NSArray arrayWithObjects:NSLocalizedString(@"notice.ok", nil), NSLocalizedString(@"devices.copy", nil), nil], 0, NO,
                              ^(NSInteger index, NSString *text) {
                 (void)text;
                 if (index == 1) [UIPasteboard generalPasteboard].string = report;
             });
         } : nil];
-    }
-    BOOL starting = [_starting containsObject:entry.file];
-    NSMutableArray *lines = [NSMutableArray array];
-    if (starting) [lines addObject:NSLocalizedString(@"plugins.starting", nil)];
-    else if (entry.fault) [lines addObject:[NSString stringWithFormat:NSLocalizedString(@"plugins.fault", nil), friendly_fault(entry.fault)]];
-    else if (entry.changed) [lines addObject:NSLocalizedString(@"plugins.changed", nil)];
-    [lines addObject:permission_names(entry.permissions)];
-    if (entry.enabled && entry.hasSettings) [lines addObject:NSLocalizedString(@"plugins.settings.hint", nil)];
-    ExteriaWeakReference *weak = _weak;
-    NSString *file = entry.file;
-    ExteriaSettingsRow *row = [ExteriaSettingsRow switchRowWithSymbol:ExteriaSymbolApps tone:ExteriaSettingsToneCyan title:entry.name subtitle:[lines componentsJoinedByString:@"\n"] on:entry.enabled || starting
-                                            toggle:^(BOOL on) {
-        ExteriaPluginsController *me = weak.target;
-        if (!me) return;
-        if (on) [me startPlugin:file];
-        else [me stopPlugin:file];
-    }];
-    /* a plugin that failed shows what went wrong in a line; a tap gives the whole report */
-    if (entry.fault && !entry.enabled && !starting) {
-        NSString *report = entry.fault;
-        NSString *title = entry.name;
-        row.tap = ^{ ExteriaShowNotice(title, report); };
-    }
-    /* a tap on the row of a running plugin opens the settings it built */
-    if (entry.enabled && entry.hasSettings) {
-        NSString *pluginId = entry.pluginId;
-        NSString *title = entry.name;
-        row.tap = ^{
+    } else {
+        BOOL starting = [_starting containsObject:entry.file];
+        NSMutableArray *lines = [NSMutableArray array];
+        permissions = permission_lines(entry.permissions);
+        if (starting) [lines addObject:NSLocalizedString(@"plugins.starting", nil)];
+        else if (entry.fault) [lines addObject:NSLocalizedString(@"plugins.fault.off", nil)];
+        else if (entry.changed) [lines addObject:NSLocalizedString(@"plugins.changed", nil)];
+        if (!permissions.count) [lines addObject:NSLocalizedString(@"plugins.perm.none", nil)];
+        if (entry.enabled && entry.hasSettings) [lines addObject:NSLocalizedString(@"plugins.settings.hint", nil)];
+        if (!entry.enabled && !starting) {
+            NSMutableArray *found = [NSMutableArray array];
+            if (entry.fault) [found addObject:friendly_fault(entry.fault)];
+            if (entry.failure) [found addObject:failure_text(entry.failure)];
+            errors = found;
+        }
+        ExteriaWeakReference *weak = _weak;
+        NSString *file = entry.file;
+        main = [ExteriaSettingsRow switchRowWithSymbol:ExteriaSymbolApps tone:ExteriaSettingsToneCyan title:entry.name subtitle:lines.count ? [lines componentsJoinedByString:@"\n"] : nil on:entry.enabled || starting
+                                                toggle:^(BOOL on) {
             ExteriaPluginsController *me = weak.target;
             if (!me) return;
-            [me.navigationController pushViewController:[[[ExteriaPluginSettingsController alloc] initWithPluginId:pluginId title:title items:nil] autorelease] animated:YES];
-        };
+            if (on) [me startPlugin:file];
+            else [me stopPlugin:file];
+        }];
+        /* a plugin that failed gives the whole report on a tap */
+        if (entry.fault && !entry.enabled && !starting) {
+            NSString *report = entry.fault;
+            NSString *title = entry.name;
+            main.tap = ^{ ExteriaShowNotice(title, report); };
+        }
+        /* a tap on the row of a running plugin opens the settings it built */
+        if (entry.enabled && entry.hasSettings) {
+            NSString *pluginId = entry.pluginId;
+            NSString *title = entry.name;
+            main.tap = ^{
+                ExteriaPluginsController *me = weak.target;
+                if (!me) return;
+                [me.navigationController pushViewController:[[[ExteriaPluginSettingsController alloc] initWithPluginId:pluginId title:title items:nil] autorelease] animated:YES];
+            };
+        }
     }
-    return row;
+    [group addObject:main];
+    if (errors.count) [group addObject:[self disclosureRowWithTitle:counted(@"plugins.err.count", errors.count) lines:errors file:entry.file open:[_openErrors containsObject:entry.file] set:_openErrors]];
+    if (permissions.count) [group addObject:[self disclosureRowWithTitle:counted(@"plugins.perm.count", permissions.count) lines:permissions file:entry.file open:[_openPermissions containsObject:entry.file] set:_openPermissions]];
+    for (ExteriaSettingsRow *row in group) [self makeRemovable:row file:entry.file];
+    return group;
 }
 
 /* the same browser as the one that picks a file to send, asking for scripts: only folders and plugin files show, and the one that is tapped is copied into the plugins folder */
@@ -335,7 +416,7 @@ static NSString *failure_text(NSDictionary *why) {
         if (!me) return;
         NSString *installed = nil;
         NSString *failure = ExteriaPluginsImport(path, nil, &installed);
-        if (failure) ExteriaShowNotice(NSLocalizedString(@"plugins.import.title", nil), failure);
+        if (failure) ExteriaShowPicturePopup(NSLocalizedString(@"plugins.import.title", nil), failure, @"plugin_import_fail.png", 150);
         else ExteriaShowNotice(NSLocalizedString(@"plugins.import.title", nil), [NSString stringWithFormat:NSLocalizedString(@"plugins.import.done", nil), installed]);
         [me rebuild];
     } cancel:nil] autorelease];
@@ -351,16 +432,23 @@ static NSString *failure_text(NSDictionary *why) {
 
 - (void)rebuild {
     NSMutableArray *rows = [NSMutableArray array];
-    for (ExteriaPluginEntry *entry in ExteriaPluginsList()) [rows addObject:[self rowForEntry:entry]];
+    NSMutableArray *cards = [NSMutableArray array];
+    for (ExteriaPluginEntry *entry in ExteriaPluginsList()) {
+        NSArray *group = [self rowsForEntry:entry];
+        [rows addObjectsFromArray:group];
+        [cards addObject:group];
+    }
     ExteriaWeakReference *weak = _weak;
     ExteriaSettingsRow *import = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolDocument tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"plugins.import.title", nil)
                                                           subtitle:nil value:nil tap:^{
         [(ExteriaPluginsController *)weak.target importPlugin];
     }];
     NSMutableArray *sections = [NSMutableArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:import]]];
-    if (rows.count) {
-        [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"plugins.installed", nil)
-                                                               footer:NSLocalizedString(@"plugins.footer", nil) rows:rows]];
+    /* each plugin is a card of its own; the title of the list is over the first and the hint under the last */
+    for (NSUInteger i = 0; i < cards.count; ++i) {
+        ExteriaSettingsSection *card = [ExteriaSettingsSection sectionWithHeader:i == 0 ? NSLocalizedString(@"plugins.installed", nil) : nil footer:nil rows:[cards objectAtIndex:i]];
+        if (i + 1 == cards.count) card.footer = NSLocalizedString(@"plugins.footer", nil);
+        [sections addObject:card];
     }
     NSMutableArray *actionRows = [NSMutableArray array];
     for (NSDictionary *action in ExteriaPluginsActions()) {

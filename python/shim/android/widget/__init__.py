@@ -187,6 +187,26 @@ class TextView(View):
         self._bold = False
         self._gravity = Gravity.TOP | Gravity.LEFT
         self._max_width = None
+        self._lines = 0
+        self._ellipsize = None
+
+    def setSingleLine(self, single=True):
+        self.setMaxLines(1 if single else 0)
+
+    def setMaxLines(self, lines):
+        self._lines = max(0, int(lines))
+        self._push(lines=self._lines)
+        self._request_layout()
+
+    def getMaxLines(self):
+        return self._lines or 2 ** 31 - 1
+
+    def setEllipsize(self, where):
+        """what is cut at the last line is shown cut: the label of the app has no mark for it, so the choice is kept for getEllipsize only"""
+        self._ellipsize = where
+
+    def getEllipsize(self):
+        return self._ellipsize
 
     def setText(self, text, *_ignored):
         self._text = "" if text is None else str(text)
@@ -220,7 +240,7 @@ class TextView(View):
         self._request_layout()
 
     def _kind_props(self):
-        return {"text": self._text, "color": self._color, "size": self._size, "bold": self._bold, "gravity": self._gravity}
+        return {"text": self._text, "color": self._color, "size": self._size, "bold": self._bold, "gravity": self._gravity, "lines": self._lines}
 
     def _content_size(self, max_w, max_h):
         pad_w = self._pad[0] + self._pad[2]
@@ -228,9 +248,13 @@ class TextView(View):
         if self._max_width is not None:
             cap = self._max_width - pad_w
             limit = cap if limit is None else min(limit, cap)
+        line = _ui.measure_text("A", self._size, self._bold, 100000)[1]
         if not self._text:
-            return (0, _ui.measure_text("A", self._size, self._bold, 100000)[1])
-        return _ui.measure_text(self._text, self._size, self._bold, max(limit, 1) if limit is not None else 100000)
+            return (0, line)
+        width, height = _ui.measure_text(self._text, self._size, self._bold, max(limit, 1) if limit is not None else 100000)
+        if self._lines:
+            height = min(height, line * self._lines)
+        return (width, height)
 
 
 class EditText(TextView):
@@ -272,8 +296,34 @@ class ImageView(View):
         if bitmap is None:
             self._push(image=False)
         elif self._attached:
-            _ui.emit("img", self._id, bitmap.getWidth(), bitmap.getHeight(), bitmap._base64())
+            self._send_bitmap()
         self._request_layout()
+
+    def _send_bitmap(self):
+        """a picture the app keeps is shown by its handle, any other bitmap goes over as pixels"""
+        handle = getattr(self._bitmap, "_handle", None)
+        if handle is not None:
+            _ui.emit("nimg", self._id, self._bitmap._live())
+        else:
+            _ui.emit("img", self._id, self._bitmap.getWidth(), self._bitmap.getHeight(), self._bitmap._base64())
+
+    def setColorFilter(self, *args):
+        """a PorterDuffColorFilter, or a color and a mode, laid over the picture. SRC_ATOP and SRC_OVER put the color on the picture
+        as it is (a dimming layer); the other modes need pixels the app does not hand to python"""
+        from android.graphics import ColorFilter, PorterDuff, PorterDuffColorFilter
+        if len(args) == 2:
+            args = (PorterDuffColorFilter(args[0], args[1]),)
+        color_filter = args[0] if len(args) == 1 else None
+        if color_filter is None or not isinstance(color_filter, ColorFilter):
+            raise TypeError("not a color filter: %r" % (args,))
+        if not isinstance(color_filter, PorterDuffColorFilter) or color_filter._mode not in (PorterDuff.Mode.SRC_ATOP, PorterDuff.Mode.SRC_OVER):
+            raise NotImplementedError("an image view takes a PorterDuffColorFilter of mode SRC_ATOP or SRC_OVER")
+        self._tint = color_filter._color
+        self._push(tint=self._tint)
+
+    def clearColorFilter(self):
+        self._tint = 0
+        self._push(tint=0)
 
     def setNativeSurface(self, name):
         """exteria only: shows the frames a native module publishes under this name (see core/pyhost/exteria_surface.h). the view needs
@@ -288,12 +338,12 @@ class ImageView(View):
             _ui.emit("native", self._id, self._surface)
 
     def _kind_props(self):
-        return {"scale": self._scale}
+        return {"scale": self._scale, "tint": getattr(self, "_tint", 0)}
 
     def _attach(self):
         super()._attach()
         if self._bitmap is not None:
-            _ui.emit("img", self._id, self._bitmap.getWidth(), self._bitmap.getHeight(), self._bitmap._base64())
+            self._send_bitmap()
 
     def _content_size(self, max_w, max_h):
         if self._bitmap is None:

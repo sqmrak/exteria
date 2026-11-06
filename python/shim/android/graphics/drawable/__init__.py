@@ -105,3 +105,22 @@ class BitmapDrawable(Drawable):
         out = Bitmap(self._bitmap.getWidth(), self._bitmap.getHeight())
         out._pixels[:] = tint_pixels(self._bitmap._pixels, self._filter._color, self._filter._mode)
         return out
+
+
+class RippleDrawable(Drawable):
+    """a background that rises under a finger on android. here it is its content (the drawable the plugin gives, or nothing): the app draws
+    no ripple, so a view with this background does not answer a touch with a wave"""
+
+    def __init__(self, color, content, mask):
+        super().__init__()
+        from android.content.res import ColorStateList
+        if not isinstance(color, ColorStateList):
+            raise TypeError("the color of a ripple is a ColorStateList")
+        self._content = content
+        self._mask = mask
+        # a view draws a bitmap background as pixels, which is so only when the content is one
+        if hasattr(content, "_rendered"):
+            self._rendered = content._rendered
+
+    def _encode(self):
+        return self._content._encode() if self._content is not None else None

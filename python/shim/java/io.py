@@ -110,3 +110,25 @@ class ByteArrayOutputStream(Object):
 
     def toString(self):
         return self._data.decode("utf-8", "replace")
+
+
+class FileOutputStream(Object):
+    """a file a plugin writes a picture into with Bitmap.compress: the app writes it, so only that is possible here, and only inside the folder
+    the plugin may write pictures to (the app checks the place). write() is not available"""
+
+    def __init__(self, path):
+        from file_utils import _require_files
+        self._path = os.fspath(path.getPath() if isinstance(path, File) else path)
+        _require_files(self._path, "write a file")
+        self._written = False
+        self._closed = False
+
+    def write(self, *_args):
+        raise NotImplementedError("a FileOutputStream takes a picture from Bitmap.compress only")
+
+    def flush(self):
+        if self._closed:
+            raise ValueError("the stream is closed")
+
+    def close(self):
+        self._closed = True

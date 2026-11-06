@@ -71,6 +71,10 @@ void ExteriaPluginsSetEnabled(NSString *file, BOOL enabled);
    *installed gets the file name inside the folder on success */
 NSString *ExteriaPluginsImport(NSString *path, NSString *name, NSString **installed);
 
+/* switches the plugin off, forgets its approval and deletes its file from the plugins folder. returns nil when it is gone, else the text to show. a name that is not a plain
+   plugin file name of the folder is refused */
+NSString *ExteriaPluginsRemove(NSString *file);
+
 /* "start", "stop", "pause" or "resume" for every plugin that is on */
 void ExteriaPluginsEvent(const char *name);
 
@@ -94,6 +98,10 @@ BOOL ExteriaPluginsPathInCache(NSString *path);
 
 /* a plugin file the app is asked to open: the extensions the folder scan accepts */
 BOOL ExteriaPluginsAcceptsExtension(NSString *extension);
+
+/* whether the interpreter is up and a plugin file is known: the screens that tell plugins about themselves (exteria_host.fragment_event) ask first, so a person
+   with no plugins costs the screens a flag test and no log line */
+BOOL ExteriaPluginsAreRunning(void);
 
 /* calls exteria_host.<function>(*arguments) on the main thread and gives the decoded result, nil when it failed or returned
    null. for the view layer of exteria_plugin_ui.m, which forwards touches and sensor readings to python */

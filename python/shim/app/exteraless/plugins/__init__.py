@@ -160,6 +160,12 @@ class PluginServices:
     them is not portable"""
 
     @staticmethod
+    def sendRequest(_account, request, callback):
+        """the requests of org.telegram.tgnet.requests; any other fails by name"""
+        from org.telegram.tgnet import requests
+        return requests.send(request, callback)
+
+    @staticmethod
     def runOnUiThread(fn, delay_ms=0):
         with _token_lock:
             token = _next_token[0]

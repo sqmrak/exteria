@@ -1,0 +1,6 @@
+# the pure python libraries that plugins may import, as wheels from pypi. scripts/build_python.sh checks each file against this list
+# and puts it in the bundle under python/lib, as bytecode. fetch them into the directory EXTERIA_PYTHON_WHEELS names:
+#   mutagen  https://pypi.org/project/mutagen/1.48.1/   (gpl-2.0-or-later)
+#   yt-dlp   https://pypi.org/project/yt-dlp/2026.10.26/ (unlicense)
+4f077fe87d3fc7fba259aa63d8c026b18382ca6a42ef37c61e16f1b1b5b82fe7  mutagen-1.48.1-py3-none-any.whl
+a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae  yt_dlp-2026.10.26-py3-none-any.whl

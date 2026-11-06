@@ -352,7 +352,7 @@ TRIMMED = r'''
 import importlib.abc, sys
 sys.path.insert(0, sys.argv[1])
 # the extensions the device bundle does not build (scripts/build_python.sh, drop) and the stdlib folders it leaves out
-BLOCK = {"_lzma", "_bz2", "_decimal", "pyexpat", "_elementtree", "_uuid", "_multiprocessing", "multiprocessing", "termios", "syslog"}
+BLOCK = {"_decimal", "_uuid", "_multiprocessing", "multiprocessing", "termios", "syslog"}
 
 class Block(importlib.abc.MetaPathFinder):
     def find_spec(self, name, path=None, target=None):

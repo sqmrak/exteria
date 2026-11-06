@@ -3,6 +3,7 @@
 from android import _ui
 from java.lang import Object
 from java.util import ArrayList
+from org.telegram.messenger.music import MediaController, SharedConfig  # noqa: F401
 from org.telegram.tgnet import TLRPC
 
 
@@ -109,6 +110,8 @@ class DispatchQueue(Object):
 
 class UserConfig(Object):
     selectedAccount = 0
+    # the app keeps one signed in account
+    MAX_ACCOUNT_COUNT = 1
     _instances = {}
 
     @staticmethod
@@ -128,6 +131,9 @@ class UserConfig(Object):
     def getClientUserId(self):
         return (_ui.ask("app.me") or {}).get("id", 0)
 
+    def isClientActivated(self):
+        return self._account == 0 and bool(self.getClientUserId())
+
 
 class UserObject:
     @staticmethod
@@ -143,6 +149,9 @@ class MessageObject(Object):
     # the layouts the android client caches for the text; a plugin that changes the text resets them, here there is none to reset
     textLayout = None
     captionLayout = None
+    currentAccount = 0
+    # what the music player says of a song that is the message (org.telegram.messenger.music), None for a message of a chat
+    _track = None
 
     def __init__(self, owner, dialog_id=0):
         self.messageOwner = owner
@@ -165,31 +174,16 @@ class MessageObject(Object):
         return bool(self.messageOwner.out)
 
     def isVoice(self):
-        return False
+        return self._track is not None and self._track.get("kind") == "voice"
 
     def isMusic(self):
+        return self._track is not None and self._track.get("kind") == "music"
+
+    def shouldEncryptPhotoOrVideo(self):
+        # only a secret chat protects its files like that, and the music player plays the songs of the cloud
         return False
 
     def isRoundVideo(self):
-        return False
-
-
-class MediaController(Object):
-    _instance = None
-
-    @staticmethod
-    def getInstance():
-        if MediaController._instance is None:
-            MediaController._instance = MediaController()
-        return MediaController._instance
-
-    def getPlayingMessageObject(self):
-        return None
-
-    def isPlayingMessage(self, message):
-        return False
-
-    def isMessagePaused(self):
         return False
 
 
@@ -207,6 +201,10 @@ class MessagesController(Object):
 
     def getUser(self, user_id):
         return None
+
+    def getStoriesController(self):
+        from org.telegram.ui.Stories import StoriesController
+        return StoriesController.getInstance()
 
 
 def _needs_requests(owner, name):
@@ -287,6 +285,13 @@ class SendMessagesHelper(Object):
         import os
         return str(path) if os.path.isfile(path) and os.path.getsize(path) > 0 else None
 
+    @staticmethod
+    def prepareSendingDocument(_account, path, _original, _uri, caption, mime, dialog_id, *_rest):
+        """a file to Saved Messages, which is the one chat the app can send a plugin's file to. a song carries the title, the performer and the duration
+        a plugin sets on the document in its send hook, as it does on android"""
+        from org.telegram.messenger.documents import send_audio
+        send_audio(str(path), caption, str(mime or ""), int(dialog_id))
+
     def sendMessage(self, params):
         reply = params.replyToMsg
         reply_id = reply.getId() if hasattr(reply, "getId") else (reply if isinstance(reply, int) else 0)
@@ -347,6 +352,9 @@ class LocaleController(Object):
         def __init__(self, plural_lang_code):
             self.pluralLangCode = plural_lang_code
 
+        def getLangCode(self):
+            return self.pluralLangCode
+
     _instance = None
 
     @staticmethod
@@ -354,6 +362,16 @@ class LocaleController(Object):
         if LocaleController._instance is None:
             LocaleController._instance = LocaleController()
         return LocaleController._instance
+
+    @staticmethod
+    def getSystemLocaleStringIso639():
+        """the language the app runs in, the one it also tells the server"""
+        return str(_ui.ask("app.language")["value"])
+
+    def getCurrentLocale(self):
+        """the language the person chose in the app, as the Locale of the android client names it"""
+        from java.util import Locale
+        return Locale(str(_ui.ask("app.language")["value"]))
 
     def getCurrentLocaleInfo(self):
         return LocaleController.LocaleInfo(str(_ui.ask("app.language")["value"]))
@@ -376,10 +394,45 @@ class Utilities(Object):
     class Callback(Object):
         """a plugin class implements run(argument)"""
 
+    BLUR_RADIUS_MAX = 254
+
+    @staticmethod
+    def stackBlurBitmap(bitmap, radius):
+        """blurs a picture decoded by BitmapFactory in place, in the app: the pixels are not in python. a radius of 0 changes nothing"""
+        from android.graphics import _NativeBitmap
+        if not isinstance(bitmap, _NativeBitmap):
+            raise NotImplementedError("only a picture decoded by BitmapFactory can be blurred")
+        radius = int(radius)
+        if not 0 <= radius <= Utilities.BLUR_RADIUS_MAX:
+            raise ValueError("the blur radius is 0 to %d, not %d" % (Utilities.BLUR_RADIUS_MAX, radius))
+        if radius:
+            bitmap._blur(radius)
+
+
+class DialogObject(Object):
+    @staticmethod
+    def isEncryptedDialog(dialog_id):
+        """a secret chat has the bit 62 set and the sign bit clear, as the android client numbers its dialogs"""
+        dialog_id = int(dialog_id)
+        return bool(dialog_id & 0x4000000000000000) and not dialog_id & 0x8000000000000000
+
 
 class FileLoader(Object):
     """the names and the choices of the file loader of the android app, which need no network. the cache name of a file is the
     key a download is announced under, so any name works as long as the same media always has the same one"""
+
+    _instances = {}
+
+    @staticmethod
+    def getInstance(account=0):
+        if account not in FileLoader._instances:
+            FileLoader._instances[account] = FileLoader()
+        return FileLoader._instances[account]
+
+    def getPathToMessage(self, owner):
+        """where the file of a message is: the path the app gave it, or a file that is not there. the app keeps no other copies by message"""
+        from java.io import File
+        return File(str(getattr(owner, "attachPath", "") or "/nonexistent"))
 
     @staticmethod
     def getClosestPhotoSizeWithSize(sizes, side, *_ignored):

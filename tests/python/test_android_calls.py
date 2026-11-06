@@ -316,6 +316,25 @@ class Pickers(unittest.TestCase):
         self.answer([{"id": 7, "kind": 1}])
         self.assertEqual(len(got), 1)
 
+    def test_going_back_from_the_picker_ends_it_without_a_choice(self):
+        import exteria_host
+        from android.os import Bundle
+        from org.telegram.ui import BaseFragment, DialogsActivity, GroupCreateActivity
+        for make in (GroupCreateActivity, DialogsActivity):
+            got, gone = [], []
+            picker = make(Bundle())
+            picker.setDelegate(type("D", (object,), {
+                "didSelectUsers": lambda self, *args: got.append(args),
+                "didSelectDialogs": lambda self, *args: got.append(args)})())
+            picker.onFragmentDestroy = lambda gone=gone: gone.append(1)
+            BaseFragment().presentFragment(picker)
+            token = fakeapp.fake.picks[-1]["token"]
+            exteria_host.pick_cancelled(token)
+            self.assertEqual((got, gone), ([], [1]), make.__name__)
+            exteria_host.pick_cancelled(token)
+            exteria_host.pick_result(token, [{"id": 7, "kind": 1}])
+            self.assertEqual((got, gone), ([], [1]), "an answer after the end is dropped")
+
     def test_a_hook_on_the_adapter_narrows_the_kinds(self):
         from org.telegram.tgnet import TLRPC
         from org.telegram.ui import GroupCreateActivity

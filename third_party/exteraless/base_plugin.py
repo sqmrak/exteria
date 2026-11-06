@@ -562,6 +562,23 @@ class BasePlugin:
                 pass  # fall through to stderr
         print(f"[plugin:{self._exteraless_plugin_id or '?'}] {text}", file=sys.stderr)
 
+    @property
+    def logger(self):
+        """The logging.Logger of the plugin (exteraGram sdk 1.4.5): its records go to the plugin log, with the traceback of exc_info."""
+        logger = self.__dict__.get("_exteraless_logger")
+        if logger is None:
+            import logging
+
+            class Handler(logging.Handler):
+                def emit(handler, record):
+                    self.log(f"{record.levelname}: {handler.format(record)}")
+
+            logger = logging.Logger(f"plugin.{self._exteraless_plugin_id or '?'}", logging.INFO)
+            logger.propagate = False
+            logger.addHandler(Handler())
+            self.__dict__["_exteraless_logger"] = logger
+        return logger
+
     # ---- settings storage ----
 
     def _exteraless_settings_cache(self):

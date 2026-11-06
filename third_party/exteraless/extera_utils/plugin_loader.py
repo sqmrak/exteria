@@ -1080,6 +1080,21 @@ _sandboxed_import._exteraless_sandbox = True
 _original_open = None
 
 
+def _plugin_file_alias(file, mode):
+    """<plugins>/<id>.py for a plugin kept as <id>.plugin. zwylib reads the file of a plugin by that name, the one exteraGram stores it under, and without
+    this every read fails and zwylib logs a traceback per plugin"""
+    try:
+        if isinstance(file, str) and file.endswith(".py") and isinstance(mode, str) and not set(mode) & set("wax+"):
+            folder = os.path.dirname(file)
+            if folder and folder == _plugins_dir_path() and not os.path.exists(file):
+                alias = file[:-3] + ".plugin"
+                if os.path.isfile(alias):
+                    return alias
+    except Exception:
+        pass
+    return file
+
+
 def _sandboxed_open(file, mode="r", *args, **kwargs):
     """Обёртка builtins.open.
 
@@ -1087,6 +1102,7 @@ def _sandboxed_open(file, mode="r", *args, **kwargs):
     обёртки разрешение "files" закрывало бы только парадный вход. Проверяется
     только прямой вызов из кода плагина: у SDK своя проверка в file_utils.
     """
+    file = _plugin_file_alias(file, mode)
     checked = None
     try:
         pid = _direct_plugin_caller()

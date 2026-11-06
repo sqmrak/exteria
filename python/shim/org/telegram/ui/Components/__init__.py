@@ -1,10 +1,37 @@
 """org.telegram.ui.Components: the short notices of the android app, shown as a banner at the top"""
 
 from android import _ui
-from android.view import MATCH_PARENT, WRAP_CONTENT, Gravity, View, _resolve
+from android.graphics import ColorMatrixColorFilter, Paint
+from android.view import MATCH_PARENT, WRAP_CONTENT, Gravity, View, ViewGroup, _resolve
 from android.widget import EditText, FrameLayout, ImageView, LinearLayout, TextView
 from org.telegram.messenger import AndroidUtilities
+from org.telegram.messenger.music import VideoPlayer  # noqa: F401
 from java.lang import Object
+
+
+class AlertsCreator(Object):
+    class ScheduleDatePickerDelegate:
+        """the object a plugin gives to the schedule dialog; didSelectDate(notify, date) runs once the person chose"""
+
+    class _ScheduleDialog:
+        def __init__(self, delegate):
+            self._delegate = delegate
+
+        def show(self):
+            import time
+            from android.app import ask_time
+            # a moment from now at the earliest: a time that has passed cannot be scheduled, and the wheel does not offer it
+            ask_time("datetime", None, int((time.time() + 60) * 1000), self._chosen)
+            return self
+
+        def _chosen(self, parts):
+            if parts is not None:
+                self._delegate.didSelectDate(True, int(parts[0]))
+
+    @staticmethod
+    def createScheduleDatePickerDialog(context, dialog_id, delegate, *_ignored):
+        """the wheel of the app for a date and a time, with the choice sent to delegate.didSelectDate(notify, date): the date is seconds since 1970"""
+        return AlertsCreator._ScheduleDialog(delegate)
 
 
 class Bulletin:
@@ -95,6 +122,11 @@ class UItem(Object):
     def asExteraExpandableSwitch(item_id, text, subtext, listener=None):
         return UItem._row("expandable_switch", id=item_id, text=str(text), subtext=str(subtext), listener=listener,
                           checked=False, collapsed=False, padded=False)
+
+    @staticmethod
+    def asSlideView(choices, chosen, when_chose):
+        """a row that picks one of a few texts. the settings page shows it as a row of choices, and the answer is passed to when_chose (a Callback)"""
+        return UItem._row("slide", choices=[str(choice) for choice in choices], chosen=int(chosen), whenChose=when_chose, intValue=int(chosen))
 
     def setChecked(self, value):
         self.checked = bool(value)
@@ -304,3 +336,51 @@ class ItemOptions:
     def dismiss(self):
         if self._popup is not None:
             self._popup.dismiss()
+
+
+class _CardPaint(Paint):
+    """the paint the settings page fills its cards with. a color filter that only scales alpha makes the cards see-through: the app
+    applies that scale to its own cards. None puts them back"""
+
+    def __init__(self):
+        super().__init__()
+        self._sent = 1.0
+
+    def setColorFilter(self, color_filter):
+        super().setColorFilter(color_filter)
+        if color_filter is None:
+            scale = 1.0
+        else:
+            scale = color_filter._alpha_scale() if isinstance(color_filter, ColorMatrixColorFilter) else None
+        if scale is None:
+            raise NotImplementedError("the cards of the settings page take a color filter that only scales alpha")
+        if scale != self._sent:
+            self._sent = scale
+            _ui.ask("page.cards", alpha=scale)
+        return color_filter
+
+
+class RecyclerListView(ViewGroup):
+    """the list of the settings page. the page draws its rows itself, so the list has no row views to walk (getChildCount is 0) and
+    nothing to redraw: what a plugin changes on its paints reaches the page at once. the fields are the paints of the android list that
+    a plugin reads by name"""
+
+    sectionBackgroundPaint: Paint
+    backgroundPaint: Paint
+    sectionBackgroundStrokePaint: Paint
+
+    def __init__(self, page):
+        ViewGroup.__init__(self, None)
+        self._page = page
+        self.sectionBackgroundPaint = _CardPaint()
+        self.backgroundPaint = Paint()
+        self.sectionBackgroundStrokePaint = Paint()
+
+    def getWidth(self):
+        return self._page.fragmentView.getWidth()
+
+    def getHeight(self):
+        return self._page.fragmentView.getHeight()
+
+    def invalidateViews(self):
+        """the changes of a plugin are applied when it makes them"""

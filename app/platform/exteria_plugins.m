@@ -2,6 +2,7 @@
 
 #import <CommonCrypto/CommonDigest.h>
 #import "exteria_message.h"
+#import "exteria_plugin_music.h"
 #import "exteria_plugin_ui.h"
 #import "exteria_language.h"
 #include "exteria_pyhost.h"
@@ -12,7 +13,9 @@ static NSString *const ExteriaPluginsEnabledKey = @"exteria.plugins.enabled";
 static NSString *const ExteriaPluginsSettingsKey = @"exteria.plugins.settings";
 /* a folder of hundreds of files would stall the page, each one is parsed to read its name */
 #define PLUGINS_LISTED_MAX 64
-#define RESULTS_MAX 512
+/* the results of the hooks are kept per message, and a chat that has been scrolled far holds thousands of them: with room for fewer than the chat has, a cache that is
+   emptied when it fills gives a miss for every message of each rebuild, and each miss is a call into python on the main thread */
+#define RESULTS_MAX 8192
 /* a plugin may carry compressed game data, but its source still has a hard limit */
 #define PLUGIN_FILE_MAX (4 * 1024 * 1024)
 #define SETTING_VALUE_MAX 16384
@@ -98,7 +101,9 @@ static NSString *const ExteriaPluginsSettingsKey = @"exteria.plugins.settings";
 static NSMutableArray *g_slots;
 /* a result of the incoming hooks is kept per message text, since the chat is ordered again on every change; a new
    generation drops them all when a plugin is switched or a file changes */
-static NSMutableDictionary *g_results;
+static NSCache *g_results;
+/* messages the display hook was asked about with these very words, under this generation, and left as they were */
+static NSCache *g_displayAsked;
 static unsigned g_generation;
 static BOOL g_started;
 /* 0 not tried, 1 running, -1 did not start: the second try would fail the same way */
@@ -217,6 +222,7 @@ static void store_enabled(NSString *file, NSString *digest) {
 static void changed(void) {
     ++g_generation;
     [g_results removeAllObjects];
+    [g_displayAsked removeAllObjects];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPluginsDidChangeNotification object:nil];
 }
 
@@ -277,6 +283,10 @@ static id python_call(NSString *function, NSArray *arguments, uint32_t timeout, 
     }
     free(reply);
     return result;
+}
+
+BOOL ExteriaPluginsAreRunning(void) {
+    return g_started && g_python > 0 && g_slots.count > 0;
 }
 
 id ExteriaPluginsCallHost(NSString *function, NSArray *arguments) {
@@ -343,7 +353,7 @@ static exteria_status plugin_service(void *ctx, const char *name_c, const char *
     if (![NSThread isMainThread] && ![name isEqualToString:@"ui.run"]) {
         return reply_text("the app is served on its main thread only", EXTERIA_E_STATE, out, cap, out_len);
     }
-    if ([name hasPrefix:@"ui."] || [name hasPrefix:@"sensor."] || [name hasPrefix:@"theme."] || [name hasPrefix:@"app."] || [name hasPrefix:@"chat."] || [name hasPrefix:@"sheet."] || [name hasPrefix:@"audio."]) {
+    if ([name hasPrefix:@"ui."] || [name hasPrefix:@"sensor."] || [name hasPrefix:@"theme."] || [name hasPrefix:@"app."] || [name hasPrefix:@"chat."] || [name hasPrefix:@"sheet."] || [name hasPrefix:@"audio."] || [name hasPrefix:@"music."] || [name hasPrefix:@"bitmap."] || [name hasPrefix:@"page."] || [name hasPrefix:@"account."] || [name hasPrefix:@"story."]) {
         NSDictionary *answer = nil;
         NSString *failure = nil;
         exteria_status result = ExteriaPluginUIService(name, request, &answer, &failure);
@@ -468,11 +478,14 @@ static BOOL ensure_python(void) {
     NSString *stdlib = [root stringByAppendingPathComponent:@"stdlib"];
     NSString *shim = [root stringByAppendingPathComponent:@"shim"];
     NSString *sdk = [root stringByAppendingPathComponent:@"sdk"];
+    NSString *lib = [root stringByAppendingPathComponent:@"lib"];
     exteria_pyhost_config config;
     memset(&config, 0, sizeof(config));
     config.stdlib = [stdlib fileSystemRepresentation];
     config.paths[0] = [shim fileSystemRepresentation];
     config.paths[1] = [sdk fileSystemRepresentation];
+    /* mutagen and yt-dlp, the libraries the bundle carries for plugins (see third_party/python/wheels.sha256) */
+    config.paths[2] = [lib fileSystemRepresentation];
     config.service = plugin_service;
     NSTimeInterval began = [NSDate timeIntervalSinceReferenceDate];
     exteria_status status = exteria_pyhost_init(&config);
@@ -662,6 +675,8 @@ NSArray *ExteriaPluginsList(void) {
 void ExteriaPluginsStart(void) {
     if (g_started) return;
     g_started = YES;
+    /* the music player asks the plugins before a song starts or pauses, once one of them runs */
+    ExteriaPluginMusicInstall();
     /* a library such as zwylib keeps texts in the language of the app and learns of a change through LocaleController.applyLanguage; python is not started for it */
     [[NSNotificationCenter defaultCenter] addObserverForName:ExteriaLanguageDidChangeNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
         (void)note;
@@ -672,7 +687,10 @@ void ExteriaPluginsStart(void) {
             }
         }
     }];
-    if (!g_results) g_results = [[NSMutableDictionary alloc] init];
+    if (!g_results) {
+        g_results = [[NSCache alloc] init];
+        g_results.countLimit = RESULTS_MAX;
+    }
     if (!enabled_digests().count) {
         if (!g_slots) g_slots = [[NSMutableArray alloc] init];
         return;
@@ -826,7 +844,6 @@ BOOL ExteriaPluginsHidesMessage(ExteriaMessage *message, long long chat) {
             }
         }
     }
-    if (g_results.count >= RESULTS_MAX) [g_results removeAllObjects];
     if (hidden) {
         [g_results setObject:[NSNumber numberWithBool:YES] forKey:key];
         return YES;
@@ -894,6 +911,7 @@ BOOL ExteriaPluginsStopsSend(NSString **text, long long chat, int replyTo, NSStr
 /* what the display hooks last made of a message: chat:id to the words before and the words shown, so a message is put back when the plugin stops changing it, and a
    message that was edited on the server in between is left alone */
 static NSMutableDictionary *g_rewritten;
+#define REWRITTEN_MAX 8192
 
 void ExteriaPluginsRewriteMessages(NSArray *messages, long long chat) {
     if (!g_started || !g_slots.count || !on_main_thread("display hook")) return;
@@ -901,33 +919,57 @@ void ExteriaPluginsRewriteMessages(NSArray *messages, long long chat) {
     for (ExteriaPluginSlot *slot in g_slots) hooked = hooked || (slot->loaded && slot->displayHook);
     if (!g_rewritten) g_rewritten = [[NSMutableDictionary alloc] init];
     if (!hooked && !g_rewritten.count) return;
+    if (!g_displayAsked) {
+        g_displayAsked = [[NSCache alloc] init];
+        g_displayAsked.countLimit = RESULTS_MAX;
+    }
     NSMutableArray *items = [NSMutableArray array];
     NSMutableDictionary *byKey = [NSMutableDictionary dictionary];
+    NSMutableDictionary *askedKeys = [NSMutableDictionary dictionary];
     for (ExteriaMessage *message in messages) {
         if (message.messageId <= 0 || message.service) continue;
         NSString *key = [NSString stringWithFormat:@"%lld:%d", chat, (int)message.messageId];
+        /* an entry is the words before, the words the plugin made of them and the generation it was made in */
         NSArray *before = [g_rewritten objectForKey:key];
-        if (before && [message.text isEqualToString:[before objectAtIndex:1]]) {
-            [message showPluginText:[before objectAtIndex:0]];
+        if (before) {
+            NSString *shown = message.text ? message.text : @"";
+            if (hooked && [[before objectAtIndex:2] unsignedIntValue] == g_generation) {
+                /* the chat is ordered again on every change and hands back fresh messages: the words the plugin made are put on again without asking it */
+                if ([shown isEqualToString:[before objectAtIndex:1]]) continue;
+                if ([shown isEqualToString:[before objectAtIndex:0]]) {
+                    [message showPluginText:[before objectAtIndex:1]];
+                    continue;
+                }
+            } else if ([shown isEqualToString:[before objectAtIndex:1]]) {
+                [message showPluginText:[before objectAtIndex:0]];
+            }
+            [g_rewritten removeObjectForKey:key];
         }
-        [g_rewritten removeObjectForKey:key];
         if (!hooked) continue;
         NSString *text = message.text ? message.text : @"";
         if (!fits(text)) continue;
-        [byKey setObject:message forKey:[NSNumber numberWithInt:(int)message.messageId]];
-        [items addObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:(int)message.messageId], @"id", text, @"text", [NSNumber numberWithBool:message.outgoing], @"out", nil]];
+        NSString *askedKey = [NSString stringWithFormat:@"%@:%lu:%lu:%u", key, (unsigned long)text.length, (unsigned long)text.hash, g_generation];
+        if ([g_displayAsked objectForKey:askedKey]) continue;
+        NSNumber *number = [NSNumber numberWithInt:(int)message.messageId];
+        [byKey setObject:message forKey:number];
+        [askedKeys setObject:askedKey forKey:number];
+        [items addObject:[NSDictionary dictionaryWithObjectsAndKeys:number, @"id", text, @"text", [NSNumber numberWithBool:message.outgoing], @"out", nil]];
     }
     if (!items.count) return;
     NSDictionary *changed = ExteriaPluginsCallHost(@"display_messages", [NSArray arrayWithObjects:[NSNumber numberWithLongLong:chat], items, nil]);
+    /* a call that failed is asked again at the next rebuild */
     if (![changed isKindOfClass:[NSDictionary class]]) return;
+    for (NSNumber *number in askedKeys) {
+        if (![changed objectForKey:[number stringValue]]) [g_displayAsked setObject:[NSNumber numberWithBool:YES] forKey:[askedKeys objectForKey:number]];
+    }
     for (NSString *idText in changed) {
         ExteriaMessage *message = [byKey objectForKey:[NSNumber numberWithInt:[idText intValue]]];
         id words = [changed objectForKey:idText];
         if (!message || ![words isKindOfClass:[NSString class]] || ![words length] || !fits(words)) continue;
         NSString *before = message.text ? message.text : @"";
         [message showPluginText:words];
-        if (g_rewritten.count >= RESULTS_MAX) [g_rewritten removeAllObjects];
-        [g_rewritten setObject:[NSArray arrayWithObjects:before, words, nil] forKey:[NSString stringWithFormat:@"%lld:%d", chat, (int)message.messageId]];
+        if (g_rewritten.count >= REWRITTEN_MAX) [g_rewritten removeAllObjects];
+        [g_rewritten setObject:[NSArray arrayWithObjects:before, words, [NSNumber numberWithUnsignedInt:g_generation], nil] forKey:[NSString stringWithFormat:@"%lld:%d", chat, (int)message.messageId]];
     }
 }
 
@@ -946,6 +988,8 @@ void ExteriaPluginsSettingClick(NSString *pluginId, NSString *callbackId) {
     exteria_status status = EXTERIA_OK;
     python_call(@"setting_click", [NSArray arrayWithObjects:pluginId, callbackId, nil], QUEUED_TIMEOUT_MS, &status);
     note_outcome(slot, status);
+    /* a plugin may answer differently after one of its settings changed, so what the hooks said before is asked again */
+    ++g_generation;
 }
 
 void ExteriaPluginsSettingChanged(NSString *pluginId, NSString *key, id value) {
@@ -973,7 +1017,13 @@ NSArray *ExteriaPluginsActions(void) {
                                 slot->entry.pluginId, @"pluginId", itemId, @"item", text, @"text", nil]];
         }
     }
-    ExteriaPluginsLog(@"exteria: the plugins page lists %lu actions of %lu plugins", (unsigned long)actions.count, (unsigned long)g_slots.count);
+    /* the page asks every second it is on screen, and the log keeps 128 KiB: say it when the numbers change */
+    static NSUInteger listedActions = NSNotFound, listedPlugins = NSNotFound;
+    if (listedActions != actions.count || listedPlugins != g_slots.count) {
+        listedActions = actions.count;
+        listedPlugins = g_slots.count;
+        ExteriaPluginsLog(@"exteria: the plugins page lists %lu actions of %lu plugins", (unsigned long)actions.count, (unsigned long)g_slots.count);
+    }
     return actions;
 }
 
@@ -1011,6 +1061,26 @@ void ExteriaPluginsRunAction(NSString *pluginId, NSString *itemId) {
     note_outcome(slot, status);
 }
 
+NSString *ExteriaPluginsRemove(NSString *file) {
+    /* the name comes from a row of the list, but a path that leaves the folder would make this delete other files */
+    if (!file.length || ![file isEqualToString:[file lastPathComponent]] || [file hasPrefix:@"."] || !ExteriaPluginsAcceptsExtension([file pathExtension])) {
+        return NSLocalizedString(@"plugins.remove.failed", nil);
+    }
+    ExteriaPluginSlot *slot = slot_for_file(file);
+    if (slot) unload_slot(slot);
+    /* a stored approval would switch a later file of the same name and content on without asking */
+    store_enabled(file, nil);
+    NSError *error = nil;
+    NSString *path = [ExteriaPluginsDirectory() stringByAppendingPathComponent:file];
+    if (![[NSFileManager defaultManager] removeItemAtPath:path error:&error]) {
+        ExteriaPluginsLog(@"exteria: the plugin %@ could not be deleted: %@", file, error);
+        rescan();
+        return [NSString stringWithFormat:@"%@\n(%@ %ld)", NSLocalizedString(@"plugins.remove.failed", nil), error.domain, (long)error.code];
+    }
+    rescan();
+    return nil;
+}
+
 NSString *ExteriaPluginsImport(NSString *path, NSString *name, NSString **installed) {
     if (installed) *installed = nil;
     NSString *given = name.length ? [name lastPathComponent] : [path lastPathComponent];
@@ -1038,7 +1108,11 @@ NSString *ExteriaPluginsImport(NSString *path, NSString *name, NSString **instal
     NSError *error = nil;
     if (![script writeToFile:target options:NSDataWritingAtomic error:&error]) {
         ExteriaPluginsLog(@"exteria: the plugin %@ could not be written to the plugins folder: %@", file, error);
-        return NSLocalizedString(@"plugins.import.failed", nil);
+        /* the code tells a missing or foreign-owned Plugins folder from a full disk, which the same line cannot */
+        /* cocoa error 513 or a missing folder after a failed mkdir: Documents belongs to root, which only a reinstall of the package (its postinst) or chown fixes */
+        BOOL denied = ![files isWritableFileAtPath:[directory stringByDeletingLastPathComponent]];
+        NSString *reason = NSLocalizedString(denied ? @"plugins.import.denied" : @"plugins.import.failed", nil);
+        return [NSString stringWithFormat:@"%@\n(%@ %ld)", reason, error.domain, (long)error.code];
     }
     rescan();
     if (installed) *installed = file;

@@ -21,6 +21,12 @@ def _argb(color):
     return int(color) & 0xFFFFFFFF
 
 
+class HapticFeedbackConstants:
+    LONG_PRESS = 0
+    VIRTUAL_KEY = 1
+    KEYBOARD_TAP = 3
+
+
 class Gravity:
     NO_GRAVITY = 0
     CENTER_HORIZONTAL = 1
@@ -249,6 +255,21 @@ class View(Object):
 
     def isAttachedToWindow(self):
         return self._attached
+
+    def isShown(self):
+        """attached, and neither it nor a parent is invisible or gone; the root of a native page also has to be on screen"""
+        view = self
+        while view is not None:
+            if not view._attached or view._vis != View.VISIBLE or not getattr(view, "_shown", True):
+                return False
+            view = view._parent
+        return True
+
+    def setContentDescription(self, text):
+        self._description = None if text is None else str(text)
+
+    def getContentDescription(self):
+        return getattr(self, "_description", None)
 
     def getRootView(self):
         view = self
@@ -868,6 +889,44 @@ class DecorView(ViewGroup):
 
     def _request_layout(self):
         _dirty_roots.add(self)
+
+
+class PageView(DecorView):
+    """the root of the views a plugin puts on a page of the app itself (the settings tab). the page owns a transparent layer under its
+    table and registers it under page_id, so what python adds to this root appears there. the size is the one the page reports, since
+    the layer is laid out by uikit and not by python"""
+
+    def __init__(self, context, page_id):
+        ViewGroup.__init__(self, context)
+        self._id = page_id
+        self._attached = True
+        self._size = (0, 0)
+        self._shown = False
+        _ui.register(page_id, self)
+
+    def _layout_root(self):
+        width, height = self._size
+        self.measure(width | EXACTLY, height | EXACTLY)
+        self._frame = (0, 0, width, height)
+        self._layout_children(width, height)
+        self._push_frames()
+
+    def resize(self, width, height):
+        if (int(width), int(height)) != self._size:
+            self._size = (int(width), int(height))
+            self._request_layout()
+
+    def rebind(self):
+        """the page made its layer again: the views of the plugin are sent to it once more, in their order"""
+        children = list(self._children)
+        for child in children:
+            self._detach_subtree(child)
+        for position, child in enumerate(children):
+            self._attach_subtree(child, position)
+        self._request_layout()
+
+    def setShown(self, shown):
+        self._shown = bool(shown)
 
 
 def _gravity_of(params, default):

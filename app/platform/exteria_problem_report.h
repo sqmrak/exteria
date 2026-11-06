@@ -12,3 +12,7 @@ void ExteriaProblemReportsStart(ExteriaSession *session);
 void ExteriaProblemReportCallFailure(ExteriaSession *session);
 /* what a report is headed with: the version and the build, the processor, the system and the model of the phone; also shown in the settings */
 NSString *ExteriaProblemReportHeader(void);
+/* the account is the developer's own, so a report to the developer would go to itself */
+BOOL ExteriaProblemReportIsDeveloper(ExteriaSession *session);
+/* sends a zip to the developer as a file, whatever the crash report switch says; done runs on the queue of the session with whether the message went out */
+void ExteriaProblemReportSendArchive(ExteriaSession *session, NSString *path, void (^done)(BOOL sent));

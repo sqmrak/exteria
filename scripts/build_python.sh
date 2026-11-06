@@ -11,7 +11,11 @@ set -euo pipefail
 : "${EXTERIA_OPENSSL_V64:?set EXTERIA_OPENSSL_V64 to the arm64 openssl prefix}"
 # the roots plugins trust for https: the mozilla bundle of curl.se, checked against its published sha-256 by whoever fetched it
 : "${EXTERIA_PYTHON_CACERT:?set EXTERIA_PYTHON_CACERT to a cacert.pem}"
+: "${EXTERIA_PYTHON_WHEELS:?set EXTERIA_PYTHON_WHEELS to a directory with the wheels of third_party/python/wheels.sha256}"
+: "${EXTERIA_PYTHON_SOURCES:?set EXTERIA_PYTHON_SOURCES to a directory with the archives of third_party/python/sources.sha256}"
 test -s "$EXTERIA_PYTHON_CACERT" || { echo "missing $EXTERIA_PYTHON_CACERT" >&2; exit 1; }
+root0="$(cd "$(dirname "$0")/.." && pwd)"
+(cd "$EXTERIA_PYTHON_SOURCES" && grep -v '^#' "$root0/third_party/python/sources.sha256" | sha256sum -c --quiet -) || { echo "bad or missing archive in $EXTERIA_PYTHON_SOURCES" >&2; exit 1; }
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 out="${EXTERIA_PYTHON_BUILD:-$root/build/python}"
@@ -40,9 +44,43 @@ if [ ! -x "$host_py" ]; then
 fi
 
 # modules the plugin host does not want, or that need a library or a flag set the static link here does not carry:
-# _decimal (python falls back to _pydecimal), pyexpat and _elementtree (bundled expat flags), _uuid, and _posixsubprocess,
-# which needs fork(), marked unavailable in the arm64 sdk. subprocess is out for the same reason on both slices
-drop='^(_testbuffer|_testinternalcapi|_testcapi|_testclinic|_xxtestfuzz|_testimportmultiple|_testmultiphase|_ctypes_test|xxlimited|xxlimited_35|nis|_scproxy|_xxsubinterpreters|audioop|_bz2|_lzma|termios|_posixshmem|_multiprocessing|syslog|_posixsubprocess|_decimal|pyexpat|_elementtree|_uuid) '
+# _decimal (python falls back to _pydecimal), _uuid, and _posixsubprocess, which needs fork(), marked unavailable in the arm64 sdk.
+# subprocess is out for the same reason on both slices. _bz2, _lzma, pyexpat, _elementtree and _sqlite3 are dropped from the list of the
+# configure step and given back below, with the flags and the libraries of this build
+drop='^(_testbuffer|_testinternalcapi|_testcapi|_testclinic|_xxtestfuzz|_testimportmultiple|_testmultiphase|_ctypes_test|xxlimited|xxlimited_35|nis|_scproxy|_xxsubinterpreters|audioop|_bz2|_lzma|termios|_posixshmem|_multiprocessing|syslog|_posixsubprocess|_decimal|pyexpat|_elementtree|_uuid|_sqlite3) '
+
+# bzip2, xz and sqlite from source, static, for one slice: the libraries of the sdks are missing on ios 5 (liblzma) or older than python 3.11 asks (sqlite).
+# the objects end up in libexteria_pyext.a, which the app links after libpython
+build_ext() {
+  local name="$1" cc="$2"
+  local ext="$out/ext-$name"
+  rm -rf "$ext"
+  mkdir -p "$ext/bzip2" "$ext/sqlite" "$ext/xz"
+  tar -xzf "$EXTERIA_PYTHON_SOURCES/bzip2-1.0.8.tar.gz" -C "$ext/bzip2" --strip-components=1
+  (cd "$ext/bzip2" && for f in blocksort huffman crctable randtable compress decompress bzlib; do $cc -O2 -D_FILE_OFFSET_BITS=64 -c $f.c -o $f.o; done \
+    && "$EXTERIA_TC/llvm-ar" rcs libbz2.a blocksort.o huffman.o crctable.o randtable.o compress.o decompress.o bzlib.o)
+  "$host_py" - "$EXTERIA_PYTHON_SOURCES/sqlite-amalgamation-3460100.zip" "$ext/sqlite" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    for info in archive.infolist():
+        base = info.filename.rsplit("/", 1)[-1]
+        if base in ("sqlite3.c", "sqlite3.h", "sqlite3ext.h"):
+            with open(sys.argv[2] + "/" + base, "wb") as out:
+                out.write(archive.read(info))
+PY
+  # no extension loading (dlopen is not an option in the app), one connection per thread unless python asks otherwise
+  (cd "$ext/sqlite" && $cc -O2 -DSQLITE_THREADSAFE=1 -DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_USE_URI=1 -DSQLITE_ENABLE_FTS5=1 \
+    -DSQLITE_ENABLE_RTREE=1 -c sqlite3.c -o sqlite3.o && "$EXTERIA_TC/llvm-ar" rcs libsqlite3.a sqlite3.o)
+  tar -xJf "$EXTERIA_PYTHON_SOURCES/xz-5.4.6.tar.xz" -C "$ext/xz" --strip-components=1
+  # threads off: python's _lzma uses the single thread coders, and ios 5 has no use for a thread pool in a decoder
+  (cd "$ext/xz" && PATH="$host_path:$EXTERIA_TC" ./configure --host=arm-apple-darwin --build="$(uname -m)-unknown-linux-gnu" --disable-shared --enable-static \
+    --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-scripts --disable-doc --disable-nls --disable-threads --disable-assembler \
+    CC="$cc" AR="$EXTERIA_TC/llvm-ar" RANLIB="$EXTERIA_TC/llvm-ranlib" CFLAGS="-O2" >configure.log 2>&1 \
+    && PATH="$host_path:$EXTERIA_TC" make -C src/liblzma -j"$jobs" >make.log 2>&1)
+  test -s "$ext/xz/src/liblzma/.libs/liblzma.a"
+  printf 'create %s/libexteria_pyext.a\naddlib %s/bzip2/libbz2.a\naddlib %s/sqlite/libsqlite3.a\naddlib %s/xz/src/liblzma/.libs/liblzma.a\nsave\nend\n' \
+    "$ext" "$ext" "$ext" "$ext" | "$EXTERIA_TC/llvm-ar" -M
+}
 
 build_arch() {
   local name="$1" target="$2" sdk="$3" arch_cache="$4" openssl="$5"
@@ -72,6 +110,7 @@ ac_cv_func_posix_spawn=yes
 ac_cv_func_posix_spawnp=yes
 $arch_cache
 CFG
+  build_ext "$name" "$cc"
   # an empty pkg-config path keeps host libraries (libb2, zlib of the build machine) out of the ios build
   CONFIG_SITE="$PWD/config.site" PATH="$host_path:$EXTERIA_TC" PKG_CONFIG_LIBDIR=/nonexistent PKG_CONFIG_PATH= "$src/configure" \
     --host=arm-apple-darwin --build="$(uname -m)-unknown-linux-gnu" \
@@ -95,6 +134,16 @@ for line in open(src):
     out.append(line)
 open(dst, 'w').write(''.join(out))
 PY
+  # the modules the drop list took out, with the bundled expat and the libraries built above. makesetup takes any line with an equals sign for a macro, so
+  # the module name of _sqlite3 comes in through a header that is force included
+  printf '#define MODULE_NAME "sqlite3"\n' > "$out/ext-$name/sqlite/exteria_module_name.h"
+  printf '%s\n' \
+    "_bz2 _bz2module.c -I$dir/../ext-$name/bzip2" \
+    "_lzma _lzmamodule.c -I$dir/../ext-$name/xz/src/liblzma/api" \
+    'pyexpat pyexpat.c expat/xmlparse.c expat/xmlrole.c expat/xmltok.c -I$(srcdir)/Modules/expat -DUSE_PYEXPAT_CAPI -DXML_DEV_URANDOM' \
+    '_elementtree _elementtree.c -I$(srcdir)/Modules/expat -DUSE_PYEXPAT_CAPI' \
+    "_sqlite3 _sqlite/blob.c _sqlite/connection.c _sqlite/cursor.c _sqlite/microprotocols.c _sqlite/module.c _sqlite/prepare_protocol.c _sqlite/row.c _sqlite/statement.c _sqlite/util.c -I$dir/../ext-$name/sqlite -Xcompiler -include -Xcompiler $dir/../ext-$name/sqlite/exteria_module_name.h" \
+    >> Modules/Setup.local
   # ssl and the hashes of openssl: libssl and libcrypto come from the app's own link, the same static copies the core uses
   printf '_ssl _ssl.c -I%s/include\n_hashlib _hashopenssl.c -I%s/include\n' "$openssl" "$openssl" >> Modules/Setup.local
   PATH="$host_path:$EXTERIA_TC" make -j"$jobs" libpython3.11.a >make.log 2>&1
@@ -119,6 +168,7 @@ for arch in armv7 arm64; do
   cp -R "$src/Include/." "$prefix/include/python3.11/"
   cp "$out/$arch/pyconfig.h" "$prefix/include/python3.11/pyconfig.h"
   cp "$out/$arch/libpython3.11.a" "$prefix/lib/"
+  cp "$out/ext-$arch/libexteria_pyext.a" "$prefix/lib/"
 done
 
 # what goes into the app bundle under python/: the pure python standard library without tests, gui and tools the app
@@ -135,6 +185,26 @@ find "$bundle/stdlib" -name '*.py' -delete
 cp -R "$root/python/shim/." "$bundle/shim/"
 cp -R "$root/third_party/exteraless/." "$bundle/sdk/"
 cp "$EXTERIA_PYTHON_CACERT" "$bundle/cacert.pem"
+# the libraries a plugin may import, from wheels whose hashes are pinned in the repository. bytecode only, like the stdlib: yt-dlp is 22 MB of source
+mkdir -p "$bundle/lib"
+(cd "$EXTERIA_PYTHON_WHEELS" && grep -v '^#' "$root/third_party/python/wheels.sha256" | sha256sum -c --quiet -)
+grep -v '^#' "$root/third_party/python/wheels.sha256" | while read -r _hash wheel; do
+  "$host_py" - "$EXTERIA_PYTHON_WHEELS/$wheel" "$bundle/lib" <<'PY'
+import sys, zipfile
+wheel, target = sys.argv[1:3]
+with zipfile.ZipFile(wheel) as archive:
+    for info in archive.infolist():
+        name = info.filename
+        # the code and the licenses; scripts, man pages and completions of the .data folder are not needed
+        if name.startswith("/") or ".." in name.split("/") or ".data/" in name or name.endswith("/"):
+            continue
+        if ".dist-info/" in name and "/licenses/" not in name and not name.rsplit("/", 1)[-1].startswith("LICENSE"):
+            continue
+        archive.extract(info, target)
+PY
+done
+"$host_py" -m compileall -q -b -f "$bundle/lib"
+find "$bundle/lib" -name '*.py' -delete
 rm -f "$bundle/sdk/PATCHES"
 # bytecode that host runs left in the source tree is of another python and mtime checked, the bundle gets its own
 find "$bundle/shim" "$bundle/sdk" -name __pycache__ -type d -prune -exec rm -rf {} +
