@@ -1,6 +1,8 @@
 #import "exteria_release_check.h"
 #import <QuartzCore/QuartzCore.h>
 #import "exteria_theme.h"
+#import "exteria_animation.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #import "exteria_shiro_network.h"
 #import "exteria_updater.h"
@@ -31,6 +33,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     uint64_t _size;
     ExteriaUpdater *_updater;
     NoticeMode _mode;
+    BOOL _leaving;
 }
 - (id)initWithTag:(NSString *)tag notes:(NSString *)notes ipaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size;
 @end
@@ -54,9 +57,14 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _digestURL = [digestURL copy];
     _size = size;
     _card = [[UIView alloc] init];
-    _card.backgroundColor = ExteriaColorCard();
-    _card.layer.cornerRadius = 22;
-    _card.clipsToBounds = YES;
+    if (ExteriaThemeIsClassic()) {
+        /* the plate of the classic menus, with its shadow outside the card, so the card does not clip */
+        ExteriaClassicApplyMenuPlate(_card, 14);
+    } else {
+        _card.backgroundColor = ExteriaColorCard();
+        _card.layer.cornerRadius = 22;
+        _card.clipsToBounds = YES;
+    }
     [self addSubview:_card];
     /* a jpeg of a photo size, with a file for each screen scale */
     _picture = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"release_meme.jpg"]];
@@ -65,14 +73,15 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     [_card addSubview:_picture];
     _title = [[UILabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
-    _title.textColor = ExteriaColorTitle();
+    _title.textColor = ExteriaThemeIsClassic() ? ExteriaClassicMenuTextColor() : ExteriaColorTitle();
     _title.font = ExteriaFontBold(19);
+    if (ExteriaThemeIsClassic()) ExteriaClassicStyleMenuLabel(_title, 19);
     _title.textAlignment = ExteriaTextAlignmentCenter;
     _title.numberOfLines = 2;
     [_card addSubview:_title];
     _notes = [[UITextView alloc] init];
     _notes.backgroundColor = [UIColor clearColor];
-    _notes.textColor = ExteriaColorMessage();
+    _notes.textColor = ExteriaThemeIsClassic() ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.8f] : ExteriaColorMessage();
     _notes.font = ExteriaFontRegular(14);
     _notes.editable = NO;
     [_card addSubview:_notes];
@@ -87,11 +96,18 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _wave.userInteractionEnabled = NO;
     [_card addSubview:_wave];
     _primary = [self buttonWithAction:@selector(primaryTapped) bold:YES];
-    _primary.backgroundColor = ExteriaColorAccent();
-    _primary.layer.cornerRadius = 22;
+    if (ExteriaThemeIsClassic()) {
+        [_primary setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+        [_primary setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+        [_primary setTitleShadowColor:[UIColor colorWithWhite:0 alpha:0.5] forState:UIControlStateNormal];
+        _primary.titleLabel.shadowOffset = CGSizeMake(0, -1);
+    } else {
+        _primary.backgroundColor = ExteriaColorAccent();
+        _primary.layer.cornerRadius = 22;
+    }
     [_primary setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     _secondary = [self buttonWithAction:@selector(secondaryTapped) bold:NO];
-    [_secondary setTitleColor:ExteriaColorSecondary() forState:UIControlStateNormal];
+    [_secondary setTitleColor:ExteriaThemeIsClassic() ? ExteriaClassicMenuTextColor() : ExteriaColorSecondary() forState:UIControlStateNormal];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(backdropTapped)] autorelease];
     tap.delegate = self;
     [self addGestureRecognizer:tap];
@@ -173,7 +189,12 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     CGFloat natural = image && image.size.width > 0 ? ceil(inner * image.size.height / image.size.width) : inner;
     CGFloat pictureHeight = MIN(natural, MAX(96, MIN(190, floor(height * 0.3f))));
     CGFloat y = 14;
+    /* the card keeps its size while it springs in or out, so the frame is set with the transform put aside */
+    CGAffineTransform held = _card.transform;
+    _card.transform = CGAffineTransformIdentity;
     _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - height) / 2), width, height);
+    if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(_card, 0);
+    _card.transform = held;
     _picture.frame = CGRectMake(16, y, inner, pictureHeight);
     y += pictureHeight + 8;
     _title.frame = CGRectMake(16, y, inner, 48);
@@ -185,7 +206,32 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _primary.frame = CGRectMake(16, height - 104, inner, 44);
     _secondary.frame = CGRectMake(16, height - 56, inner, 40);
 }
-- (void)close { [self removeFromSuperview]; }
+/* the notice comes up as the other popups do: the dim fades in and the card springs from a little smaller */
+- (void)presentInView:(UIView *)host {
+    self.frame = host.bounds;
+    [host addSubview:self];
+    [self layoutIfNeeded];
+    if (ExteriaReduceMotionEnabled()) return;
+    self.alpha = 0;
+    _card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
+    ExteriaAnimateView(self, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
+}
+- (void)close {
+    if (_leaving) return;
+    _leaving = YES;
+    if (ExteriaReduceMotionEnabled() || !self.superview) {
+        [self removeFromSuperview];
+        return;
+    }
+    [self retain];
+    ExteriaAnimateView(self, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 1, ExteriaPopupCurve(NO), ^(BOOL done) {
+        (void)done;
+        [self removeFromSuperview];
+        [self autorelease];
+    });
+}
 - (void)openRelease {
     NSURL *url = [NSURL URLWithString:@"https://github.com/sqmrak/exteria/releases/latest"];
     if (![[UIApplication sharedApplication] openURL:url]) NSLog(@"exteria: cannot open the releases page");
@@ -287,8 +333,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     UIView *host = _window.rootViewController.view;
     if (!host.window) return;
     ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:_tag notes:_notes ipaURL:_ipaURL digestURL:_digestURL size:_size] autorelease];
-    notice.frame = host.bounds;
-    [host addSubview:notice];
+    [notice presentInView:host];
     [_tag release]; _tag = nil;
     [_notes release]; _notes = nil;
     [_ipaURL release]; _ipaURL = nil;
@@ -388,8 +433,7 @@ void ExteriaFetchLatestRelease(void (^completion)(NSDictionary *, NSString *)) {
 void ExteriaShowReleasePreview(UIView *host) {
     if (!host) return;
     ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:@"v9.9.9-preview" notes:@"- the notice as the person sees it\n- no file behind it, so nothing is installed" ipaURL:nil digestURL:nil size:0] autorelease];
-    notice.frame = host.bounds;
-    [host addSubview:notice];
+    [notice presentInView:host];
 }
 
 void ExteriaReleaseCheckStart(UIWindow *window) {

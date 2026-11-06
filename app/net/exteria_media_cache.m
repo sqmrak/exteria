@@ -25,8 +25,13 @@
 #define FILE_BYTES_MAX EXTERIA_REMOTE_FILE_PART
 /* the disk copies stay between runs; past this size the oldest go first, down to four fifths of it */
 #define DISK_BYTES_MAX (150ull * 1024 * 1024)
-/* path downloads use one part in memory and cannot exceed the disk cache budget */
-#define PATH_BYTES_MAX ((long long)DISK_BYTES_MAX)
+/* a path download holds one part in memory and writes it to the disk, so its size is bounded by what the server sends (4 GiB for a premium account), not by the cache budget;
+   a limit of the budget refused every file past 150 MB */
+#define PATH_BYTES_MAX (4ll * 1024 * 1024 * 1024)
+/* a file past this size stays out of the budget: counted in it, it made every trim delete the rest of the cache to make room, and the next trim delete the file itself */
+#define LARGE_FILE_BYTES (32ull * 1024 * 1024)
+/* the copy of an upload kept for showing it again is bounded by the budget */
+#define UPLOAD_COPY_BYTES_MAX ((unsigned long long)DISK_BYTES_MAX)
 /* divides a mebibyte, as the server demands of a part */
 #define PATH_PART (512 * 1024)
 /* files remembered with the message they came from; the table is dropped whole past this, since an old entry is only a chance to refresh a reference */
@@ -612,7 +617,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
                 /* rename replaces a stale cache copy without leaving the new download behind it */
                 written = rename(temporary.fileSystemRepresentation, final.fileSystemRepresentation) == 0;
                 if (written) [self trimDiskKeepingPath:final removePartials:NO];
-            } else if (written) {
+            } else if (written && size <= (long long)LARGE_FILE_BYTES) {
                 if (data.length <= _diskBytesUntilTrim) _diskBytesUntilTrim -= data.length;
                 else [self trimDiskKeepingPath:nil removePartials:NO];
             }
@@ -663,7 +668,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         NSFileManager *files = [NSFileManager defaultManager];
         NSDictionary *attributes = [files attributesOfItemAtPath:path error:NULL];
         unsigned long long actual = [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
-        BOOL valid = destination && actual > 0 && actual <= (unsigned long long)PATH_BYTES_MAX;
+        BOOL valid = destination && actual > 0 && actual <= UPLOAD_COPY_BYTES_MAX;
         BOOL stored = NO;
         if (valid) {
             NSString *partial = [destination stringByAppendingFormat:@".%llu.part", (unsigned long long)exteria_file_temporary_token()];
@@ -804,8 +809,11 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         }
         NSDictionary *attributes = [files attributesOfItemAtPath:path error:NULL];
         if (!attributes) continue;
-        total += [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
-        if ([name hasSuffix:@".part"] || [path isEqualToString:keep]) continue;
+        unsigned long long length = [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
+        /* a part belongs to a download that is running, and a large file to a person who asked for it: neither is cache to give back */
+        if ([name hasSuffix:@".part"] || length > LARGE_FILE_BYTES) continue;
+        total += length;
+        if ([path isEqualToString:keep]) continue;
         [entries addObject:[NSArray arrayWithObjects:path, [attributes objectForKey:NSFileModificationDate], [attributes objectForKey:NSFileSize], nil]];
     }
     if (total > DISK_BYTES_MAX) {

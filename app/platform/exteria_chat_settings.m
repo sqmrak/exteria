@@ -339,10 +339,22 @@ static NSString *const ExteriaChatSeekKey = @"exteria.chat.seek";
 static NSString *const ExteriaChatStickerScaleKey = @"exteria.chat.stickerscale";
 static NSString *const ExteriaChatStickerShapeKey = @"exteria.chat.stickershape";
 
+static NSString *const ExteriaChatQuickReactionOffKey = @"exteria.chat.quickreaction.off";
+
+BOOL ExteriaChatQuickReactionEnabled(void) {
+    NSNumber *off = ExteriaStoredNumber(ExteriaChatQuickReactionOffKey);
+    return !off.integerValue;
+}
+
+void ExteriaChatSetQuickReactionEnabled(BOOL enabled) {
+    ExteriaStoreNumber(ExteriaChatQuickReactionOffKey, enabled ? 0 : 1);
+}
+
 ExteriaDoubleTapAction ExteriaChatDoubleTap(BOOL outgoing) {
     NSNumber *stored = ExteriaStoredNumber(outgoing ? ExteriaChatDoubleTapOutKey : ExteriaChatDoubleTapInKey);
     /* reacts to a double tap out of the box */
     NSInteger value = stored ? stored.integerValue : ExteriaDoubleTapReaction;
+    if (value == ExteriaDoubleTapReaction && !ExteriaChatQuickReactionEnabled()) return ExteriaDoubleTapNone;
     return value >= ExteriaDoubleTapNone && value < ExteriaDoubleTapCount ? (ExteriaDoubleTapAction)value : ExteriaDoubleTapNone;
 }
 

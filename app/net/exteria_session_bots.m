@@ -161,6 +161,22 @@ static NSString *ExteriaParseFailure(const char *method, exteria_status status) 
     [phone release];
 }
 
+- (void)setContactNote:(NSString *)note ofPerson:(ExteriaPerson *)person completion:(void (^)(NSString *))completion {
+    exteria_peer_ref user = ExteriaPeerRefOfPerson(person);
+    NSString *text = [note copy];
+    [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_contact_note_request(arena, &user, text.UTF8String, request);
+    } completion:completion];
+    [text release];
+}
+
+- (void)resetContactPhotoOfPerson:(ExteriaPerson *)person completion:(void (^)(NSString *))completion {
+    exteria_peer_ref user = ExteriaPeerRefOfPerson(person);
+    [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_contact_photo_reset_request(arena, &user, request);
+    } completion:completion];
+}
+
 - (void)loadBotInfoOfPerson:(ExteriaPerson *)bot completion:(void (^)(ExteriaBotInfo *, NSString *))completion {
     void (^done)(ExteriaBotInfo *, NSString *) = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfPerson(bot);

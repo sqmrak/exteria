@@ -41,8 +41,17 @@
     int32_t _pendingRatingDate;
     exteria_star_rating _rating;
     exteria_star_rating _pendingRating;
+    NSString *_note;
+    BOOL _hasPersonalPhoto;
+    ExteriaMedia *_publicPhoto;
 }
 @property (nonatomic, readonly, copy) NSString *about;
+/* the note the signed in person keeps on this contact, empty when there is none */
+@property (nonatomic, readonly, copy) NSString *note;
+/* the signed in person set a photo of their own for this contact, which the server shows in place of the one the contact chose */
+@property (nonatomic, readonly) BOOL hasPersonalPhoto;
+/* the photo those who may not see the main one get, in the profile of the signed in person; nil when none is set */
+@property (nonatomic, readonly, retain) ExteriaMedia *publicPhoto;
 /* the user as that answer names them, nil when it did not carry them */
 @property (nonatomic, readonly, retain) ExteriaPerson *person;
 /* only Premium users may write to this person and reply to their stories */

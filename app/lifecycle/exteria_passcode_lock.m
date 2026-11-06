@@ -89,6 +89,7 @@
 - (void)applyBiometricButton {
     ExteriaPasscodeLockController *lock = self;
     BOOL wanted = [self biometricWanted];
+    _entry.biometricFingerprint = ExteriaBiometricAvailable() == ExteriaBiometricTouchID;
     _entry.biometricTitle = wanted ? ExteriaBiometricName(ExteriaBiometricAvailable()) : nil;
     _entry.biometric = wanted ? ^{ [lock askBiometric]; } : nil;
 }

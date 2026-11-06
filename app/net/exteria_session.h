@@ -121,6 +121,8 @@ extern NSString *const ExteriaReadOutboxDidChangeNotification;
 /* the parts of a file sent in a message that the server has taken, on the main thread; userInfo has "randomId" (the NSNumber of the pending message)
    and "fraction" (an NSNumber float from 0 to 1) */
 extern NSString *const ExteriaUploadProgressNotification;
+/* posted on the main thread after the photo or video of this account's profile was set or removed, so the screens that wear it (the tab bar) ask for the profile again */
+extern NSString *const ExteriaOwnProfileDidChangeNotification;
 
 @class ExteriaStoryAudience;
 
@@ -252,6 +254,11 @@ typedef void (^ExteriaListCompletion)(NSArray *items, NSString *errorName);
 /* ends the session on the server, then drops the key and the stored account; ExteriaAuthEventLoggedOut follows */
 - (void)signOut:(void (^)(NSString *errorName))completion;
 
+/* the device model, system version and app version the server lists for this session in the devices screen, until the app restarts. the server has them
+   with the next request, which this sends; nil for all three goes back to what the device really is. the completion runs on the main thread with the name
+   of the failure or nil: DEVICE_INVALID for a model or system version that is empty or longer than 128 bytes, or an error of the request */
+- (void)setDeviceModel:(NSString *)model systemVersion:(NSString *)system appVersion:(NSString *)app completion:(void (^)(NSString *errorName))completion;
+
 @end
 
 /* the answers of the chat calls, on the main thread */
@@ -340,6 +347,8 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)uploadProfilePhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
 /* a jpeg becomes the public photo: it is shown to those who are not allowed to see the main profile photo, and the main photo is left as it is */
 - (void)uploadPublicPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
+/* a jpeg becomes the photo of a contact: set for them on this account's side, or with suggest sent to them as a proposal for their own profile photo */
+- (void)uploadContactPhotoAtPath:(NSString *)path ofPerson:(ExteriaPerson *)person suggest:(BOOL)suggest completion:(void (^)(NSString *errorName))completion;
 /* the same for an mp4 that becomes a moving profile picture: square, ten seconds at most and small, as ExteriaProfilePhotoPicker makes it */
 - (void)uploadProfileVideoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion;
 /* a jpeg becomes a story of the signed in user, shown to everyone for a day, no caption; the completion is the same as the profile photo's */

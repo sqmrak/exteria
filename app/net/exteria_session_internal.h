@@ -75,6 +75,9 @@ void ExteriaApprovePaidMessages(ExteriaSession *session, const exteria_peer_ref 
 /* queues a request from code that already runs on the worker; the handler runs there too */
 - (void)submitBuilt:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build
             handler:(void (^)(const exteria_mt_rpc_result *result))handler;
+/* a request whose answer is of no interest beyond the error: the completion runs on the main thread with nil or the name of the error; implemented in exteria_session_profile.m */
+- (void (^)(NSString *errorName))announcingOwnProfile:(void (^)(NSString *errorName))completion;
+- (void)runBoolRequest:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build completion:(void (^)(NSString *errorName))completion;
 /* runs the block on the main thread */
 - (void)deliverMain:(void (^)(void))block;
 /* worker only: a stored user, or a stored channel for a negative key; nil when none is kept */

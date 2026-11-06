@@ -722,6 +722,9 @@ static NSString *ExteriaSupportDirectory(void) {
     _callMinimized = YES;
     _callMinimizing = YES;
     ExteriaCallController *screen = _callScreen;
+    /* the bar is there from the start: it stands under the screen that is sliding away, and a dismissal whose completion never comes (a screen that was not presented any more)
+       used to leave the call with no way back */
+    [self showCallBar];
     [screen dismissViewControllerAnimated:YES completion:^{
         if (_callScreen != screen) return;
         _callMinimizing = NO;
@@ -731,7 +734,9 @@ static NSString *ExteriaSupportDirectory(void) {
 
 - (void)restoreCallAnimated:(BOOL)animated {
     if (!_callScreen || !_callMinimized) return;
-    if (_callMinimizing) return;
+    /* a dismissal still sliding is waited for; one that is over (the screen is no longer presented) is not, whatever its completion did */
+    if (_callMinimizing && _callScreen.presentingViewController) return;
+    _callMinimizing = NO;
     _callMinimized = NO;
     [self hideCallBar];
     UIViewController *top = _navigation;
@@ -779,6 +784,10 @@ static NSString *ExteriaSupportDirectory(void) {
 - (void)callBarTick:(NSTimer *)timer {
     (void)timer;
     [self refreshCallBarWithCall:_callBarSnapshot];
+    /* a screen that was pushed or put back under it must not cover the way back into the call */
+    UIView *host = _navigation.view;
+    if (_callBar.superview != host) [host addSubview:_callBar];
+    else [host bringSubviewToFront:_callBar];
 }
 
 - (void)hideCallBar {

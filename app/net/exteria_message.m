@@ -104,6 +104,8 @@ static NSString *ExteriaUtf8(const char *bytes) {
     [waveform release];
     [caption release];
     [phone release];
+    [title release];
+    [performer release];
     [preview release];
     [super dealloc];
 }

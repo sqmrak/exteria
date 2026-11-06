@@ -17,6 +17,8 @@
 /* swaps between the front and the back camera while the clip keeps running */
 - (void)switchCameraWithCompletion:(void (^)(BOOL switched))completion;
 
+/* the front camera has no torch, so the screen stands in for it */
+@property (nonatomic, readonly) BOOL usesFrontCamera;
 @property (nonatomic, readonly) BOOL canUseTorch;
 @property (nonatomic, readonly) BOOL torchOn;
 - (void)setTorchOn:(BOOL)on completion:(void (^)(BOOL success))completion;

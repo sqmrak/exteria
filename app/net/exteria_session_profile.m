@@ -36,6 +36,7 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
 
 @implementation ExteriaFullUser
 @synthesize about = _about;
+@synthesize note = _note, hasPersonalPhoto = _hasPersonalPhoto, publicPhoto = _publicPhoto;
 @synthesize person = _person;
 @synthesize requiresPremium = _requiresPremium;
 @synthesize sharingRestricted = _sharingRestricted;
@@ -53,6 +54,9 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
     self = [super init];
     if (!self) return nil;
     _about = [ExteriaProfileUtf8(row->about) copy];
+    _note = [ExteriaProfileUtf8(row->note) copy];
+    _hasPersonalPhoto = row->has_personal_photo != 0;
+    if (row->has_public_photo) _publicPhoto = [[ExteriaMedia mediaWithInfo:&row->public_photo] retain];
     if (row->has_person) _person = [[ExteriaPerson alloc] initWithRow:&row->person];
     _requiresPremium = row->require_premium != 0;
     _sharingRestricted = row->sharing_restricted != 0;
@@ -76,6 +80,8 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
 }
 - (void)dealloc {
     [_about release];
+    [_note release];
+    [_publicPhoto release];
     [_person release];
     [_channel release];
     [_music release];
@@ -265,7 +271,7 @@ static NSNumber *ExteriaSelfPremium;
     exteria_media_ref ref = photo.ref;
     [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         return exteria_profile_photo_delete_request(arena, &ref, request);
-    } completion:completion];
+    } completion:[self announcingOwnProfile:completion]];
 }
 
 - (void)saveMusic:(ExteriaMedia *)song unsave:(BOOL)unsave completion:(void (^)(NSString *))completion {

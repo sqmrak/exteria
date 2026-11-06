@@ -294,8 +294,8 @@ static NSError *ExteriaWriteUserIconFiles(NSString *name) {
             UIImage *image = best ? [UIImage imageWithContentsOfFile:best] : nil;
             if (!image) return ExteriaIconFailure(9, @"the selected icon could not be read");
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, 1);
-            /* the alternate icons are opaque squares for the system to mask and gloss, but this install keeps the primary names and their pre-rendered flag, so nothing
-               masks them: the corners the original file has are cut here */
+            /* this install keeps the primary names and their pre-rendered flag, so nothing masks the picture: the corners the original file has are cut here, which
+               also covers an opaque alternate file of a size that is not one of the rounded ones */
             if (ExteriaPNGHasAlpha(original)) [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, width, height) cornerRadius:width * 0.18] addClip];
             [image drawInRect:CGRectMake(0, 0, width, height)];
             UIImage *resized = UIGraphicsGetImageFromCurrentImageContext();

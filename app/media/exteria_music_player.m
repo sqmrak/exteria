@@ -69,8 +69,120 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     return performer.length ? [NSString stringWithFormat:@"%@ - %@", performer, ExteriaTrackTitle(track)] : ExteriaTrackTitle(track);
 }
 
+/* sets the volume of a player. AVPlayer.volume exists from ios 7; before it the level goes through an audio mix on the item, which needs the audio track and so
+   a ready item. NO when it could not be applied yet (an item that is not ready), so the caller tries again */
+static BOOL ExteriaSetPlayerVolume(AVPlayer *player, AVPlayerItem *item, float volume) {
+    if (volume < 0) volume = 0;
+    if (volume > 1) volume = 1;
+    if ([player respondsToSelector:NSSelectorFromString(@"setVolume:")]) {
+        [player setValue:[NSNumber numberWithFloat:volume] forKey:@"volume"];
+        return YES;
+    }
+    if (item.status != AVPlayerItemStatusReadyToPlay) return NO;
+    NSArray *tracks = [item.asset tracksWithMediaType:AVMediaTypeAudio];
+    if (!tracks.count) return NO;
+    NSMutableArray *parameters = [NSMutableArray arrayWithCapacity:tracks.count];
+    for (AVAssetTrack *track in tracks) {
+        AVMutableAudioMixInputParameters *one = [AVMutableAudioMixInputParameters audioMixInputParametersWithTrack:track];
+        [one setVolume:volume atTime:kCMTimeZero];
+        [parameters addObject:one];
+    }
+    AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
+    mix.inputParameters = parameters;
+    item.audioMix = mix;
+    return YES;
+}
+
+@interface ExteriaMusicGhost () {
+    AVPlayer *_player;
+    AVPlayerItem *_item;
+    NSString *_directory;
+    NSUInteger _playbackId;
+    float _volume;
+    BOOL _finished;
+}
+- (id)initWithPlayer:(AVPlayer *)player item:(AVPlayerItem *)item directory:(NSString *)directory playbackId:(NSUInteger)playbackId volume:(float)volume;
+@end
+
+@implementation ExteriaMusicGhost
+
+@synthesize playbackId = _playbackId;
+
+- (id)initWithPlayer:(AVPlayer *)player item:(AVPlayerItem *)item directory:(NSString *)directory playbackId:(NSUInteger)playbackId volume:(float)volume {
+    self = [super init];
+    if (!self) return nil;
+    _player = [player retain];
+    _item = [item retain];
+    _directory = [directory copy];
+    _playbackId = playbackId;
+    _volume = volume;
+    /* a song that reaches its end while it fades out has nothing left to play */
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemEnded:) name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+    return self;
+}
+
+- (void)dealloc {
+    [self finish];
+    [super dealloc];
+}
+
+- (void)itemEnded:(NSNotification *)note {
+    (void)note;
+    [self finish];
+}
+
+- (BOOL)playing {
+    return !_finished && _player.rate > 0;
+}
+
+- (NSTimeInterval)position {
+    if (_finished) return 0;
+    NSTimeInterval seconds = CMTimeGetSeconds(_player.currentTime);
+    return seconds == seconds && seconds > 0 ? seconds : 0;
+}
+
+- (NSTimeInterval)duration {
+    if (_finished) return 0;
+    NSTimeInterval seconds = CMTimeGetSeconds(_item.duration);
+    return seconds == seconds && seconds > 0 ? seconds : 0;
+}
+
+- (void)setVolume:(float)volume {
+    if (_finished) return;
+    _volume = volume;
+    ExteriaSetPlayerVolume(_player, _item, volume);
+}
+
+- (void)finish {
+    if (_finished) return;
+    _finished = YES;
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+    [_player pause];
+    [_player release];
+    _player = nil;
+    [_item release];
+    _item = nil;
+    if (_directory) {
+        [[NSFileManager defaultManager] removeItemAtPath:_directory error:NULL];
+        [_directory release];
+        _directory = nil;
+    }
+}
+
+@end
+
 @interface ExteriaMusicPlayer () {
     BOOL (^_voiceEndHandler)(ExteriaMedia *);
+    BOOL (^_startRoute)(NSUInteger);
+    BOOL (^_pauseRoute)(void);
+    NSUInteger _playbackId;
+    float _volume;
+    /* the song that has just been started for a plugin stays silent until the run loop turns, by which time the plugin has set the volume it wants */
+    BOOL _volumeHeld;
+    BOOL _volumeStale;
+    BOOL _bypassRoute;
+    BOOL _inRoute;
+    BOOL _slotFlip;
     ExteriaMedia *_track;
     NSArray *_queue;
     NSUInteger _index;
@@ -107,6 +219,10 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
 @implementation ExteriaMusicPlayer
 
 @synthesize voiceEndHandler = _voiceEndHandler;
+@synthesize startRoute = _startRoute;
+@synthesize pauseRoute = _pauseRoute;
+@synthesize playbackId = _playbackId;
+@synthesize queueIndex = _index;
 @synthesize track = _track;
 @synthesize state = _state;
 @synthesize loadProgress = _loadProgress;
@@ -129,6 +245,7 @@ NSString *ExteriaTrackLine(ExteriaMedia *track) {
     if (!self) return nil;
     float saved = [[NSUserDefaults standardUserDefaults] floatForKey:SPEED_KEY];
     _speed = saved >= 1.9f ? 2.0f : (saved >= 1.4f ? 1.5f : 1.0f);
+    _volume = 1.0f;
     _shuffle = [[NSUserDefaults standardUserDefaults] boolForKey:SHUFFLE_KEY];
     NSInteger repeat = [[NSUserDefaults standardUserDefaults] integerForKey:REPEAT_KEY];
     _repeat = repeat == ExteriaMusicRepeatList || repeat == ExteriaMusicRepeatSong ? (ExteriaMusicRepeat)repeat : ExteriaMusicRepeatOff;
@@ -499,6 +616,7 @@ static NSString *ExteriaDecodeVoice(NSString *path, NSString **error) {
     _item = [[AVPlayerItem playerItemWithURL:url] retain];
     _player = [[AVPlayer playerWithPlayerItem:_item] retain];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemEnded:) name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+    [self applyVolume];
     _waitTicks = 0;
     [self setState:ExteriaMusicStatePlaying];
     [self startPlayer];
@@ -586,7 +704,9 @@ static BOOL ExteriaIsFlac(NSString *path) {
         });
         return;
     }
-    [self playItemAtURL:ExteriaPlayableLink(path, ExteriaAudioExtension(_track), @"music")];
+    /* the folder of a link is emptied when the next link is made; two folders in turn keep the file of a player that a plugin took out and fades, until the song after next */
+    _slotFlip = !_slotFlip;
+    [self playItemAtURL:ExteriaPlayableLink(path, ExteriaAudioExtension(_track), _slotFlip ? @"music-b" : @"music")];
 }
 
 - (void)tick:(NSTimer *)timer {
@@ -600,6 +720,8 @@ static BOOL ExteriaIsFlac(NSString *path) {
         [self fail:@"the file never became ready"];
         return;
     }
+    /* ios 5 and 6 set the volume through the audio track, which an item has once it is ready */
+    if (_volumeStale) [self applyVolume];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaMusicPlayerDidTickNotification object:self];
 }
 
@@ -630,6 +752,15 @@ static BOOL ExteriaIsFlac(NSString *path) {
 }
 
 - (void)startCurrent {
+    if (_startRoute && !_bypassRoute && !_inRoute) {
+        _inRoute = YES;
+        BOOL handled = _startRoute(_index);
+        _inRoute = NO;
+        if (handled) return;
+    }
+    ++_playbackId;
+    _volume = 1.0f;
+    _volumeStale = NO;
     ++_token;
     [self releasePlayer];
     [_media cancelPathRequest:_pathRequest];
@@ -701,6 +832,12 @@ static BOOL ExteriaIsFlac(NSString *path) {
 
 - (void)pause {
     if (_state != ExteriaMusicStatePlaying) return;
+    if (_pauseRoute && !_bypassRoute && !_inRoute) {
+        _inRoute = YES;
+        BOOL handled = _pauseRoute();
+        _inRoute = NO;
+        if (handled) return;
+    }
     [_player pause];
     [self stopTimer];
     [self setState:ExteriaMusicStatePaused];
@@ -733,6 +870,9 @@ static BOOL ExteriaIsFlac(NSString *path) {
             return;
         }
         _state = ExteriaMusicStatePlaying;
+        /* a pause in the middle of a fade in left the song at the level the fade had reached */
+        _volume = 1.0f;
+        [self applyVolume];
         [self startPlayer];
         [self changed];
         break;
@@ -785,6 +925,10 @@ static BOOL ExteriaIsFlac(NSString *path) {
 
 - (void)stop {
     ++_token;
+    _playbackId = 0;
+    _volume = 1.0f;
+    _volumeHeld = NO;
+    _volumeStale = NO;
     [_order release];
     _order = nil;
     [_orderQueue release];
@@ -802,9 +946,83 @@ static BOOL ExteriaIsFlac(NSString *path) {
     _cover = nil;
     ExteriaRemoteControlsStop(self);
     [[NSFileManager defaultManager] removeItemAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-music"] error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-music-b"] error:NULL];
     [[NSFileManager defaultManager] removeItemAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-voice"] error:NULL];
     [ExteriaAudioSession() setActive:NO error:NULL];
     [self setState:ExteriaMusicStateIdle];
+}
+
+#pragma mark plugins
+
+- (float)volume {
+    return _volume;
+}
+
+- (void)setVolume:(float)volume {
+    _volume = volume < 0 ? 0 : (volume > 1 ? 1 : volume);
+    [self applyVolume];
+}
+
+- (void)applyVolume {
+    if (!_player) return;
+    _volumeStale = !ExteriaSetPlayerVolume(_player, _item, _volumeHeld ? 0.0f : _volume);
+}
+
+/* the queue indexes in the order the songs are played */
+- (NSUInteger)playPositionOfCurrent {
+    if (!_queue.count) return NSNotFound;
+    if (![self modesApply] || !_shuffle) return _index;
+    return [[self playOrder:NO] indexOfObject:[NSNumber numberWithUnsignedInteger:_index]];
+}
+
+- (NSUInteger)queueIndexAtPlayPosition:(NSUInteger)position {
+    if (position >= _queue.count) return NSNotFound;
+    if (![self modesApply] || !_shuffle) return position;
+    return [[[self playOrder:NO] objectAtIndex:position] unsignedIntegerValue];
+}
+
+- (NSUInteger)nextQueueIndex {
+    return [self indexStepping:1 wrap:YES];
+}
+
+- (ExteriaMusicGhost *)detachPlayback {
+    if (!_player) return nil;
+    ExteriaMusicGhost *ghost = [[[ExteriaMusicGhost alloc] initWithPlayer:_player item:_item directory:_flacDirectory playbackId:_playbackId volume:_volume] autorelease];
+    [self stopTimer];
+    if (_item) [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+    [_player release];
+    _player = nil;
+    [_item release];
+    _item = nil;
+    /* the player that was taken out reads the decoded file, so its folder goes with it */
+    [_flacDirectory release];
+    _flacDirectory = nil;
+    ++_seekGeneration;
+    _seeking = NO;
+    return ghost;
+}
+
+- (void)releaseCurrentPlayer {
+    [self releasePlayer];
+}
+
+- (void)startQueueIndex:(NSUInteger)index {
+    if (index >= _queue.count) return;
+    _index = index;
+    _volumeHeld = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        _volumeHeld = NO;
+        [self applyVolume];
+    });
+    _bypassRoute = YES;
+    [self startCurrent];
+    _bypassRoute = NO;
+}
+
+- (void)pauseWithoutRoute {
+    _bypassRoute = YES;
+    [self pause];
+    _bypassRoute = NO;
 }
 
 @end

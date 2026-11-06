@@ -187,6 +187,10 @@
     NSString *_deviceModel;
     NSString *_systemVersion;
     NSString *_appVersion;
+    /* what the device really is, for the way back after a plugin changed the three above */
+    NSString *_realDeviceModel;
+    NSString *_realSystemVersion;
+    NSString *_realAppVersion;
     NSString *_langCode;
     /* the client keeps these pointers for its whole life and rebuilds its handshake preamble from them after a
        data center change */
@@ -218,6 +222,7 @@ NSString *const ExteriaSessionDialogsUpdatedNotification = @"ExteriaSessionDialo
 
 NSString *const ExteriaReadOutboxDidChangeNotification = @"ExteriaReadOutboxDidChange";
 NSString *const ExteriaUploadProgressNotification = @"ExteriaUploadProgress";
+NSString *const ExteriaOwnProfileDidChangeNotification = @"ExteriaOwnProfileDidChange";
 
 - (int32_t)readOutboxOfKind:(int32_t)kind peer:(long long)peer {
     return [[_readOutbox objectForKey:[NSString stringWithFormat:@"%d:%lld", (int)kind, peer]] intValue];
@@ -290,6 +295,9 @@ static NSString *ExteriaMachineName(void) {
     NSString *language = [[NSLocale preferredLanguages] count] ? [[NSLocale preferredLanguages] objectAtIndex:0] : @"en";
     NSRange dash = [language rangeOfString:@"-"];
     _langCode = [(dash.location == NSNotFound ? language : [language substringToIndex:dash.location]) copy];
+    _realDeviceModel = [_deviceModel retain];
+    _realSystemVersion = [_systemVersion retain];
+    _realAppVersion = [_appVersion retain];
     _cDeviceModel = strdup(_deviceModel.UTF8String);
     _cSystemVersion = strdup(_systemVersion.UTF8String);
     _cAppVersion = strdup(_appVersion.UTF8String);
@@ -317,6 +325,9 @@ static NSString *ExteriaMachineName(void) {
     [_deviceModel release];
     [_systemVersion release];
     [_appVersion release];
+    [_realDeviceModel release];
+    [_realSystemVersion release];
+    [_realAppVersion release];
     [_langCode release];
     free(_cDeviceModel);
     free(_cSystemVersion);
@@ -569,6 +580,55 @@ static NSString *ExteriaMachineName(void) {
     [buildCopy release];
 }
 
+- (void)setDeviceModel:(NSString *)model systemVersion:(NSString *)system appVersion:(NSString *)app completion:(void (^)(NSString *))completion {
+    void (^done)(NSString *) = [completion copy];
+    NSString *newModel = [[(model ? model : _realDeviceModel) copy] autorelease];
+    NSString *newSystem = [[(system ? system : _realSystemVersion) copy] autorelease];
+    NSString *newApp = [[(app ? app : _realAppVersion) copy] autorelease];
+    [self post:^{
+        char *cModel = strdup(newModel.UTF8String), *cSystem = strdup(newSystem.UTF8String), *cApp = strdup(newApp.UTF8String);
+        exteria_status status = cModel && cSystem && cApp ? EXTERIA_OK : EXTERIA_E_NOMEM;
+        /* the client takes the strings at once or refuses them, and keeps the old ones in the second case */
+        if (status == EXTERIA_OK && _clientLive) status = exteria_mt_client_set_device(&_client.mt, cModel, cSystem, cApp);
+        if (status != EXTERIA_OK) {
+            free(cModel);
+            free(cSystem);
+            free(cApp);
+            NSString *error = status == EXTERIA_E_ARG ? @"DEVICE_INVALID" : @"INTERNAL";
+            [self deliverMain:^{ done(error); [done release]; }];
+            return;
+        }
+        free(_cDeviceModel);
+        free(_cSystemVersion);
+        free(_cAppVersion);
+        _cDeviceModel = cModel;
+        _cSystemVersion = cSystem;
+        _cAppVersion = cApp;
+        [_deviceModel release];
+        [_systemVersion release];
+        [_appVersion release];
+        _deviceModel = [newModel retain];
+        _systemVersion = [newSystem retain];
+        _appVersion = [newApp retain];
+        if (!_clientLive) {
+            /* the next connection starts with these */
+            [self deliverMain:^{ done(nil); [done release]; }];
+            return;
+        }
+        /* the metadata rides on a request, so one goes out now and its answer says whether the server has it */
+        [self submit:"help.getNearestDc" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
+            (void)arena;
+            (void)request;
+            return EXTERIA_OK;
+        } handler:^(const exteria_mt_rpc_result *result) {
+            NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+            [self noteRpcError:error];
+            NSString *delivered = [[error copy] autorelease];
+            [self deliverMain:^{ done(delivered); [done release]; }];
+        }];
+    }];
+}
+
 /* worker only: the same, for code that already runs there */
 - (void)submit:(const char *)method configure:(exteria_status (^)(exteria_arena *arena, exteria_tl_value *request))configure
        handler:(void (^)(const exteria_mt_rpc_result *result))handler {
@@ -754,6 +814,8 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
     return status;
 }
 
+static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item);
+
 - (void)loadDialogsInFolder:(int32_t)folder completion:(ExteriaListCompletion)completion {
     NSString *wait = [self folderFloodError];
     if (wait) {
@@ -761,6 +823,24 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
         return;
     }
     NSUInteger draftRevision = self.drafts.revision;
+    ExteriaListCompletion shown = completion;
+    if (folder > 0 && completion) {
+        /* a request holds the newest hundred chats of the archive, and the older ones were never asked for, so a long archive ended at the hundredth chat; the pages that follow are
+           walked here, up to the limit the search uses, and a page that fails leaves the chats that came */
+        ExteriaListCompletion whole = [completion copy];
+        shown = [[^(NSArray *items, NSString *errorName) {
+            if (!items || errorName) { whole(items, errorName); return; }
+            NSMutableArray *all = [NSMutableArray arrayWithArray:items];
+            NSMutableSet *keys = [NSMutableSet set];
+            ExteriaDialog *cursor = nil;
+            for (ExteriaDialog *item in items) {
+                [keys addObject:[NSString stringWithFormat:@"%d:%lld", (int)item.peerKind, item.peerId]];
+                if (ExteriaDialogIsPageCursor(item)) cursor = item;
+            }
+            [self walkRemainingDialogsInFolder:folder all:all keys:keys cursor:cursor pages:0 completion:^(NSArray *every) { whole(every, nil); }];
+        } copy] autorelease];
+        [whole release];
+    }
     [self load:"messages.getDialogs" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
         return ExteriaConfigureDialogList(arena, request, folder);
     } parse:^NSArray *(const exteria_tl_value *answer) {
@@ -780,7 +860,7 @@ static exteria_status ExteriaConfigureDialogList(exteria_arena *arena, exteria_t
             if (folder == 0) [self requestAllDraftsOnce];
         }
         return dialogs;
-    } completion:completion];
+    } completion:shown];
 }
 
 - (void)loadDialogPageInFolder:(int32_t)folder after:(ExteriaDialog *)cursor completion:(void (^)(NSArray *, ExteriaDialog *, NSString *))completion {
@@ -834,17 +914,17 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
         [keys addObject:[NSString stringWithFormat:@"%d:%lld", (int)item.peerKind, item.peerId]];
         if (ExteriaDialogIsPageCursor(item)) cursor = item;
     }
-    [self walkRemainingDialogs:all keys:keys cursor:cursor pages:0 completion:done];
+    [self walkRemainingDialogsInFolder:0 all:all keys:keys cursor:cursor pages:0 completion:done];
     [done release];
 }
 
-- (void)walkRemainingDialogs:(NSMutableArray *)all keys:(NSMutableSet *)keys cursor:(ExteriaDialog *)cursor pages:(NSUInteger)pages completion:(void (^)(NSArray *))done {
+- (void)walkRemainingDialogsInFolder:(int32_t)folder all:(NSMutableArray *)all keys:(NSMutableSet *)keys cursor:(ExteriaDialog *)cursor pages:(NSUInteger)pages completion:(void (^)(NSArray *))done {
     /* the first page of a list is the one the screen holds, so a list with no cursor has no later page */
     if (!cursor || pages >= REMAINING_DIALOG_PAGES_MAX) { done(all); return; }
     void (^finish)(NSArray *) = [done copy];
-    [self loadDialogPageInFolder:0 after:cursor completion:^(NSArray *items, ExteriaDialog *next, NSString *errorName) {
+    [self loadDialogPageInFolder:folder after:cursor completion:^(NSArray *items, ExteriaDialog *next, NSString *errorName) {
         if (!items || errorName) {
-            if (errorName) NSLog(@"exteria: the rest of the chat list did not load for the search: %@", errorName);
+            if (errorName) NSLog(@"exteria: the rest of the chat list of folder %d did not load: %@", (int)folder, errorName);
             finish(all);
             [finish release];
             return;
@@ -855,7 +935,7 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
             [keys addObject:key];
             [all addObject:item];
         }
-        [self walkRemainingDialogs:all keys:keys cursor:next pages:pages + 1 completion:finish];
+        [self walkRemainingDialogsInFolder:folder all:all keys:keys cursor:next pages:pages + 1 completion:finish];
         [finish release];
     }];
 }

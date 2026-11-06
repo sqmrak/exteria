@@ -256,10 +256,11 @@ BOOL ExteriaBackgroundLinkWanted(void) {
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
-    /* the person is here, so the reminder of what they have not read has no use */
-    for (UILocalNotification *old in [[application.scheduledLocalNotifications copy] autorelease]) {
-        if ([[old.userInfo objectForKey:@"repeat"] boolValue]) [application cancelLocalNotification:old];
-    }
+    /* the person is here: the reminder and the banners still in the notification center are old news. ios 5 and 6 empty the notification center only when the badge goes to zero, so it is
+       set back at once; left at zero it would stay empty until a scan on the way to the background got an answer, and a scan blocked by a flood wait or a dead link never does */
+    NSInteger badge = application.applicationIconBadgeNumber;
+    [self clearNotificationsInApplication:application];
+    application.applicationIconBadgeNumber = badge;
     [_session setPingInterval:0];
     [_debounce invalidate];
     _debounce = nil;
@@ -382,8 +383,10 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     options.badgeShown = ExteriaNotifyBadgeShown();
     options.badgeMuted = ExteriaNotifyBadgeMuted();
     options.badgeMessages = ExteriaNotifyBadgeMessages();
-    options.activeKind = ExteriaOpenChatKind;
-    options.activePeer = ExteriaOpenChatPeer;
+    /* the chat screen clears its chat only when it disappears, not when the app goes to the home screen, and a chat nobody looks at must still announce */
+    BOOL onScreen = application.applicationState == UIApplicationStateActive;
+    options.activeKind = onScreen ? ExteriaOpenChatKind : 0;
+    options.activePeer = onScreen ? ExteriaOpenChatPeer : 0;
     [_session scanNotificationsAnnouncing:announce options:options completion:^(NSArray *events, NSUInteger more, NSString *moreText, NSInteger badge, NSInteger unreadChats, NSString *errorName) {
         ExteriaNotifier *notifier = weak.target;
         if (notifier && notifier->_scanGeneration == generation) {

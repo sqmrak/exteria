@@ -16,12 +16,17 @@ NSArray *ExteriaAyuRegexList(void) {
 /* the compiled expressions are kept with the list they came from, so a change of the list builds them again */
 static NSArray *ExteriaAyuCompiledFrom;
 static NSArray *ExteriaAyuCompiled;
+/* what the list said of a text. the chat asks for every loaded message at every rebuild, and running up to fifty expressions over each of thousands of texts took the main
+   thread; the list is only written by ExteriaAyuSetRegexList, which empties this */
+static NSCache *ExteriaAyuVerdicts;
+#define VERDICTS_MAX 8192
 
 void ExteriaAyuSetRegexList(NSArray *patterns) {
     NSMutableArray *list = [NSMutableArray array];
     for (NSString *pattern in patterns) {
         if (pattern.length && pattern.length <= PATTERN_LENGTH_MAX && list.count < PATTERNS_MAX) [list addObject:pattern];
     }
+    [ExteriaAyuVerdicts removeAllObjects];
     [[NSUserDefaults standardUserDefaults] setObject:list forKey:ExteriaAyuRegexKey];
     if (![[NSUserDefaults standardUserDefaults] synchronize]) NSLog(@"exteria: the filters were not saved");
 }
@@ -36,6 +41,12 @@ NSString *ExteriaAyuRegexProblem(NSString *pattern) {
 
 BOOL ExteriaAyuHidesText(NSString *text) {
     if (!text.length || !ExteriaChatFlagGet(ExteriaChatFlagAyuRegex)) return NO;
+    if (!ExteriaAyuVerdicts) {
+        ExteriaAyuVerdicts = [[NSCache alloc] init];
+        ExteriaAyuVerdicts.countLimit = VERDICTS_MAX;
+    }
+    NSNumber *known = [ExteriaAyuVerdicts objectForKey:text];
+    if (known) return known.boolValue;
     NSArray *list = ExteriaAyuRegexList();
     if (!list.count) return NO;
     if (!ExteriaAyuCompiled || ![ExteriaAyuCompiledFrom isEqualToArray:list]) {
@@ -50,8 +61,10 @@ BOOL ExteriaAyuHidesText(NSString *text) {
         ExteriaAyuCompiled = [compiled retain];
     }
     NSRange all = NSMakeRange(0, text.length);
+    BOOL hides = NO;
     for (NSRegularExpression *expression in ExteriaAyuCompiled) {
-        if ([expression firstMatchInString:text options:0 range:all]) return YES;
+        if ([expression firstMatchInString:text options:0 range:all]) { hides = YES; break; }
     }
-    return NO;
+    [ExteriaAyuVerdicts setObject:[NSNumber numberWithBool:hides] forKey:text];
+    return hides;
 }

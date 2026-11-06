@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #import "exteria_shiro_network.h"
+#import "exteria_system_notifications.h"
 #include "exteria_crypto.h"
 #include "exteria_https.h"
 #include "exteria_release.h"
@@ -346,7 +347,11 @@ static void refresh_home_screen(void) {
         [self setInstallFraction:DOWNLOAD_SHARE];
         status = exteria_update_apply(path, [[NSBundle mainBundle] bundlePath].fileSystemRepresentation, APP_FOLDER, plistExecutable.UTF8String, install_progress, self);
         if (status != EXTERIA_OK) NSLog(@"exteria: update installation failed: %s", exteria_status_name(status));
-        if (status == EXTERIA_OK) refresh_home_screen();
+        if (status == EXTERIA_OK) {
+            /* the new Info.plist comes from the ipa and has no internal tag, so ios 5 and 6 would stop giving the app banners; the tag goes back before the cache is rebuilt */
+            if (ExteriaSystemNotificationsRun("on") != 0) NSLog(@"exteria: the notification setup for /Applications failed after the update, banners will not show on ios 5 and 6");
+            refresh_home_screen();
+        }
     }
     unlink(path);
     return status;

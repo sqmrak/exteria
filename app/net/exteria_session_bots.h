@@ -28,6 +28,10 @@ typedef void (^ExteriaInviteCheckCompletion)(ExteriaDialog *member, NSString *ti
    whether the number has an account */
 - (void)addContactPhone:(NSString *)phone firstName:(NSString *)first lastName:(NSString *)last completion:(void (^)(BOOL found, NSString *errorName))completion;
 - (void)editContact:(ExteriaPerson *)person firstName:(NSString *)first lastName:(NSString *)last completion:(void (^)(NSString *errorName))completion;
+/* the private note under the username of a contact (contacts.updateContactNote); an empty note takes it off */
+- (void)setContactNote:(NSString *)note ofPerson:(ExteriaPerson *)person completion:(void (^)(NSString *errorName))completion;
+/* takes the photo the person set for this contact away, so the contact's own photo shows again */
+- (void)resetContactPhotoOfPerson:(ExteriaPerson *)person completion:(void (^)(NSString *errorName))completion;
 /* what the bot says in its empty chat and its menu; a user without bot info answers an empty info */
 - (void)loadBotInfoOfPerson:(ExteriaPerson *)bot completion:(void (^)(ExteriaBotInfo *info, NSString *errorName))completion;
 /* the first message of a chat with a bot; param is the start parameter, empty for none */

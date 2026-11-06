@@ -241,6 +241,9 @@ typedef enum {
 ExteriaDoubleTapAction ExteriaChatDoubleTap(BOOL outgoing);
 void ExteriaChatSetDoubleTap(BOOL outgoing, ExteriaDoubleTapAction action);
 /* the emoji a double tap reacts with, the red heart until the person picks another; if the chat does not offer it, the first reaction it offers is sent */
+/* the double tap that sends the quick reaction can be turned off: the double tap then does nothing, and a single tap stops waiting for a second one. the chosen emoji is kept */
+BOOL ExteriaChatQuickReactionEnabled(void);
+void ExteriaChatSetQuickReactionEnabled(BOOL enabled);
 NSString *ExteriaChatQuickReaction(void);
 void ExteriaChatSetQuickReaction(NSString *emoji);
 NSString *ExteriaChatQuickReactionDisplay(void);

@@ -248,8 +248,8 @@ static char ExteriaMediaPlayerStatusContext;
     ((AVPlayerLayer *)_video.layer).videoGravity = AVLayerVideoGravityResizeAspect;
     [_page addSubview:_video];
     _top = [[UIView alloc] init]; _bottom = [[UIView alloc] init];
-    _top.backgroundColor = [UIColor blackColor];
-    _bottom.backgroundColor = [UIColor colorWithWhite:0 alpha:ExteriaThemeIsClassic() ? 0.7 : 0.62];
+    /* the picture runs under both plates, so the top one lets it show through as the bottom one does */
+    _top.backgroundColor = _bottom.backgroundColor = [UIColor colorWithWhite:0 alpha:ExteriaThemeIsClassic() ? 0.7 : 0.62];
     if (!ExteriaThemeIsClassic()) _bottom.layer.cornerRadius = 12;
     [self.view addSubview:_top]; [self.view addSubview:_bottom];
     UIButton *close = [self button:ExteriaSymbolBack action:@selector(close) host:_top];

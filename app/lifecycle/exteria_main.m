@@ -1,8 +1,10 @@
 #import <UIKit/UIKit.h>
 
 #include <stdio.h>
+#include <string.h>
 
 #import "exteria_app_delegate.h"
+#import "exteria_system_notifications.h"
 
 #define LOG_BYTES_MAX (512 * 1024)
 
@@ -35,6 +37,8 @@ static void ExteriaChooseLanguage(void) {
 }
 
 int main(int argc, char *argv[]) {
+    /* the package scripts run the executable like a tool, before any screen exists */
+    if (argc >= 2 && !strcmp(argv[1], "--system-notifications")) return ExteriaSystemNotificationsRun(argc >= 3 ? argv[2] : NULL);
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     ExteriaRedirectLog();
     ExteriaChooseLanguage();

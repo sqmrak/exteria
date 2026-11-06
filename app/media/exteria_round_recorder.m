@@ -197,6 +197,10 @@ static BOOL ExteriaDeviceZooms(AVCaptureDevice *device) {
     return !_captureStopped && !_switching && device.hasTorch && device.torchAvailable && [device isTorchModeSupported:AVCaptureTorchModeOn];
 }
 
+- (BOOL)usesFrontCamera {
+    return !_captureStopped && !_switching && _cameraInput.device.position == AVCaptureDevicePositionFront;
+}
+
 - (BOOL)torchOn { return _torchOn; }
 
 - (void)setTorchOn:(BOOL)on completion:(void (^)(BOOL success))completion {

@@ -35,6 +35,20 @@ typedef enum {
     ExteriaMusicStateFailed     /* the file did not arrive or this system cannot play its format */
 } ExteriaMusicState;
 
+/* the player of a song that was taken out of the music player (detachPlayback) and plays on by itself until it is finished or its file ends. a plugin that
+   mixes one song into the next holds these, see exteria_plugin_music.h */
+@interface ExteriaMusicGhost : NSObject
+/* the playback the player belonged to */
+@property (nonatomic, readonly) NSUInteger playbackId;
+@property (nonatomic, readonly) BOOL playing;
+@property (nonatomic, readonly) NSTimeInterval position;
+@property (nonatomic, readonly) NSTimeInterval duration;
+/* 0 to 1 */
+- (void)setVolume:(float)volume;
+/* stops the sound and lets the player and its files go; harmless a second time */
+- (void)finish;
+@end
+
 /* the one song that plays on the device; there is a single audio output, so the profile's list, its mini player
    and the audio messages of a chat all drive this one object */
 @interface ExteriaMusicPlayer : NSObject
@@ -94,5 +108,30 @@ typedef enum {
 - (void)stop;
 /* fraction of the song, 0 to 1 */
 - (void)seekToFraction:(float)fraction;
+
+/* what a plugin that mixes songs needs. every song that starts is a playback with its own number, from the moment it starts, before its file has arrived; 0 while
+   nothing plays */
+@property (nonatomic, readonly) NSUInteger playbackId;
+/* 0 to 1 for the playback that is current. a song starts at 1, and a pause that ends sets it back to 1; while a start is being routed through a plugin the song is
+   silent until the plugin has set its volume, so a fade in never begins with a blip at full volume */
+@property (nonatomic, assign) float volume;
+/* the index in queue of the song that is current, and the order the songs are walked in (the queue order, or the shuffled one): the position of the current song in
+   that walk, the queue index at a position, and the queue index next would start (NSNotFound at an end that repeat does not carry over) */
+@property (nonatomic, readonly) NSUInteger queueIndex;
+- (NSUInteger)playPositionOfCurrent;
+- (NSUInteger)queueIndexAtPlayPosition:(NSUInteger)position;
+- (NSUInteger)nextQueueIndex;
+/* takes the player of the current song out, so it plays on without the music player knowing; nil when the song has no player yet. the music player has no
+   player until the next song starts */
+- (ExteriaMusicGhost *)detachPlayback;
+/* lets the player of the current song go, as starting another song does first */
+- (void)releaseCurrentPlayer;
+/* starts and pauses without asking the routes below, for the plugin that was asked */
+- (void)startQueueIndex:(NSUInteger)index;
+- (void)pauseWithoutRoute;
+/* asked before a song starts (the queue index) and before a playing song is paused; YES means the plugin did it, and the music player leaves it. set by
+   exteria_plugin_music.m, nil otherwise */
+@property (nonatomic, copy) BOOL (^startRoute)(NSUInteger index);
+@property (nonatomic, copy) BOOL (^pauseRoute)(void);
 
 @end

@@ -144,6 +144,10 @@ typedef enum {
     BOOL animated;
     /* a photo or a video that is gone from the other side once it was opened */
     BOOL viewOnce;
+    /* a file that is an audio file the server lists as a song: sent with this title and performer and the duration below, not forced to be a file */
+    BOOL music;
+    NSString *title;
+    NSString *performer;
     int32_t durationMs;
     int32_t width;
     int32_t height;

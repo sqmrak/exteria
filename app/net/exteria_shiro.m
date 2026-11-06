@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <pthread.h>
@@ -37,6 +38,11 @@ static NSString *const ExteriaShiroAccountFile = @"shiro.account";
 #define REGISTRATION_PATH "/v0a4471/reg"
 #define REGISTRATION_VERSION "CF-Client-Version: a-6.38-4471"
 #define REGISTRATION_TIMEOUT_MS 15000
+/* the call failed at once, which a device does at launch while its radio or wifi is still coming up (getaddrinfo answers at once with nothing): the round is tried again after
+   a pause, three more times, and a failure that took longer than this is a dead path and is not waited on */
+#define REGISTRATION_ROUNDS 4
+#define REGISTRATION_QUICK_FAIL_MS 3000
+#define REGISTRATION_PAUSE_MS 1500
 /* the first servers are the ones of the account, the rest are drawn; a silent network stops here instead of dialing for ever */
 #define SERVER_ATTEMPTS 5u
 /* after that many servers without an answer the tunnel is tried again on its own, this many times, the first pause being this long and each next one twice as long */
@@ -464,8 +470,28 @@ static void ExteriaShiroTimestamp(char out[32]) {
              millis);
 }
 
+/* what the resolver says of a host, for the log of a call that failed before it could have reached the network */
+- (void)logResolutionOfHost:(const char *)host {
+    struct addrinfo hints, *list = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    int rc = getaddrinfo(host, "443", &hints, &list);
+    if (rc != 0 || !list) {
+        [self log:@"registration: the resolver gave nothing for %s: %s", host, rc ? gai_strerror(rc) : "empty list"];
+        return;
+    }
+    int v4 = 0, v6 = 0;
+    for (struct addrinfo *ai = list; ai; ai = ai->ai_next) {
+        if (ai->ai_family == AF_INET) ++v4;
+        else if (ai->ai_family == AF_INET6) ++v6;
+    }
+    freeaddrinfo(list);
+    [self log:@"registration: the resolver gave %d IPv4 and %d IPv6 addresses for %s, so the connect or the handshake failed", v4, v6, host];
+}
+
 /* makes the account on the first start */
-- (exteria_status)registerIdentity {
+- (exteria_status)registerIdentityForRun:(uint32_t)run {
     NSString *rootsPath = [[NSBundle mainBundle] pathForResource:@"roots" ofType:@"pem"];
     NSData *roots = rootsPath ? [NSData dataWithContentsOfFile:rootsPath] : nil;
     _registrationHttp = 0;
@@ -497,12 +523,27 @@ static void ExteriaShiroTimestamp(char out[32]) {
     request.roots_pem = roots.bytes;
     request.roots_len = roots.length;
     request.timeout_ms = REGISTRATION_TIMEOUT_MS;
-    /* a network that reads the SNI of one segment drops the plain hello; only a dead path is worth a second try */
-    for (int split = 0; split < 2; ++split) {
-        request.split_hello = split;
-        status = exteria_https_post(&request, &response);
-        [self log:@"registration: call to %s, hello %s: %s", REGISTRATION_HOST, split ? "in pieces" : "whole", exteria_status_name(status)];
-        if (status == EXTERIA_OK || (status != EXTERIA_E_IO && status != EXTERIA_E_TIMEOUT)) break;
+    for (int round = 0; round < REGISTRATION_ROUNDS; ++round) {
+        if (round) {
+            /* a pause that ends as soon as the run does, in slices, so a cancel is not held up */
+            for (int waited = 0; waited < REGISTRATION_PAUSE_MS * round; waited += 100) {
+                if (![self runIsLive:run]) {
+                    status = EXTERIA_E_STATE;
+                    goto done;
+                }
+                usleep(100 * 1000);
+            }
+        }
+        CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
+        /* a network that reads the SNI of one segment drops the plain hello; only a dead path is worth a second try */
+        for (int split = 0; split < 2; ++split) {
+            request.split_hello = split;
+            status = exteria_https_post(&request, &response);
+            [self log:@"registration: call to %s, hello %s: %s", REGISTRATION_HOST, split ? "in pieces" : "whole", exteria_status_name(status)];
+            if (status == EXTERIA_OK || (status != EXTERIA_E_IO && status != EXTERIA_E_TIMEOUT)) break;
+        }
+        if (status != EXTERIA_E_IO || (CFAbsoluteTimeGetCurrent() - began) * 1000.0 > REGISTRATION_QUICK_FAIL_MS) break;
+        [self logResolutionOfHost:REGISTRATION_HOST];
     }
     if (status != EXTERIA_OK) goto done;
     _registrationHttp = response.status;
@@ -532,7 +573,7 @@ done:
     case EXTERIA_E_RPC: return [NSString stringWithFormat:NSLocalizedString(@"shiro.why.account.refused", nil), _registrationHttp];
     case EXTERIA_E_MALFORMED: return NSLocalizedString(@"shiro.why.account.answer", nil);
     case EXTERIA_E_NOTFOUND: return NSLocalizedString(@"shiro.why.account.roots", nil);
-    default: return [NSString stringWithFormat:NSLocalizedString(@"shiro.why.account.other", nil), exteria_status_name(status)];
+    default: return NSLocalizedString(@"shiro.why.account.other", nil);
     }
 }
 
@@ -548,7 +589,7 @@ done:
         if (status == EXTERIA_E_NOTFOUND) {
             [self log:@"account: none stored, registering"];
             dispatch_async(dispatch_get_main_queue(), ^{ [self registeringRun:run]; });
-            status = [self registerIdentity];
+            status = [self registerIdentityForRun:run];
             if (status != EXTERIA_OK) [self log:@"registration failed: %s", exteria_status_name(status)];
             dispatch_async(dispatch_get_main_queue(), ^{ [self connectingRun:run]; });
         } else if (status == EXTERIA_OK) {
@@ -588,7 +629,7 @@ done:
         [self log:@"the engine did not start: %s", exteria_status_name(status)];
         free(context);
         NSString *detail = [NSString stringWithFormat:@"engine: %s", exteria_status_name(status)];
-        NSString *text = [NSString stringWithFormat:NSLocalizedString(@"shiro.why.engine", nil), exteria_status_name(status)];
+        NSString *text = NSLocalizedString(@"shiro.why.engine", nil);
         dispatch_async(dispatch_get_main_queue(), ^{ [self failRun:run with:ExteriaShiroFailureServer detail:detail text:text]; });
         return;
     }

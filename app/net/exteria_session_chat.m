@@ -54,6 +54,9 @@ typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_audience
     BOOL profileVideo;
     /* ... and it is the public photo, which those who may not see the main one get to see, not the main photo */
     BOOL profilePublic;
+    /* ... and it is the photo of the contact in peer, set on this account's side, or suggested to them */
+    BOOL contactPhoto;
+    BOOL contactSuggest;
     /* the file becomes a story of the signed in user */
     BOOL storyPhoto;
     /* ... with this text and for this audience */
@@ -343,6 +346,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
             exteria_status status = exteria_file_uploaded(&job->transfer, arena, &file);
             if (status == EXTERIA_OK && job->storyPhoto) status = exteria_story_publish_photo_audience_request(arena, file, job->randomId, job->storyCaption, &job->storyAudience, request);
             else if (status == EXTERIA_OK && job->profileVideo) status = exteria_profile_video_request(arena, file, 0, request);
+            else if (status == EXTERIA_OK && job->contactPhoto) status = exteria_contact_photo_request(arena, &job->peer, file, job->contactSuggest, request);
             else if (status == EXTERIA_OK && job->profilePublic) status = exteria_profile_public_photo_request(arena, file, request);
             else if (status == EXTERIA_OK) status = exteria_profile_photo_request(arena, file, request);
             return status;
@@ -613,16 +617,34 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     }];
 }
 
+/* the completion of a change to the profile of this account: a success tells the screens that wear the photo */
+- (void (^)(NSString *))announcingOwnProfile:(void (^)(NSString *))completion {
+    void (^inner)(NSString *) = [[completion copy] autorelease];
+    return [[^(NSString *errorName) {
+        if (!errorName) [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaOwnProfileDidChangeNotification object:nil];
+        if (inner) inner(errorName);
+    } copy] autorelease];
+}
+
 - (void)uploadProfilePhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
-    [self uploadJobAtPath:path story:NO video:NO completion:completion];
+    [self uploadJobAtPath:path story:NO video:NO completion:[self announcingOwnProfile:completion]];
 }
 
 - (void)uploadPublicPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
     [self uploadJobAtPath:path story:NO video:NO public:YES options:NULL completion:completion];
 }
 
+- (void)uploadContactPhotoAtPath:(NSString *)path ofPerson:(ExteriaPerson *)person suggest:(BOOL)suggest completion:(void (^)(NSString *errorName))completion {
+    exteria_peer_ref contact;
+    memset(&contact, 0, sizeof(contact));
+    contact.kind = 1;
+    contact.id = person.userId;
+    contact.access_hash = person.accessHash;
+    [self uploadJobAtPath:path story:NO video:NO public:NO contact:&contact suggest:suggest options:NULL completion:completion];
+}
+
 - (void)uploadProfileVideoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
-    [self uploadJobAtPath:path story:NO video:YES completion:completion];
+    [self uploadJobAtPath:path story:NO video:YES completion:[self announcingOwnProfile:completion]];
 }
 
 - (void)postStoryPhotoAtPath:(NSString *)path completion:(void (^)(NSString *errorName))completion {
@@ -649,9 +671,19 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
 }
 
 - (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video public:(BOOL)publicPhoto options:(const ExteriaStoryPostOptions *)options completion:(void (^)(NSString *errorName))completion {
+    [self uploadJobAtPath:path story:story video:video public:publicPhoto contact:NULL suggest:NO options:options completion:completion];
+}
+
+- (void)uploadJobAtPath:(NSString *)path story:(BOOL)story video:(BOOL)video public:(BOOL)publicPhoto contact:(const exteria_peer_ref *)contact suggest:(BOOL)suggest
+                options:(const ExteriaStoryPostOptions *)options completion:(void (^)(NSString *errorName))completion {
     void (^done)(NSString *) = [completion copy];
     ExteriaUploadJob *job = [[ExteriaUploadJob alloc] init];
     job->profilePhoto = !story;
+    if (contact && !story && !video) {
+        job->contactPhoto = YES;
+        job->contactSuggest = suggest;
+        job->peer = *contact;
+    }
     job->profileVideo = video && !story;
     job->profilePublic = publicPhoto && !story && !video;
     job->storyPhoto = story;
@@ -746,6 +778,12 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
         int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", outgoing->name.UTF8String);
         int mimeLength = snprintf(spec.mime, sizeof(spec.mime), "%s", outgoing->mime.length ? outgoing->mime.UTF8String : "application/octet-stream");
         if (nameLength < 0 || (size_t)nameLength >= sizeof(spec.name) || mimeLength < 0 || (size_t)mimeLength >= sizeof(spec.mime)) { completion(0, @"FILE_NAME_TOO_LONG"); return; }
+        if (outgoing->music) {
+            int titleLength = snprintf(spec.title, sizeof(spec.title), "%s", outgoing->title.UTF8String ? outgoing->title.UTF8String : "");
+            int performerLength = snprintf(spec.performer, sizeof(spec.performer), "%s", outgoing->performer.UTF8String ? outgoing->performer.UTF8String : "");
+            if (titleLength < 0 || (size_t)titleLength >= sizeof(spec.title) || performerLength < 0 || (size_t)performerLength >= sizeof(spec.performer)) { completion(0, @"SONG_TAGS_TOO_LONG"); return; }
+            spec.music = 1;
+        }
     }
     [self sendUploadAtPath:outgoing->path spec:spec waveform:outgoing->waveform toDialog:dialog randomId:randomId completion:completion];
 }
