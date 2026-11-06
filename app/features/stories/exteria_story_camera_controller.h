@@ -11,6 +11,10 @@
 /* whether this device has a camera to show */
 + (BOOL)cameraAvailable;
 
+/* presses publish on the screen that is on show and holds a picture, as the button does; NO when there is none. a plugin that scheduled a story does it once
+   the person has chosen a time */
++ (BOOL)publishHeld;
+
 /* a screen that starts on a photo already in hand (from the library) and only dresses it: no camera, the back arrow closes it */
 - (id)initWithPhotoPath:(NSString *)path;
 

@@ -81,10 +81,14 @@ static CGRect CallRect(exteria_rect r, CGFloat dx) {
 }
 
 /* the mesh is 16 by 24 pixels and the layer stretches it with linear filtering, which is what blends the four colors smoothly */
-static CGImageRef CreateMeshImage(exteria_call_mood mood, BOOL dark) {
+static CGImageRef CreateMeshImage(exteria_call_mood mood) {
     uint32_t colors[4];
     uint8_t pixels[MESH_WIDTH * MESH_HEIGHT * 4];
-    if (exteria_call_mood_colors(mood, dark, colors) != EXTERIA_OK) return NULL;
+    /* the field is made of the accent of the theme in use, deeper on a dark theme */
+    CGFloat red = 0, green = 0, blue = 0, alpha = 0;
+    if (![ExteriaColorAccent() getRed:&red green:&green blue:&blue alpha:&alpha]) return NULL;
+    uint32_t accent = ((uint32_t)(red * 255 + 0.5) << 16) | ((uint32_t)(green * 255 + 0.5) << 8) | (uint32_t)(blue * 255 + 0.5);
+    if (exteria_call_mood_colors(mood, accent, ExteriaThemeIsDark(), colors) != EXTERIA_OK) return NULL;
     if (exteria_call_mesh_fill(pixels, sizeof(pixels), MESH_WIDTH, MESH_HEIGHT, colors) != EXTERIA_OK) return NULL;
     CFDataRef data = CFDataCreate(NULL, pixels, (CFIndex)sizeof(pixels));
     CGDataProviderRef provider = data ? CGDataProviderCreateWithCFData(data) : NULL;
@@ -444,7 +448,7 @@ static CGImageRef CreateMeshImage(exteria_call_mood mood, BOOL dark) {
 - (void)applyMood {
     int mood = [self moodForPhase];
     if (mood == _mood) return;
-    CGImageRef image = CreateMeshImage((exteria_call_mood)mood, ExteriaThemeIsClassic());
+    CGImageRef image = CreateMeshImage((exteria_call_mood)mood);
     if (!image) return;
     if (_mood >= 0 && !ExteriaReduceMotionEnabled() && ExteriaLiteEnabled(EXTERIA_LITE_CALLS)) {
         CATransition *fade = [CATransition animation];
@@ -657,7 +661,7 @@ static CGImageRef CreateMeshImage(exteria_call_mood mood, BOOL dark) {
     _end.accessibilityLabel = _endCaption.text;
     UIColor *dark = [UIColor colorWithWhite:0.18 alpha:1];
     _mute.backgroundColor = [UIColor colorWithWhite:1 alpha:_call.muted ? 0.92 : 0.2];
-    [_mute setImage:ExteriaSymbolImage(ExteriaSymbolMicrophone, 26, _call.muted ? dark : [UIColor whiteColor]) forState:UIControlStateNormal];
+    [_mute setImage:ExteriaSymbolImage(_call.muted ? ExteriaSymbolMicrophoneSlash : ExteriaSymbolMicrophone, 26, _call.muted ? dark : [UIColor whiteColor]) forState:UIControlStateNormal];
     _camera.backgroundColor = [UIColor colorWithWhite:1 alpha:_call.cameraOn ? 0.92 : 0.2];
     [_camera setImage:ExteriaSymbolImage(ExteriaSymbolVideoCamera, 26, _call.cameraOn ? dark : [UIColor whiteColor]) forState:UIControlStateNormal];
     _speaker.backgroundColor = [UIColor colorWithWhite:1 alpha:_speakerOn ? 0.92 : 0.2];

@@ -8,6 +8,7 @@
 #import "exteria_string_drawing.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_classic_bubble.h"
 #import "exteria_wallpaper.h"
 #import "exteria_reactions_view.h"
 #include "exteria_reactions.h"
@@ -50,7 +51,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     {YES, YES, nil, @"10:47", nil, nil, 0},
 };
 
-/* one item of the preview: a bubble with its box, the gradient of the classic style, the quote of the message it
+/* one item of the preview: a bubble with its box, the picture of the classic style, the quote of the message it
    answers, the words */
 @interface ExteriaPreviewBubble : NSObject {
 @public
@@ -58,7 +59,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     BOOL sticker;
     NSInteger quoteColorId;
     UIView *box;
-    CAGradientLayer *fill;
+    UIImageView *shape;
     UIView *quotePlate;
     UIView *quoteBar;
     UILabel *quoteName;
@@ -74,7 +75,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
 @implementation ExteriaPreviewBubble
 - (void)dealloc {
     [box release];
-    [fill release];
+    [shape release];
     [quotePlate release];
     [quoteBar release];
     [quoteName release];
@@ -164,10 +165,10 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
         } else {
             bubble->box = [[UIView alloc] init];
             [self addSubview:bubble->box];
-            /* the classic bubble is a gradient with an outline, as the old Messages drew it */
-            bubble->fill = [[CAGradientLayer alloc] init];
-            bubble->fill.hidden = !ExteriaThemeIsClassic();
-            [bubble->box.layer insertSublayer:bubble->fill atIndex:0];
+            /* the classic bubble is the glossy picture of the chat, in its plain form */
+            bubble->shape = [[UIImageView alloc] init];
+            bubble->shape.hidden = !ExteriaThemeIsClassic();
+            [bubble->box insertSubview:bubble->shape atIndex:0];
             bubble->text = [[[ExteriaEmojiLabel alloc] init] autorelease];
             bubble->text.numberOfLines = 0;
             bubble->text.text = NSLocalizedString(_lines[i].key, nil);
@@ -248,12 +249,8 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
             continue;
         }
         if (ExteriaThemeIsClassic()) {
-            UIColor *top, *bottom, *outline;
-            ExteriaClassicBubbleColors(out, &top, &bottom, &outline);
-            bubble->fill.colors = [NSArray arrayWithObjects:(id)top.CGColor, (id)bottom.CGColor, nil];
+            bubble->shape.image = ExteriaClassicBubbleImage(out, NO);
             bubble->box.backgroundColor = [UIColor clearColor];
-            bubble->box.layer.borderColor = outline.CGColor;
-            bubble->box.layer.borderWidth = 1;
         } else {
             bubble->box.backgroundColor = out ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn();
         }
@@ -349,12 +346,11 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
         CGFloat reactionHeight = _quickReaction && bubble == [_bubbles objectAtIndex:0] ? 38 : 0;
         CGFloat boxHeight = BUBBLE_PAD_Y + quoteBlock + ceil(textSize.height) + (beside || reactionHeight ? 0 : meta - 2) + BUBBLE_PAD_Y + reactionHeight;
         if (apply) {
-            CGFloat corner = ExteriaThemeIsClassic() ? (CGFloat)ExteriaChatClassicBubbleRadius() : MIN(radius, MIN(boxWidth, boxHeight) / 2);
+            CGFloat corner = ExteriaThemeIsClassic() ? 0 : MIN(radius, MIN(boxWidth, boxHeight) / 2);
             CGFloat x = bubble->outgoing ? width - PREVIEW_PAD - boxWidth : PREVIEW_PAD;
             bubble->box.layer.cornerRadius = corner;
             bubble->box.frame = CGRectMake(x, y, boxWidth, boxHeight);
-            bubble->fill.frame = bubble->box.bounds;
-            bubble->fill.cornerRadius = corner;
+            bubble->shape.frame = bubble->box.bounds;
             CGFloat inner = boxWidth - 2 * BUBBLE_PAD_X;
             if (bubble->quotePlate) {
                 bubble->quotePlate.frame = CGRectMake(BUBBLE_PAD_X, BUBBLE_PAD_Y, inner, quoteHeight);

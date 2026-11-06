@@ -1,5 +1,7 @@
 #import "exteria_date_sheet.h"
 
+#import "exteria_animation.h"
+
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_dismiss_pan.h"
@@ -127,24 +129,20 @@ static UIButton *ExteriaSheetButton(NSString *title, UIColor *color, BOOL bold) 
     [host addSubview:self];
     [self layoutIfNeeded];
     _panel.transform = CGAffineTransformMakeTranslation(0, _panel.bounds.size.height);
-    [UIView animateWithDuration:0.24 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
-        _dim.alpha = 0.4;
-        _panel.transform = CGAffineTransformIdentity;
-    } completion:nil];
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.4, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_panel, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 - (void)leaveThen:(void (^)(void))after {
     void (^next)(void) = [after copy];
     self.userInteractionEnabled = NO;
-    [UIView animateWithDuration:0.2 delay:0 options:UIViewAnimationOptionCurveEaseIn animations:^{
-        _dim.alpha = 0;
-        _panel.transform = CGAffineTransformMakeTranslation(0, _panel.bounds.size.height);
-    } completion:^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_panel, CGAffineTransformMakeTranslation(0, _panel.bounds.size.height), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         if (next) next();
         [next release];
-    }];
+    });
 }
 
 - (void)cancelTapped {

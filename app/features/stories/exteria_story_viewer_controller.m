@@ -58,14 +58,35 @@
 @interface ExteriaStoryReplyField : UITextField {
     UILabel *_hint;
     BOOL _lightFill;
+    BOOL _nativeLayout;
 }
 /* the field is a pale pill with dark words, and not a dark one with white words */
 @property (nonatomic, assign) BOOL lightFill;
+/* the system places the text: the margins are side views and the rects are not overridden. the one line rect below was made for ios 5 to 7, and on ios 15 the typed words
+   did not show in it (the keyboard took them, the pill stayed empty) */
+@property (nonatomic, assign) BOOL nativeLayout;
 @end
 
 @implementation ExteriaStoryReplyField
 
 @synthesize lightFill = _lightFill;
+@synthesize nativeLayout = _nativeLayout;
+
+- (void)setNativeLayout:(BOOL)native {
+    _nativeLayout = native;
+    if (native) {
+        UIView *left = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, REPLY_INSET, 1)] autorelease];
+        UIView *right = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, REPLY_INSET, 1)] autorelease];
+        self.leftView = left;
+        self.leftViewMode = UITextFieldViewModeAlways;
+        self.rightView = right;
+        self.rightViewMode = UITextFieldViewModeAlways;
+    } else {
+        self.leftView = nil;
+        self.rightView = nil;
+    }
+    [self setNeedsLayout];
+}
 
 /* the hint is a label of the field: the system placeholder of a subclass is drawn through drawPlaceholderInRect on ios 5 to 12 only,
    and the newer systems leave the pill empty */
@@ -108,14 +129,14 @@
     return CGRectMake(REPLY_INSET, floor((bounds.size.height - line) / 2), MAX(0, bounds.size.width - 2 * REPLY_INSET), line);
 }
 
-- (CGRect)textRectForBounds:(CGRect)bounds { return [self textAreaForBounds:bounds]; }
-- (CGRect)editingRectForBounds:(CGRect)bounds { return [self textAreaForBounds:bounds]; }
+- (CGRect)textRectForBounds:(CGRect)bounds { return _nativeLayout ? [super textRectForBounds:bounds] : [self textAreaForBounds:bounds]; }
+- (CGRect)editingRectForBounds:(CGRect)bounds { return _nativeLayout ? [super editingRectForBounds:bounds] : [self textAreaForBounds:bounds]; }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
     _hint.font = self.font;
     _hint.textColor = _lightFill ? [UIColor colorWithWhite:0.6 alpha:1] : [UIColor colorWithWhite:1 alpha:0.7];
-    _hint.frame = [self textAreaForBounds:self.bounds];
+    _hint.frame = _nativeLayout ? CGRectMake(REPLY_INSET, 0, MAX(0, self.bounds.size.width - 2 * REPLY_INSET), self.bounds.size.height) : [self textAreaForBounds:self.bounds];
     [self textChanged];
 }
 
@@ -465,6 +486,7 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
         _reply.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1].CGColor;
         _reply.layer.borderWidth = 1;
     } else {
+        _reply.nativeLayout = YES;
         _reply.textColor = [UIColor whiteColor];
         /* the pill is dark: white words on a pale, see-through pill vanished over a light picture, and what was typed could not be read */
         _reply.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];

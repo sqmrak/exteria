@@ -13,6 +13,7 @@
 #define PHOTO_MAX_SIDE 1600.0
 /* the buttons of the profile stand over the lower edge of the photo; the words stand over them */
 #define ACTIONS_ROOM 84.0
+#define SWITCH_CIRCLE 26.0
 
 @interface ExteriaProfileHeroView () {
     ExteriaSession *_session;
@@ -30,6 +31,13 @@
     ExteriaEmojiLabel *_name;
     UILabel *_status;
     ExteriaRatingBadge *_ratingBadge;
+    ExteriaMedia *_publicPhoto;
+    /* the public photo as a page: the last of _photos, once the list is in */
+    BOOL _hasPublicPage;
+    UIControl *_switch;
+    UIImageView *_switchThumb;
+    UILabel *_switchLabel;
+    UIImage *_publicImage;
     NSInteger _index;
     BOOL _moving;
     NSUInteger _token;
@@ -39,6 +47,7 @@
 @implementation ExteriaProfileHeroView
 
 @synthesize bottomRoom = _bottomRoom;
+@synthesize publicPhoto = _publicPhoto;
 
 @synthesize name = _name;
 @synthesize status = _status;
@@ -105,6 +114,25 @@
     _ratingBadge.hidden = YES;
     _ratingBadge.alpha = 0;
     [self addSubview:_ratingBadge];
+    _switch = [[UIControl alloc] init];
+    _switch.hidden = YES;
+    _switch.alpha = 0;
+    [_switch addTarget:self action:@selector(switchTapped) forControlEvents:UIControlEventTouchUpInside];
+    _switchThumb = [[UIImageView alloc] init];
+    _switchThumb.contentMode = UIViewContentModeScaleAspectFill;
+    _switchThumb.clipsToBounds = YES;
+    _switchThumb.layer.cornerRadius = SWITCH_CIRCLE / 2;
+    _switchThumb.layer.borderWidth = 1.5;
+    _switchThumb.layer.borderColor = [UIColor whiteColor].CGColor;
+    _switchThumb.userInteractionEnabled = NO;
+    [_switch addSubview:_switchThumb];
+    _switchLabel = [[UILabel alloc] init];
+    _switchLabel.backgroundColor = [UIColor clearColor];
+    _switchLabel.textColor = [UIColor whiteColor];
+    _switchLabel.font = ExteriaFontMedium(13);
+    _switchLabel.userInteractionEnabled = NO;
+    [_switch addSubview:_switchLabel];
+    [self addSubview:_switch];
     [self showSmallPhoto];
     return self;
 }
@@ -115,6 +143,7 @@
     [_session release]; [_dialog release]; [_avatars release]; [_media release]; [_photos release];
     [_cover release]; [_pager release]; [_pages release]; [_asked release]; [_strips release]; [_stripFills release]; [_scrim release];
     [_name release]; [_status release]; [_ratingBadge release];
+    [_publicPhoto release]; [_switch release]; [_switchThumb release]; [_switchLabel release]; [_publicImage release];
     [super dealloc];
 }
 
@@ -156,10 +185,80 @@
     [self setNeedsLayout];
 }
 
+/* the public photo is the page after the last profile photo; it is left out when the list already holds it */
+- (NSArray *)pagesWithPublicPhoto:(NSArray *)photos {
+    _hasPublicPage = NO;
+    if (!_publicPhoto || _publicPhoto.ref.id == 0) return photos;
+    for (ExteriaMedia *photo in photos) {
+        if (photo.ref.id == _publicPhoto.ref.id) return photos;
+    }
+    _hasPublicPage = YES;
+    return [photos arrayByAddingObject:_publicPhoto];
+}
+
+- (void)setPublicPhoto:(ExteriaMedia *)photo {
+    if (photo == _publicPhoto || (photo && _publicPhoto && photo.ref.id == _publicPhoto.ref.id)) return;
+    [_publicPhoto release];
+    _publicPhoto = [photo retain];
+    [_publicImage release];
+    _publicImage = nil;
+    if (_photos.count || _hasPublicPage) {
+        /* the list came before the photo: its pages are built again with the new last one */
+        NSMutableArray *own = [NSMutableArray arrayWithArray:_photos];
+        if (_hasPublicPage && own.count) [own removeLastObject];
+        [_photos release];
+        _photos = [[self pagesWithPublicPhoto:own] retain];
+        [self buildPages:_photos.count];
+        [self buildStrips];
+        _index = MIN(_index, (NSInteger)_photos.count - 1);
+        [self loadAround:_index];
+        [self loadPublicThumb];
+        [self refreshStrips];
+        [self refreshSwitch];
+    }
+}
+
+- (void)loadPublicThumb {
+    if (!_hasPublicPage || _publicImage) return;
+    exteria_media_ref ref = _publicPhoto.ref;
+    ExteriaRemoteFile *file = [ExteriaRemoteFile fileForMedia:&ref];
+    if (!file) return;
+    NSUInteger token = _token;
+    [_media loadImageForFile:file maxSide:PHOTO_MAX_SIDE completion:^(UIImage *image) {
+        if (token != _token || !image) return;
+        [_publicImage release];
+        _publicImage = [image retain];
+        [self refreshSwitch];
+    }];
+}
+
+/* on the public page the circle shows the first profile photo and leads back to it; on any other page it shows the public one and leads there */
+- (BOOL)onPublicPage {
+    return _hasPublicPage && _index == (NSInteger)_photos.count - 1;
+}
+
+- (void)refreshSwitch {
+    BOOL shown = _hasPublicPage && !_moving;
+    _switch.hidden = !shown;
+    if (!shown) return;
+    BOOL onPublic = [self onPublicPage];
+    UIImage *first = _pages.count ? [[_pages objectAtIndex:0] image] : nil;
+    _switchThumb.image = onPublic ? (first ? first : _cover.image) : _publicImage;
+    _switchLabel.text = NSLocalizedString(onPublic ? @"profile.photo.main" : @"profile.photo.public", nil);
+    [self setNeedsLayout];
+}
+
+- (void)switchTapped {
+    if (_moving || !_hasPublicPage) return;
+    [self goToIndex:[self onPublicPage] ? 0 : (NSInteger)_photos.count - 1];
+}
+
 - (void)loadList {
     NSUInteger token = _token;
     [_session loadAvatarsOfDialog:_dialog completion:^(NSArray *photos, NSString *errorName) {
-        if (token != _token || errorName || photos.count == 0) return;
+        if (token != _token || errorName) return;
+        photos = [self pagesWithPublicPhoto:photos];
+        if (photos.count == 0) return;
         [_photos release];
         _photos = [photos retain];
         _index = 0;
@@ -167,6 +266,7 @@
         [self buildStrips];
         [self loadAround:0];
         [self refreshStrips];
+        [self loadPublicThumb];
         /* the first page shows what the cover shows until its own sharp picture comes */
         if (_pages.count) [[_pages objectAtIndex:0] setImage:_cover.image];
         if (!_moving) {
@@ -191,6 +291,7 @@
             if (token != _token || !image) return;
             page.image = image;
             if (i == _index) _cover.image = image;
+            if (i == 0) [self refreshSwitch];
         }];
     }
 }
@@ -241,8 +342,17 @@
     /* the words stand over the buttons that the screen puts on the lower edge */
     /* the badge of the rating stands before the status, and the status moves over by the room it takes */
     CGFloat statusLeft = _ratingBadge.hidden ? 20 : 20 + 26;
+    /* the circle of the public photo and its name take the right end of the status line */
+    CGFloat switchWidth = 0;
+    if (!_switch.hidden) {
+        switchWidth = MIN(ceil([_switchLabel sizeThatFits:CGSizeMake(size.width, SWITCH_CIRCLE)].width), size.width / 2) + SWITCH_CIRCLE + 8;
+        _switch.frame = CGRectMake(size.width - 20 - switchWidth, size.height - _bottomRoom - 22 + 10 - SWITCH_CIRCLE / 2 - 2, switchWidth, SWITCH_CIRCLE + 4);
+        _switchThumb.frame = CGRectMake(0, 2, SWITCH_CIRCLE, SWITCH_CIRCLE);
+        _switchLabel.frame = CGRectMake(SWITCH_CIRCLE + 8, 2, switchWidth - SWITCH_CIRCLE - 8, SWITCH_CIRCLE);
+        switchWidth += 10;
+    }
     _ratingBadge.frame = CGRectMake(20, size.height - _bottomRoom - 22, 22, 20);
-    _status.frame = CGRectMake(statusLeft, size.height - _bottomRoom - 22, MAX(0, size.width - statusLeft - 20), 20);
+    _status.frame = CGRectMake(statusLeft, size.height - _bottomRoom - 22, MAX(0, size.width - statusLeft - 20 - switchWidth), 20);
     _name.frame = CGRectMake(20, size.height - _bottomRoom - 22 - 32, MAX(0, size.width - 40), 30);
     CGFloat count = (CGFloat)_stripFills.count;
     if (count > 0) {
@@ -261,6 +371,7 @@
     [_pager setContentOffset:CGPointMake(_pager.bounds.size.width * (CGFloat)index, 0) animated:YES];
     [self loadAround:index];
     [self refreshStrips];
+    [self refreshSwitch];
 }
 
 /* a tap anywhere on the photo goes to the next one, and after the last one comes the first; the photo is taken away by a pull down, not by a tap */
@@ -285,6 +396,7 @@
     _index = index;
     [self loadAround:index];
     [self refreshStrips];
+    [self refreshSwitch];
 }
 
 #pragma mark moving
@@ -294,11 +406,13 @@
     _name.alpha = alpha;
     _status.alpha = alpha;
     _ratingBadge.alpha = alpha;
+    _switch.alpha = alpha;
     _scrim.opacity = (float)alpha;
 }
 
 - (void)beginMove {
     _moving = YES;
+    [self refreshSwitch];
     _pager.hidden = YES;
     _cover.hidden = NO;
     [self setContentAlpha:0];
@@ -310,12 +424,14 @@
     BOOL pages = _photos.count > 0;
     _pager.hidden = !pages;
     _cover.hidden = pages;
+    [self refreshSwitch];
     [self setNeedsLayout];
     [UIView animateWithDuration:0.2 animations:^{ [self setContentAlpha:1]; }];
 }
 
 - (void)beginClose {
     _moving = YES;
+    [self refreshSwitch];
     /* the picture that was shown stays under the shrinking frame, and the pages go: a pager resized in the middle of a move showed what lay behind it */
     if (_index < (NSInteger)_pages.count) {
         UIImage *shown = [[_pages objectAtIndex:(NSUInteger)_index] image];

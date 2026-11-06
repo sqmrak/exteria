@@ -2,11 +2,13 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #import "exteria_string_drawing.h"
 #import "exteria_theme.h"
 
 #define CARD_RADIUS 22.0
+#define CLASSIC_RADIUS 12.0
 #define CARD_PAD 14.0
 #define STICKER_SIDE 84.0
 #define BUTTON_HEIGHT 38.0
@@ -55,29 +57,40 @@
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorCard();
-    self.layer.cornerRadius = CARD_RADIUS;
-    self.layer.shadowColor = [UIColor blackColor].CGColor;
-    self.layer.shadowOpacity = 0.22f;
-    self.layer.shadowRadius = 14;
-    self.layer.shadowOffset = CGSizeMake(0, 6);
+    BOOL classic = ExteriaThemeIsClassic();
+    if (classic) {
+        ExteriaClassicApplyMenuPlate(self, CLASSIC_RADIUS);
+    } else {
+        self.backgroundColor = ExteriaColorCard();
+        self.layer.cornerRadius = CARD_RADIUS;
+        self.layer.shadowColor = [UIColor blackColor].CGColor;
+        self.layer.shadowOpacity = 0.22f;
+        self.layer.shadowRadius = 14;
+        self.layer.shadowOffset = CGSizeMake(0, 6);
+    }
     _title = [[UILabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
-    _title.textColor = ExteriaColorTitle();
+    _title.textColor = classic ? ExteriaClassicMenuTextColor() : ExteriaColorTitle();
     _title.font = ExteriaFontBold(17);
     /* a long title wraps onto as many lines as it needs, rather than ending in dots */
     _title.numberOfLines = 0;
     [self addSubview:_title];
     _message = [[UILabel alloc] init];
     _message.backgroundColor = [UIColor clearColor];
-    _message.textColor = ExteriaColorMessage();
+    _message.textColor = classic ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.7] : ExteriaColorMessage();
     _message.font = ExteriaFontRegular(14);
     _message.numberOfLines = 0;
     [self addSubview:_message];
     _primary = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     _primary.titleLabel.font = ExteriaFontBold(15);
-    _primary.layer.cornerRadius = BUTTON_HEIGHT / 2;
-    _primary.backgroundColor = ExteriaColorAccent();
+    if (classic) {
+        [_primary setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+        [_primary setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+        [_primary setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateDisabled];
+    } else {
+        _primary.layer.cornerRadius = BUTTON_HEIGHT / 2;
+        _primary.backgroundColor = ExteriaColorAccent();
+    }
     [_primary setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [_primary setTitleColor:[UIColor colorWithWhite:1 alpha:0.7] forState:UIControlStateDisabled];
     [_primary addTarget:self action:@selector(primaryTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -167,11 +180,20 @@
     return CGRectMake(floor((_host.bounds.size.width - width) / 2), _inset + 8, width, height);
 }
 
+/* the classic plate is a layer that has to follow the card as it grows with its text */
+- (void)fitShadow {
+    if (ExteriaThemeIsClassic()) {
+        ExteriaClassicFitPlate(self, 0);
+        return;
+    }
+    self.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.bounds cornerRadius:CARD_RADIUS].CGPath;
+}
+
 - (void)refresh {
     if (!_host) return;
     CGRect frame = [self restFrame];
     self.frame = CGRectMake(frame.origin.x, self.frame.origin.y, frame.size.width, frame.size.height);
-    self.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.bounds cornerRadius:CARD_RADIUS].CGPath;
+    [self fitShadow];
 }
 
 #pragma mark showing
@@ -183,7 +205,7 @@
     _host = host;
     _inset = inset;
     self.frame = [self restFrame];
-    self.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.bounds cornerRadius:CARD_RADIUS].CGPath;
+    [self fitShadow];
     [host addSubview:self];
     if ([_sticker respondsToSelector:@selector(setLoaded:)]) [(id<ExteriaToastSticker>)_sticker setLoaded:YES];
     if ([_sticker respondsToSelector:@selector(setPlaying:)]) [(id<ExteriaToastSticker>)_sticker setPlaying:YES];

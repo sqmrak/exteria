@@ -293,6 +293,33 @@ static UIColor *ExteriaLogLineColor(NSString *line) {
     return [NSString stringWithFormat:@"exteria-%@.zip", name];
 }
 
+/* the archive goes to the developer as a file in a private message; the account of the developer itself, or a send that failed, falls back to the share sheet so the logs are not lost */
+- (void)deliverArchive:(NSString *)archive {
+    if (ExteriaProblemReportIsDeveloper(_session)) {
+        ExteriaShareFile(self, archive);
+        return;
+    }
+    ExteriaWeakReference *weak = _weak;
+    ExteriaProblemReportSendArchive(_session, archive, ^(BOOL sent) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ExteriaLogsController *me = weak.target;
+            if (sent) {
+                [[NSFileManager defaultManager] removeItemAtPath:archive error:NULL];
+                ExteriaShowNotice(nil, NSLocalizedString(@"logs.export.sent", nil));
+                return;
+            }
+            if (!me) return;
+            ExteriaShowAlert(nil, NSLocalizedString(@"logs.export.unsent", nil),
+                             [NSArray arrayWithObjects:NSLocalizedString(@"notice.ok", nil), NSLocalizedString(@"logs.export.share", nil), nil], 0, NO,
+                             ^(NSInteger index, NSString *text) {
+                (void)text;
+                ExteriaLogsController *again = weak.target;
+                if (index == 1 && again) ExteriaShareFile(again, archive);
+            });
+        });
+    });
+}
+
 - (void)exportAll {
     ExteriaWeakReference *weak = _weak;
     NSString *archive = [NSTemporaryDirectory() stringByAppendingPathComponent:[self archiveName]];
@@ -324,7 +351,7 @@ static UIColor *ExteriaLogLineColor(NSString *line) {
                 return;
             }
             if (!packed) NSLog(@"exteria: the archive of the logs holds the device note only, no log exists yet");
-            ExteriaShareFile(me, archive);
+            [me deliverArchive:archive];
         });
         [pool release];
     });

@@ -148,6 +148,8 @@
     _minimized = YES;
     _minimizing = YES;
     ExteriaGroupCallController *screen = _screen;
+    /* the bar is there from the start, so a dismissal whose completion never comes does not leave the call with no way back */
+    [self showBar];
     [screen dismissViewControllerAnimated:YES completion:^{
         if (_screen != screen) return;
         _minimizing = NO;
@@ -156,7 +158,8 @@
 }
 
 - (void)restore {
-    if (!_screen || !_minimized || _minimizing) return;
+    if (!_screen || !_minimized || (_minimizing && _screen.presentingViewController)) return;
+    _minimizing = NO;
     _minimized = NO;
     [self hideBar];
     UIViewController *top = _topController();
@@ -192,6 +195,10 @@
         title = NSLocalizedString(@"call.reconnecting", nil);
     }
     [_bar setTitle:title forState:UIControlStateNormal];
+    /* a screen that was pushed or put back under the bar must not cover the way back into the call */
+    UIView *host = _host();
+    if (_bar.superview && _bar.superview == host) [host bringSubviewToFront:_bar];
+    else if (_bar && _barTimer) [host addSubview:_bar];
 }
 
 - (void)hideBar {

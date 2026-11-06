@@ -117,6 +117,7 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     UIButton *_close;
     NSString *_coverKey;
     UIColor *_plate;
+    CAGradientLayer *_glass;
     BOOL _hadContent;
 }
 @end
@@ -137,6 +138,15 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     self.backgroundColor = ExteriaMusicTonalColor();
     self.layer.cornerRadius = CARD_RADIUS;
     self.clipsToBounds = YES;
+    if (ExteriaThemeIsClassic()) {
+        /* the classic card is a plate that is lit at the top and shades down to the bottom with no edge between the two, a dark rim round it, and the cover in a white slide mount */
+        self.layer.cornerRadius = 10;
+        self.layer.borderWidth = 1;
+        self.layer.borderColor = [UIColor colorWithWhite:0 alpha:0.4].CGColor;
+        _glass = [[CAGradientLayer layer] retain];
+        _glass.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:1 alpha:0.14].CGColor, (id)[UIColor colorWithWhite:0 alpha:0.16].CGColor, nil];
+        [self.layer insertSublayer:_glass atIndex:0];
+    }
     _pattern = [[ExteriaMusicPatternView alloc] init];
     CAGradientLayer *fade = [CAGradientLayer layer];
     fade.startPoint = CGPointMake(0, 0.5f);
@@ -147,7 +157,11 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     _cover = [[UIImageView alloc] init];
     _cover.contentMode = UIViewContentModeScaleAspectFill;
     _cover.clipsToBounds = YES;
-    _cover.layer.cornerRadius = COVER_RADIUS;
+    _cover.layer.cornerRadius = ExteriaThemeIsClassic() ? 5 : COVER_RADIUS;
+    if (ExteriaThemeIsClassic()) {
+        _cover.layer.borderWidth = 2;
+        _cover.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.92].CGColor;
+    }
     _cover.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12];
     _cover.userInteractionEnabled = NO;
     [self addSubview:_cover];
@@ -188,6 +202,7 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     [_media release];
     [_patternImage release];
     [_patternColor release];
+    [_glass release];
     [_contentHandler release];
     [_pattern release];
     [_cover release];
@@ -315,6 +330,12 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     [super layoutSubviews];
     CGSize size = self.bounds.size;
     BOOL active = [self playerActive];
+    if (_glass) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        _glass.frame = self.bounds;
+        [CATransaction commit];
+    }
     CGFloat reach = floor(size.width * PATTERN_REACH);
     _pattern.frame = CGRectMake(size.width - reach, 0, reach, size.height);
     /* the marks fade out toward the left edge of their area */

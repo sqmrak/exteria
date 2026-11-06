@@ -15,6 +15,7 @@
 #import "exteria_avatar_viewer.h"
 #import "exteria_channel_errors.h"
 #import "exteria_chat_controller.h"
+#import "exteria_community_screen.h"
 #import "exteria_contact_picker_controller.h"
 #import "exteria_emoji_label.h"
 #import "exteria_channel_manage_controller.h"
@@ -53,6 +54,8 @@
     UIImageView *_chevron;
 }
 - (void)configureWithDialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars;
+/* the line under the name, for a card that stands for something other than the discussion group */
+- (void)setCaption:(NSString *)caption;
 @end
 
 @implementation ExteriaLinkedGroupCard
@@ -89,6 +92,10 @@
     [_caption release];
     [_chevron release];
     [super dealloc];
+}
+
+- (void)setCaption:(NSString *)caption {
+    _caption.text = caption;
 }
 
 - (void)configureWithDialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars {
@@ -133,6 +140,7 @@
     /* the list runs under the bar while the wide photo is open, so the photo can reach the top of the screen */
     BOOL _heroUnderBar;
     BOOL _heroMoving;
+    BOOL _viewerWanted;
     ExteriaStoryRing *_storyRing;
     ExteriaStoryPeer *_storyPeer;
     BOOL _storiesShown;
@@ -146,6 +154,9 @@
     ExteriaUserAction *_linkAction;
     ExteriaInfoCardView *_info;
     ExteriaLinkedGroupCard *_linkedCard;
+    /* the community the channel was added to, under the card of its discussion group */
+    ExteriaLinkedGroupCard *_communityCard;
+    ExteriaDialog *_community;
     ExteriaGiftFactsView *_counts;
     ExteriaGroupTabsView *_groupTabs;
     UILabel *_giftsTitle;
@@ -245,13 +256,24 @@
         _heroMoving = NO;
         _avatar.hidden = YES;
         [_hero finishOpen];
+        if (_viewerWanted) {
+            _viewerWanted = NO;
+            [self openAvatarViewer];
+        }
     }];
 }
 
 /* the photos on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+/* a long pull goes through the whole opening of the wide photo in one drag: the part that came while it opened is kept, or the photos would ask for a second pull */
+- (BOOL)holdsPullWhileOpening:(CGFloat)pull {
+    if (!_heroMoving) return NO;
+    if (_heroOpen && pull > 130) _viewerWanted = YES;
+    return YES;
+}
+
 /* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo */
 - (void)heroFollowsPull:(CGFloat)pull {
-    if (_heroMoving) return;
+    if ([self holdsPullWhileOpening:pull]) return;
     if (!_hero) {
         if (pull > 60) [self openHero];
     } else if (_heroOpen) {
@@ -319,6 +341,8 @@
     [_linkAction release];
     [_info release];
     [_linkedCard release];
+    [_communityCard release];
+    [_community release];
     [_counts release];
     _groupTabs.delegate = nil;
     [_groupTabs release];
@@ -413,6 +437,11 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _linkedCard.hidden = YES;
     [_linkedCard addTarget:self action:@selector(openDiscussion) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_linkedCard];
+    _communityCard = [[ExteriaLinkedGroupCard alloc] init];
+    [_communityCard setCaption:NSLocalizedString(@"channel.community.card", nil)];
+    _communityCard.hidden = YES;
+    [_communityCard addTarget:self action:@selector(openCommunity) forControlEvents:UIControlEventTouchUpInside];
+    [_head addSubview:_communityCard];
     _counts = [[ExteriaGiftFactsView alloc] init];
     _counts.hidden = YES;
     [_head addSubview:_counts];
@@ -531,6 +560,11 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     [_info setRows:rows];
     _linkedCard.hidden = full.linked == nil;
     if (full.linked) [_linkedCard configureWithDialog:full.linked avatars:self.avatars];
+    /* the dialog of the list carries the community when the channel is in one; the full channel's own dialog is the fallback */
+    [_community release];
+    _community = [(_dialog.linkedCommunity ? _dialog.linkedCommunity : full.dialog.linkedCommunity) retain];
+    _communityCard.hidden = _community == nil;
+    if (_community) [_communityCard configureWithDialog:_community avatars:self.avatars];
     [self fillCounts];
     if ((full.megagroup || _dialog.kind == EXTERIA_DIALOG_CHANNEL) && !_groupTabs) {
         /* the members of a broadcast channel are told to its administrators only, so the tab is not offered to anybody else */
@@ -639,6 +673,10 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     }
     if (!_linkedCard.hidden) {
         _linkedCard.frame = CGRectMake(x, y, contentWidth, LINKED_HEIGHT);
+        y += LINKED_HEIGHT + GAP;
+    }
+    if (!_communityCard.hidden) {
+        _communityCard.frame = CGRectMake(x, y, contentWidth, LINKED_HEIGHT);
         y += LINKED_HEIGHT + GAP;
     }
     if (!_counts.hidden) {
@@ -806,6 +844,11 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:self.session dialog:linked avatars:self.avatars media:self.media
                                                                           stickers:_stickers] autorelease];
     [self.navigationController pushViewController:chat animated:YES];
+}
+
+- (void)openCommunity {
+    if (!_community) return;
+    [self.navigationController pushViewController:ExteriaCommunityScreen(self.session, _community, nil, self.avatars, self.media, _stickers, nil) animated:YES];
 }
 
 - (void)openQr {

@@ -9,6 +9,8 @@
 #import "exteria_people_avatars.h"
 #import "exteria_person.h"
 #import "exteria_profile_photo_picker.h"
+#import "exteria_remote_file.h"
+#import "exteria_session_profile.h"
 #import "exteria_sheet.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -355,6 +357,11 @@ static void ExteriaPrivacyFail(NSString *errorName) {
     void (^_changedHandler)(ExteriaPrivacyRules *rules);
     BOOL _saving;
     BOOL _uploadingPublic;
+    BOOL _deletingPublic;
+    /* the public photo the account has, asked for when the page of the profile photo opens, and the small round picture of it that sits by the row that deletes it */
+    ExteriaMedia *_publicPhoto;
+    UIImage *_publicCircle;
+    NSUInteger _publicGeneration;
 }
 @end
 
@@ -400,12 +407,104 @@ static void ExteriaPrivacyFail(NSString *errorName) {
     [_avatars release];
     [_media release];
     [_changedHandler release];
+    [_publicPhoto release];
+    [_publicCircle release];
     [super dealloc];
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self rebuild];
+    if (_rules.key == EXTERIA_PRIVACY_PHOTO) [self loadPublicPhoto];
+}
+
+#define PUBLIC_CIRCLE 34.0
+
+/* the picture cut to a circle, since a row draws its trailing picture in a rounded square */
+static UIImage *ExteriaPrivacyCircle(UIImage *image) {
+    CGRect frame = CGRectMake(0, 0, PUBLIC_CIRCLE, PUBLIC_CIRCLE);
+    UIGraphicsBeginImageContextWithOptions(frame.size, NO, 0);
+    [[UIBezierPath bezierPathWithOvalInRect:frame] addClip];
+    CGFloat side = MIN(image.size.width, image.size.height);
+    if (side <= 0) {
+        UIGraphicsEndImageContext();
+        return nil;
+    }
+    CGFloat scale = PUBLIC_CIRCLE / side;
+    CGSize drawn = CGSizeMake(image.size.width * scale, image.size.height * scale);
+    [image drawInRect:CGRectMake((PUBLIC_CIRCLE - drawn.width) / 2, (PUBLIC_CIRCLE - drawn.height) / 2, drawn.width, drawn.height)];
+    UIImage *circle = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return circle;
+}
+
+/* the account's own full profile carries the public photo; a later answer for an older page is dropped */
+- (void)loadPublicPhoto {
+    ExteriaWeakReference *weak = _weak;
+    NSUInteger generation = ++_publicGeneration;
+    [_session loadSelf:^(NSArray *items, NSString *errorName) {
+        ExteriaPrivacyRuleController *me = weak.target;
+        ExteriaPerson *self_ = items.count ? [items objectAtIndex:0] : nil;
+        if (!me || generation != me->_publicGeneration) return;
+        if (!self_) {
+            NSLog(@"exteria: the public photo was not looked up, own profile failed: %@", errorName);
+            return;
+        }
+        [me->_session loadFullUserOfDialog:[ExteriaDialog savedMessagesWithPerson:self_] completion:^(ExteriaFullUser *user, NSString *fullError) {
+            ExteriaPrivacyRuleController *again = weak.target;
+            if (!again || generation != again->_publicGeneration) return;
+            if (!user) {
+                NSLog(@"exteria: the public photo was not looked up: %@", fullError);
+                return;
+            }
+            [again adoptPublicPhoto:user.publicPhoto];
+        }];
+    }];
+}
+
+- (void)adoptPublicPhoto:(ExteriaMedia *)photo {
+    [_publicPhoto release];
+    _publicPhoto = [photo retain];
+    [_publicCircle release];
+    _publicCircle = nil;
+    [self rebuild];
+    if (!photo) return;
+    exteria_media_ref ref = photo.ref;
+    ExteriaRemoteFile *file = [ExteriaRemoteFile fileForMedia:&ref];
+    if (!file) return;
+    ExteriaWeakReference *weak = _weak;
+    NSUInteger generation = _publicGeneration;
+    [_media loadImageForFile:file maxSide:PUBLIC_CIRCLE * 3 completion:^(UIImage *image) {
+        ExteriaPrivacyRuleController *me = weak.target;
+        if (!me || generation != me->_publicGeneration || !image) return;
+        UIImage *circle = ExteriaPrivacyCircle(image);
+        if (!circle) return;
+        [me->_publicCircle release];
+        me->_publicCircle = [circle retain];
+        [me rebuild];
+    }];
+}
+
+- (void)deletePublicPhoto {
+    if (_deletingPublic || !_publicPhoto) return;
+    ExteriaWeakReference *weak = _weak;
+    ExteriaConfirm(nil, NSLocalizedString(@"privacy.photo.public.remove.confirm", nil), NSLocalizedString(@"privacy.photo.public.remove", nil), ^{
+        ExteriaPrivacyRuleController *me = weak.target;
+        if (!me || !me->_publicPhoto) return;
+        me->_deletingPublic = YES;
+        [me->_session deleteProfilePhoto:me->_publicPhoto completion:^(NSString *errorName) {
+            ExteriaPrivacyRuleController *again = weak.target;
+            if (!again) return;
+            again->_deletingPublic = NO;
+            if (errorName) {
+                ExteriaPrivacyFail(errorName);
+                return;
+            }
+            ++again->_publicGeneration;
+            [again adoptPublicPhoto:nil];
+            ExteriaShowNotice(nil, NSLocalizedString(@"privacy.photo.public.removed", nil));
+        }];
+    });
 }
 
 - (void)themeDidChange {
@@ -468,8 +567,13 @@ static void ExteriaPrivacyFail(NSString *errorName) {
             ExteriaPrivacyRuleController *again = weak.target;
             if (!again) return;
             again->_uploadingPublic = NO;
-            if (errorName) ExteriaPrivacyFail(errorName);
-            else ExteriaShowNotice(nil, NSLocalizedString(@"privacy.photo.public.done", nil));
+            if (errorName) {
+                ExteriaPrivacyFail(errorName);
+                return;
+            }
+            ExteriaShowNotice(nil, NSLocalizedString(@"privacy.photo.public.done", nil));
+            /* the page shows the photo that was just set, and the one it replaced is gone */
+            [again loadPublicPhoto];
         }];
     } unavailable:^{
         ExteriaShowNotice(nil, NSLocalizedString(@"attach.failed", nil));
@@ -520,11 +624,21 @@ static void ExteriaPrivacyFail(NSString *errorName) {
     }
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"privacy.exceptions", nil) footer:NSLocalizedString(@"privacy.exceptions.info", nil) rows:exceptions]];
     /* somebody is kept from the main photo only when the base is narrower than everybody or a person is on the never list */
-    if (_rules.key == EXTERIA_PRIVACY_PHOTO && (base != EXTERIA_PRIVACY_EVERYBODY || [_rules countAllowed:NO])) {
-        ExteriaSettingsRow *publicPhoto = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolCameraPlus tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"privacy.photo.public", nil) subtitle:nil
-                                                                       value:nil tap:^{ [(ExteriaPrivacyRuleController *)weak.target choosePublicPhoto]; }];
-        [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"privacy.photo.public.info", nil) rows:[NSArray arrayWithObject:publicPhoto]]];
+    BOOL canSetPublic = _rules.key == EXTERIA_PRIVACY_PHOTO && (base != EXTERIA_PRIVACY_EVERYBODY || [_rules countAllowed:NO]);
+    NSMutableArray *publicRows = [NSMutableArray array];
+    if (canSetPublic) {
+        [publicRows addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolCameraPlus tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"privacy.photo.public", nil) subtitle:nil
+                                                          value:nil tap:^{ [(ExteriaPrivacyRuleController *)weak.target choosePublicPhoto]; }]];
     }
+    /* a public photo can be taken away whatever the rule is now, since it stays on the account after the rule widens */
+    if (_rules.key == EXTERIA_PRIVACY_PHOTO && _publicPhoto) {
+        ExteriaSettingsRow *remove = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolTrash title:NSLocalizedString(@"privacy.photo.public.remove", nil) destructive:YES
+                                                                         tap:^{ [(ExteriaPrivacyRuleController *)weak.target deletePublicPhoto]; }];
+        remove.trailingImage = _publicCircle;
+        remove.trailingImageUnclipped = YES;
+        [publicRows addObject:remove];
+    }
+    if (publicRows.count) [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:canSetPublic ? NSLocalizedString(@"privacy.photo.public.info", nil) : nil rows:publicRows]];
     self.sections = sections;
     [self reloadSettings];
 }

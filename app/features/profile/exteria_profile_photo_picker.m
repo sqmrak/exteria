@@ -36,6 +36,7 @@ static NSString *ExteriaProfileSquarePath(UIImage *image) {
     void (^_picked)(NSString *);
     void (^_sheetPicked)(NSString *, BOOL);
     void (^_failed)(void);
+    void (^_cancelled)(void);
     BOOL _whole;
     UIPopoverController *_popover;
 }
@@ -44,20 +45,25 @@ static NSString *ExteriaProfileSquarePath(UIImage *image) {
 @implementation ExteriaProfilePhotoPicker
 
 + (void)pickFrom:(UIViewController *)host picked:(void (^)(NSString *))picked unavailable:(void (^)(void))unavailable {
-    [self pickFrom:host whole:NO picked:picked unavailable:unavailable];
+    [self pickFrom:host whole:NO picked:picked cancelled:nil unavailable:unavailable];
 }
 
 + (void)pickWholeFrom:(UIViewController *)host picked:(void (^)(NSString *))picked unavailable:(void (^)(void))unavailable {
-    [self pickFrom:host whole:YES picked:picked unavailable:unavailable];
+    [self pickFrom:host whole:YES picked:picked cancelled:nil unavailable:unavailable];
 }
 
-+ (void)pickFrom:(UIViewController *)host whole:(BOOL)whole picked:(void (^)(NSString *))picked unavailable:(void (^)(void))unavailable {
++ (void)pickWholeFrom:(UIViewController *)host picked:(void (^)(NSString *))picked cancelled:(void (^)(void))cancelled unavailable:(void (^)(void))unavailable {
+    [self pickFrom:host whole:YES picked:picked cancelled:cancelled unavailable:unavailable];
+}
+
++ (void)pickFrom:(UIViewController *)host whole:(BOOL)whole picked:(void (^)(NSString *))picked cancelled:(void (^)(void))cancelled unavailable:(void (^)(void))unavailable {
     if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypePhotoLibrary]) {
         unavailable();
         return;
     }
     ExteriaProfilePhotoPicker *me = [[ExteriaProfilePhotoPicker alloc] init];
     me->_picked = [picked copy];
+    me->_cancelled = [cancelled copy];
     me->_whole = whole;
     UIImagePickerController *picker = [[[UIImagePickerController alloc] init] autorelease];
     picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
@@ -76,6 +82,7 @@ static NSString *ExteriaProfileSquarePath(UIImage *image) {
     _popover.delegate = nil;
     [_popover release];
     [_picked release];
+    [_cancelled release];
     [_sheetPicked release];
     [_failed release];
     [super dealloc];
@@ -95,11 +102,13 @@ static NSString *ExteriaProfileSquarePath(UIImage *image) {
     [(UIImagePickerController *)_popover.contentViewController setDelegate:nil];
     _popover.delegate = nil;
     [_popover release]; _popover = nil;
+    if (_cancelled) _cancelled();
     [self release];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
     [self dismissPicker:picker];
+    if (_cancelled) _cancelled();
     [self release];
 }
 

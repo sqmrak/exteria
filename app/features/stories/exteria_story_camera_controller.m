@@ -8,6 +8,7 @@
 #import "exteria_alert.h"
 #import "exteria_photo_library.h"
 #import "exteria_platform.h"
+#import "exteria_plugin_story.h"
 #import "exteria_popup_menu.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -45,6 +46,8 @@
     UITextField *_captionField;
     UIButton *_textButton;
     UIButton *_audience;
+    /* the button of a plugin beside the audience (the story scheduler's), shown only while a plugin asks for one */
+    UIButton *_schedule;
     ExteriaStoryAudience *_audienceChoice;
     ExteriaSession *_session;
     NSString *_photoPath;
@@ -53,6 +56,9 @@
     BOOL _closed;
 }
 @end
+
+/* the screen that holds a picture and is on show, which a plugin presses publish on after it chose a time */
+static ExteriaStoryCameraController *g_active;
 
 @implementation ExteriaStoryCameraController
 
@@ -89,6 +95,7 @@ static AVCaptureDevice *ExteriaStoryCamera(AVCaptureDevicePosition position) {
 }
 
 - (void)dealloc {
+    if (g_active == self) g_active = nil;
     ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
     [_weak clear];
     [_weak release];
@@ -118,6 +125,7 @@ static AVCaptureDevice *ExteriaStoryCamera(AVCaptureDevicePosition position) {
     [_captionField release];
     [_textButton release];
     [_audience release];
+    [_schedule release];
     [_photoPath release];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_input release];
@@ -227,6 +235,17 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     [_audience addTarget:self action:@selector(audienceTapped) forControlEvents:UIControlEventTouchUpInside];
     _audience.hidden = YES;
     [root addSubview:_audience];
+    _schedule = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    _schedule.backgroundColor = glass;
+    _schedule.layer.cornerRadius = 17;
+    _schedule.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    _schedule.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
+    [_schedule setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [_schedule addTarget:self action:@selector(scheduleTapped) forControlEvents:UIControlEventTouchUpInside];
+    _schedule.hidden = YES;
+    [root addSubview:_schedule];
+    UILongPressGestureRecognizer *hold = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(publishHeldDown:)] autorelease];
+    [_publish addGestureRecognizer:hold];
     [self refreshAudienceTitle];
     _captionField = [[UITextField alloc] init];
     _captionField.delegate = self;
@@ -254,6 +273,32 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     [_audience setTitle:[self audienceTitle] forState:UIControlStateNormal];
     [_audience sizeToFit];
     [self.view setNeedsLayout];
+}
+
+/* the title is the plugin's own; a plugin that does not offer the button leaves the screen as it was */
+- (void)refreshSchedule {
+    NSString *title = _publish.hidden ? nil : ExteriaPluginStoryScheduleTitle();
+    [_schedule setTitle:title forState:UIControlStateNormal];
+    _schedule.hidden = !title;
+    [self.view setNeedsLayout];
+}
+
+- (void)scheduleTapped {
+    [self.view endEditing:YES];
+    ExteriaPluginStoryScheduleTapped(NO);
+}
+
+- (void)publishHeldDown:(UILongPressGestureRecognizer *)hold {
+    if (hold.state != UIGestureRecognizerStateBegan || _schedule.hidden) return;
+    [self.view endEditing:YES];
+    ExteriaPluginStoryScheduleTapped(YES);
+}
+
++ (BOOL)publishHeld {
+    ExteriaStoryCameraController *screen = g_active;
+    if (!screen || !screen->_heldPath || screen->_publish.hidden) return NO;
+    [screen publishTapped];
+    return YES;
 }
 
 - (void)audienceTapped {
@@ -400,6 +445,9 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     _textButton.frame = _gridButton.frame;
     CGFloat pillWidth = MIN(MAX(_audience.frame.size.width, 90), width - 2 * (12 + 44 + 12));
     _audience.frame = CGRectMake((width - pillWidth) / 2, top + 14, pillWidth, 34);
+    [_schedule sizeToFit];
+    CGFloat scheduleWidth = MIN(MAX(_schedule.frame.size.width, 90), width - 2 * (12 + 44 + 12));
+    _schedule.frame = CGRectMake((width - scheduleWidth) / 2, CGRectGetMaxY(_audience.frame) + 8, scheduleWidth, 34);
     _captionField.frame = CGRectMake(12, CGRectGetMaxY(_stage.frame) - 12 - 36, width - 24, 36);
 }
 
@@ -439,6 +487,7 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    g_active = self;
     if (_photoPath) return;
     if (!_capture) [self startCapture];
     else [self resumeCapture];
@@ -446,6 +495,7 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    if (g_active == self) g_active = nil;
     /* the camera never gave the bar back, and the screens under it stayed without one */
     ExteriaStatusBarShow(self, UIStatusBarAnimationFade);
     AVCaptureSession *capture = _capture;
@@ -597,6 +647,8 @@ static UIButton *ExteriaStoryRoundButton(ExteriaSymbol symbol, CGFloat side, UIC
     _textButton.hidden = !held;
     _audience.hidden = !held;
     _captionField.hidden = !held;
+    if (held) [self refreshSchedule];
+    else _schedule.hidden = YES;
     if (!held) {
         [self.view endEditing:YES];
         [_overlay removeFromSuperview];

@@ -11,6 +11,7 @@
 #import "exteria_developers.h"
 #import "exteria_developer_settings.h"
 #import "exteria_alert.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_gift_screen.h"
 #import "exteria_custom_emoji.h"
 #import "exteria_pill_tabs_view.h"
@@ -50,7 +51,6 @@ static const ExteriaCredit ExteriaCredits[] = {
     {5191291829LL, @"about.frontend", 6, 0.14, @"iChatter", @"app_ichatter"},
     {5390055485LL, @"about.frontend", 7, 0.12, @"iKlassika", @"app_iklassika"},
     {6233584668LL, @"about.backend", 10, 0.10, @"FlowGram", @"app_flowgram"},
-    {1448306214LL, @"about.backend", 3, 0.12, @"OneGram", @"app_onegram"},
 };
 
 /* the slice the running code was built for, which is what the version line shows */
@@ -64,7 +64,7 @@ static NSString *ExteriaSliceName(void) {
 #endif
 }
 
-/* the picture drawn inside a wavy circle, r = R (1 - depth / 2 + depth / 2 cos(lobes angle)), so the outline touches the square at every lobe */
+/* the picture drawn inside a wavy circle (a plain circle with no depth: the classic style has no wavy shapes), r = R (1 - depth / 2 + depth / 2 cos(lobes angle)), so the outline touches the square at every lobe */
 static UIImage *ExteriaShapedPicture(UIImage *source, int lobes, CGFloat depth, CGFloat side) {
     if (!source) return nil;
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
@@ -186,6 +186,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     NSString *path = [[NSBundle mainBundle] pathForResource:@"Icon-83.5@2x" ofType:@"png"];
     UIImage *source = path ? [UIImage imageWithContentsOfFile:path] : nil;
     if (!source) return ExteriaSettingsMarkTile(side);
+    /* the classic style sets the icon in a chrome rim, as the logo of the QR code is */
+    if (ExteriaThemeIsClassic()) return ExteriaClassicMetalDisc(source, side);
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
     [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, side, side)] addClip];
     [source drawInRect:CGRectMake(0, 0, side, side)];
@@ -484,7 +486,7 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     NSString *made = lead && person->app ? [NSString stringWithFormat:NSLocalizedString(@"about.made", nil), person->app] : nil;
     UIImage *picture = [_fresh objectForKey:identifier] ?: ExteriaStoredTeamImage(identifier) ?: ExteriaInitialPicture(name, 2 * LEAD_TILE);
     UIImage *icon = lead && person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
-    ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaCachedShapedPicture(identifier, picture, person->lobes, person->depth, LEAD_TILE)
+    ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaCachedShapedPicture(identifier, picture, ExteriaThemeIsClassic() ? 0 : person->lobes, ExteriaThemeIsClassic() ? 0 : person->depth, LEAD_TILE)
                                                                   appIcon:icon marks:ExteriaMarksOfId(person->userId)] autorelease];
     [view addTarget:self action:@selector(creditTapped:) forControlEvents:UIControlEventTouchUpInside];
     view.userId = person->userId;

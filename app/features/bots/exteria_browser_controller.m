@@ -294,8 +294,8 @@ void ExteriaPresentBrowser(NSURL *url, UIViewController *host) {
     [self.view layoutIfNeeded];
     _card.transform = CGAffineTransformMakeTranslation(0, [self cardTravel]);
     _dim.alpha = 0;
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.45, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.45, ExteriaPopupCurve(YES), nil);
 }
 - (void)close {
     if (_closing) return;
@@ -304,8 +304,8 @@ void ExteriaPresentBrowser(NSURL *url, UIViewController *host) {
     [_load cancel];
     [_web stopLoading];
     _web.delegate = nil;
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_SHEET_DISMISS, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, [self cardTravel]), 1, EXTERIA_MOTION_SHEET_DISMISS, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, [self cardTravel]), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self willMoveToParentViewController:nil];
         [self.view removeFromSuperview];

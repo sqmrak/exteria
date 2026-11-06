@@ -3,7 +3,9 @@
 #import <QuartzCore/QuartzCore.h>
 #import <CoreGraphics/CoreGraphics.h>
 
+#import "exteria_classic_chrome.h"
 #import "exteria_gift_backdrop_view.h"
+#import "exteria_theme.h"
 #import "exteria_platform.h"
 #import "exteria_star_gift.h"
 
@@ -56,8 +58,51 @@ static void ExteriaDrawSparkle(CGContextRef context, CGPoint center, CGFloat rad
     CGContextFillPath(context);
 }
 
+/* the classic gift stands on a glass medallion: the color of its backdrop lit from above, a dark rim over a lit one, a gloss on the upper half and a shadow under the disc */
+- (void)drawMedallion {
+    CGFloat red = 0.45, green = 0.40, blue = 0.62, alpha = 0;
+    if (_color) [_color getRed:&red green:&green blue:&blue alpha:&alpha];
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGFloat side = self.bounds.size.width;
+    CGRect disc = CGRectMake(side * 0.12, side * 0.1, side * 0.76, side * 0.76);
+    CGContextSaveGState(context);
+    CGContextSetShadowWithColor(context, CGSizeMake(0, 2), 3, [UIColor colorWithWhite:0 alpha:0.5].CGColor);
+    [[UIColor colorWithRed:red * 0.6 green:green * 0.6 blue:blue * 0.6 alpha:1] setFill];
+    CGContextFillEllipseInRect(context, disc);
+    CGContextRestoreGState(context);
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGFloat body[] = {MIN(1, red + (1 - red) * 0.35), MIN(1, green + (1 - green) * 0.35), MIN(1, blue + (1 - blue) * 0.35), 1,
+                      red, green, blue, 1,
+                      red * 0.7, green * 0.7, blue * 0.7, 1};
+    CGFloat at[] = {0, 0.5, 1};
+    CGGradientRef gradient = CGGradientCreateWithColorComponents(space, body, at, 3);
+    CGContextSaveGState(context);
+    CGRect face = CGRectInset(disc, 1.5, 1.5);
+    CGContextAddEllipseInRect(context, face);
+    CGContextClip(context);
+    CGContextDrawLinearGradient(context, gradient, CGPointMake(0, face.origin.y), CGPointMake(0, CGRectGetMaxY(face)), 0);
+    CGFloat shine[] = {1, 1, 1, 0.5, 1, 1, 1, 0.06};
+    CGGradientRef gloss = CGGradientCreateWithColorComponents(space, shine, NULL, 2);
+    CGContextAddEllipseInRect(context, CGRectMake(face.origin.x + face.size.width * 0.08, face.origin.y - face.size.height * 0.1, face.size.width * 0.84, face.size.height * 0.62));
+    CGContextClip(context);
+    CGContextDrawLinearGradient(context, gloss, CGPointMake(0, face.origin.y), CGPointMake(0, face.origin.y + face.size.height * 0.52), 0);
+    CGContextRestoreGState(context);
+    CGGradientRelease(gloss);
+    CGGradientRelease(gradient);
+    CGColorSpaceRelease(space);
+    [[UIColor colorWithRed:red * 0.45 green:green * 0.45 blue:blue * 0.45 alpha:1] setStroke];
+    CGContextSetLineWidth(context, 1);
+    CGContextStrokeEllipseInRect(context, CGRectInset(disc, 0.5, 0.5));
+    [[UIColor colorWithWhite:1 alpha:0.45] setStroke];
+    CGContextStrokeEllipseInRect(context, CGRectInset(disc, 1.5, 1.5));
+}
+
 - (void)drawRect:(CGRect)rect {
     (void)rect;
+    if (ExteriaThemeIsClassic()) {
+        [self drawMedallion];
+        return;
+    }
     if (!_color) return;
     CGFloat red = 0, green = 0, blue = 0, alpha = 0;
     [_color getRed:&red green:&green blue:&blue alpha:&alpha];
@@ -143,6 +188,8 @@ static void ExteriaDrawSparkle(CGContextRef context, CGPoint center, CGFloat rad
     /* the light shows with the picture, so a gift that has not loaded does not leave an empty disc */
     _glows[slot].hidden = YES;
     _glows[slot].color = gift.hasBackdropColors ? ExteriaGiftRgb(gift.backdropCenter) : nil;
+    /* the classic gift always stands on its medallion, in the slate of the app when it has no backdrop */
+    BOOL medallion = ExteriaThemeIsClassic();
     _pictures[slot].hidden = NO;
     _pictures[slot].image = nil;
     ExteriaMedia *sticker = gift.sticker;
@@ -155,7 +202,7 @@ static void ExteriaDrawSparkle(CGContextRef context, CGPoint center, CGFloat rad
     }
     CGFloat pixels = GIFT_SIDE * ExteriaScreenScale();
     UIImage *ready = [_media cachedImageForFile:file maxSide:pixels];
-    BOOL glows = gift.hasBackdropColors;
+    BOOL glows = gift.hasBackdropColors || medallion;
     if (ready) {
         _pictures[slot].image = ready;
         _glows[slot].hidden = !glows;

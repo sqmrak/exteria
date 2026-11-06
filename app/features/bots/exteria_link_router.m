@@ -531,18 +531,25 @@ static NSString *ExteriaCloudThemePath(void) {
     }];
 }
 
-- (void)pickDialogsWithFilter:(BOOL (^)(ExteriaDialog *))filter limit:(NSUInteger)limit completion:(void (^)(NSArray *))completion {
+- (void)pickDialogsWithFilter:(BOOL (^)(ExteriaDialog *))filter limit:(NSUInteger)limit completion:(void (^)(NSArray *))completion cancelled:(void (^)(void))cancelled {
     UINavigationController *navigation = [self navigation];
-    if (!navigation) return;
-    void (^done)(NSArray *) = [completion copy];
+    if (!navigation) {
+        /* later, not here: the caller may be a plugin service still waiting for this call to return */
+        if (cancelled) {
+            void (^later)(void) = [cancelled copy];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                later();
+                [later release];
+            });
+        }
+        return;
+    }
     ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
     picker.screenTitle = NSLocalizedString(@"bots.pick.title", nil);
     picker.filter = filter;
     picker.limit = limit;
-    picker.pickHandler = ^(NSArray *dialogs) {
-        done(dialogs);
-        [done release];
-    };
+    picker.pickHandler = completion;
+    picker.cancelHandler = cancelled;
     [navigation pushViewController:picker animated:YES];
 }
 

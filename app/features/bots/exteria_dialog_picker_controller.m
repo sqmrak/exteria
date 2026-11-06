@@ -16,7 +16,54 @@
    the forward that followed waited behind them for seconds and was refused */
 #define PICKER_PAGES_MAX 2
 
+/* seconds between a touch and the moment the app handles it, after which a tap is dropped: forwarding is sent at once and cannot be taken back */
+#define PICKER_STALE_TAP 0.6
+
+/* a frozen main thread queues the touches and handles them seconds later: the finger that began a scroll on a row then selects that row. this watches the
+   touches without taking part in them and tells whether the last tap was handled long after the finger made it */
+@interface ExteriaStaleTapWatcher : UIGestureRecognizer {
+    BOOL _stale;
+}
+@property (nonatomic, readonly) BOOL stale;
+- (void)clear;
+@end
+
+@implementation ExteriaStaleTapWatcher
+@synthesize stale = _stale;
+
+- (id)initWithTarget:(id)target action:(SEL)action {
+    self = [super initWithTarget:target action:action];
+    if (self) {
+        self.cancelsTouchesInView = NO;
+        self.delaysTouchesBegan = NO;
+        self.delaysTouchesEnded = NO;
+    }
+    return self;
+}
+
+- (void)noteTouches:(NSSet *)touches {
+    NSTimeInterval now = [[NSProcessInfo processInfo] systemUptime];
+    for (UITouch *touch in touches) if (now - touch.timestamp > PICKER_STALE_TAP) _stale = YES;
+}
+
+- (void)clear { _stale = NO; }
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+    _stale = NO;
+    [self noteTouches:touches];
+}
+
+- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
+    [self noteTouches:touches];
+}
+
+- (BOOL)canPreventGestureRecognizer:(UIGestureRecognizer *)other { return NO; }
+- (BOOL)canBePreventedByGestureRecognizer:(UIGestureRecognizer *)other { return NO; }
+
+@end
+
 @interface ExteriaDialogPickerController () {
+    ExteriaStaleTapWatcher *_tapWatcher;
     ExteriaSession *_session;
     ExteriaAvatarCache *_avatars;
     ExteriaWeakReference *_weak;
@@ -27,6 +74,8 @@
     UIButton *_done;
     BOOL (^_filter)(ExteriaDialog *dialog);
     void (^_pickHandler)(NSArray *dialogs);
+    void (^_cancelHandler)(void);
+    BOOL _resolved;
     NSUInteger _limit;
     BOOL _forwarding;
     NSString *_remoteQuery;
@@ -46,6 +95,7 @@
 @synthesize forwarding = _forwarding;
 @synthesize limit = _limit;
 @synthesize pickHandler = _pickHandler;
+@synthesize cancelHandler = _cancelHandler;
 
 - (id)initWithSession:(ExteriaSession *)session avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media {
     (void)media;
@@ -60,6 +110,8 @@
 }
 
 - (void)dealloc {
+    /* a picker dropped from the stack without being on screen again (popToRoot) never gets viewDidDisappear */
+    [self resolveCancelled];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(searchRemote) object:nil];
     [_weak clear];
     [_weak release];
@@ -79,7 +131,22 @@
     [_done release];
     [_filter release];
     [_pickHandler release];
+    [_cancelHandler release];
+    [_tapWatcher release];
     [super dealloc];
+}
+
+- (void)resolveCancelled {
+    if (_resolved) return;
+    _resolved = YES;
+    void (^handler)(void) = [_cancelHandler retain];
+    if (handler) handler();
+    [handler release];
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    if ([self isMovingFromParentViewController]) [self resolveCancelled];
 }
 
 - (NSString *)screenTitle {
@@ -108,6 +175,8 @@
         ExteriaDialog *saved = account > 0 ? [ExteriaDialog savedMessagesOfUserId:account] : nil;
         if (saved && [self usable:saved]) _all = [[NSArray alloc] initWithObjects:saved, nil];
     }
+    _tapWatcher = [[ExteriaStaleTapWatcher alloc] initWithTarget:nil action:NULL];
+    [self.table addGestureRecognizer:_tapWatcher];
     [self rebuild];
     [self refreshAction];
     ExteriaWeakReference *weak = _weak;
@@ -246,6 +315,7 @@
 
 - (void)finish {
     if (!_picked.count) return;
+    _resolved = YES;
     void (^handler)(NSArray *) = [_pickHandler retain];
     NSArray *chosen = [[_picked copy] autorelease];
     [self.navigationController popViewControllerAnimated:YES];
@@ -254,7 +324,13 @@
 }
 
 - (void)choose:(ExteriaDialog *)dialog {
+    if (_tapWatcher.stale) {
+        [_tapWatcher clear];
+        NSLog(@"exteria: picker dropped a tap handled late, the main thread was blocked");
+        return;
+    }
     if (self.limit <= 1) {
+        _resolved = YES;
         void (^handler)(NSArray *) = [_pickHandler retain];
         [self.navigationController popViewControllerAnimated:YES];
         if (handler) handler([NSArray arrayWithObject:dialog]);

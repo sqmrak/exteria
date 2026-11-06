@@ -30,6 +30,11 @@ void ExteriaGiftAlert(NSString *title, NSString *message);
 @property (nonatomic, readonly) ExteriaAvatarCache *avatars;
 @property (nonatomic, readonly) ExteriaMediaCache *media;
 @property (nonatomic, copy) NSString *screenTitle;
+/* the classic bar draws this text, with these entities (the badge and the custom emoji status after a name), in place of the screen title, in the same label and with the same
+   fallback fonts as the name in the body of the screen; nil text goes back to the title. the modern bar has its own label */
+- (void)setClassicTitleText:(NSString *)text entities:(NSArray *)entities;
+/* draws that title again, once the pictures of its custom emoji have come */
+- (void)refreshClassicTitle;
 /* in the modern style the bar is see-through, with no title and no line, and the back button sits on a dark disc,
    for a screen whose picture runs to the top edge; set it before the view loads */
 @property (nonatomic, assign) BOOL clearBar;

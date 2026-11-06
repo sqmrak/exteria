@@ -116,7 +116,7 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
         _status.text = NSLocalizedString(@"group.listening", nil);
         _status.textColor = [UIColor colorWithWhite:1 alpha:0.6f];
     }
-    _mic.image = ExteriaSymbolImage(ExteriaSymbolMicrophone, 20, member.muted ? [UIColor colorWithWhite:1 alpha:0.35f] : GroupGreen());
+    _mic.image = ExteriaSymbolImage(member.muted ? ExteriaSymbolMicrophoneSlash : ExteriaSymbolMicrophone, 20, member.muted ? [UIColor colorWithWhite:1 alpha:0.35f] : GroupGreen());
     [self setNeedsLayout];
 }
 
@@ -297,6 +297,7 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
         caption = NSLocalizedString(@"group.muted.admin", nil);
     }
     _mic.backgroundColor = fill;
+    [_mic setImage:ExteriaSymbolImage(live && _call.muted ? ExteriaSymbolMicrophoneSlash : ExteriaSymbolMicrophone, 30, [UIColor whiteColor]) forState:UIControlStateNormal];
     _mic.enabled = live && (!_call.muted || _call.canUnmute);
     _micCaption.text = caption;
     [_speaker setImage:ExteriaSymbolImage(_speakerOn ? ExteriaSymbolSpeaker : ExteriaSymbolSpeakerSlash, 24, [UIColor whiteColor]) forState:UIControlStateNormal];

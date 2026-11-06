@@ -2,6 +2,7 @@
 
 #include "exteria_channel.h"
 
+#import "exteria_admin_log_controller.h"
 #import "exteria_channel_field_controller.h"
 #import "exteria_channel_errors.h"
 #import "exteria_channel_members_controller.h"
@@ -104,6 +105,10 @@ static NSString *ExteriaCount(NSInteger count) {
         }]];
     }
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"channel.manage.people", nil) footer:nil rows:people]];
+    NSMutableArray *history = [NSMutableArray array];
+    [history addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolClock tone:ExteriaSettingsToneCyan title:NSLocalizedString(@"adminlog.title", nil) subtitle:nil
+                                                   value:nil tap:^{ [(ExteriaChannelManageController *)weak.target openAdminLog]; }]];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"adminlog.footer", nil) rows:history]];
     self.sections = sections;
     [self reloadSettings];
 }
@@ -205,6 +210,11 @@ static NSString *ExteriaUnlessUnchanged(NSString *errorName) {
 }
 
 #pragma mark lists
+
+- (void)openAdminLog {
+    ExteriaAdminLogController *log = [[[ExteriaAdminLogController alloc] initWithSession:_session channel:_channel avatars:_avatars media:_media] autorelease];
+    [self.navigationController pushViewController:log animated:YES];
+}
 
 - (void)openList:(ExteriaChannelList)list {
     ExteriaChannelMembersController *members = [[[ExteriaChannelMembersController alloc] initWithSession:_session channel:_channel list:list avatars:_avatars

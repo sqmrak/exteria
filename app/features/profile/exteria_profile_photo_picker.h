@@ -10,6 +10,8 @@
 + (void)pickFrom:(UIViewController *)host picked:(void (^)(NSString *path))picked unavailable:(void (^)(void))unavailable;
 /* the same for a story: the whole picture is kept, shrunk to at most 1280 points on its long side, and not cut to a square */
 + (void)pickWholeFrom:(UIViewController *)host picked:(void (^)(NSString *path))picked unavailable:(void (^)(void))unavailable;
+/* the same, and cancelled runs on the main thread when the person closes the picker without choosing (picked gets a nil path when the choice could not be written) */
++ (void)pickWholeFrom:(UIViewController *)host picked:(void (^)(NSString *path))picked cancelled:(void (^)(void))cancelled unavailable:(void (^)(void))unavailable;
 
 /* the sheet of the paperclip with only the grid of the library under "choose a photo or a video": a tap on a picture ends in picked with the path of a square jpeg, a tap on a video with the path
    of a square mp4 of ten seconds at most (video is YES); the receiver deletes the file. failed runs when the entry could not be read or made. The sheet stands over host, and the picker lives as

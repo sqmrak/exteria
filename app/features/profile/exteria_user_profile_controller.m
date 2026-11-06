@@ -3,6 +3,7 @@
 #import "exteria_notifications_chat_controller.h"
 #import "exteria_group_tabs_view.h"
 #import "exteria_chat_settings.h"
+#import "exteria_contact_edit_controller.h"
 #import "exteria_text_filter.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -84,6 +85,7 @@
     /* the ink the cards wear on the colored ground of a collectible profile, to put back when the wide photo closes */
     UIColor *_cardInk;
     BOOL _heroMoving;
+    BOOL _viewerWanted;
     ExteriaStoryRing *_storyRing;
     BOOL _storiesShown;
     ExteriaEmojiLabel *_name;
@@ -309,8 +311,10 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
         return;
     }
     BOOL service = _dialog.peerKind == 1 && _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID;
-    [_status setStatus:service ? NSLocalizedString(@"chat.status.telegram", nil) : ExteriaLastSeenText(_dialog.presence, _dialog.seen)
-                   kind:!service && _dialog.presence == EXTERIA_PRESENCE_ONLINE ? ExteriaStatusOnline : ExteriaStatusPlain];
+    NSString *seen = service ? NSLocalizedString(@"chat.status.telegram", nil) : ExteriaLastSeenText(_dialog.presence, _dialog.seen);
+    /* a photo the person set for this contact is a thing only they see, so the line says it after the time of the visit */
+    if (!service && _fullUser.hasPersonalPhoto) seen = [NSString stringWithFormat:@"%@ \u2022 %@", seen, NSLocalizedString(@"profile.status.photo.set", nil)];
+    [_status setStatus:seen kind:!service && _dialog.presence == EXTERIA_PRESENCE_ONLINE ? ExteriaStatusOnline : ExteriaStatusPlain];
 }
 
 - (void)viewDidLoad {
@@ -426,13 +430,17 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     long long badge = _dialog.peerKind == 1 && _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID ? ExteriaDialogBadgeDocument(_dialog) : (_dialog.saved ? 0 : ExteriaBadgeDocument(emojiStatus, premium));
     _name.text = ExteriaNameWithBadges(name, badge, ExteriaDialogIsDeveloper(_dialog), &entities);
     _name.entities = entities;
+    [self setClassicTitleText:_name.text entities:entities];
     /* only a status that is the badge drawn after the name has a place to move in */
     [self animateStatus:badge == emojiStatus ? emojiStatus : 0];
     if (!emojiStatus) return;
     ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
     ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:emojiStatus]], self.session, self.media, ^{
         ExteriaUserProfileController *profile = weak.target;
-        if (profile) [profile->_name setNeedsDisplay];
+        if (profile) {
+            [profile->_name setNeedsDisplay];
+            [profile refreshClassicTitle];
+        }
     });
 }
 
@@ -563,7 +571,10 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     _name.textColor = ink;
     _status.plainColor = [ink colorWithAlphaComponent:0.78f];
     _status.activeColor = ink;
-    for (ExteriaUserAction *action in [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil]) [action setInk:ink];
+    for (ExteriaUserAction *action in [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil]) {
+        [action setInk:ink];
+        [action setGround:ExteriaColorOfRGB(edge)];
+    }
     if (document > 0) {
         ExteriaWeakReference *weak = _weak;
         ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:document]], self.session, self.media, ^{
@@ -608,9 +619,12 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
         [NSArray arrayWithObjects:NSLocalizedString(@"profile.phone", nil), person.phone.length ? [@"+" stringByAppendingString:person.phone] : @"", nil],
         [NSArray arrayWithObjects:NSLocalizedString(@"profile.about", nil), user.about ? user.about : @"", nil],
         [NSArray arrayWithObjects:NSLocalizedString(@"profile.username", nil), person.username.length ? [@"@" stringByAppendingString:person.username] : @"", nil],
+        [NSArray arrayWithObjects:NSLocalizedString(@"contact.note.caption", nil), user.note ? user.note : @"", nil],
         [NSArray arrayWithObjects:NSLocalizedString(@"profile.birthday", nil), birthday, nil], nil];
     [infoRows addObjectsFromArray:ExteriaIdentityRows(person.userId, person.photo)];
     [_info setRows:infoRows];
+    /* the line under the name tells that the photo is the person's own pick once the profile says so */
+    [self refreshStatus];
     _channelCard.hidden = user.channel == nil;
     if (user.channel) [_channelCard configureWithChannel:user.channel avatars:self.avatars];
     _music.savedTrack = user.music;
@@ -735,7 +749,9 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
         CGFloat above = 600;
         /* the wide photo ends the head itself, so the ground shows no strip under it */
         _backdropBottom = _heroOpen ? wideHeight : y - GAP + 6;
-        _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom);
+        /* the ground melts at its lower edge unless the wide photo ends the head; the strip past the edge is under the music pill, which is not blurred */
+        _backdrop.softBottom = !_heroOpen;
+        _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom + (_heroOpen ? 0 : EXTERIA_BACKDROP_BLEED));
         _backdrop.focus = CGPointMake(width / 2, above + CGRectGetMidY(_avatar.frame));
     }
     if (_music.hasContent) {
@@ -851,30 +867,15 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     ExteriaConfirm(nil, [NSString stringWithFormat:NSLocalizedString(@"profile.block.confirm", nil), _dialog.title], NSLocalizedString(@"profile.block", nil), apply);
 }
 
-/* the name of the contact is asked as one line, the first word being the first name and the rest the last, as the old Telegram clients ask for it in one field */
+/* the contact is edited on a screen of its own: the name, the note under the username and the photo */
 - (void)askContactName {
     ExteriaPerson *person = _fullUser.person;
     if (!person) return;
     ExteriaWeakReference *me = _weak;
-    ExteriaPromptText(NSLocalizedString(@"profile.contact.edit", nil), nil, person.name, NSLocalizedString(@"profile.contact.placeholder", nil), ^(NSString *text) {
-        ExteriaUserProfileController *profile = me.target;
-        NSString *full = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (!profile || !full.length) return;
-        NSRange space = [full rangeOfCharacterFromSet:[NSCharacterSet whitespaceCharacterSet]];
-        NSString *first = space.location == NSNotFound ? full : [full substringToIndex:space.location];
-        NSString *last = space.location == NSNotFound ? @"" : [[full substringFromIndex:space.location] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        [profile retain];
-        [profile.session editContact:person firstName:first lastName:last completion:^(NSString *errorName) {
-            [profile autorelease];
-            if (errorName) {
-                NSLog(@"exteria: the contact was not renamed: %@", errorName);
-                ExteriaShowNotice(nil, NSLocalizedString(@"profile.contact.error", nil));
-                return;
-            }
-            /* the profile is read again, and brings the name the server keeps now */
-            [profile load];
-        }];
-    });
+    ExteriaContactEditController *edit = [[[ExteriaContactEditController alloc] initWithSession:self.session person:person fullUser:_fullUser avatars:self.avatars media:self.media] autorelease];
+    /* the profile is read again, and brings the name, the note and the photo the server keeps now */
+    edit.changedHandler = ^{ [(ExteriaUserProfileController *)me.target load]; };
+    [self.navigationController pushViewController:edit animated:YES];
 }
 
 - (void)showMenu {
@@ -1062,13 +1063,24 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
         _heroMoving = NO;
         _avatar.hidden = YES;
         [_hero finishOpen];
+        if (_viewerWanted) {
+            _viewerWanted = NO;
+            [self openAvatarViewer];
+        }
     }];
 }
 
 /* the photos of the person on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+/* a long pull goes through the whole opening of the wide photo in one drag: the part that came while it opened is kept, or the photos would ask for a second pull */
+- (BOOL)holdsPullWhileOpening:(CGFloat)pull {
+    if (!_heroMoving) return NO;
+    if (_heroOpen && pull > HERO_VIEW_PULL) _viewerWanted = YES;
+    return YES;
+}
+
 /* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo; the head stays still while it changes */
 - (void)heroFollowsPull:(CGFloat)pull {
-    if (_heroMoving) return;
+    if ([self holdsPullWhileOpening:pull]) return;
     if (!_hero) {
         if (pull > HERO_OPEN_PULL) [self openHero];
     } else if (_heroOpen) {

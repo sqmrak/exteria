@@ -39,8 +39,9 @@ BOOL ExteriaIsTelegramLink(NSURL *url);
 - (void)openDialog:(ExteriaDialog *)dialog person:(ExteriaPerson *)person draft:(NSString *)draft startParam:(NSString *)startParam messageId:(int32_t)messageId;
 /* the profile of a user a message names; asks the server for the hash that opening it needs */
 - (void)openProfileOfUser:(long long)userId inMessage:(int32_t)messageId dialog:(ExteriaDialog *)dialog;
-/* lets the person pick chats the filter accepts, up to limit of them; the completion gets the ticked ones, not called when they back out */
-- (void)pickDialogsWithFilter:(BOOL (^)(ExteriaDialog *dialog))filter limit:(NSUInteger)limit completion:(void (^)(NSArray *dialogs))completion;
+/* lets the person pick chats the filter accepts, up to limit of them; the completion gets the ticked ones, cancelled (may be nil) runs instead when they back out
+   or when there is no screen to show the picker on */
+- (void)pickDialogsWithFilter:(BOOL (^)(ExteriaDialog *dialog))filter limit:(NSUInteger)limit completion:(void (^)(NSArray *dialogs))completion cancelled:(void (^)(void))cancelled;
 /* lets the person pick one of their chats whose kind is in the mask (bit 0 people, 1 bots, 2 groups, 3 channels, zero for any) and tells
    the completion; nil if they backed out */
 - (void)pickDialogWithTypes:(uint8_t)types completion:(void (^)(ExteriaDialog *dialog))completion;

@@ -1,7 +1,11 @@
 #import "exteria_senko_popup.h"
 
+#import "exteria_animation.h"
+
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_alert.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #import "exteria_string_drawing.h"
 #import "exteria_theme.h"
@@ -43,13 +47,19 @@
     if (!self) return nil;
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45f];
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    BOOL classic = ExteriaThemeIsClassic();
     _card = [[UIView alloc] init];
-    _card.backgroundColor = ExteriaColorCard();
-    _card.layer.cornerRadius = 22;
-    _card.layer.shadowColor = [UIColor blackColor].CGColor;
-    _card.layer.shadowOpacity = 0.3f;
-    _card.layer.shadowRadius = 18;
-    _card.layer.shadowOffset = CGSizeMake(0, 8);
+    if (classic) {
+        /* the plate of the classic menus, which keeps its own corners and shadow */
+        ExteriaClassicApplyMenuPlate(_card, 14);
+    } else {
+        _card.backgroundColor = ExteriaColorCard();
+        _card.layer.cornerRadius = 22;
+        _card.layer.shadowColor = [UIColor blackColor].CGColor;
+        _card.layer.shadowOpacity = 0.3f;
+        _card.layer.shadowRadius = 18;
+        _card.layer.shadowOffset = CGSizeMake(0, 8);
+    }
     [self addSubview:_card];
     /* the picture is a jpeg of a photo size; the system picks the file for the screen scale */
     _picture = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"senko_meme.jpg"]];
@@ -59,22 +69,30 @@
     [_card addSubview:_picture];
     _title = [[UILabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
-    _title.textColor = ExteriaColorTitle();
+    _title.textColor = classic ? ExteriaClassicMenuTextColor() : ExteriaColorTitle();
     _title.font = ExteriaFontBold(18);
+    if (classic) ExteriaClassicStyleMenuLabel(_title, 18);
     _title.textAlignment = ExteriaTextAlignmentCenter;
     _title.numberOfLines = 0;
     [_card addSubview:_title];
     _message = [[UILabel alloc] init];
     _message.backgroundColor = [UIColor clearColor];
-    _message.textColor = ExteriaColorMessage();
+    _message.textColor = classic ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.75f] : ExteriaColorMessage();
     _message.font = ExteriaFontRegular(14);
     _message.textAlignment = ExteriaTextAlignmentCenter;
     _message.numberOfLines = 0;
     [_card addSubview:_message];
     _button = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     _button.titleLabel.font = ExteriaFontBold(16);
-    _button.layer.cornerRadius = BUTTON_HEIGHT / 2;
-    _button.backgroundColor = ExteriaColorAccent();
+    if (classic) {
+        [_button setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+        [_button setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+        _button.titleLabel.shadowOffset = CGSizeMake(0, -1);
+        [_button setTitleShadowColor:[UIColor colorWithWhite:0 alpha:0.5] forState:UIControlStateNormal];
+    } else {
+        _button.layer.cornerRadius = BUTTON_HEIGHT / 2;
+        _button.backgroundColor = ExteriaColorAccent();
+    }
     [_button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [_button addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
     [_card addSubview:_button];
@@ -145,7 +163,8 @@
         CGAffineTransform held = _card.transform;
         _card.transform = CGAffineTransformIdentity;
         _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - y) / 2), width, y);
-        _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:22].CGPath;
+        if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(_card, 0);
+        else _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:22].CGPath;
         _card.transform = held;
     }
 }
@@ -158,16 +177,10 @@
     [self layoutIfNeeded];
     BOOL still = ExteriaReduceMotionEnabled();
     self.alpha = still ? 1 : 0;
-    _card.transform = still ? CGAffineTransformIdentity : CGAffineTransformMakeScale(0.86f, 0.86f);
+    _card.transform = still ? CGAffineTransformIdentity : CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
     if (still) return;
-    /* the spring call of ios 7 does not exist on ios 5 and 6, so the card grows a little past its size and settles back */
-    [UIView animateWithDuration:0.22 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
-        self.alpha = 1;
-        _card.transform = CGAffineTransformMakeScale(1.03f, 1.03f);
-    } completion:^(BOOL done) {
-        (void)done;
-        [UIView animateWithDuration:0.12 animations:^{ _card.transform = CGAffineTransformIdentity; }];
-    }];
+    ExteriaAnimateView(self, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 - (void)dismiss {
@@ -186,13 +199,28 @@
         finish();
         return;
     }
-    [UIView animateWithDuration:0.2 animations:^{
-        self.alpha = 0;
-        _card.transform = CGAffineTransformMakeScale(0.92f, 0.92f);
-    } completion:^(BOOL done) {
+    ExteriaAnimateView(self, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 1, ExteriaPopupCurve(NO), ^(BOOL done) {
         (void)done;
         finish();
-    }];
+    });
 }
 
 @end
+
+void ExteriaShowPicturePopup(NSString *title, NSString *message, NSString *pictureName, CGFloat pictureHeight) {
+    UIView *host = ExteriaOverlayHost();
+    if (!host) {
+        ExteriaShowNotice(title, message);
+        return;
+    }
+    ExteriaSenkoPopup *popup = [[ExteriaSenkoPopup alloc] init];
+    popup.pictureName = pictureName;
+    popup.pictureHeight = pictureHeight;
+    popup.titleText = title;
+    popup.messageText = message;
+    popup.buttonTitle = NSLocalizedString(@"notice.ok", nil);
+    /* the host view holds the popup while it is shown */
+    [popup showInView:host];
+    [popup release];
+}

@@ -19,3 +19,6 @@
 @property (nonatomic, readonly) BOOL isShown;
 
 @end
+
+/* a one-button window with a sticker over the words, shown over the whole screen; it keeps itself until the button is pressed */
+void ExteriaShowPicturePopup(NSString *title, NSString *message, NSString *pictureName, CGFloat pictureHeight);

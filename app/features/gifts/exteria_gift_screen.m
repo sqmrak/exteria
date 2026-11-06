@@ -82,6 +82,8 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     ExteriaSymbol _actionSymbol;
     NSString *_actionLabel;
     NSString *_screenTitle;
+    NSString *_classicTitleText;
+    NSArray *_classicTitleEntities;
     NSString *_actionTitle;
     void (^_actionHandler)(void);
     BOOL _clearBar;
@@ -115,6 +117,8 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     [_avatars release];
     [_media release];
     [_screenTitle release];
+    [_classicTitleText release];
+    [_classicTitleEntities release];
     [_actionTitle release];
     [_actionHandler release];
     [_header release];
@@ -185,6 +189,42 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     _screenTitle = [title copy];
     self.title = _screenTitle;
     _titleLabel.text = _screenTitle;
+    [self showClassicTitle];
+}
+
+/* the name in the classic bar is drawn by the app's own label: the system title shows boxes for the letters of a styled nick and has no emoji of the app. the bar centers the view
+   between its buttons, so on a phone it is as wide as what is left beside them */
+- (void)showClassicTitle {
+    if (!ExteriaThemeIsClassic() || !self.isViewLoaded) return;
+    NSString *text = _classicTitleText.length ? _classicTitleText : _screenTitle;
+    UIView *title = nil;
+    if (text.length) {
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        CGFloat width = ExteriaIsPad() ? 420 : MIN(190, MIN(screen.width, screen.height) - 2 * 92);
+        title = ExteriaClassicTitleViewWithStatusWidth(text, nil, 0, width);
+        if (_classicTitleText.length) {
+            for (UIView *view in title.subviews) {
+                if (![view isKindOfClass:[ExteriaEmojiLabel class]]) continue;
+                ExteriaEmojiLabel *label = (ExteriaEmojiLabel *)view;
+                label.entities = _classicTitleEntities;
+                /* the name in the body keeps every character it has a font for, so the title does not cut them either */
+                label.dropsUndrawable = NO;
+            }
+        }
+    }
+    self.navigationItem.titleView = title;
+}
+
+- (void)setClassicTitleText:(NSString *)text entities:(NSArray *)entities {
+    [_classicTitleText release];
+    _classicTitleText = [text copy];
+    [_classicTitleEntities release];
+    _classicTitleEntities = [entities copy];
+    [self showClassicTitle];
+}
+
+- (void)refreshClassicTitle {
+    for (UIView *view in self.navigationItem.titleView.subviews) [view setNeedsDisplay];
 }
 
 - (void)setActionTitle:(NSString *)title handler:(void (^)(void))handler {
@@ -270,6 +310,7 @@ void ExteriaGiftAlert(NSString *title, NSString *message) {
     [self buildBodyInView:root];
     if (ExteriaThemeIsClassic()) {
         self.title = _screenTitle;
+        [self showClassicTitle];
         if (_actionTitle) [self setActionTitle:_actionTitle handler:_actionHandler];
         return;
     }

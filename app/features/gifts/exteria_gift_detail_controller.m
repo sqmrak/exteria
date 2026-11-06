@@ -114,8 +114,8 @@ enum {
     [self.view layoutIfNeeded];
     _dim.alpha = 0;
     _card.transform = CGAffineTransformMakeTranslation(0, _card.bounds.size.height);
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.45, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.45, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 - (BOOL)exteriaCanDismissByPan {
@@ -136,8 +136,8 @@ enum {
     self.view.userInteractionEnabled = NO;
     [_detail popupWillClose];
     /* the plate stays whole while it slides: it is told it has left only once it is off the screen, since telling it first tears down its pictures and leaves an empty card moving down */
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.view.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.view.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self willMoveToParentViewController:nil];
         [self.view removeFromSuperview];

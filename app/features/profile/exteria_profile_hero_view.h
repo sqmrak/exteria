@@ -21,6 +21,10 @@
 /* the badge of the rating to the left of the status ("[rating] online"); level 0 leaves it out; a tap on it runs the action of the target */
 - (void)setRatingLevel:(int32_t)level target:(id)target action:(SEL)action;
 
+/* the public photo of the signed in person, the photo those who may not see the main ones get: it comes as the last page after the profile photos, and a small round
+   picture with its name at the right end of the status line jumps to it, and from it back to the first photo. nil leaves both out; set it before or after the list of photos came */
+@property (nonatomic, retain) ExteriaMedia *publicPhoto;
+
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media;
 /* the photo alone, one picture that follows the frame, with the words and the strips hidden: the state the view is in while it moves */
 - (void)beginMove;

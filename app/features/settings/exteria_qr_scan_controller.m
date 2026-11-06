@@ -106,8 +106,31 @@
     UIEdgeInsets insets = ExteriaLayoutInsets(self);
     _preview.frame = bounds;
     _back.frame = CGRectMake(8, insets.top + 8, 44, 44);
-    _frame.frame = CGRectMake((bounds.size.width - FRAME_SIDE) / 2, (bounds.size.height - FRAME_SIDE) / 2 - 20, FRAME_SIDE, FRAME_SIDE);
-    _hint.frame = CGRectMake(32, CGRectGetMaxY(_frame.frame) + 24, bounds.size.width - 64, 70);
+    if (bounds.size.width > bounds.size.height) {
+        /* the height of a phone on its side leaves no room under the frame, so the hint stands beside it */
+        CGFloat side = MIN(FRAME_SIDE, bounds.size.height - 32);
+        CGFloat gap = 24, hintWidth = MIN(260, bounds.size.width - side - 3 * gap - 52);
+        CGFloat left = (bounds.size.width - side - gap - hintWidth) / 2;
+        _frame.frame = CGRectMake(left, (bounds.size.height - side) / 2, side, side);
+        _hint.frame = CGRectMake(CGRectGetMaxX(_frame.frame) + gap, (bounds.size.height - 70) / 2, hintWidth, 70);
+    } else {
+        _frame.frame = CGRectMake((bounds.size.width - FRAME_SIDE) / 2, (bounds.size.height - FRAME_SIDE) / 2 - 20, FRAME_SIDE, FRAME_SIDE);
+        _hint.frame = CGRectMake(32, CGRectGetMaxY(_frame.frame) + 24, bounds.size.width - 64, 70);
+    }
+    [self turnPreview];
+}
+
+/* the preview layer shows the sensor upright for portrait only, so a turned screen has to tell it which way is up; zbar reads a code in any direction, so the decoder needs nothing */
+- (void)turnPreview {
+    if (!_preview) return;
+    UIInterfaceOrientation orientation = self.interfaceOrientation;
+    /* the values of UIInterfaceOrientation and AVCaptureVideoOrientation are the same four numbers */
+    if ([_preview respondsToSelector:@selector(connection)]) {
+        AVCaptureConnection *connection = _preview.connection;
+        if (connection.supportsVideoOrientation) connection.videoOrientation = (AVCaptureVideoOrientation)orientation;
+    } else if ([_preview respondsToSelector:NSSelectorFromString(@"setOrientation:")]) {
+        ((void (*)(id, SEL, NSInteger))objc_msgSend)(_preview, NSSelectorFromString(@"setOrientation:"), (NSInteger)orientation);
+    }
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -127,11 +150,11 @@
 }
 
 - (BOOL)prefersStatusBarHidden { return YES; }
-- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation { return orientation == UIInterfaceOrientationPortrait; }
-- (BOOL)shouldAutorotate { return NO; }
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation { return ExteriaAllowsOrientation(orientation); }
+- (BOOL)shouldAutorotate { return YES; }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmismatched-return-types"
-- (NSUInteger)supportedInterfaceOrientations { return 1 << UIInterfaceOrientationPortrait; }
+- (NSUInteger)supportedInterfaceOrientations { return ExteriaOrientationMask(); }
 #pragma clang diagnostic pop
 
 - (void)showTimeout {
@@ -238,6 +261,7 @@ static void ExteriaFocusForScanning(AVCaptureDevice *camera) {
     _preview.videoGravity = AVLayerVideoGravityResizeAspectFill;
     _preview.frame = self.view.bounds;
     [self.view.layer insertSublayer:_preview atIndex:0];
+    [self turnPreview];
     _started = YES;
     [self resume];
 }

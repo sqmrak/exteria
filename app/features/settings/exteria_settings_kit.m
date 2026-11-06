@@ -25,6 +25,8 @@
 #define ROW_GAP 2.0
 #define ICON_PAD 18.0
 #define TILE 36.0
+/* the side of the face picture of a people row, as exteria_people_avatars.m draws it */
+#define CLASSIC_FACE 48.0
 #define TRAILING_SIDE 34.0
 #define SESSION_ICON 42.0
 
@@ -277,8 +279,12 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind) {
 @synthesize sliderMaximum = _sliderMaximum;
 @synthesize sliderFormat = _sliderFormat;
 @synthesize tap = _tap;
+@synthesize remove = _remove;
+@synthesize removed = _removed;
+@synthesize removesSection = _removesSection;
 @synthesize toggle = _toggle;
 @synthesize slide = _slide;
+@synthesize slideEnded = _slideEnded;
 
 - (void)dealloc {
     [_describe release];
@@ -286,6 +292,7 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind) {
     [_rightCaption release];
     [_sliderFormat release];
     [_slide release];
+    [_slideEnded release];
     [_title release];
     [_subtitle release];
     [_value release];
@@ -296,6 +303,8 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind) {
     [_customView release];
     [_customHeight release];
     [_tap release];
+    [_remove release];
+    [_removed release];
     [_toggle release];
     [super dealloc];
 }
@@ -735,9 +744,18 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     ExteriaRowPlace _place;
 }
 - (void)configureWithRow:(ExteriaSettingsRow *)row place:(ExteriaRowPlace)place;
+/* how much of the plate behind the row is taken away: 0 as drawn, 1 only the row on what lies under the page */
+- (void)setCardFade:(CGFloat)fade;
 @end
 
 @implementation ExteriaSettingsCell
+
+- (void)setCardFade:(CGFloat)fade {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _shape.opacity = (float)(1 - fade);
+    [CATransaction commit];
+}
 
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)identifier {
     self = [super initWithStyle:style reuseIdentifier:identifier];
@@ -785,6 +803,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     [_card addSubview:_check];
     _slider = [[ExteriaExpressiveSlider alloc] init];
     [_slider addTarget:self action:@selector(slid) forControlEvents:UIControlEventValueChanged];
+    [_slider addTarget:self action:@selector(slideLetGo) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
     [_card addSubview:_slider];
     _levelBadge = [[UILabel alloc] init];
     _levelBadge.textAlignment = ExteriaTextAlignmentCenter;
@@ -860,6 +879,10 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _leftLabel.textColor = [[info objectForKey:@"left"] boolValue] ? ExteriaColorAccent() : ExteriaColorSecondary();
     _rightLabel.textColor = [[info objectForKey:@"right"] boolValue] ? ExteriaColorAccent() : ExteriaColorSecondary();
     [self setNeedsLayout];
+}
+
+- (void)slideLetGo {
+    if (_row.slideEnded) _row.slideEnded();
 }
 
 - (void)slid {
@@ -1111,6 +1134,9 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
 }
 @end
 
+/* what the back button with its word and the dots take of a phone's width on the wider side of the classic bar of a settings page */
+#define SETTINGS_CLASSIC_SIDE 92.0
+
 @interface ExteriaSettingsPageController () {
     NSString *_pageTitle;
     NSArray *_sections;
@@ -1130,11 +1156,15 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     NSArray *_searchSections;
     UIView *_barBackground;
     ExteriaWaveBackgroundView *_backdrop;
+    UIView *_underlay;
+    CGFloat _cardFade;
     UIButton *_back;
     UILabel *_titleLabel;
     UIButton *_searchButton;
     UITextField *_searchField;
     UILabel *_emptyLabel;
+    NSString *_classicTitleText;
+    NSArray *_classicTitleEntities;
     BOOL _classic;
     ExteriaClassicSearchInput *_classicSearch;
     UIView *_classicHead;
@@ -1191,6 +1221,8 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _searchField.delegate = nil;
     _classicSearch.changeHandler = nil;
     [_pageTitle release];
+    [_classicTitleText release];
+    [_classicTitleEntities release];
     [_sections release];
     [_flat release];
     [_headerView release];
@@ -1198,6 +1230,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     [_barViews release];
     [_leadingView release];
     [_backdrop release];
+    [_underlay release];
     [_back release];
     [_titleLabel release];
     [_barBackground release];
@@ -1222,6 +1255,63 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _pageTitle = [title copy];
     _titleLabel.text = _pageTitle;
     self.title = _pageTitle;
+    [self showClassicTitle];
+}
+
+/* the name of a person or a chat in the classic bar is drawn by the app's own label: the system title shows boxes for the letters of a styled nick that the system font lacks */
+- (void)showClassicTitle {
+    if (!_classic || !self.isViewLoaded) return;
+    /* the bar centers the view between its buttons, and the 190 points of the default ran under the back button and the dots of a phone 320 points wide: the width is what is left
+       beside the wider side, as the system's own title had */
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    CGFloat width = ExteriaIsPad() ? 420 : MIN(190, MIN(screen.width, screen.height) - 2 * SETTINGS_CLASSIC_SIDE);
+    NSString *text = _classicTitleText.length ? _classicTitleText : _pageTitle;
+    UIView *title = text.length ? ExteriaClassicTitleViewWithStatusWidth(text, nil, 0, width) : nil;
+    if (title && _classicTitleText.length) {
+        for (UIView *view in title.subviews) {
+            if (![view isKindOfClass:[ExteriaEmojiLabel class]]) continue;
+            ExteriaEmojiLabel *label = (ExteriaEmojiLabel *)view;
+            label.entities = _classicTitleEntities;
+            /* the name in the body keeps every character it has a font for, so the title does not cut them either */
+            label.dropsUndrawable = NO;
+        }
+    }
+    self.navigationItem.titleView = title;
+}
+
+- (void)setClassicTitleText:(NSString *)text entities:(NSArray *)entities {
+    [_classicTitleText release];
+    _classicTitleText = [text copy];
+    [_classicTitleEntities release];
+    _classicTitleEntities = [entities copy];
+    [self showClassicTitle];
+}
+
+- (void)refreshClassicTitle {
+    for (UIView *view in self.navigationItem.titleView.subviews) [view setNeedsDisplay];
+}
+
+- (UIView *)underlay { return _underlay; }
+- (void)setUnderlay:(UIView *)underlay {
+    if (underlay == _underlay) return;
+    [_underlay removeFromSuperview];
+    [_underlay release];
+    _underlay = [underlay retain];
+    if (_underlay && _backdrop && !_classic) {
+        _underlay.frame = self.view.bounds;
+        [self.view insertSubview:_underlay aboveSubview:_backdrop];
+    }
+    [self.view setNeedsLayout];
+}
+
+- (CGFloat)cardFade { return _cardFade; }
+- (void)setCardFade:(CGFloat)fade {
+    CGFloat clamped = fade < 0 ? 0 : (fade > 1 ? 1 : fade);
+    if (clamped == _cardFade) return;
+    _cardFade = clamped;
+    for (UITableViewCell *cell in _table.visibleCells) {
+        if ([cell isKindOfClass:[ExteriaSettingsCell class]]) [(ExteriaSettingsCell *)cell setCardFade:_cardFade];
+    }
 }
 
 - (NSArray *)sections { return _sections; }
@@ -1546,6 +1636,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _emptyLabel.hidden = YES;
     [root addSubview:_emptyLabel];
     self.title = _pageTitle;
+    [self showClassicTitle];
 }
 
 /* everything the modern page draws around its rows; it is made again when the colors change */
@@ -1567,6 +1658,13 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
         _table.dataSource = self;
         _table.tableHeaderView = _headerView;
         [root addSubview:_table];
+        UILongPressGestureRecognizer *press = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(rowPressed:)] autorelease];
+        press.minimumPressDuration = 0.45;
+        [_table addGestureRecognizer:press];
+    }
+    if (_underlay) {
+        _underlay.frame = root.bounds;
+        [root insertSubview:_underlay aboveSubview:_backdrop];
     }
     _barBackground = [[UIView alloc] init];
     _barBackground.backgroundColor = ExteriaImportedThemeColor("root.navBar.background") ?: [ExteriaColorScreen() colorWithAlphaComponent:0.94];
@@ -1618,6 +1716,8 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
    animation that was running on one of them (the waves, a fade of the bar) still reports to it when it ends */
 - (void)discardModernChrome {
     _searchField.delegate = nil;
+    /* the underlay belongs to whoever set it and goes back under the new table */
+    [_underlay removeFromSuperview];
     NSMutableArray *retired = [NSMutableArray array];
     for (UIView *view in [NSArray arrayWithObjects:_backdrop, _barBackground, _emptyLabel, _back, _titleLabel, _searchButton, _searchField, nil]) {
         [view removeFromSuperview];
@@ -1722,6 +1822,11 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     CGRect column = ExteriaContentColumn(size, insets, EXTERIA_COLUMN_PAGE);
     CGFloat left = column.origin.x, edge = CGRectGetMaxX(column);
     _backdrop.frame = self.view.bounds;
+    _underlay.frame = self.view.bounds;
+    /* a picture over the whole page covers the waves, which would still draw every frame under it */
+    BOOL covered = _underlay.subviews.count > 0;
+    _backdrop.hidden = covered;
+    _backdrop.animated = !covered;
     _back.frame = CGRectMake(left + 6, top + 6, 44, 44);
     _titleLabel.font = ExteriaFontSemibold(22);
     CGFloat right = edge - 8;
@@ -1970,19 +2075,25 @@ enum { ExteriaFlatHeader, ExteriaFlatRow, ExteriaFlatFooter, ExteriaFlatSpace };
 }
 
 /* a footer that changed under the finger is swapped in now that the finger has left */
-- (void)classicSlideEnded {
+- (void)classicSlideEnded:(UISlider *)slider {
     _sliding = NO;
     [self flushFooters];
+    NSInteger tag = slider.tag - 1;
+    NSArray *shown = [self shownSections];
+    NSUInteger section = (NSUInteger)(tag / 1000), index = (NSUInteger)(tag % 1000);
+    if (section >= shown.count) return;
+    NSArray *rows = [[shown objectAtIndex:section] rows];
+    if (index < rows.count && [[rows objectAtIndex:index] slideEnded]) [[rows objectAtIndex:index] slideEnded]();
 }
 
 /* the classic cell has one line for its title, so "Pause music when recording a video" ended as "Pause music when" */
 static CGFloat ExteriaClassicTextWidth(ExteriaSettingsRow *row, CGFloat tableWidth) {
-    CGFloat left = 20 + (row.hasSymbol || row.tileImage ? 29 + 10 : 0);
+    CGFloat left = 20 + (row.tileImage ? CLASSIC_FACE + 10 : (row.hasSymbol ? 29 + 10 : 0));
     CGFloat right = 14;
     if (row.hasSwitch) right = 20 + 79 + 8;
     else if (row.trailingImage) right = 20 + 29 + 8;
     else if (row.value.length) right = 20 + MIN(ceil(ExteriaStringSize(row.value, [UIFont systemFontOfSize:17]).width), tableWidth * 0.4) + 8;
-    else if (row.tap) right = 40;
+    else if (row.tap || row.tileImage) right = 40;
     return MAX(40, tableWidth - 20 - left - right);
 }
 
@@ -1991,7 +2102,8 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
     CGFloat width = ExteriaClassicTextWidth(row, tableWidth);
     CGFloat title = ExteriaStringSizeIn(row.title, [UIFont boldSystemFontOfSize:17], CGSizeMake(width, 600)).height;
     CGFloat detail = row.subtitle.length ? ExteriaStringSizeIn(row.subtitle, [UIFont systemFontOfSize:14], CGSizeMake(width, 600)).height : 0;
-    return MAX(44, ceil(title) + ceil(detail) + 22);
+    /* ios 6 scales a cell's picture down to the row, so faces in rows of 44 and 59 points came out in two sizes; every row with a face is tall enough to show it whole */
+    return MAX(row.tileImage ? CLASSIC_FACE + 16 : 44, ceil(title) + ceil(detail) + 22);
 }
 
 - (UITableViewCell *)classicCellForRow:(ExteriaSettingsRow *)row at:(NSIndexPath *)indexPath {
@@ -2097,12 +2209,12 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
         slider.tag = tag;
         [slider addTarget:self action:@selector(classicSlid:) forControlEvents:UIControlEventValueChanged];
         [slider addTarget:self action:@selector(classicSlideBegan) forControlEvents:UIControlEventTouchDown];
-        [slider addTarget:self action:@selector(classicSlideEnded) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+        [slider addTarget:self action:@selector(classicSlideEnded:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
         [cell.contentView addSubview:slider];
         [(ExteriaClassicSliderCell *)cell setSlider:slider];
     } else if (row.checked) {
         cell.accessoryType = UITableViewCellAccessoryCheckmark;
-    } else if (row.tap && !row.value.length && !subtitle) {
+    } else if (row.tap && !row.value.length && (!subtitle || row.tileImage)) {
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
     if (!row.tap && !row.hasSwitch && !row.hasSlider) cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -2152,6 +2264,7 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
         ExteriaSettingsCell *cell = (ExteriaSettingsCell *)[tableView dequeueReusableCellWithIdentifier:identifier];
         if (!cell) cell = [[[ExteriaSettingsCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier] autorelease];
         [cell configureWithRow:[item objectForKey:@"row"] place:(ExteriaRowPlace)[[item objectForKey:@"place"] intValue]];
+        [cell setCardFade:_cardFade];
         return cell;
     }
     static NSString *textIdentifier = @"text";
@@ -2182,6 +2295,220 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
     label.textAlignment = center ? ExteriaTextAlignmentCenter : ExteriaTextAlignmentLeft;
     if (center) label.font = ExteriaFontRegular(14);
     return cell;
+}
+
+#pragma mark removal
+
+/* the tonal red of an M3 error container, light and dark */
+static UIColor *ExteriaErrorContainerColor(void) {
+    return ExteriaThemeIsDark() ? ExteriaToneRGB(0x8C1D18) : ExteriaToneRGB(0xF9DEDC);
+}
+
+- (void)rowPressed:(UILongPressGestureRecognizer *)press {
+    if (press.state != UIGestureRecognizerStateBegan || _classic || _searching) return;
+    NSIndexPath *path = [_table indexPathForRowAtPoint:[press locationInView:_table]];
+    if (!path || (NSUInteger)path.row >= _flat.count) return;
+    NSDictionary *item = [self itemAt:path];
+    ExteriaSettingsRow *row = [item objectForKey:@"row"];
+    if ([[item objectForKey:@"kind"] intValue] != ExteriaFlatRow || !row.remove) return;
+    [ExteriaSheet presentInView:self.view title:row.title message:nil options:[NSArray arrayWithObject:NSLocalizedString(@"settings.remove", nil)]
+                    destructive:[NSIndexSet indexSetWithIndex:0] cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:^(NSUInteger index) {
+        (void)index;
+        [self removeRow:row];
+    }];
+}
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    (void)tableView;
+    return _classic && [self classicRowAt:indexPath].remove != nil;
+}
+
+- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
+    (void)tableView;
+    return _classic && [self classicRowAt:indexPath].remove ? UITableViewCellEditingStyleDelete : UITableViewCellEditingStyleNone;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath {
+    (void)tableView;
+    (void)indexPath;
+    return NSLocalizedString(@"settings.remove", nil);
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)style forRowAtIndexPath:(NSIndexPath *)indexPath {
+    (void)tableView;
+    if (style != UITableViewCellEditingStyleDelete || !_classic) return;
+    [self removeRow:[self classicRowAt:indexPath]];
+}
+
+- (void)removeRow:(ExteriaSettingsRow *)row {
+    if (!row.remove) return;
+    /* the block may drop the last reference to the row */
+    [[row retain] autorelease];
+    NSString *failure = row.remove();
+    if (failure) {
+        ExteriaShowNotice(nil, failure);
+        /* a swipe left the row open */
+        if (_classic) [_table reloadData];
+        return;
+    }
+    [self takeOutRow:row];
+}
+
+/* the sections without the row, and the section index it was in; a section left with no rows goes too */
+- (void)takeOutRow:(ExteriaSettingsRow *)row {
+    NSUInteger at = NSNotFound;
+    for (NSUInteger i = 0; i < _sections.count; ++i) if ([[[_sections objectAtIndex:i] rows] containsObject:row]) at = i;
+    void (^done)(void) = [[row.removed retain] autorelease];
+    if (at == NSNotFound) {
+        if (done) done();
+        return;
+    }
+    ExteriaSettingsSection *old = [_sections objectAtIndex:at];
+    NSMutableArray *rows = [NSMutableArray arrayWithArray:old.rows];
+    NSUInteger rowIndex = [rows indexOfObject:row];
+    [rows removeObjectAtIndex:rowIndex];
+    BOOL vanishes = rows.count == 0 || row.removesSection;
+    ExteriaSettingsSection *rest = [ExteriaSettingsSection sectionWithHeader:old.header footer:old.footer rows:rows];
+    rest.centerFooter = old.centerFooter;
+    NSMutableArray *next = [NSMutableArray arrayWithArray:_sections];
+    if (vanishes) [next removeObjectAtIndex:at];
+    else [next replaceObjectAtIndex:at withObject:rest];
+    if (_searching || ![self isViewLoaded] || !_table.window) {
+        self.sections = next;
+        if (done) done();
+        return;
+    }
+    if (_classic) {
+        [_sections release];
+        _sections = [next copy];
+        [_table beginUpdates];
+        if (vanishes) [_table deleteSections:[NSIndexSet indexSetWithIndex:at] withRowAnimation:UITableViewRowAnimationLeft];
+        else [_table deleteRowsAtIndexPaths:[NSArray arrayWithObject:[NSIndexPath indexPathForRow:(NSInteger)rowIndex inSection:(NSInteger)at]] withRowAnimation:UITableViewRowAnimationLeft];
+        [_table endUpdates];
+        if (done) done();
+        return;
+    }
+    [self takeOutModernRow:row section:at vanishes:vanishes next:next done:done];
+}
+
+- (void)takeOutModernRow:(ExteriaSettingsRow *)row section:(NSUInteger)at vanishes:(BOOL)vanishes next:(NSArray *)next done:(void (^)(void))done {
+    NSArray *oldFlat = [[_flat retain] autorelease];
+    NSUInteger target = NSNotFound;
+    NSMutableArray *removed = [NSMutableArray array];
+    for (NSUInteger i = 0; i < oldFlat.count; ++i) {
+        NSDictionary *item = [oldFlat objectAtIndex:i];
+        if ([item objectForKey:@"row"] == row) target = i;
+        if (vanishes && [[item objectForKey:@"section"] unsignedIntegerValue] == at) [removed addObject:[NSIndexPath indexPathForRow:(NSInteger)i inSection:0]];
+    }
+    if (target == NSNotFound) {
+        self.sections = next;
+        if (done) done();
+        return;
+    }
+    if (!vanishes) [removed addObject:[NSIndexPath indexPathForRow:(NSInteger)target inSection:0]];
+    NSArray *oldSections = [[_sections retain] autorelease];
+    [_sections release];
+    _sections = [next copy];
+    [self rebuildFlat];
+    NSArray *newFlat = [[_flat retain] autorelease];
+    if (newFlat.count + removed.count != oldFlat.count) {
+        /* the rows around it changed shape in a way the table cannot be told of, so it is drawn again */
+        [_table reloadData];
+        if (done) done();
+        return;
+    }
+    /* the neighbours take their new corners first, while the table still holds the old count, so that the deletion below is the only thing that moves */
+    NSMutableDictionary *places = [NSMutableDictionary dictionary];
+    for (NSDictionary *item in newFlat) if ([item objectForKey:@"row"]) [places setObject:[item objectForKey:@"place"] forKey:[NSValue valueWithNonretainedObject:[item objectForKey:@"row"]]];
+    NSMutableArray *patched = [NSMutableArray arrayWithArray:oldFlat];
+    NSMutableArray *reload = [NSMutableArray array];
+    for (NSUInteger i = 0; i < oldFlat.count; ++i) {
+        NSDictionary *item = [oldFlat objectAtIndex:i];
+        id shown = [item objectForKey:@"row"];
+        NSNumber *place = shown && shown != row ? [places objectForKey:[NSValue valueWithNonretainedObject:shown]] : nil;
+        if (!place || [place isEqual:[item objectForKey:@"place"]]) continue;
+        NSMutableDictionary *copy = [NSMutableDictionary dictionaryWithDictionary:item];
+        [copy setObject:place forKey:@"place"];
+        [patched replaceObjectAtIndex:i withObject:copy];
+        [reload addObject:[NSIndexPath indexPathForRow:(NSInteger)i inSection:0]];
+    }
+    [_flat release];
+    _flat = [patched retain];
+    if (reload.count) {
+        BOOL animated = [UIView areAnimationsEnabled];
+        [UIView setAnimationsEnabled:NO];
+        [_table reloadRowsAtIndexPaths:reload withRowAnimation:UITableViewRowAnimationNone];
+        [UIView setAnimationsEnabled:animated];
+    }
+    (void)oldSections;
+    void (^finish)(void) = ^{
+        [_flat release];
+        _flat = [newFlat retain];
+        [_table beginUpdates];
+        [_table deleteRowsAtIndexPaths:removed withRowAnimation:UITableViewRowAnimationFade];
+        [_table endUpdates];
+        _table.userInteractionEnabled = YES;
+        if (done) done();
+    };
+    /* the rows that leave with the animation: the one that was asked for, or every row of its section */
+    NSMutableArray *leaving = [NSMutableArray array];
+    for (NSUInteger i = 0; i < oldFlat.count; ++i) {
+        NSDictionary *item = [oldFlat objectAtIndex:i];
+        BOOL mine = row.removesSection ? ([[item objectForKey:@"section"] unsignedIntegerValue] == at && [item objectForKey:@"row"]) : i == target;
+        UITableViewCell *shown = mine ? [_table cellForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)i inSection:0]] : nil;
+        if (!shown) continue;
+        ExteriaRowPlace place = (ExteriaRowPlace)[[item objectForKey:@"place"] intValue];
+        BOOL last = place == ExteriaRowPlaceLast || place == ExteriaRowPlaceOnly;
+        UIView *wash = [[[UIView alloc] initWithFrame:CGRectMake(CARD_INSET, 0, shown.contentView.bounds.size.width - 2 * CARD_INSET, shown.contentView.bounds.size.height - (last ? 0 : ROW_GAP))] autorelease];
+        wash.backgroundColor = ExteriaErrorContainerColor();
+        wash.layer.cornerRadius = CARD_RADIUS;
+        wash.alpha = 0;
+        [leaving addObject:[NSArray arrayWithObjects:shown, wash, nil]];
+    }
+    if (!leaving.count || ExteriaReduceMotionEnabled()) {
+        finish();
+        return;
+    }
+    _table.userInteractionEnabled = NO;
+    for (NSArray *pair in leaving) [[[pair objectAtIndex:0] contentView] addSubview:[pair objectAtIndex:1]];
+    /* the emphasized curves of Material 3: the wash comes in decelerating, the card leaves accelerating */
+    CAMediaTimingFunction *accelerate = [CAMediaTimingFunction functionWithControlPoints:0.3f:0.0f:0.8f:0.15f];
+    [UIView animateWithDuration:0.2 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
+        for (NSArray *pair in leaving) [[pair objectAtIndex:1] setAlpha:1];
+    } completion:^(BOOL ignored) {
+        (void)ignored;
+        /* each card becomes a pill as it shrinks; the layer keeps the end value once the animation is over */
+        for (NSArray *pair in leaving) {
+            UIView *wash = [pair objectAtIndex:1];
+            CGFloat pill = wash.bounds.size.height / 2;
+            CABasicAnimation *round = [CABasicAnimation animationWithKeyPath:@"cornerRadius"];
+            round.fromValue = [NSNumber numberWithDouble:CARD_RADIUS];
+            round.toValue = [NSNumber numberWithDouble:pill];
+            round.duration = 0.26;
+            round.timingFunction = accelerate;
+            wash.layer.cornerRadius = pill;
+            [wash.layer addAnimation:round forKey:@"pill"];
+        }
+        [UIView animateWithDuration:0.26 delay:0 options:UIViewAnimationOptionCurveEaseIn animations:^{
+            for (NSArray *pair in leaving) {
+                UITableViewCell *shown = [pair objectAtIndex:0];
+                shown.transform = CGAffineTransformMakeScale(0.8f, 0.8f);
+                shown.alpha = 0;
+            }
+        } completion:^(BOOL over) {
+            (void)over;
+            finish();
+            /* the cells are reused by the table, so they are made whole again after their fade out has run */
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                for (NSArray *pair in leaving) {
+                    [[pair objectAtIndex:1] removeFromSuperview];
+                    UITableViewCell *shown = [pair objectAtIndex:0];
+                    shown.transform = CGAffineTransformIdentity;
+                    shown.alpha = 1;
+                }
+            });
+        }];
+    }];
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {

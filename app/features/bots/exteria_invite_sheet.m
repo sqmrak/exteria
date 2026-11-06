@@ -105,8 +105,8 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
         }];
     }
     sheet->_card.transform = CGAffineTransformMakeTranslation(0, sheet.bounds.size.height - (sheet->_card.center.y - sheet->_card.bounds.size.height / 2));
-    ExteriaAnimateView(sheet->_shade, CGAffineTransformIdentity, 0.45, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(sheet->_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(sheet->_shade, CGAffineTransformIdentity, 0.45, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(sheet->_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 - (void)dealloc {
@@ -152,8 +152,8 @@ static UILabel *InviteLabel(UIFont *font, UIColor *color) {
     void (^handler)(void) = joining ? [_joinHandler copy] : nil;
     [self retain];
     /* the card leaves on the curve it arrives on: EXIT starts slowly and the card hung for a moment before it dropped */
-    ExteriaAnimateView(_shade, CGAffineTransformIdentity, 0, EXTERIA_MOTION_SHEET_DISMISS, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, EXTERIA_MOTION_SHEET_DISMISS, ^(BOOL finished) {
+    ExteriaAnimateView(_shade, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         if (handler) handler();

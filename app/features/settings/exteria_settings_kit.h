@@ -141,8 +141,16 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
 @property (nonatomic, readonly) float sliderMaximum;
 @property (nonatomic, readonly, copy) NSString *sliderFormat;
 @property (nonatomic, copy) void (^tap)(void);
+/* makes the row removable: a long press on the modern card asks, and a swipe on the classic row. the block does the removal itself and answers nil when it is done, or the
+   text that tells why it was not; the page then takes the row out with an animation, and removed runs once the row has left the table */
+@property (nonatomic, copy) NSString *(^remove)(void);
+@property (nonatomic, copy) void (^removed)(void);
+/* the row stands for the whole section it is in (a plugin card of a few rows): removing it takes the section out, and every row of it leaves together */
+@property (nonatomic, assign) BOOL removesSection;
 @property (nonatomic, readonly, copy) void (^toggle)(BOOL on);
 @property (nonatomic, readonly, copy) void (^slide)(float value);
+/* the finger has left the slider: the place for a change that is too heavy to follow every step of the drag */
+@property (nonatomic, copy) void (^slideEnded)(void);
 /* the row is a session: its height has room for three lines */
 @property (nonatomic, readonly) BOOL isSession;
 @end
@@ -171,6 +179,11 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
 @interface ExteriaSettingsPageController : UIViewController <UITableViewDataSource, UITableViewDelegate, UITextFieldDelegate>
 
 @property (nonatomic, copy) NSString *pageTitle;
+/* the classic bar draws this text, with these entities (the badge and the custom emoji status after a name), in place of the page title, in the same label and with the same
+   fallback fonts as the name in the body of the page, so the emoji and the symbols of a styled name show as they do there and are not cut or boxed; nil text goes back to the title */
+- (void)setClassicTitleText:(NSString *)text entities:(NSArray *)entities;
+/* draws that title again, once the pictures of its custom emoji have come */
+- (void)refreshClassicTitle;
 @property (nonatomic, retain) NSArray *sections;
 /* shown above the first section and scrolling with it; set before the view loads or call reloadSettings after */
 @property (nonatomic, retain) UIView *headerView;
@@ -185,6 +198,11 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
 /* the table starts under the status bar and scrolls up behind the bar, which then carries a background that fades in with the title; for a root screen whose
    header is taller than the bar */
 @property (nonatomic, assign) BOOL contentUnderBar;
+/* a view between the background and the table, as large as the page: where a plugin puts a picture. the page keeps it through the changes of colors, and
+   while it holds a view the animated background is hidden and still. the modern style only; the classic table has no background behind it */
+@property (nonatomic, retain) UIView *underlay;
+/* how much of the plates behind the rows is taken away: 0 draws them as they are, 1 leaves the rows alone on what lies under the page. the modern style only */
+@property (nonatomic, assign) CGFloat cardFade;
 /* the page makes its bar and background again when the colors of the theme change, and then calls this */
 - (void)themeDidChange;
 /* the middle of the row that was tapped last, in window coordinates, for a change that spreads over the screen from where the finger was */
@@ -214,6 +232,10 @@ NSString *ExteriaDeviceAnimationName(exteria_session_kind kind);
 - (void)replaceSectionAtIndex:(NSUInteger)index withSection:(ExteriaSettingsSection *)section;
 /* the text under a section, changed in place: a screen that shows it while a slider is dragged cannot have the slider's row made again */
 - (void)setFooter:(NSString *)footer forSectionAtIndex:(NSUInteger)index;
+
+/* runs the remove block of the row and takes the row out of the page: the modern style washes the card in the tonal red of an error container, rounds it to a pill
+   and lets it shrink away while the rows under it glide up, the classic style slides it out as the system does. a failure is shown as a notice and the row stays */
+- (void)removeRow:(ExteriaSettingsRow *)row;
 
 - (void)reloadSettings;
 /* the heights of the rows are asked again, and the rows stay as they are */

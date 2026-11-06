@@ -1056,7 +1056,7 @@ static BOOL ExteriaInlineParse(NSString *text, NSString **name, NSString **query
             ExteriaChatBots *again = weak.target;
             if (again && errorName) [again->_router showNote:[ExteriaLinkRouter textForError:errorName]];
         }];
-    }];
+    } cancelled:nil];
 }
 
 #pragma mark buttons under messages

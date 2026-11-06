@@ -38,11 +38,13 @@
     BOOL _sensitiveShown;
     ExteriaChatPreviewView *_preview;
     UIButton *_more;
+    BOOL _interfaceScaleDirty;
 }
 - (void)chooseThemeFile;
 - (void)customFontTapped;
 - (void)chooseFontFile;
 - (void)fontsChanged;
+- (void)interfaceScaleLetGo;
 @end
 
 /* the duck of the theme change covers the window while the icon is written, which takes a moment and ends the app
@@ -180,11 +182,18 @@ static NSString *ExteriaNightStateText(void) {
     [self refreshMenu];
 }
 
-/* the scale is read once at launch, so the slider only stores it for the next start */
+/* the screens are made again when the finger leaves the slider, not at every step of the drag: the rebuild takes the main thread for a moment */
 - (void)interfaceScaleMoved:(float)value {
     NSInteger percent = (NSInteger)(value + 0.5f);
     if (percent == ExteriaInterfaceScaleStored()) return;
     ExteriaInterfaceScaleStore(percent);
+    _interfaceScaleDirty = YES;
+}
+
+- (void)interfaceScaleLetGo {
+    if (!_interfaceScaleDirty) return;
+    _interfaceScaleDirty = NO;
+    [self fontsChanged];
 }
 
 - (void)radiusMoved:(float)value {
@@ -219,12 +228,16 @@ static NSString *ExteriaNightStateText(void) {
     }
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.textsize.header", nil) footer:nil rows:size]];
 
-    ExteriaSettingsRow *interfaceScale = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.uiscale.row", nil) format:@"%.0f%%" value:(float)ExteriaInterfaceScaleStored()
-                                                                        minimum:EXTERIA_INTERFACE_SCALE_MIN maximum:EXTERIA_INTERFACE_SCALE_MAX change:^(float value) {
-        [(ExteriaChatSettingsController *)weak.target interfaceScaleMoved:value];
-    }];
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.uiscale.header", nil) footer:NSLocalizedString(@"chatset.uiscale.footer", nil)
-                                                             rows:[NSArray arrayWithObject:interfaceScale]]];
+    /* the classic style is drawn by the system with its own sizes, so the scale changes nothing there and the slider is not offered */
+    if (!ExteriaThemeIsClassic()) {
+        ExteriaSettingsRow *interfaceScale = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.uiscale.row", nil) format:@"%.0f%%" value:(float)ExteriaInterfaceScaleStored()
+                                                                            minimum:EXTERIA_INTERFACE_SCALE_MIN maximum:EXTERIA_INTERFACE_SCALE_MAX change:^(float value) {
+            [(ExteriaChatSettingsController *)weak.target interfaceScaleMoved:value];
+        }];
+        interfaceScale.slideEnded = ^{ [(ExteriaChatSettingsController *)weak.target interfaceScaleLetGo]; };
+        [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.uiscale.header", nil) footer:nil
+                                                                 rows:[NSArray arrayWithObject:interfaceScale]]];
+    }
 
     NSMutableArray *looks = [NSMutableArray array];
     [looks addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolGallery tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"chatset.wallpaper", nil) subtitle:nil

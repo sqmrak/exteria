@@ -132,12 +132,13 @@
     /* an archive with nothing in it is not offered */
     if (_archivedTotal > 0) [catalog addObject:archived];
     [catalog addObject:emoji];
-    ExteriaSettingsRow *quick = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolHeart tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"chatset.quickreaction", nil) subtitle:nil value:ExteriaChatQuickReactionDisplay() tap:^{
+    BOOL quickEnabled = ExteriaChatQuickReactionEnabled();
+    ExteriaSettingsRow *quick = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolHeart tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"chatset.quickreaction", nil) subtitle:nil value:quickEnabled ? ExteriaChatQuickReactionDisplay() : NSLocalizedString(@"chatset.quickreaction.off", nil) tap:^{
         ExteriaStickersSettingsController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaQuickReactionController alloc] initWithSession:me->_session] autorelease] animated:YES];
     }];
-    quick.valueIsEmoji = YES;
-    quick.valueEmojiDocument = exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String);
+    quick.valueIsEmoji = quickEnabled;
+    quick.valueEmojiDocument = quickEnabled ? exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String) : 0;
     [catalog addObject:quick];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:catalog]];
     ExteriaSettingsRow *large = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.largeemoji", nil) subtitle:NSLocalizedString(@"chatset.largeemoji.info", nil)

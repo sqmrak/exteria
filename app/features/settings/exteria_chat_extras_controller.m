@@ -217,12 +217,13 @@ static ExteriaSettingsRow *ExteriaFlagRow(NSString *titleKey, NSString *infoKey,
 /* the emoji a double tap sends; the chat falls back to its first reaction when it does not offer the one chosen */
 - (ExteriaSettingsRow *)quickReactionRow {
     ExteriaWeakReference *weak = _weak;
-    ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chatset.quickreaction", nil) value:ExteriaChatQuickReactionDisplay() tap:^{
+    BOOL enabled = ExteriaChatQuickReactionEnabled();
+    ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chatset.quickreaction", nil) value:enabled ? ExteriaChatQuickReactionDisplay() : NSLocalizedString(@"chatset.quickreaction.off", nil) tap:^{
         ExteriaChatExtrasController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaQuickReactionController alloc] initWithSession:me->_session] autorelease] animated:YES];
     }];
-    row.valueIsEmoji = YES;
-    row.valueEmojiDocument = exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String);
+    row.valueIsEmoji = enabled;
+    row.valueEmojiDocument = enabled ? exteria_quick_reaction_document(ExteriaChatQuickReaction().UTF8String) : 0;
     return row;
 }
 

@@ -9,6 +9,7 @@
 #import "exteria_alert.h"
 #import "exteria_emoji_label.h"
 #import "exteria_person.h"
+#import "exteria_plugin_story.h"
 #import "exteria_profile_photo_picker.h"
 #import "exteria_story.h"
 #import "exteria_story_camera_controller.h"
@@ -92,13 +93,13 @@ static UIColor *ExteriaStoryRGB(CGFloat red, CGFloat green, CGFloat blue) {
     return self;
 }
 
-/* the classic tile is a slide in a white mount: a rounded square photo with a glass cap over its upper half, a
-   shadow under the mount, and a lit outline while a story is unseen */
+/* the classic tile is a slide in a mount, white on the light theme and near black on the dark one, where a white frame glared on the dark shelf: a rounded square photo with a
+   glass cap over its upper half, a shadow under the mount, and a lit outline while a story is unseen */
 - (void)buildClassicTileInWidth:(CGFloat)itemWidth {
     CGFloat mat = CLASSIC_MAT;
     _mat = [[UIView alloc] initWithFrame:CGRectMake((itemWidth - CLASSIC_TILE) / 2, 8, CLASSIC_TILE, CLASSIC_TILE)];
     _mat.userInteractionEnabled = NO;
-    _mat.backgroundColor = ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.86 alpha:1] : [UIColor whiteColor];
+    _mat.backgroundColor = ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.08 alpha:1] : [UIColor whiteColor];
     _mat.layer.cornerRadius = 11;
     _mat.layer.borderWidth = 1;
     _mat.layer.shadowOffset = CGSizeMake(0, 1);
@@ -187,7 +188,7 @@ static UIColor *ExteriaStoryRGB(CGFloat red, CGFloat green, CGFloat blue) {
 - (void)configureClassicRingForPeer:(ExteriaStoryPeer *)peer {
     BOOL unseen = peer.unread > 0;
     UIColor *lit = peer.closeFriends ? [UIColor colorWithRed:0.30 green:0.78 blue:0.30 alpha:1] : ExteriaColorAccent();
-    _mat.layer.borderColor = (unseen ? lit : [UIColor colorWithWhite:0 alpha:0.28]).CGColor;
+    _mat.layer.borderColor = (unseen ? lit : [UIColor colorWithWhite:ExteriaThemeIsDark() ? 1 : 0 alpha:ExteriaThemeIsDark() ? 0.16 : 0.28]).CGColor;
     _mat.layer.borderWidth = unseen ? 2 : 1;
     _mat.layer.shadowColor = (unseen ? lit : [UIColor blackColor]).CGColor;
     _mat.layer.shadowOpacity = unseen ? 0.95f : 0.4f;
@@ -531,6 +532,12 @@ static UIColor *ExteriaStoryShelfColor(CGFloat height) {
 - (void)postStoryAtPath:(NSString *)path caption:(NSString *)caption audience:(ExteriaStoryAudience *)audience {
     if (_posting) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+        return;
+    }
+    /* a plugin that schedules stories takes it and publishes it later; it asks for the file to stay while it still reads it */
+    BOOL keepFile = NO;
+    if (ExteriaPluginStoryTaken(path, caption, audience, &keepFile)) {
+        if (!keepFile) [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         return;
     }
     _posting = YES;

@@ -145,8 +145,14 @@ void ExteriaLoadQuickReactionPicture(ExteriaSession *session, ExteriaMediaCache 
     ExteriaSettingsRow *previewRow = [ExteriaSettingsRow viewRowWithView:preview height:^CGFloat(CGFloat width) { return [preview heightForWidth:width]; }];
     NSMutableArray *sections = [NSMutableArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil
         footer:NSLocalizedString(@"chatset.quickreaction.info", nil) rows:[NSArray arrayWithObject:previewRow]]];
+    BOOL enabled = ExteriaChatQuickReactionEnabled();
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:
+        [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.quickreaction.enable", nil) subtitle:nil on:enabled toggle:^(BOOL on) {
+            ExteriaChatSetQuickReactionEnabled(on);
+            [(ExteriaQuickReactionController *)weak.target rebuild];
+        }]]]];
     NSMutableArray *rows = [NSMutableArray array];
-    if (_premiumKnown && _choices) {
+    if (enabled && _premiumKnown && _choices) {
         [rows addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"chatset.quickreaction", nil) value:nil tap:^{
             [(ExteriaQuickReactionController *)weak.target openPicker];
         }]];

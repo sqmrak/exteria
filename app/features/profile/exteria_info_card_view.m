@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_link_router.h"
 #include "exteria_links.h"
@@ -31,8 +32,13 @@
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.backgroundColor = ExteriaColorCard();
-    self.layer.cornerRadius = 14;
+    if (ExteriaThemeIsClassic()) {
+        /* the card is a plate of polished metal, as the menus are, with a groove between its rows */
+        ExteriaClassicApplyMenuPlate(self, 10);
+    } else {
+        self.backgroundColor = ExteriaColorCard();
+        self.layer.cornerRadius = 14;
+    }
     _rows = [[NSMutableArray alloc] init];
     self.hidden = YES;
     return self;
@@ -94,6 +100,19 @@ NSArray *ExteriaInfoMentions(NSString *text) {
         [row addSubview:value];
         [row addSubview:small];
         [row addTarget:self action:@selector(copyRow:event:) forControlEvents:UIControlEventTouchUpInside];
+        if (ExteriaThemeIsClassic() && _rows.count) {
+            BOOL charcoal = ExteriaThemeIsDark();
+            UIView *groove = [[[UIView alloc] init] autorelease];
+            groove.tag = 11;
+            groove.userInteractionEnabled = NO;
+            groove.backgroundColor = [UIColor colorWithWhite:0 alpha:charcoal ? 0.45 : 0.14];
+            [row addSubview:groove];
+            UIView *lit = [[[UIView alloc] init] autorelease];
+            lit.tag = 12;
+            lit.userInteractionEnabled = NO;
+            lit.backgroundColor = [UIColor colorWithWhite:1 alpha:charcoal ? 0.09 : 0.85];
+            [row addSubview:lit];
+        }
         if (_codeHandler && [caption isEqualToString:_codeCaption]) {
             UIButton *code = [UIButton buttonWithType:UIButtonTypeCustom];
             code.tag = 3;
@@ -149,6 +168,8 @@ NSArray *ExteriaInfoMentions(NSString *text) {
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width, y = 0;
+    /* the plate of the classic card is a layer of its own, sized by hand */
+    if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(self, 0);
     for (UIView *row in _rows) {
         ExteriaEmojiLabel *value = (ExteriaEmojiLabel *)[row viewWithTag:1], *caption = (ExteriaEmojiLabel *)[row viewWithTag:2];
         CGFloat textWidth = [self textWidthOfRow:row card:width];
@@ -158,6 +179,8 @@ NSArray *ExteriaInfoMentions(NSString *text) {
         value.frame = CGRectMake(16, 10, textWidth, fit.height);
         caption.frame = CGRectMake(16, 10 + fit.height + 2, textWidth, 16);
         [row viewWithTag:3].frame = CGRectMake(width - CODE_SIDE - 4, (height - CODE_SIDE) / 2, CODE_SIDE, CODE_SIDE);
+        [row viewWithTag:11].frame = CGRectMake(0, 0, width, 1);
+        [row viewWithTag:12].frame = CGRectMake(0, 1, width, 1);
         y += height;
     }
     if (_starsRow) {
