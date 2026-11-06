@@ -30,6 +30,7 @@
 
 @synthesize submit = _submit;
 @synthesize biometric = _biometric;
+@synthesize biometricFingerprint = _biometricFingerprint;
 @synthesize topInset = _topInset;
 @synthesize inputEnabled = _inputEnabled;
 
@@ -170,7 +171,8 @@
 }
 
 - (void)setBiometricTitle:(NSString *)title {
-    [_biometricButton setTitle:title forState:UIControlStateNormal];
+    [_biometricButton setTitle:_biometricFingerprint ? nil : title forState:UIControlStateNormal];
+    [_biometricButton setImage:_biometricFingerprint ? ExteriaSymbolImage(ExteriaSymbolFingerprint, 34, ExteriaColorAccent()) : nil forState:UIControlStateNormal];
     _biometricButton.accessibilityLabel = title;
     _biometricButton.hidden = title.length == 0;
 }

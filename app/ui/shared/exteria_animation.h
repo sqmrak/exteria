@@ -29,3 +29,9 @@ void ExteriaAttachBounce(UIControl *control, CGFloat depth);
 /* the rate a display link asks for, in frames a second: the link that is left alone runs at the full rate of the screen, 120 on the phones and tablets that have it, and
    the ones that only need to draw a 30 or a 60 frame say so; an old system that has no such call gets the interval of its 60 */
 void ExteriaSetFrameRate(CADisplayLink *link, NSInteger framesPerSecond);
+
+/* the curve every popup, menu, dialog and sheet comes and goes on, so none has a motion of its own: the emphasized curves of material 3 in the modern theme, the
+   plain ease out and ease in of the system in the classic one */
+exteria_motion_curve ExteriaPopupCurve(BOOL entering);
+/* the size a popup that scales in starts from and leaves to: a small step in the modern theme, a smaller one in the classic */
+CGFloat ExteriaPopupScale(void);

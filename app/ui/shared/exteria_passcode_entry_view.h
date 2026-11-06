@@ -19,6 +19,8 @@
 
 /* the name of the sensor on a button beside the code, nil for no button; pressing it calls biometric, main thread */
 @property (nonatomic, copy) NSString *biometricTitle;
+/* set before the title: the button shows the fingerprint picture and keeps the name for VoiceOver. face id has no picture of its own, so it keeps the name as text */
+@property (nonatomic, assign) BOOL biometricFingerprint;
 @property (nonatomic, copy) void (^biometric)(void);
 
 /* drops what was typed */

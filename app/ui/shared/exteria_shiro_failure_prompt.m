@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #import "exteria_shiro.h"
 #import "exteria_theme.h"
@@ -33,18 +34,15 @@ static ExteriaShiroFailureTarget *ExteriaShiroFailureShown;
     /* the buttons and the tap of the backdrop send to this object, which therefore lives until the fade ends; a second tap meanwhile finds nothing to press */
     shade.userInteractionEnabled = NO;
     plate.userInteractionEnabled = NO;
-    [UIView animateWithDuration:0.18 animations:^{
-        shade.alpha = 0;
-        plate.alpha = 0;
-        plate.transform = CGAffineTransformMakeScale(0.94, 0.94);
-    } completion:^(BOOL finished) {
+    ExteriaAnimateView(shade, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(plate, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [shade removeFromSuperview];
         [plate removeFromSuperview];
         [shade release];
         [plate release];
         [self release];
-    }];
+    });
 }
 
 - (void)retryTapped {
@@ -84,13 +82,21 @@ static ExteriaShiroFailureTarget *ExteriaShiroFailureShown;
 
 @end
 
-static UIButton *ExteriaFailureButton(NSString *title, BOOL primary, id target, SEL action) {
+static UIButton *ExteriaFailureButton(NSString *title, ExteriaClassicGloss gloss, BOOL primary, id target, SEL action) {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.backgroundColor = primary ? ExteriaColorAccent() : ExteriaColorField();
-    button.layer.cornerRadius = BUTTON_HEIGHT / 2;
     button.titleLabel.font = ExteriaFontSemibold(16);
     [button setTitle:title forState:UIControlStateNormal];
-    [button setTitleColor:primary ? [UIColor whiteColor] : ExteriaColorTitle() forState:UIControlStateNormal];
+    if (ExteriaThemeIsClassic()) {
+        [button setBackgroundImage:ExteriaClassicGlossButtonImage(gloss, NO) forState:UIControlStateNormal];
+        [button setBackgroundImage:ExteriaClassicGlossButtonImage(gloss, YES) forState:UIControlStateHighlighted];
+        [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        button.titleLabel.shadowOffset = CGSizeMake(0, -1);
+        [button setTitleShadowColor:[UIColor colorWithWhite:0 alpha:0.4] forState:UIControlStateNormal];
+    } else {
+        button.backgroundColor = primary ? ExteriaColorAccent() : ExteriaColorField();
+        button.layer.cornerRadius = BUTTON_HEIGHT / 2;
+        [button setTitleColor:primary ? [UIColor whiteColor] : ExteriaColorTitle() forState:UIControlStateNormal];
+    }
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     return button;
 }
@@ -113,32 +119,38 @@ void ExteriaShowShiroFailure(ExteriaShiro *shiro) {
     target->dim = dim;
 
     UIView *card = [[UIView alloc] init];
-    card.backgroundColor = ExteriaColorCard();
-    card.layer.cornerRadius = 26;
-    card.layer.shadowColor = [UIColor blackColor].CGColor;
-    card.layer.shadowOpacity = 0.3f;
-    card.layer.shadowRadius = 18;
-    card.layer.shadowOffset = CGSizeMake(0, 6);
+    BOOL classic = ExteriaThemeIsClassic();
+    CGFloat radius = classic ? 14 : 26;
+    if (classic) {
+        ExteriaClassicApplyMenuPlate(card, radius);
+    } else {
+        card.backgroundColor = ExteriaColorCard();
+        card.layer.cornerRadius = radius;
+        card.layer.shadowColor = [UIColor blackColor].CGColor;
+        card.layer.shadowOpacity = 0.3f;
+        card.layer.shadowRadius = 18;
+        card.layer.shadowOffset = CGSizeMake(0, 6);
+    }
     target->card = card;
 
     UILabel *title = [[[UILabel alloc] init] autorelease];
     title.backgroundColor = [UIColor clearColor];
     title.font = ExteriaFontBold(21);
-    title.textColor = ExteriaColorTitle();
+    title.textColor = classic ? ExteriaClassicMenuTextColor() : ExteriaColorTitle();
     title.textAlignment = ExteriaTextAlignmentCenter;
     title.numberOfLines = 0;
     title.text = NSLocalizedString(@"shiro.fail.title", nil);
     CGSize titleFit = [title sizeThatFits:CGSizeMake(inner, 200)];
 
     NSString *why = shiro.failureText.length ? shiro.failureText : NSLocalizedString(@"shiro.why.server", nil);
-    NSString *detail = shiro.failureDetail;
     UILabel *text = [[[UILabel alloc] init] autorelease];
     text.backgroundColor = [UIColor clearColor];
     text.font = ExteriaFontRegular(15);
-    text.textColor = ExteriaColorSecondary();
+    text.textColor = classic ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.7] : ExteriaColorSecondary();
     text.textAlignment = ExteriaTextAlignmentCenter;
     text.numberOfLines = 0;
-    text.text = detail.length ? [NSString stringWithFormat:@"%@\n\n(%@)", why, detail] : why;
+    /* the technical line (account: io error) is in the log that the button copies, and is no part of the words the person reads */
+    text.text = why;
     CGSize fit = [text sizeThatFits:CGSizeMake(inner, 600)];
 
     /* the picture takes what the screen has left over the words and the three buttons, up to the width of the card */
@@ -152,16 +164,16 @@ void ExteriaShowShiroFailure(ExteriaShiro *shiro) {
     UIScrollView *content = [[[UIScrollView alloc] init] autorelease];
     content.showsVerticalScrollIndicator = NO;
     /* a clip with rounded corners makes the card draw off screen at every frame of its move; the card already has its corners, and only a card that scrolls needs the clip */
-    content.layer.cornerRadius = 26;
+    content.layer.cornerRadius = radius;
     content.clipsToBounds = scrolls;
     [card addSubview:content];
     CGFloat top = 22;
     {
-        UIImageView *picture = [[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"shiro_meme.jpg"]] autorelease];
-        /* the whole meme, whatever room the screen leaves: a cut of it showed only a middle of the picture */
+        UIImageView *picture = [[[UIImageView alloc] initWithImage:[UIImage imageNamed:@"shiro_error.png"]] autorelease];
+        /* the whole sticker, whatever room the screen leaves: a cut of it showed only a middle of the picture */
         picture.contentMode = UIViewContentModeScaleAspectFit;
         picture.clipsToBounds = YES;
-        picture.layer.cornerRadius = 14;
+        picture.layer.cornerRadius = 0;
         picture.frame = CGRectMake(20, 20, inner, floor(side));
         [content addSubview:picture];
         top = CGRectGetMaxY(picture.frame) + 14;
@@ -172,14 +184,14 @@ void ExteriaShowShiroFailure(ExteriaShiro *shiro) {
     [content addSubview:text];
 
     CGFloat y = CGRectGetMaxY(text.frame) + 20;
-    UIButton *retry = ExteriaFailureButton(NSLocalizedString(@"shiro.fail.retry", nil), YES, target, @selector(retryTapped));
+    UIButton *retry = ExteriaFailureButton(NSLocalizedString(@"shiro.fail.retry", nil), ExteriaClassicGlossGreen, YES, target, @selector(retryTapped));
     retry.frame = CGRectMake(20, y, inner, BUTTON_HEIGHT);
     [content addSubview:retry];
-    UIButton *copy = ExteriaFailureButton(NSLocalizedString(@"shiro.fail.copy", nil), NO, target, @selector(copyTapped));
+    UIButton *copy = ExteriaFailureButton(NSLocalizedString(@"shiro.fail.copy", nil), ExteriaClassicGlossSlate, NO, target, @selector(copyTapped));
     copy.frame = CGRectMake(20, y + BUTTON_HEIGHT + 10, inner, BUTTON_HEIGHT);
     [content addSubview:copy];
     target->copyButton = copy;
-    UIButton *off = ExteriaFailureButton(NSLocalizedString(@"shiro.fail.off", nil), NO, target, @selector(offTapped));
+    UIButton *off = ExteriaFailureButton(NSLocalizedString(@"shiro.fail.off", nil), ExteriaClassicGlossRed, NO, target, @selector(offTapped));
     off.frame = CGRectMake(20, y + 2 * (BUTTON_HEIGHT + 10), inner, BUTTON_HEIGHT);
     [content addSubview:off];
     CGFloat height = CGRectGetMaxY(off.frame) + 20;
@@ -190,7 +202,8 @@ void ExteriaShowShiroFailure(ExteriaShiro *shiro) {
     card.center = CGPointMake(CGRectGetMidX(host.bounds), CGRectGetMidY(host.bounds));
     card.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     /* the shadow follows a path and the card is drawn once into a picture that then moves, so the spring of its entry costs nothing on a slow phone */
-    card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:26].CGPath;
+    if (classic) ExteriaClassicFitPlate(card, 0);
+    else card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:radius].CGPath;
     card.layer.shouldRasterize = YES;
     card.layer.rasterizationScale = [UIScreen mainScreen].scale;
 
@@ -198,7 +211,7 @@ void ExteriaShowShiroFailure(ExteriaShiro *shiro) {
     [host addSubview:card];
     ExteriaShiroFailureShown = target;
     card.alpha = 0;
-    card.transform = CGAffineTransformMakeScale(0.9, 0.9);
-    [UIView animateWithDuration:0.2 animations:^{ dim.alpha = 0.5f; }];
-    ExteriaAnimateView(card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
+    ExteriaAnimateView(dim, CGAffineTransformIdentity, 0.5f, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }

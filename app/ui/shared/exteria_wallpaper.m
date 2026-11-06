@@ -8,6 +8,7 @@
 #import "exteria_imported_theme.h"
 #import "exteria_wave.h"
 #import <Accelerate/Accelerate.h>
+#import <QuartzCore/QuartzCore.h>
 
 NSString *const ExteriaWallpaperDidChangeNotification = @"ExteriaWallpaperDidChange";
 
@@ -646,3 +647,4 @@ UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIIma
     UIGraphicsEndImageContext();
     return image;
 }
+

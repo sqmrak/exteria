@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_chat_settings.h"
 #import "exteria_theme.h"
 
 #define RING_WIDTH 2.5
@@ -42,6 +43,8 @@ void ExteriaStoryRingColors(BOOL unseen, BOOL closeFriends, UIColor **from, UICo
 
 @implementation ExteriaStoryRing
 
+@synthesize followsAvatarShape = _followsAvatarShape;
+
 + (CGFloat)outset {
     return RING_OUTSET;
 }
@@ -71,6 +74,11 @@ static CAShapeLayer *ExteriaRingStroke(UIColor *color, CGFloat width) {
     return self;
 }
 
+- (void)setFollowsAvatarShape:(BOOL)follows {
+    _followsAvatarShape = follows;
+    [self setNeedsLayout];
+}
+
 - (void)dealloc {
     [_gradient release];
     [_unseenStroke release];
@@ -93,26 +101,29 @@ static CAShapeLayer *ExteriaRingStroke(UIColor *color, CGFloat width) {
     [self setCount:peer.count unseen:peer.unread closeFriends:peer.closeFriends];
 }
 
-/* arcs of the segments from first up to last, clockwise from twelve o'clock; one story is the whole circle, since a gap
-   would have no arc to separate */
-static CGPathRef ExteriaRingPath(CGRect box, NSInteger count, NSInteger first, NSInteger last) {
+/* the outline of the ring from twelve o'clock, clockwise: a circle, or a rounded square with the corner radius given. one path serves both layers, and the
+   segments are cut from it by dashes, so the ring follows any corner radius and not only the circle */
+static CGPathRef ExteriaRingPath(CGRect box, CGFloat radius) {
     UIBezierPath *path = [UIBezierPath bezierPath];
-    if (first >= last) return path.CGPath;
-    CGPoint center = CGPointMake(CGRectGetMidX(box), CGRectGetMidY(box));
-    CGFloat radius = box.size.width / 2;
-    if (count == 1) {
-        [path addArcWithCenter:center radius:radius startAngle:-(CGFloat)M_PI_2 endAngle:(CGFloat)(M_PI * 1.5) clockwise:YES];
-        return path.CGPath;
-    }
-    CGFloat step = (CGFloat)(2 * M_PI) / count;
-    CGFloat gap = (CGFloat)((count > 20 ? 3 : 5) * M_PI / 180);
-    if (gap * 2 >= step) gap = 0;
-    for (NSInteger i = first; i < last; ++i) {
-        CGFloat start = -(CGFloat)M_PI_2 + step * i + gap;
-        [path moveToPoint:CGPointMake(center.x + radius * cosf(start), center.y + radius * sinf(start))];
-        [path addArcWithCenter:center radius:radius startAngle:start endAngle:start + step - gap * 2 clockwise:YES];
-    }
+    CGFloat minX = CGRectGetMinX(box), maxX = CGRectGetMaxX(box), minY = CGRectGetMinY(box), maxY = CGRectGetMaxY(box);
+    radius = MIN(radius, MIN(box.size.width, box.size.height) / 2);
+    [path moveToPoint:CGPointMake(CGRectGetMidX(box), minY)];
+    [path addLineToPoint:CGPointMake(maxX - radius, minY)];
+    [path addArcWithCenter:CGPointMake(maxX - radius, minY + radius) radius:radius startAngle:-(CGFloat)M_PI_2 endAngle:0 clockwise:YES];
+    [path addLineToPoint:CGPointMake(maxX, maxY - radius)];
+    [path addArcWithCenter:CGPointMake(maxX - radius, maxY - radius) radius:radius startAngle:0 endAngle:(CGFloat)M_PI_2 clockwise:YES];
+    [path addLineToPoint:CGPointMake(minX + radius, maxY)];
+    [path addArcWithCenter:CGPointMake(minX + radius, maxY - radius) radius:radius startAngle:(CGFloat)M_PI_2 endAngle:(CGFloat)M_PI clockwise:YES];
+    [path addLineToPoint:CGPointMake(minX, minY + radius)];
+    [path addArcWithCenter:CGPointMake(minX + radius, minY + radius) radius:radius startAngle:(CGFloat)M_PI endAngle:(CGFloat)(M_PI * 1.5) clockwise:YES];
+    [path closePath];
     return path.CGPath;
+}
+
+/* the length of ExteriaRingPath */
+static CGFloat ExteriaRingLength(CGRect box, CGFloat radius) {
+    radius = MIN(radius, MIN(box.size.width, box.size.height) / 2);
+    return 2 * (box.size.width + box.size.height - 4 * radius) + (CGFloat)(2 * M_PI) * radius;
 }
 
 - (void)layoutSubviews {
@@ -125,9 +136,28 @@ static CGPathRef ExteriaRingPath(CGRect box, NSInteger count, NSInteger first, N
     _gradient.frame = frame;
     _unseenStroke.frame = frame;
     _seenStroke.frame = frame;
+    /* the avatar of a list row is cut to the percent the person chose, in avatar sizes; 100 is a circle */
+    CGFloat radius = _followsAvatarShape ? box.size.width * MIN(100, ExteriaAvatarCornerPercent()) / 200.0f : box.size.width / 2;
+    CGPathRef path = ExteriaRingPath(box, radius);
+    _seenStroke.path = path;
+    _unseenStroke.path = path;
+    /* the gap the arcs leave on each side of a joint, in degrees as the Telegram avatar does, turned into a length along the outline at the radius of a circle of this size */
+    CGFloat length = ExteriaRingLength(box, radius);
+    CGFloat step = length / (CGFloat)_count;
+    CGFloat gap = (CGFloat)((_count > 20 ? 6 : 10) * M_PI / 180) * box.size.width / 2;
+    if (_count == 1 || gap >= step) gap = 0;
+    NSArray *dashes = gap > 0 ? [NSArray arrayWithObjects:[NSNumber numberWithDouble:step - gap], [NSNumber numberWithDouble:gap], nil] : nil;
+    _seenStroke.lineDashPattern = dashes;
+    _unseenStroke.lineDashPattern = dashes;
+    /* a joint sits in the middle of a gap, so the dashes start half a gap in */
+    _seenStroke.lineDashPhase = gap > 0 ? step - gap + gap / 2 : 0;
+    _unseenStroke.lineDashPhase = _seenStroke.lineDashPhase;
     /* the seen arcs are the oldest stories, so they come first and the unseen ones follow */
-    _seenStroke.path = ExteriaRingPath(box, _count, 0, _count - _unseen);
-    _unseenStroke.path = ExteriaRingPath(box, _count, _count - _unseen, _count);
+    CGFloat boundary = (CGFloat)(_count - _unseen) / (CGFloat)_count;
+    _seenStroke.strokeStart = 0;
+    _seenStroke.strokeEnd = boundary;
+    _unseenStroke.strokeStart = _unseen ? boundary : 1;
+    _unseenStroke.strokeEnd = 1;
 }
 
 @end

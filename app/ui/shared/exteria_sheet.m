@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_animation.h"
 #import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
@@ -32,13 +33,19 @@
     [super dealloc];
 }
 
+#define CLASSIC_RADIUS 10.0
+
 static UIView *ExteriaSheetCard(void) {
     UIView *card = [[[UIView alloc] init] autorelease];
+    /* the classic card is a plate of polished metal, which is put on once the card has its size, and its shadow must not be clipped */
+    if (ExteriaThemeIsClassic()) return card;
     card.backgroundColor = ExteriaColorCard();
     card.layer.cornerRadius = CARD_RADIUS;
     card.layer.masksToBounds = YES;
     return card;
 }
+
+static UIColor *ExteriaSheetText(void) { return ExteriaThemeIsClassic() ? ExteriaClassicMenuTextColor() : ExteriaColorTitle(); }
 
 static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     UILabel *label = [[[UILabel alloc] init] autorelease];
@@ -62,7 +69,14 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     return button;
 }
 
-- (void)rowDown:(UIButton *)row { row.backgroundColor = ExteriaColorField(); }
+- (void)rowDown:(UIButton *)row {
+    if (ExteriaThemeIsClassic()) {
+        /* the cancel key is a picture and shows its own pressed one */
+        if (row.tag >= 0) row.backgroundColor = ExteriaClassicMenuPressColor();
+        return;
+    }
+    row.backgroundColor = ExteriaColorField();
+}
 - (void)rowUp:(UIButton *)row { row.backgroundColor = [UIColor clearColor]; }
 
 + (void)presentInView:(UIView *)host title:(NSString *)title message:(NSString *)message options:(NSArray *)options destructive:(NSIndexSet *)destructive
@@ -89,11 +103,12 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     [_dim addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(cancel)] autorelease]];
     [self addSubview:_dim];
 
+    BOOL classic = ExteriaThemeIsClassic();
     UIView *card = ExteriaSheetCard();
     CGFloat y = 0;
     CGFloat textWidth = width - 2 * TEXT_PAD;
     if (title.length) {
-        UILabel *label = ExteriaSheetLabel(ExteriaFontSemibold(16), ExteriaColorTitle());
+        UILabel *label = ExteriaSheetLabel(classic ? [UIFont boldSystemFontOfSize:16] : ExteriaFontSemibold(16), ExteriaSheetText());
         label.text = title;
         CGSize fit = [label sizeThatFits:CGSizeMake(textWidth, 200)];
         label.frame = CGRectMake(TEXT_PAD, y + 16, textWidth, fit.height);
@@ -101,7 +116,7 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
         y += 16 + fit.height + (message.length ? 4 : 12);
     }
     if (message.length) {
-        UILabel *label = ExteriaSheetLabel(ExteriaFontRegular(14.5), ExteriaColorSecondary());
+        UILabel *label = ExteriaSheetLabel(classic ? [UIFont systemFontOfSize:14] : ExteriaFontRegular(14.5), classic ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.7] : ExteriaColorSecondary());
         label.text = message;
         CGSize fit = [label sizeThatFits:CGSizeMake(textWidth, 300)];
         label.frame = CGRectMake(TEXT_PAD, y + (title.length ? 0 : 16), textWidth, fit.height);
@@ -118,23 +133,49 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     list.contentSize = CGSizeMake(width, rows);
     list.showsVerticalScrollIndicator = NO;
     list.bounces = rows > list.bounds.size.height;
+    if (classic) {
+        /* the bottom rows follow the round corners of the plate under them */
+        list.layer.cornerRadius = CLASSIC_RADIUS;
+        list.layer.masksToBounds = YES;
+    }
     for (NSUInteger i = 0; i < options.count; ++i) {
-        UIColor *color = [destructive containsIndex:i] ? ExteriaColorBadgeRed() : ExteriaColorTitle();
-        UIButton *button = [self buttonWithTitle:[options objectAtIndex:i] color:color font:ExteriaFontMedium(17) tag:(NSInteger)i];
+        UIColor *color = [destructive containsIndex:i] ? (classic ? ExteriaClassicMenuRedColor() : ExteriaColorBadgeRed()) : ExteriaSheetText();
+        UIButton *button = [self buttonWithTitle:[options objectAtIndex:i] color:color font:classic ? [UIFont boldSystemFontOfSize:17] : ExteriaFontMedium(17) tag:(NSInteger)i];
         button.frame = CGRectMake(0, ROW_HEIGHT * (CGFloat)i, width, ROW_HEIGHT);
         [button addTarget:self action:@selector(picked:) forControlEvents:UIControlEventTouchUpInside];
-        UIView *line = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 1.0 / ExteriaScreenScale())] autorelease];
-        line.backgroundColor = ExteriaColorHairline();
-        [button addSubview:line];
+        if (classic) {
+            /* a dark groove over a lit line, the way the old menus split their rows */
+            BOOL charcoal = ExteriaThemeIsDark();
+            UIView *groove = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 1)] autorelease];
+            groove.backgroundColor = [UIColor colorWithWhite:0 alpha:charcoal ? 0.45 : 0.14];
+            groove.userInteractionEnabled = NO;
+            [button addSubview:groove];
+            UIView *lit = [[[UIView alloc] initWithFrame:CGRectMake(0, 1, width, 1)] autorelease];
+            lit.backgroundColor = [UIColor colorWithWhite:1 alpha:charcoal ? 0.08 : 0.85];
+            lit.userInteractionEnabled = NO;
+            [button addSubview:lit];
+        } else {
+            UIView *line = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 1.0 / ExteriaScreenScale())] autorelease];
+            line.backgroundColor = ExteriaColorHairline();
+            [button addSubview:line];
+        }
         [list addSubview:button];
     }
     [card addSubview:list];
     card.frame = CGRectMake(0, 0, width, cardHeight);
+    if (classic) ExteriaClassicApplyMenuPlate(card, CLASSIC_RADIUS);
 
     UIView *cancel = ExteriaSheetCard();
     cancel.frame = CGRectMake(0, cardHeight + GAP, width, cancelHeight);
-    UIButton *cancelButton = [self buttonWithTitle:cancelTitle color:ExteriaColorAccent() font:ExteriaFontSemibold(17) tag:-1];
+    UIButton *cancelButton = [self buttonWithTitle:cancelTitle color:classic ? [UIColor whiteColor] : ExteriaColorAccent() font:classic ? [UIFont boldSystemFontOfSize:17] : ExteriaFontSemibold(17) tag:-1];
     cancelButton.frame = cancel.bounds;
+    if (classic) {
+        /* the cancel key is a glossy slate key of its own, apart from the plate, as on the old action sheets */
+        [cancelButton setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+        [cancelButton setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+        cancelButton.titleLabel.shadowOffset = CGSizeMake(0, -1);
+        [cancelButton setTitleShadowColor:[UIColor colorWithWhite:0 alpha:0.5] forState:UIControlStateNormal];
+    }
     [cancelButton addTarget:self action:@selector(cancel) forControlEvents:UIControlEventTouchUpInside];
     [cancel addSubview:cancelButton];
 
@@ -153,8 +194,8 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     /* the two cards clip their rows with rounded corners, which is drawn off screen on every frame of the slide; as a bitmap it slides as a picture */
     ExteriaCacheForMotion(_stack);
     UIView *stack = _stack;
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.42, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_stack, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.42, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_stack, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), ^(BOOL finished) {
         (void)finished;
         ExteriaUncacheAfterMotion(stack);
     });
@@ -167,8 +208,8 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color) {
     void (^next)(void) = [after copy];
     [self retain];
     ExteriaCacheForMotion(_stack);
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_stack, CGAffineTransformMakeTranslation(0, _stack.frame.size.height + 40), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_stack, CGAffineTransformMakeTranslation(0, _stack.frame.size.height + 40), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         if (next) next();

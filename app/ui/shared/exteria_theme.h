@@ -81,8 +81,9 @@ UIFont *ExteriaFontRegular(CGFloat size);
 UIFont *ExteriaFontMedium(CGFloat size);
 UIFont *ExteriaFontSemibold(CGFloat size);
 UIFont *ExteriaFontBold(CGFloat size);
-/* the size of the whole interface, in percent of the designed one. The value is read once when the app starts, so every screen is built at one scale; the stored
-   value is what the next start uses. The fonts of the ExteriaFont and Shiro helpers follow it, and so do the sizes of the rows on the chat list */
+/* the size of the whole interface, in percent of the designed one. Screens read it when they are built, so a change is followed by the same rebuild of the main
+   screens that a theme change makes (post ExteriaThemeDidChangeNotification once the person has let go of the slider). The fonts of the ExteriaFont and Shiro
+   helpers follow it, and so do the sizes of the rows on the chat list */
 #define EXTERIA_INTERFACE_SCALE_MIN 85
 #define EXTERIA_INTERFACE_SCALE_MAX 125
 CGFloat ExteriaInterfaceScale(void);

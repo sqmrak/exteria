@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 
@@ -34,18 +35,15 @@ static ExteriaCrashPromptTarget *ExteriaCrashPromptShown;
        target lives until the fade ends, and nothing is tappable meanwhile */
     shade.userInteractionEnabled = NO;
     plate.userInteractionEnabled = NO;
-    [UIView animateWithDuration:0.18 animations:^{
-        shade.alpha = 0;
-        plate.alpha = 0;
-        plate.transform = CGAffineTransformMakeScale(0.94, 0.94);
-    } completion:^(BOOL finished) {
+    ExteriaAnimateView(shade, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(plate, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [shade removeFromSuperview];
         [plate removeFromSuperview];
         [shade release];
         [plate release];
         [self release];
-    }];
+    });
     if (done) done(send);
     [done release];
 }
@@ -64,11 +62,20 @@ static ExteriaCrashPromptTarget *ExteriaCrashPromptShown;
 
 static UIButton *ExteriaPromptButton(NSString *title, BOOL primary, id target, SEL action) {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.backgroundColor = primary ? ExteriaColorAccent() : ExteriaColorField();
-    button.layer.cornerRadius = BUTTON_HEIGHT / 2;
     button.titleLabel.font = ExteriaFontSemibold(17);
     [button setTitle:title forState:UIControlStateNormal];
-    [button setTitleColor:primary ? [UIColor whiteColor] : ExteriaColorTitle() forState:UIControlStateNormal];
+    if (ExteriaThemeIsClassic()) {
+        ExteriaClassicGloss gloss = primary ? ExteriaClassicGlossGreen : ExteriaClassicGlossSlate;
+        [button setBackgroundImage:ExteriaClassicGlossButtonImage(gloss, NO) forState:UIControlStateNormal];
+        [button setBackgroundImage:ExteriaClassicGlossButtonImage(gloss, YES) forState:UIControlStateHighlighted];
+        [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        button.titleLabel.shadowOffset = CGSizeMake(0, -1);
+        [button setTitleShadowColor:[UIColor colorWithWhite:0 alpha:0.4] forState:UIControlStateNormal];
+    } else {
+        button.backgroundColor = primary ? ExteriaColorAccent() : ExteriaColorField();
+        button.layer.cornerRadius = BUTTON_HEIGHT / 2;
+        [button setTitleColor:primary ? [UIColor whiteColor] : ExteriaColorTitle() forState:UIControlStateNormal];
+    }
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     return button;
 }
@@ -90,18 +97,24 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     target->dim = dim;
 
     UIView *card = [[UIView alloc] init];
-    card.backgroundColor = ExteriaColorCard();
-    card.layer.cornerRadius = 26;
-    card.layer.shadowColor = [UIColor blackColor].CGColor;
-    card.layer.shadowOpacity = 0.3f;
-    card.layer.shadowRadius = 18;
-    card.layer.shadowOffset = CGSizeMake(0, 6);
+    BOOL classic = ExteriaThemeIsClassic();
+    CGFloat radius = classic ? 14 : 26;
+    if (classic) {
+        ExteriaClassicApplyMenuPlate(card, radius);
+    } else {
+        card.backgroundColor = ExteriaColorCard();
+        card.layer.cornerRadius = radius;
+        card.layer.shadowColor = [UIColor blackColor].CGColor;
+        card.layer.shadowOpacity = 0.3f;
+        card.layer.shadowRadius = 18;
+        card.layer.shadowOffset = CGSizeMake(0, 6);
+    }
     target->card = card;
 
     UILabel *title = [[[UILabel alloc] init] autorelease];
     title.backgroundColor = [UIColor clearColor];
     title.font = ExteriaFontBold(22);
-    title.textColor = ExteriaColorTitle();
+    title.textColor = classic ? ExteriaClassicMenuTextColor() : ExteriaColorTitle();
     title.textAlignment = ExteriaTextAlignmentCenter;
     title.numberOfLines = 0;
     title.text = NSLocalizedString(@"crash.title", nil);
@@ -110,7 +123,7 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     UILabel *text = [[[UILabel alloc] init] autorelease];
     text.backgroundColor = [UIColor clearColor];
     text.font = ExteriaFontRegular(15);
-    text.textColor = ExteriaColorSecondary();
+    text.textColor = classic ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.7] : ExteriaColorSecondary();
     text.textAlignment = ExteriaTextAlignmentCenter;
     text.numberOfLines = 0;
     text.text = NSLocalizedString(@"crash.text", nil);
@@ -127,7 +140,7 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     UIScrollView *content = [[[UIScrollView alloc] init] autorelease];
     content.showsVerticalScrollIndicator = NO;
     /* a clip with rounded corners makes the card draw off screen at every frame of its move; the card already has its corners, and only a card that scrolls needs the clip */
-    content.layer.cornerRadius = 26;
+    content.layer.cornerRadius = radius;
     content.clipsToBounds = scrolls;
     [card addSubview:content];
     CGFloat top = 22;
@@ -161,7 +174,8 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     card.center = CGPointMake(CGRectGetMidX(window.bounds), CGRectGetMidY(window.bounds));
     card.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     /* the shadow follows a path and the card is drawn once into a picture that then moves, so the spring of its entry costs nothing on a slow phone */
-    card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:26].CGPath;
+    if (classic) ExteriaClassicFitPlate(card, 0);
+    else card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:radius].CGPath;
     card.layer.shouldRasterize = YES;
     card.layer.rasterizationScale = [UIScreen mainScreen].scale;
 
@@ -169,8 +183,8 @@ BOOL ExteriaAskCrashReport(void (^answer)(BOOL send)) {
     [window addSubview:card];
     ExteriaCrashPromptShown = target;
     card.alpha = 0;
-    card.transform = CGAffineTransformMakeScale(0.9, 0.9);
-    [UIView animateWithDuration:0.2 animations:^{ dim.alpha = 0.5f; }];
-    ExteriaAnimateView(card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
+    ExteriaAnimateView(dim, CGAffineTransformIdentity, 0.5f, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
     return YES;
 }

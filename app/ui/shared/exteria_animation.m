@@ -1,5 +1,7 @@
 #import "exteria_animation.h"
 
+#import "exteria_theme.h"
+
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -253,4 +255,13 @@ void ExteriaSetFrameRate(CADisplayLink *link, NSInteger framesPerSecond) {
         return;
     }
     if ([link respondsToSelector:@selector(setFrameInterval:)]) link.frameInterval = (NSUInteger)MAX(1, 60 / framesPerSecond);
+}
+
+exteria_motion_curve ExteriaPopupCurve(BOOL entering) {
+    if (ExteriaThemeIsClassic()) return entering ? EXTERIA_MOTION_POPUP_CLASSIC_ENTER : EXTERIA_MOTION_POPUP_CLASSIC_EXIT;
+    return entering ? EXTERIA_MOTION_POPUP_MODERN_ENTER : EXTERIA_MOTION_POPUP_MODERN_EXIT;
+}
+
+CGFloat ExteriaPopupScale(void) {
+    return ExteriaThemeIsClassic() ? 0.95 : 0.9;
 }

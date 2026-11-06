@@ -170,6 +170,8 @@
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    /* ios 6 scrolls the caret into view of a text view that cannot scroll, which leaves a short text shifted inside its field */
+    if (!self.scrollEnabled && (self.contentOffset.x != 0 || self.contentOffset.y != 0)) self.contentOffset = CGPointZero;
     _emojiOverlay.frame = self.bounds;
     [self bringSubviewToFront:_emojiOverlay];
     [_emojiOverlay setNeedsDisplay];

@@ -20,6 +20,39 @@
 }
 @end
 
+/* the gloss, the dark rim and the lit edge of a classic avatar of one size and corner, as a picture kept for the next ones */
+static UIImage *ExteriaAvatarGlossOverlay(CGSize size, CGFloat radius) {
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 24;
+    });
+    NSString *key = [NSString stringWithFormat:@"%.1f|%.1f|%.1f|%.1f", size.width, size.height, radius, ExteriaScreenScale()];
+    UIImage *kept = [[[cache objectForKey:key] retain] autorelease];
+    if (kept) return kept;
+    CGRect bounds = CGRectMake(0, 0, size.width, size.height);
+    UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    static const CGFloat gloss[8] = {1, 1, 1, 0.26, 1, 1, 1, 0.02};
+    CGContextSaveGState(context);
+    CGContextAddEllipseInRect(context, CGRectMake(-bounds.size.width * 0.15, -bounds.size.height * 0.52, bounds.size.width * 1.3, bounds.size.height * 1.1));
+    CGContextClip(context);
+    ExteriaFillGradient(context, CGPointZero, CGPointMake(0, bounds.size.height * 0.6), gloss, 2);
+    CGContextRestoreGState(context);
+    UIBezierPath *rim = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(bounds, 0.5, 0.5) cornerRadius:MAX(0, radius - 0.5)];
+    [[UIColor colorWithWhite:0 alpha:0.24] setStroke];
+    [rim stroke];
+    CGContextClipToRect(context, CGRectMake(0, 0, bounds.size.width, bounds.size.height * 0.5));
+    UIBezierPath *highlight = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(bounds, 1.5, 1.5) cornerRadius:MAX(0, radius - 1.5)];
+    [[UIColor colorWithWhite:1 alpha:0.28] setStroke];
+    [highlight stroke];
+    UIImage *made = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    if (made) [cache setObject:made forKey:key];
+    return made;
+}
+
 @implementation ExteriaAvatarView
 
 @synthesize initials = _initials;
@@ -176,26 +209,9 @@ static void ExteriaAccentGradient(CGFloat out[8]) {
         ExteriaFillGradient(context, CGPointMake(0, 0), CGPointMake(0, bounds.size.height),
                             _accent ? accent : palette[_seed % AVATAR_COLORS], 2);
     }
-    if (classicSymbol) {
-        static const CGFloat gloss[8] = {1, 1, 1, 0.26, 1, 1, 1, 0.02};
-        CGContextSaveGState(context);
-        CGContextAddEllipseInRect(context, CGRectMake(-bounds.size.width * 0.15, -bounds.size.height * 0.52,
-                                                      bounds.size.width * 1.3, bounds.size.height * 1.1));
-        CGContextClip(context);
-        ExteriaFillGradient(context, CGPointZero, CGPointMake(0, bounds.size.height * 0.6), gloss, 2);
-        CGContextRestoreGState(context);
-        UIBezierPath *rim = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(bounds, 0.5, 0.5)
-                                                      cornerRadius:MAX(0, radius - 0.5)];
-        [[UIColor colorWithWhite:0 alpha:0.24] setStroke];
-        [rim stroke];
-        CGContextSaveGState(context);
-        CGContextClipToRect(context, CGRectMake(0, 0, bounds.size.width, bounds.size.height * 0.5));
-        UIBezierPath *highlight = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(bounds, 1.5, 1.5)
-                                                            cornerRadius:MAX(0, radius - 1.5)];
-        [[UIColor colorWithWhite:1 alpha:0.28] setStroke];
-        [highlight stroke];
-        CGContextRestoreGState(context);
-    }
+    /* the classic style lights every picture like a glass button: a gloss over the top half and a lit rim. a list has dozens of pictures, and the gloss, the two outlines and their
+       clips were worked out again for each at every redraw, so they are drawn once for a size and a corner and the picture is laid over */
+    if (ExteriaThemeIsClassic()) [ExteriaAvatarGlossOverlay(bounds.size, radius) drawInRect:bounds];
     CGContextRestoreGState(context);
 
     if (_showsSymbol && !_image) {

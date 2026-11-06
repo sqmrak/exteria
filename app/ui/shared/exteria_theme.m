@@ -323,15 +323,30 @@ UIColor *ExteriaColorBubbleMeta(BOOL outgoing) {
     return outgoing && !ExteriaClassic ? [UIColor colorWithWhite:1 alpha:0.78] : ExteriaColorSecondary();
 }
 
+/* the bubbles are lit from above in the accent of the theme: top is the lit edge, bottom the color the picture is filled with and the light that bounces up from the lower
+   edge, outline the dark rim. the colors follow the accent, so a color of the person's own reaches the bubbles */
 void ExteriaClassicBubbleColors(BOOL outgoing, UIColor **top, UIColor **bottom, UIColor **outline) {
+    UIColor *accent = ExteriaColorAccent();
+    UIColor *white = [UIColor whiteColor], *black = [UIColor blackColor];
     if (ExteriaDark) {
-        *top = outgoing ? ExteriaRGB(118, 84, 158) : ExteriaRGB(78, 70, 96);
-        *bottom = outgoing ? ExteriaRGB(86, 58, 124) : ExteriaRGB(58, 51, 74);
-        *outline = outgoing ? ExteriaRGB(54, 34, 84) : ExteriaRGB(30, 26, 42);
+        if (outgoing) {
+            *top = ExteriaMixedColor(accent, white, 0.10);
+            *bottom = ExteriaMixedColor(accent, black, 0.34);
+            *outline = ExteriaMixedColor(accent, black, 0.68);
+        } else {
+            UIColor *grey = [UIColor colorWithWhite:0.3 alpha:1];
+            *top = ExteriaMixedColor(grey, accent, 0.16);
+            *bottom = ExteriaMixedColor([UIColor colorWithWhite:0.2 alpha:1], accent, 0.14);
+            *outline = ExteriaMixedColor([UIColor colorWithWhite:0.06 alpha:1], accent, 0.12);
+        }
+    } else if (outgoing) {
+        *top = ExteriaMixedColor(accent, white, 0.74);
+        *bottom = ExteriaMixedColor(accent, white, 0.52);
+        *outline = ExteriaMixedColor(accent, black, 0.45);
     } else {
-        *top = outgoing ? ExteriaRGB(236, 224, 252) : ExteriaRGB(255, 255, 255);
-        *bottom = outgoing ? ExteriaRGB(210, 186, 242) : ExteriaRGB(240, 236, 247);
-        *outline = outgoing ? ExteriaRGB(148, 116, 190) : ExteriaRGB(188, 178, 206);
+        *top = white;
+        *bottom = ExteriaMixedColor([UIColor colorWithWhite:0.9 alpha:1], accent, 0.07);
+        *outline = ExteriaMixedColor([UIColor colorWithWhite:0.52 alpha:1], accent, 0.28);
     }
 }
 
@@ -366,17 +381,18 @@ NSInteger ExteriaInterfaceScaleStored(void) {
     return percent < EXTERIA_INTERFACE_SCALE_MIN ? EXTERIA_INTERFACE_SCALE_MIN : (percent > EXTERIA_INTERFACE_SCALE_MAX ? EXTERIA_INTERFACE_SCALE_MAX : percent);
 }
 
+/* every font and row height asks for the scale, so it is kept in a variable and not read from the defaults each time; zero means not read yet */
+static CGFloat ExteriaScaleNow;
+
 void ExteriaInterfaceScaleStore(NSInteger percent) {
     percent = percent < EXTERIA_INTERFACE_SCALE_MIN ? EXTERIA_INTERFACE_SCALE_MIN : (percent > EXTERIA_INTERFACE_SCALE_MAX ? EXTERIA_INTERFACE_SCALE_MAX : percent);
     [[NSUserDefaults standardUserDefaults] setInteger:percent forKey:ExteriaInterfaceScaleKey];
+    ExteriaScaleNow = (CGFloat)percent / 100.0f;
 }
 
-/* fonts and the rows made from them are cached and laid out once, so a scale that changed under a running screen would leave half of it at the old size */
 CGFloat ExteriaInterfaceScale(void) {
-    static CGFloat scale;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ scale = (CGFloat)ExteriaInterfaceScaleStored() / 100.0f; });
-    return scale;
+    if (ExteriaScaleNow <= 0) ExteriaScaleNow = (CGFloat)ExteriaInterfaceScaleStored() / 100.0f;
+    return ExteriaScaleNow;
 }
 
 static UIFont *ExteriaFont(ExteriaWeight weight, CGFloat size) {
