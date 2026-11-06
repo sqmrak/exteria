@@ -314,7 +314,7 @@
 }
 
 - (void)finish {
-    if (!_picked.count) return;
+    if (!_picked.count || _resolved) return;
     _resolved = YES;
     void (^handler)(NSArray *) = [_pickHandler retain];
     NSArray *chosen = [[_picked copy] autorelease];
@@ -324,6 +324,8 @@
 }
 
 - (void)choose:(ExteriaDialog *)dialog {
+    /* taps queued behind a blocked main thread arrive after the first one resolved the picker, and each would send again */
+    if (_resolved) return;
     if (_tapWatcher.stale) {
         [_tapWatcher clear];
         NSLog(@"exteria: picker dropped a tap handled late, the main thread was blocked");
