@@ -23,23 +23,70 @@
 }
 - (int32_t)level { return _level; }
 - (void)setLevel:(int32_t)level { _level = level; [self setNeedsDisplay]; }
-- (void)drawRect:(CGRect)rect {
-    (void)rect;
-    CGContextRef c = UIGraphicsGetCurrentContext();
-    CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
-    [ExteriaColorTitle() setFill];
+static void ExteriaAddShield(CGContextRef c, CGFloat w, CGFloat h) {
     CGContextMoveToPoint(c, 3, 2);
     CGContextAddLineToPoint(c, w - 3, 2);
     CGContextAddLineToPoint(c, w - 3, h * 0.55);
     CGContextAddQuadCurveToPoint(c, w - 3, h * 0.8, w / 2, h - 2);
     CGContextAddQuadCurveToPoint(c, 3, h * 0.8, 3, h * 0.55);
     CGContextClosePath(c);
-    CGContextFillPath(c);
+}
+
+/* the shield of the classic theme is a glossy plate like the badges of the old system: a vertical shade, a pale cap on the upper half and a dark rim */
+static void ExteriaDrawGlossShield(CGContextRef c, CGFloat w, CGFloat h, UIColor *base) {
+    CGFloat red = 0, green = 0, blue = 0, alpha = 0;
+    if (![base getRed:&red green:&green blue:&blue alpha:&alpha]) {
+        CGFloat white = 0;
+        [base getWhite:&white alpha:&alpha];
+        red = green = blue = white;
+    }
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGFloat shade[8] = {MIN(1, red + (1 - red) * 0.35f), MIN(1, green + (1 - green) * 0.35f), MIN(1, blue + (1 - blue) * 0.35f), 1,
+                        red * 0.7f, green * 0.7f, blue * 0.7f, 1};
+    CGFloat cap[8] = {1, 1, 1, 0.75f, 1, 1, 1, 0.12f};
+    CGGradientRef body = CGGradientCreateWithColorComponents(space, shade, NULL, 2);
+    CGGradientRef gloss = CGGradientCreateWithColorComponents(space, cap, NULL, 2);
+    CGContextSaveGState(c);
+    ExteriaAddShield(c, w, h);
+    CGContextClip(c);
+    CGContextDrawLinearGradient(c, body, CGPointMake(0, 2), CGPointMake(0, h - 2), 0);
+    CGContextSaveGState(c);
+    CGContextAddEllipseInRect(c, CGRectMake(-w * 0.25f, -h * 0.62f, w * 1.5f, h * 1.12f));
+    CGContextClip(c);
+    CGContextDrawLinearGradient(c, gloss, CGPointMake(0, 2), CGPointMake(0, h * 0.5f), 0);
+    CGContextRestoreGState(c);
+    /* the rim is stroked double wide inside the clip, so only the inner half shows and the plate keeps its size */
+    ExteriaAddShield(c, w, h);
+    CGContextSetLineWidth(c, 2);
+    CGContextSetRGBStrokeColor(c, 0, 0, 0, 0.4f);
+    CGContextStrokePath(c);
+    CGContextRestoreGState(c);
+    CGGradientRelease(body);
+    CGGradientRelease(gloss);
+    CGColorSpaceRelease(space);
+}
+
+- (void)drawRect:(CGRect)rect {
+    (void)rect;
+    CGContextRef c = UIGraphicsGetCurrentContext();
+    CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
+    BOOL classic = ExteriaThemeIsClassic();
+    if (classic) {
+        ExteriaDrawGlossShield(c, w, h, ExteriaColorTitle());
+    } else {
+        [ExteriaColorTitle() setFill];
+        ExteriaAddShield(c, w, h);
+        CGContextFillPath(c);
+    }
     NSString *text = [NSString stringWithFormat:@"%d", (int)_level];
     UIFont *font = ExteriaFontBold(10);
     CGSize size = [text sizeWithFont:font];
+    CGContextSaveGState(c);
+    /* the digit is pressed into the plate: a light edge under it */
+    if (classic) CGContextSetShadowWithColor(c, CGSizeMake(0, 1), 0, [UIColor colorWithWhite:1 alpha:0.6f].CGColor);
     [ExteriaColorScreen() setFill];
     [text drawAtPoint:CGPointMake(floor((w - size.width) / 2), floor((h - size.height) / 2) - 1) withFont:font];
+    CGContextRestoreGState(c);
 }
 @end
 
