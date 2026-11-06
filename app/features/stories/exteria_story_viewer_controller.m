@@ -1,5 +1,6 @@
 #import "exteria_name_badge.h"
 #import "exteria_story_viewer_controller.h"
+#import "exteria_caption_view.h"
 #import "exteria_story_viewers_controller.h"
 #import "exteria_people_select_controller.h"
 #import "exteria_string_drawing.h"
@@ -51,96 +52,8 @@
 - (void)fire:(NSTimer *)timer;
 @end
 
-/* the reply pill: the text and the placeholder start at its left edge, and the line sits on the vertical middle by its own height, since a
-   field puts a tall font line high in a short rect */
+/* the reply pill: the typed words and the hint start this far from its left edge */
 #define REPLY_INSET 16.0
-
-@interface ExteriaStoryReplyField : UITextField {
-    UILabel *_hint;
-    BOOL _lightFill;
-    BOOL _nativeLayout;
-}
-/* the field is a pale pill with dark words, and not a dark one with white words */
-@property (nonatomic, assign) BOOL lightFill;
-/* the system places the text: the margins are side views and the rects are not overridden. the one line rect below was made for ios 5 to 7, and on ios 15 the typed words
-   did not show in it (the keyboard took them, the pill stayed empty) */
-@property (nonatomic, assign) BOOL nativeLayout;
-@end
-
-@implementation ExteriaStoryReplyField
-
-@synthesize lightFill = _lightFill;
-@synthesize nativeLayout = _nativeLayout;
-
-- (void)setNativeLayout:(BOOL)native {
-    _nativeLayout = native;
-    if (native) {
-        UIView *left = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, REPLY_INSET, 1)] autorelease];
-        UIView *right = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, REPLY_INSET, 1)] autorelease];
-        self.leftView = left;
-        self.leftViewMode = UITextFieldViewModeAlways;
-        self.rightView = right;
-        self.rightViewMode = UITextFieldViewModeAlways;
-    } else {
-        self.leftView = nil;
-        self.rightView = nil;
-    }
-    [self setNeedsLayout];
-}
-
-/* the hint is a label of the field: the system placeholder of a subclass is drawn through drawPlaceholderInRect on ios 5 to 12 only,
-   and the newer systems leave the pill empty */
-- (id)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (!self) return nil;
-    _hint = [[UILabel alloc] init];
-    _hint.backgroundColor = [UIColor clearColor];
-    _hint.userInteractionEnabled = NO;
-    [self addSubview:_hint];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textChanged) name:UITextFieldTextDidChangeNotification object:self];
-    return self;
-}
-
-- (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [_hint release];
-    [super dealloc];
-}
-
-- (void)setPlaceholder:(NSString *)placeholder {
-    _hint.text = placeholder;
-    self.accessibilityLabel = placeholder;
-    [self setNeedsLayout];
-}
-
-- (NSString *)placeholder { return _hint.text; }
-
-- (void)setText:(NSString *)text {
-    [super setText:text];
-    [self textChanged];
-}
-
-- (void)textChanged {
-    _hint.hidden = self.text.length > 0;
-}
-
-- (CGRect)textAreaForBounds:(CGRect)bounds {
-    CGFloat line = ceil(self.font.lineHeight) + 2;
-    return CGRectMake(REPLY_INSET, floor((bounds.size.height - line) / 2), MAX(0, bounds.size.width - 2 * REPLY_INSET), line);
-}
-
-- (CGRect)textRectForBounds:(CGRect)bounds { return _nativeLayout ? [super textRectForBounds:bounds] : [self textAreaForBounds:bounds]; }
-- (CGRect)editingRectForBounds:(CGRect)bounds { return _nativeLayout ? [super editingRectForBounds:bounds] : [self textAreaForBounds:bounds]; }
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    _hint.font = self.font;
-    _hint.textColor = _lightFill ? [UIColor colorWithWhite:0.6 alpha:1] : [UIColor colorWithWhite:1 alpha:0.7];
-    _hint.frame = _nativeLayout ? CGRectMake(REPLY_INSET, 0, MAX(0, self.bounds.size.width - 2 * REPLY_INSET), self.bounds.size.height) : [self textAreaForBounds:self.bounds];
-    [self textChanged];
-}
-
-@end
 
 @interface ExteriaStoryViewerController (Tick)
 - (void)tick;
@@ -164,7 +77,7 @@
 + (Class)layerClass { return [AVPlayerLayer class]; }
 @end
 
-@interface ExteriaStoryViewerController () <UITextFieldDelegate, UIGestureRecognizerDelegate> {
+@interface ExteriaStoryViewerController () <UITextViewDelegate, UIGestureRecognizerDelegate> {
     ExteriaSession *_session;
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
@@ -219,7 +132,9 @@
     BOOL _muted;
     ExteriaEmojiLabel *_caption;
     UIView *_bottom;
-    ExteriaStoryReplyField *_reply;
+    /* the pill that holds the words of the reply, and the text view inside it: a UITextField drew nothing of what was typed in it on any system */
+    UIView *_replyPill;
+    ExteriaCaptionView *_reply;
     UIButton *_heart;
     UILabel *_views;
     UILabel *_toast;
@@ -320,6 +235,7 @@
     [_caption release];
     [_bottom release];
     [_reply release];
+    [_replyPill release];
     [_heart release];
     [_views release];
     [_toast release];
@@ -471,33 +387,32 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
 
     _bottom = [[UIView alloc] init];
     [root addSubview:_bottom];
-    _reply = [[ExteriaStoryReplyField alloc] init];
+    _replyPill = [[UIView alloc] init];
+    _reply = [[ExteriaCaptionView alloc] init];
     _reply.delegate = self;
     _reply.placeholder = NSLocalizedString(@"story.reply", nil);
     _reply.font = ExteriaFontRegular(15);
     _reply.textAlignment = ExteriaTextAlignmentLeft;
     if (_classic) {
         /* the white rounded field of the old toolbars. The system draws its white fill only up to ios 6: from ios 7 a rounded-rect field has none, and the black words
-           lay straight on the dark story and could not be read, so the fill is the field's own */
-        _reply.lightFill = YES;
+           lay straight on the dark story and could not be read, so the fill is the pill's own */
         _reply.textColor = [UIColor blackColor];
-        _reply.backgroundColor = [UIColor whiteColor];
-        _reply.layer.cornerRadius = CLASSIC_BUTTON_HEIGHT / 2;
-        _reply.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1].CGColor;
-        _reply.layer.borderWidth = 1;
+        _replyPill.backgroundColor = [UIColor whiteColor];
+        _replyPill.layer.cornerRadius = CLASSIC_BUTTON_HEIGHT / 2;
+        _replyPill.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1].CGColor;
+        _replyPill.layer.borderWidth = 1;
     } else {
-        _reply.nativeLayout = YES;
         _reply.textColor = [UIColor whiteColor];
         /* the pill is dark: white words on a pale, see-through pill vanished over a light picture, and what was typed could not be read */
-        _reply.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
-        _reply.layer.cornerRadius = 18;
-        _reply.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.35].CGColor;
-        _reply.layer.borderWidth = 1;
+        _replyPill.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
+        _replyPill.layer.cornerRadius = 18;
+        _replyPill.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.35].CGColor;
+        _replyPill.layer.borderWidth = 1;
     }
     _reply.returnKeyType = UIReturnKeySend;
     _reply.keyboardAppearance = UIKeyboardAppearanceAlert;
-    _reply.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-    [_bottom addSubview:_reply];
+    [_replyPill addSubview:_reply];
+    [_bottom addSubview:_replyPill];
     _locked = [(_classic ? ExteriaStoryClassicButton(nil) : [UIButton buttonWithType:UIButtonTypeCustom]) retain];
     [_locked setImage:ExteriaSymbolImage(ExteriaSymbolLock, 15, [UIColor colorWithWhite:1 alpha:0.55]) forState:UIControlStateNormal];
     [_locked setTitle:NSLocalizedString(@"story.locked", nil) forState:UIControlStateNormal];
@@ -637,22 +552,25 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _bottom.frame = CGRectMake(left, barY, width, barHeight);
     BOOL own = _current.outgoing;
     BOOL gated = !own && [self repliesClosed];
-    _reply.hidden = own || gated;
+    _replyPill.hidden = own || gated;
     _locked.hidden = own || !gated;
     _heart.hidden = own;
     _views.hidden = !own;
     /* the pill and the heart beside it: the heart is a button of its own at the right end of the bar */
     if (_classic) {
-        _reply.frame = CGRectMake(8, 7, width - 8 - 52 - 8, CLASSIC_BUTTON_HEIGHT);
-        _locked.frame = _reply.frame;
+        _replyPill.frame = CGRectMake(8, 7, width - 8 - 52 - 8, CLASSIC_BUTTON_HEIGHT);
+        _locked.frame = _replyPill.frame;
         _heart.frame = CGRectMake(width - 8 - 44, 7, 44, CLASSIC_BUTTON_HEIGHT);
         _views.frame = CGRectMake(16, 11, width - 32, 22);
     } else {
-        _reply.frame = CGRectMake(12, 9, width - 12 - SIDE_BUTTON - 12, 36);
-        _locked.frame = _reply.frame;
+        _replyPill.frame = CGRectMake(12, 9, width - 12 - SIDE_BUTTON - 12, 36);
+        _locked.frame = _replyPill.frame;
         _heart.frame = CGRectMake(width - 8 - SIDE_BUTTON, 5, SIDE_BUTTON, 44);
         _views.frame = CGRectMake(16, 16, width - 32, 22);
     }
+    /* the words start REPLY_INSET from the left edge of the pill (the view keeps 8 points of its own) and stand on its vertical middle */
+    CGFloat replyHeight = ceil(_reply.font.lineHeight) + 8;
+    _reply.frame = CGRectMake(REPLY_INSET - 8, floor((_replyPill.bounds.size.height - replyHeight) / 2), MAX(0, _replyPill.bounds.size.width - 2 * (REPLY_INSET - 8)), replyHeight);
     /* the track sits right over the bar and the caption over the track */
     NSString *musicLine = _current.musicLine;
     _chip.hidden = musicLine.length == 0;
@@ -1583,11 +1501,20 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
     }];
 }
 
-- (BOOL)textFieldShouldReturn:(UITextField *)field {
-    NSString *text = [field.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (!text.length || !_current) { [field resignFirstResponder]; return NO; }
-    field.text = @"";
-    [field resignFirstResponder];
+/* the return key sends the reply and does not make a new line, as the one line field it replaces did */
+- (BOOL)textView:(UITextView *)view shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
+    (void)view;
+    (void)range;
+    if (![text isEqualToString:@"\n"]) return YES;
+    [self sendReply];
+    return NO;
+}
+
+- (void)sendReply {
+    NSString *text = [_reply.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!text.length || !_current) { [_reply resignFirstResponder]; return; }
+    _reply.text = @"";
+    [_reply resignFirstResponder];
     long long randomId = ((long long)arc4random() << 32) | arc4random();
     ExteriaWeakReference *weak = _weak;
     [_session replyToStory:_current.storyId ofDialog:[self peer].owner text:text randomId:randomId completion:^(NSString *errorName) {
@@ -1595,17 +1522,16 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
         if (errorName) NSLog(@"exteria: story reply failed: %@", errorName);
         [me toast:NSLocalizedString(errorName ? @"story.reply.failed" : @"story.reply.sent", nil)];
     }];
-    return NO;
 }
 
-- (void)textFieldDidBeginEditing:(UITextField *)field {
+- (void)textViewDidBeginEditing:(UITextView *)field {
     (void)field;
     _editing = YES;
     [_player pause];
     [self syncMusic];
 }
 
-- (void)textFieldDidEndEditing:(UITextField *)field {
+- (void)textViewDidEndEditing:(UITextView *)field {
     (void)field;
     _editing = NO;
     if (!_paused && _videoStarted) [_player play];
