@@ -14,15 +14,26 @@ class AppIconTests(unittest.TestCase):
         root = Path(make_assets.ROOT)
         with tempfile.TemporaryDirectory() as directory:
             make_assets.build_deb_icons(root / "resources/icons", directory)
-            for name, side in make_assets.APP_ICONS.items():
-                if side in make_assets.LEGACY_ICON_SIDES:
-                    continue
+            for name, side in make_assets.deb_icon_files():
                 with self.subTest(name=name):
                     path = Path(directory) / name
                     self.assert_launcher_icon(path, side, True)
                     self.assertEqual(path.read_bytes(), (root / "resources/deb-icons" / name).read_bytes())
-                    with Image.open(path) as rounded, Image.open(root / "resources/icons" / name) as original:
-                        self.assertEqual(rounded.getpixel((side // 2, side // 2))[:3], original.getpixel((side // 2, side // 2))[:3])
+
+    def test_deb_icons_of_the_old_home_screen_carry_the_gloss(self):
+        root = Path(make_assets.ROOT)
+        with tempfile.TemporaryDirectory() as directory:
+            make_assets.build_deb_icons(root / "resources/icons", directory)
+            for name, side in make_assets.deb_icon_files():
+                with self.subTest(name=name), Image.open(Path(directory) / name) as icon, Image.open(root / "resources/icons" / name) as original:
+                    top = (side // 2, side // 8)
+                    before, after = original.convert("RGB").getpixel(top), icon.convert("RGB").getpixel(top)
+                    if side in make_assets.LEGACY_ICON_SIDES:
+                        # the highlight lightens the upper half and leaves the corners as they were
+                        self.assertGreater(sum(after), sum(before))
+                        self.assertEqual(icon.getpixel((0, 0))[3], 0)
+                    else:
+                        self.assertEqual(after, before)
 
     def assert_launcher_icon(self, path, side=None, rounded=False):
         with Image.open(path) as icon:
@@ -49,7 +60,7 @@ class AppIconTests(unittest.TestCase):
                     with Image.open(path) as icon:
                         self.assertEqual(icon.getpixel((side // 2, side // 2))[:3], (41, 79, 113))
 
-    def test_alternate_generator_keeps_squares(self):
+    def test_alternate_generator_rounds_legacy_sizes(self):
         with tempfile.TemporaryDirectory() as directory:
             res = Path(directory) / "res"
             (res / "drawable").mkdir(parents=True)
@@ -67,7 +78,7 @@ class AppIconTests(unittest.TestCase):
             for name in make_assets.ALTERNATE_ICONS:
                 for suffix, side in make_assets.ALTERNATE_ICON_SIZES:
                     with self.subTest(name=name, suffix=suffix):
-                        self.assert_launcher_icon(out / (name.capitalize() + suffix + ".png"), side)
+                        self.assert_launcher_icon(out / (name.capitalize() + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
 
     def test_primary_icon_is_prerendered(self):
         root = Path(make_assets.ROOT)
@@ -79,22 +90,23 @@ class AppIconTests(unittest.TestCase):
         for key in ("CFBundleIcons", "CFBundleIcons~ipad"):
             self.assertTrue(plist[key]["CFBundlePrimaryIcon"]["UIPrerenderedIcon"])
 
-    def test_alternate_icons_get_the_system_gloss(self):
+    def test_alternate_icons_are_prerendered(self):
         root = Path(make_assets.ROOT)
         with (root / "packaging/Info.plist").open("rb") as handle:
             plist = plistlib.load(handle)
-        # springboard of ios 5 and 6 masks and glosses an icon that is not pre-rendered, so the files of an alternate icon are opaque squares and say so
+        # the home screen of ios 5 and 6 neither masks nor glosses the icon of an app in /Applications, so the legacy size files of an alternate icon
+        # carry their corners and the plist says so; the primary icon is set the same way when an alternate one is chosen
         for key in ("CFBundleIcons", "CFBundleIcons~ipad"):
             for name, icon in plist[key]["CFBundleAlternateIcons"].items():
                 with self.subTest(key=key, name=name):
-                    self.assertFalse(icon["UIPrerenderedIcon"])
+                    self.assertTrue(icon["UIPrerenderedIcon"])
 
     def test_senkogram_generator(self):
         source = Path(make_assets.ROOT) / "resources/icons/source/senkogram.png"
         with tempfile.TemporaryDirectory() as directory:
             make_assets.build_senkogram_icons(source, directory)
             for suffix, side in make_assets.ALTERNATE_ICON_SIZES:
-                self.assert_launcher_icon(Path(directory) / ("SenkoGram" + suffix + ".png"), side)
+                self.assert_launcher_icon(Path(directory) / ("SenkoGram" + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
             for suffix, side in make_assets.SPLASH_SIDES:
                 self.assert_launcher_icon(Path(directory) / ("splash_senkogram" + suffix + ".png"), side, True)
 
@@ -103,7 +115,7 @@ class AppIconTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             make_assets.build_image_icons(source, "Telegram", directory)
             for suffix, side in make_assets.ALTERNATE_ICON_SIZES:
-                self.assert_launcher_icon(Path(directory) / ("Telegram" + suffix + ".png"), side)
+                self.assert_launcher_icon(Path(directory) / ("Telegram" + suffix + ".png"), side, side in make_assets.LEGACY_ICON_SIDES)
             for suffix, side in make_assets.SPLASH_SIDES:
                 self.assert_launcher_icon(Path(directory) / ("splash_telegram" + suffix + ".png"), side, True)
 
@@ -120,16 +132,13 @@ class AppIconTests(unittest.TestCase):
                     else:
                         yield from icon_files(value)
 
-        alternates = set()
-        for key in ("CFBundleIcons", "CFBundleIcons~ipad"):
-            alternates.update(icon_files(plist[key]["CFBundleAlternateIcons"]))
         names = set(icon_files(plist))
         self.assertTrue(names)
         for name in sorted(names):
             with self.subTest(name=name):
                 path = root / "resources/icons" / name
                 with Image.open(path) as icon:
-                    rounded = icon.width in make_assets.LEGACY_ICON_SIDES and name not in alternates
+                    rounded = icon.width in make_assets.LEGACY_ICON_SIDES
                 self.assert_launcher_icon(path, rounded=rounded)
 
 
