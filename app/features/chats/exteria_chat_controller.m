@@ -124,6 +124,8 @@
 /* the pages of older history a tap on the pinned message will fetch looking for it */
 #define PINNED_SEARCH_PAGES 12
 #define HISTORY_PAGE 40
+/* a page of older history: every page costs a walk over all loaded messages on the main thread, so a longer one means fewer walks while the list is read upwards through a big chat */
+#define OLDER_PAGE 80
 /* rows below or above the fold whose pictures are fetched ahead, nearest first */
 static NSString *ExteriaMessageSummary(ExteriaMessage *message);
 
@@ -3474,7 +3476,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     NSUInteger token = _windowToken;
     ExteriaWeakReference *weak = _weak;
     int32_t before = _historyOldestId;
-    [_session loadHistoryOfDialog:_dialog offsetId:before addOffset:0 limit:HISTORY_PAGE pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
+    [_session loadHistoryOfDialog:_dialog offsetId:before addOffset:0 limit:OLDER_PAGE pageCompletion:^(NSArray *messages, NSDictionary *people, exteria_history_page page, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
         /* a page asked for before the list moved to another stretch of history belongs to the old one */
         if (!chat || token != chat->_windowToken) return;
@@ -3492,7 +3494,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:messages];
     int more = 0;
-    if (exteria_history_cursor_advance(before, &page, HISTORY_PAGE, &_historyOldestId, &more) != EXTERIA_OK)
+    if (exteria_history_cursor_advance(before, &page, OLDER_PAGE, &_historyOldestId, &more) != EXTERIA_OK)
         NSLog(@"exteria: history of chat %lld did not advance before %d", _dialog.peerId, (int)before);
     _canLoadMore = more;
     [self mergeDiscussionMessagesAtHistoryEnd];
@@ -4259,7 +4261,7 @@ static void ExteriaRedrawTree(UIView *view) {
         ExteriaChatItem *item = [_itemCache objectForKey:key];
         NSString *role = [_senderRoles objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
         int32_t replyId = message.replyTo ? message.replyTo : message.sendReplyTo;
-        BOOL localReply = [self replyIsInThisChat:message];
+        BOOL localReply = replyId > 0 && [self replyIsInThisChat:message];
         ExteriaDialog *replySource = replyId > 0 ? [self replySourceOfMessage:message] : nil;
         ExteriaMessage *original = replyId > 0 && localReply ? [self messageWithId:replyId] : nil;
         /* the key is a formatted string, so it is made only for a reply whose original is not in the list */
