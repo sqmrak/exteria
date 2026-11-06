@@ -776,6 +776,14 @@ static NSString *ExteriaMachineName(void) {
 /* parse turns the answer into model objects, or returns nil and sets *error to the name the screen shows */
 - (void)load:(const char *)method configure:(exteria_status (^)(exteria_arena *, exteria_tl_value *))configure
        parse:(NSArray * (^)(const exteria_tl_value *answer))parse completion:(ExteriaListCompletion)completion {
+    [self load:method configure:configure parse:parse keep:nil completion:completion];
+}
+
+/* keep runs on the worker after the parsed items are on their way to the main thread: the store syncs to disk at every commit, and a list that waited for it showed
+   the new chat order late on a phone with slow flash */
+- (void)load:(const char *)method configure:(exteria_status (^)(exteria_arena *, exteria_tl_value *))configure
+       parse:(NSArray * (^)(const exteria_tl_value *answer))parse keep:(void (^)(const exteria_tl_value *answer))keep
+  completion:(ExteriaListCompletion)completion {
     ExteriaListCompletion done = [completion copy];
     [self invoke:method configure:configure handler:^(const exteria_mt_rpc_result *result) {
         NSArray *items = nil;
@@ -794,6 +802,7 @@ static NSString *ExteriaMachineName(void) {
             }
         }
         [self finishLoad:items error:error completion:done];
+        if (keep && items) keep(result->value);
     }];
     [done release];
 }
@@ -849,18 +858,17 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item);
         NSUInteger folders = 0;
         for (ExteriaDialog *entry in dialogs) if (entry.folder) ++folders;
         NSLog(@"exteria: chat list of folder %d: %lu rows, %lu archive entries", (int)folder, (unsigned long)dialogs.count, (unsigned long)folders);
-        /* the whole answer is kept so the list opens at once next time, before the network answers */
-        if (dialogs) {
-            exteria_peer none = {0, 0};
-            exteria_status status = exteria_store_put([self workerStore], EXTERIA_RECORD_DIALOG, none, (int64_t)folder + 1, answer);
-            if (status != EXTERIA_OK) NSLog(@"exteria: cannot keep the chat list of folder %d: %s", (int)folder, exteria_status_name(status));
-        }
         if (dialogs && folder == 0) [self refreshArchiveSummary];
         if (dialogs) {
             [self noteDraftsOfDialogsAnswer:answer complete:YES since:draftRevision];
             if (folder == 0) [self requestAllDraftsOnce];
         }
         return dialogs;
+    } keep:^(const exteria_tl_value *answer) {
+        /* the whole answer is kept so the list opens at once next time, before the network answers */
+        exteria_peer none = {0, 0};
+        exteria_status status = exteria_store_put([self workerStore], EXTERIA_RECORD_DIALOG, none, (int64_t)folder + 1, answer);
+        if (status != EXTERIA_OK) NSLog(@"exteria: cannot keep the chat list of folder %d: %s", (int)folder, exteria_status_name(status));
     } completion:shown];
 }
 
