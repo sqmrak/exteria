@@ -745,6 +745,18 @@ exteria_status exteria_archive_summary_parse(const exteria_tl_value *info, const
     if (status == EXTERIA_OK) {
         if (folders) *out = folder;
         else { out->folder = 1; out->folder_id = 1; out->kind = EXTERIA_DIALOG_GROUP; }
+        /* the counters of the folder entry are the server's own and can disagree with the chats inside, showing one unread chat on the entry while every chat of the
+           archive is read. a list that came whole (not a slice) is all there is to count, so the entry counts what the person finds when it opens */
+        if (folders && exteria_tl_is(contents, EXTERIA_TL_ID_messages_dialogs)) {
+            int32_t unmuted = 0, muted = 0;
+            for (size_t i = 0; i < count; ++i) {
+                const exteria_dialog_row *row = rows + i;
+                if (row->folder || row->folder_id != 1 || row->deleted || (!row->unread_count && !row->unread_mark)) continue;
+                if (row->muted) ++muted; else ++unmuted;
+            }
+            out->unread_count = unmuted > INT32_MAX - muted ? INT32_MAX : unmuted + muted;
+            out->muted = unmuted == 0 && muted > 0;
+        }
         size_t used = 0;
         for (size_t i = 0; i < count; ++i) {
             const exteria_dialog_row *row = rows + i;

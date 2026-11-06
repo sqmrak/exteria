@@ -1170,6 +1170,21 @@ static void test_archive_summary(void) {
     /* both names fit whole now that a text field holds a full message: nothing is cut, and the last emoji keeps its final byte */
     CHECK_EQ_INT(strlen(summary.text), 190);
     CHECK_EQ_INT((unsigned char)summary.text[189], 0x80);
+    /* a whole list is counted by what is in it: the server says 3 + 5 unread chats, the chats say one unread and one read */
+    set_i32(f, "unread_unmuted_peers_count", 3);
+    set_i32(f, "unread_muted_peers_count", 5);
+    exteria_tl_value *whole = answer("messages.dialogs", d, 3, &m, 1, NULL, 0, u, 3);
+    CHECK_EQ_INT(exteria_archive_summary_parse(info, whole, SELF, 0, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.unread_count, 1);
+    CHECK_EQ_INT(summary.muted, 0);
+    set_i32(d[1], "unread_count", 0);
+    CHECK_EQ_INT(exteria_archive_summary_parse(info, whole, SELF, 0, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.unread_count, 0);
+    /* a chat marked unread by hand counts as one */
+    set_i32(d[1], "unread_count", 0);
+    set_flag(d[1], "unread_mark");
+    CHECK_EQ_INT(exteria_archive_summary_parse(info, whole, SELF, 0, &summary), EXTERIA_OK);
+    CHECK_EQ_INT(summary.unread_count, 1);
     exteria_tl_value *empty = answer("messages.dialogs", NULL, 0, NULL, 0, NULL, 0, NULL, 0);
     CHECK_EQ_INT(exteria_archive_summary_parse(info, empty, SELF, 0, &summary), EXTERIA_OK);
     CHECK_EQ_INT(summary.preview, EXTERIA_PREVIEW_NONE);
