@@ -34,6 +34,13 @@ static NSString *ExteriaProxyFilePath(void) {
     return [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"proxy-link"];
 }
 
+/* a jailbroken install without the keychain entitlement answers -34018, and other builds answer with other codes (a missing keychain, a refused access group, a read-only
+   store): none of those gets better by asking again, so the private file takes the record. a locked device is the one answer that passes by itself, and the keychain
+   keeps the record then, so it is an error and not a reason to start a second copy in the file */
+static BOOL ExteriaProxyKeychainLocked(OSStatus result) {
+    return result == errSecInteractionNotAllowed;
+}
+
 /* the jailbreak build may lack a keychain entitlement; the private file keeps the same complete record */
 static exteria_status ExteriaProxyReadData(NSData **out, BOOL *fileBacked) {
     *out = nil;
@@ -55,8 +62,10 @@ static exteria_status ExteriaProxyReadData(NSData **out, BOOL *fileBacked) {
     CFTypeRef value = NULL;
     OSStatus result = SecItemCopyMatching((CFDictionaryRef)query, &value);
     if (result == errSecItemNotFound) return EXTERIA_E_NOTFOUND;
-    if (result == -34018) return EXTERIA_E_UNSUPPORTED;
-    if (result != errSecSuccess) return EXTERIA_E_STORAGE;
+    if (result != errSecSuccess) {
+        NSLog(@"exteria: proxy keychain read failed: %d", (int)result);
+        return ExteriaProxyKeychainLocked(result) ? EXTERIA_E_STORAGE : EXTERIA_E_UNSUPPORTED;
+    }
     NSData *data = [(NSData *)value autorelease];
     if (data.length > PROXY_DATA_MAX) return EXTERIA_E_LIMIT;
     *out = data;
@@ -137,10 +146,10 @@ static exteria_status ExteriaProxySave(NSArray *links, NSUInteger selected, BOOL
         [item addEntriesFromDictionary:update];
         [item setObject:(id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly forKey:(id)kSecAttrAccessible];
         result = SecItemAdd((CFDictionaryRef)item, NULL);
-        if (result == -34018 && ExteriaProxyWriteFile(data)) return EXTERIA_OK;
     }
     if (result != errSecSuccess) {
         NSLog(@"exteria: proxy keychain write failed: %d", (int)result);
+        if (!ExteriaProxyKeychainLocked(result) && ExteriaProxyWriteFile(data)) return EXTERIA_OK;
         return EXTERIA_E_STORAGE;
     }
     return EXTERIA_OK;
