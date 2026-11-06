@@ -217,7 +217,7 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
 + (UIImage *)imageForDocument:(long long)document {
     if (document == EXTERIA_TELEGRAM_VERIFIED_DOCUMENT) return ExteriaTelegramVerifiedImage();
     if (document == EXTERIA_PREMIUM_STAR_DOCUMENT) return ExteriaPremiumStarImage();
-    static UIImage *hammer, *fox, *net, *hammers, *caution, *promotion, *bugHunter, *officialTester, *manager, *videoFix, *flawSeer;
+    static UIImage *hammer, *fox, *net, *hammers, *promotion, *bugHunter, *officialTester, *manager, *videoFix, *flawSeer;
     if (document == EXTERIA_BUG_HUNTER_DOCUMENT) {
         if (!bugHunter) {
             NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_bug_hunter" ofType:@"png"];
@@ -231,15 +231,6 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
     if (document == EXTERIA_MANAGER_DOCUMENT) return ExteriaBundledBadge(@"badge_manager", &manager);
     if (document == EXTERIA_VIDEO_FIX_DOCUMENT) return ExteriaBundledBadge(@"badge_videofix", &videoFix);
     if (document == EXTERIA_PROMOTION_DOCUMENT) return ExteriaBundledBadge(@"badge_promotion", &promotion);
-    if (document == EXTERIA_CAUTION_DOCUMENT) {
-        if (!caution) {
-            NSString *path = [[NSBundle mainBundle] pathForResource:@"badge_caution" ofType:@"png"];
-            if (path) caution = [ExteriaDecodeImageAtURL([NSURL fileURLWithPath:path],
-                BADGE_POINTS * EXTERIA_CAUTION_BADGE_RATIO * ExteriaScreenScale()) retain];
-            if (!caution) NSLog(@"exteria: the caution badge picture could not be decoded");
-        }
-        return caution;
-    }
     if (document == EXTERIA_DEVELOPER_DOCUMENT) return ExteriaBundledBadge(@"badge_developer", &hammer);
     if (document == EXTERIA_LEAD_DOCUMENT) return ExteriaBundledBadge(@"badge_lead", &hammers);
     if (document == EXTERIA_TESTER_DOCUMENT) return ExteriaBundledBadge(@"badge_tester", &net);

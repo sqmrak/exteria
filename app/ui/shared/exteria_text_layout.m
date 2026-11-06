@@ -235,8 +235,7 @@ static NSData *ExteriaPlaceEmoji(NSMutableAttributedString *string, NSString *te
             /* the picture is drawn over this character; a font that has no glyph for it (Rubik, a font of the person's own) would show its empty-glyph mark, a letter or a box, under the picture */
             [string addAttribute:(id)kCTForegroundColorAttributeName value:(id)[UIColor clearColor].CGColor range:place];
             CGFloat side = fontSize * EMOJI_SCALE;
-            CGFloat width = mark->document == EXTERIA_CAUTION_DOCUMENT ? side * EXTERIA_CAUTION_BADGE_RATIO : side;
-            CTRunDelegateRef delegate = ExteriaCreateEmojiDelegate(side, width);
+            CTRunDelegateRef delegate = ExteriaCreateEmojiDelegate(side, side);
             [string addAttribute:(id)kCTRunDelegateAttributeName value:(id)delegate range:place];
             CFRelease(delegate);
             if (mark->entry != ExteriaNoEntry) [string addAttribute:ExteriaEmojiAttribute value:[NSNumber numberWithUnsignedInteger:mark->entry] range:place];
@@ -539,10 +538,8 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
             UIImage *picture = document ? [ExteriaCustomEmoji imageForDocument:[document longLongValue]] : nil;
             /* every emoji is a square of the width the line reserved, centered in its room; the room is a little taller than wide, and a
                picture drawn into all of it came out stretched */
-            CGFloat side = document && [document longLongValue] == EXTERIA_CAUTION_DOCUMENT ?
-                rect.size.width / EXTERIA_CAUTION_BADGE_RATIO : rect.size.width;
-            CGFloat pictureWidth = document && [document longLongValue] == EXTERIA_CAUTION_DOCUMENT ? rect.size.width : side;
-            CGRect square = CGRectMake(CGRectGetMidX(rect) - pictureWidth / 2, CGRectGetMidY(rect) - side / 2, pictureWidth, side);
+            CGFloat side = rect.size.width;
+            CGRect square = CGRectMake(CGRectGetMidX(rect) - side / 2, CGRectGetMidY(rect) - side / 2, side, side);
             if (picture) {
                 [picture drawInRect:square];
             } else if (entry) {

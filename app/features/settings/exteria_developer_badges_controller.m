@@ -30,7 +30,6 @@ static const ExteriaBadgeEntry ExteriaBadgeEntries[] = {
     {ExteriaMarkManager, EXTERIA_MANAGER_DOCUMENT, @"developer.mark.manager", @"developer.manager"},
     {ExteriaMarkVideoFix, EXTERIA_VIDEO_FIX_DOCUMENT, @"developer.mark.videofix", @"developer.videofix"},
     {ExteriaMarkPromotion, EXTERIA_PROMOTION_DOCUMENT, @"developer.mark.promotion", @"developer.promotion"},
-    {ExteriaMarkCaution, EXTERIA_CAUTION_DOCUMENT, @"developer.mark.caution", @"developer.caution"},
 };
 #define BADGE_COUNT (sizeof(ExteriaBadgeEntries) / sizeof(ExteriaBadgeEntries[0]))
 

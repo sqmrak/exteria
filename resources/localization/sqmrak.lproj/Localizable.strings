@@ -1979,7 +1979,6 @@
 "developer.official_tester" = "официальный тестер @sqmrak";
 "developer.bug_hunter.notice" = "самый элитный тестер exteria";
 "developer.lead" = "главный разработчик exteria";
-"developer.caution" = "общение с этим пользователем нежелательно";
 "proxy.title" = "прокси";
 "proxy.confirm" = "подключить прокси %1$@ %2$s:%3$u?";
 "proxy.enable" = "подключить";
@@ -2364,7 +2363,6 @@
 "developer.mark.hunter" = "охотник за багами";
 "developer.mark.manager" = "менеджер";
 "developer.mark.promotion" = "реклама";
-"developer.mark.caution" = "осторожно";
 "look.effects.header" = "эффекты";
 "profile.choosephoto" = "выбрать фото";
 "attach.pick.profile" = "выберите фотографию или видео";

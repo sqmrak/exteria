@@ -1973,7 +1973,6 @@
 "developer.official_tester" = "Official tester of @sqmrak";
 "developer.bug_hunter.notice" = "Exteria's most elite tester";
 "developer.lead" = "Lead developer of Exteria";
-"developer.caution" = "Interacting with this user is discouraged";
 "proxy.title" = "Proxy";
 "proxy.confirm" = "Connect to %1$@ proxy %2$s:%3$u?";
 "proxy.enable" = "Connect";
@@ -2358,7 +2357,6 @@
 "developer.mark.hunter" = "Bug hunter";
 "developer.mark.manager" = "Manager";
 "developer.mark.promotion" = "Promotion";
-"developer.mark.caution" = "Caution";
 "look.effects.header" = "Effects";
 "profile.choosephoto" = "Choose photo";
 "attach.pick.profile" = "Choose a photo or a video";

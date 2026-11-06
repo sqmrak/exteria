@@ -755,7 +755,7 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     CGFloat fullTitleWidth = [_title sizeThatFits:CGSizeMake(4096, 20)].width;
     NSUInteger markCount = 0;
     for (NSUInteger bit = 1; bit <= ExteriaMarkFlawSeer; bit <<= 1) if (_marks & bit) ++markCount;
-    CGFloat markWidth = markCount * 30.0 + (_marks & ExteriaMarkCaution ? 24.0 * (EXTERIA_CAUTION_BADGE_RATIO - 1) : 0);
+    CGFloat markWidth = markCount * 30.0;
     _markHit.hidden = !markCount || fullTitleWidth > titleMax;
     _markHit.frame = CGRectMake(textX + MAX(0, titleWidth - markWidth), titleY - 4, MIN(titleWidth, markWidth), 28);
     _mutedIcon.frame = CGRectMake(textX + titleWidth + 4, titleY + (SCALED(20) - _mutedIcon.image.size.height) / 2,

@@ -108,7 +108,6 @@ NSUInteger ExteriaMarkForDocument(long long document) {
     if (document == EXTERIA_SENKO_DOCUMENT) return ExteriaMarkSenko;
     if (document == EXTERIA_TESTER_DOCUMENT) return ExteriaMarkTester;
     if (document == EXTERIA_OFFICIAL_TESTER_DOCUMENT) return ExteriaMarkOfficialTester;
-    if (document == EXTERIA_CAUTION_DOCUMENT) return ExteriaMarkCaution;
     return 0;
 }
 
@@ -172,7 +171,7 @@ void ExteriaShowMarkNoticeForUser(NSString *name, NSUInteger mark, long long use
     plate.layer.shadowOpacity = 0.28f;
     plate.layer.shadowRadius = 14;
     plate.layer.shadowOffset = CGSizeMake(0, 4);
-    UIImage *badge = mark == ExteriaMarkFlawSeer ? [ExteriaCustomEmoji imageForDocument:EXTERIA_FLAW_SEER_DOCUMENT] : mark == ExteriaMarkVideoFix ? [ExteriaCustomEmoji imageForDocument:EXTERIA_VIDEO_FIX_DOCUMENT] : mark == ExteriaMarkManager ? [ExteriaCustomEmoji imageForDocument:EXTERIA_MANAGER_DOCUMENT] : mark == ExteriaMarkOfficialTester ? [ExteriaCustomEmoji imageForDocument:EXTERIA_OFFICIAL_TESTER_DOCUMENT] : mark == ExteriaMarkBugHunter ? [ExteriaCustomEmoji imageForDocument:EXTERIA_BUG_HUNTER_DOCUMENT] : mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] : mark == ExteriaMarkCaution ? [ExteriaCustomEmoji imageForDocument:EXTERIA_CAUTION_DOCUMENT] :
+    UIImage *badge = mark == ExteriaMarkFlawSeer ? [ExteriaCustomEmoji imageForDocument:EXTERIA_FLAW_SEER_DOCUMENT] : mark == ExteriaMarkVideoFix ? [ExteriaCustomEmoji imageForDocument:EXTERIA_VIDEO_FIX_DOCUMENT] : mark == ExteriaMarkManager ? [ExteriaCustomEmoji imageForDocument:EXTERIA_MANAGER_DOCUMENT] : mark == ExteriaMarkOfficialTester ? [ExteriaCustomEmoji imageForDocument:EXTERIA_OFFICIAL_TESTER_DOCUMENT] : mark == ExteriaMarkBugHunter ? [ExteriaCustomEmoji imageForDocument:EXTERIA_BUG_HUNTER_DOCUMENT] : mark == ExteriaMarkPromotion ? [ExteriaCustomEmoji imageForDocument:EXTERIA_PROMOTION_DOCUMENT] :
         [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:mark == ExteriaMarkTester ? @"badge_tester" : (mark == ExteriaMarkSenko ? @"badge_senko" : (mark == ExteriaMarkLead ? @"badge_lead" : @"badge_developer")) ofType:@"png"]];
     UIImageView *hammer = [[[UIImageView alloc] initWithImage:badge] autorelease];
     hammer.contentMode = UIViewContentModeScaleAspectFit;
@@ -191,7 +190,7 @@ void ExteriaShowMarkNoticeForUser(NSString *name, NSUInteger mark, long long use
     what.textColor = ExteriaColorSecondary();
     what.numberOfLines = 0;
     what.lineBreakMode = UILineBreakModeWordWrap;
-    what.text = mark == ExteriaMarkFlawSeer ? ExteriaFlawSeerNotice(userId) : NSLocalizedString(mark == ExteriaMarkVideoFix ? @"developer.videofix" : mark == ExteriaMarkManager ? @"developer.manager" : mark == ExteriaMarkOfficialTester ? @"developer.official_tester" : mark == ExteriaMarkBugHunter ? @"developer.bug_hunter.notice" : (mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkCaution ? @"developer.caution" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice"))))), nil);
+    what.text = mark == ExteriaMarkFlawSeer ? ExteriaFlawSeerNotice(userId) : NSLocalizedString(mark == ExteriaMarkVideoFix ? @"developer.videofix" : mark == ExteriaMarkManager ? @"developer.manager" : mark == ExteriaMarkOfficialTester ? @"developer.official_tester" : mark == ExteriaMarkBugHunter ? @"developer.bug_hunter.notice" : (mark == ExteriaMarkPromotion ? @"developer.promotion" : (mark == ExteriaMarkTester ? @"developer.tester" : (mark == ExteriaMarkSenko ? @"developer.senko" : (mark == ExteriaMarkLead ? @"developer.lead" : @"developer.notice")))), nil);
     CGFloat textHeight = MAX(34, ceil([what sizeThatFits:CGSizeMake(textWidth, CGFLOAT_MAX)].height));
     CGFloat height = MAX(84, 41 + textHeight + 9);
     what.frame = CGRectMake(textX, 41, textWidth, textHeight);

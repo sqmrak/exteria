@@ -9,7 +9,6 @@ enum {
     ExteriaMarkSenko = 2,
     ExteriaMarkTester = 4,
     ExteriaMarkLead = 8,
-    ExteriaMarkCaution = 16,
     ExteriaMarkPromotion = 32,
     ExteriaMarkBugHunter = 64,
     ExteriaMarkOfficialTester = 128,

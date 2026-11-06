@@ -158,7 +158,7 @@ static UIView *ExteriaDeveloperHost(void) {
     static const struct { NSUInteger mark; NSString *key; } marks[] = {
         {ExteriaMarkDeveloper, @"developer.mark.developer"}, {ExteriaMarkLead, @"developer.mark.lead"}, {ExteriaMarkSenko, @"developer.mark.senko"},
         {ExteriaMarkTester, @"developer.mark.tester"}, {ExteriaMarkOfficialTester, @"developer.mark.official"}, {ExteriaMarkBugHunter, @"developer.mark.hunter"}, {ExteriaMarkFlawSeer, @"developer.mark.flawseer"},
-        {ExteriaMarkManager, @"developer.mark.manager"}, {ExteriaMarkVideoFix, @"developer.mark.videofix"}, {ExteriaMarkPromotion, @"developer.mark.promotion"}, {ExteriaMarkCaution, @"developer.mark.caution"}
+        {ExteriaMarkManager, @"developer.mark.manager"}, {ExteriaMarkVideoFix, @"developer.mark.videofix"}, {ExteriaMarkPromotion, @"developer.mark.promotion"}
     };
     NSMutableArray *titles = [NSMutableArray array];
     for (size_t i = 0; i < sizeof(marks) / sizeof(marks[0]); ++i) [titles addObject:NSLocalizedString(marks[i].key, nil)];
