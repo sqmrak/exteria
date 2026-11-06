@@ -162,8 +162,12 @@ BOOL ExteriaClassicThemeAvailable(void) {
     return [[[UIDevice currentDevice] systemVersion] integerValue] <= 10;
 }
 
+/* ios 5 and 6 have no flat ui, so the modern style looks foreign there; until the person picks a style, 6 and older get the classic one */
 BOOL ExteriaThemeStoredClassic(void) {
-    return ExteriaClassicThemeAvailable() && [[NSUserDefaults standardUserDefaults] boolForKey:ExteriaClassicThemeKey];
+    if (!ExteriaClassicThemeAvailable()) return NO;
+    id stored = [[NSUserDefaults standardUserDefaults] objectForKey:ExteriaClassicThemeKey];
+    if (!stored) return [[[UIDevice currentDevice] systemVersion] integerValue] <= 6;
+    return [stored boolValue];
 }
 
 void ExteriaThemeStoreClassic(BOOL classic) {
