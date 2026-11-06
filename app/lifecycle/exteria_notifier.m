@@ -84,6 +84,8 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     NSTimer *_debounce;
     BOOL _scanning;
     BOOL _rescan;
+    /* a look for the badge alone was asked for while another one was on its way: that one was counted before what the person read since, so its answer is not the badge */
+    BOOL _rescanForBadge;
     BOOL _started;
     NSUInteger _scanGeneration;
     NSTimeInterval _lastForegroundLook;
@@ -218,6 +220,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     ++_scanGeneration;
     _scanning = NO;
     _rescan = NO;
+    _rescanForBadge = NO;
     [_session post:^{ [_session setChangeHook:nil]; }];
     [_debounce invalidate];
     _debounce = nil;
@@ -237,6 +240,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     ++_scanGeneration;
     _scanning = NO;
     _rescan = NO;
+    _rescanForBadge = NO;
     [_debounce invalidate];
     _debounce = nil;
     [self endWakeTask];
@@ -358,6 +362,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     if (!_started || !ExteriaNotifyEnabled()) return;
     if (_scanning) {
         _rescan = _rescan || announce;
+        if (!announce) _rescanForBadge = YES;
         return;
     }
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
@@ -411,7 +416,11 @@ BOOL ExteriaBackgroundLinkWanted(void) {
             }
             if (notifier->_rescan) {
                 notifier->_rescan = NO;
+                notifier->_rescanForBadge = NO;
                 [notifier scanAnnouncing:YES application:application];
+            } else if (notifier->_rescanForBadge) {
+                notifier->_rescanForBadge = NO;
+                [notifier scanAnnouncing:NO application:application];
             } else {
                 [notifier endWakeTask];
             }
@@ -541,6 +550,8 @@ static NSString *ExteriaBannerSoundFile(const exteria_notify_sound *sound) {
         [self scheduleRepeatForUnread:unreadChats application:application];
         return;
     }
+    /* the badge is the account's count of unread chats whether the app is on screen or not, so what the person read here is on the icon when the app is left */
+    application.applicationIconBadgeNumber = badge;
     [self announceInApp:events];
 }
 
