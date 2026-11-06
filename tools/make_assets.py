@@ -10,6 +10,7 @@ sources, all copied unchanged apart from scaling:
   phone video                          twelve demo/Resources/IntroPhone.mp4, the original telegram red phone
   flag svgs                            flag-icons 7.5.0 (lipis, mit), flags/4x3
   symbols, the tab icons among them    res/drawable-* of the reference tree, the msg_, menu_, input_ and ic_ drawables of SYMBOL_ICONS
+  tools/material                       Material Symbols Rounded, filled, 24 dp (google, apache 2.0, see resources/licenses/MaterialSymbols.txt), the glyphs of the modern player strip
   resources/fonts                      Inter 4.1 (rsms, ofl), extras/ttf
   resources/fonts fallbacks            Noto Sans Math, Symbols, Symbols2 (notofonts, ofl) and Unifont 16.0.01, unifont and
                                        unifont_upper otf (unifoundry.com, ofl), the upstream files; see Fallback-LICENSE.txt
@@ -17,6 +18,7 @@ sources, all copied unchanged apart from scaling:
 import argparse
 import glob
 import gzip
+import io
 import json
 import os
 import plistlib
@@ -277,9 +279,15 @@ def legacy_icon(square, side, force=False):
     return big.resize((side, side), Image.LANCZOS)
 
 
-def write_png(image, path):
+def write_png(image, path, launcher=False):
+    """saves the image and recompresses it without changing a pixel: the pngs are most of the resources of the app, and oxipng makes them about a fifth smaller.
+    the icons of the home screen keep their color type, since a palette icon has not been tried on the springboard of ios 5 and 6"""
+    oxipng = shutil.which("oxipng")
+    if not oxipng:
+        sys.exit("oxipng is required to write the png resources, install it or set PATH")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     image.save(path, optimize=True)
+    subprocess.run([oxipng, "-o", "4", "--strip", "safe", "-q"] + (["--nc", "--np"] if launcher else []) + [path], check=True)
 
 
 class Disk:
@@ -364,16 +372,37 @@ def build_icons(rgb, out_dir):
     cut = int(MASTER * ICON_BLEED)
     square = to_image(rgb, np.ones(rgb.shape[:2])).convert("RGB").crop((cut, cut, MASTER - cut, MASTER - cut))
     for name, side in APP_ICONS.items():
-        write_png(legacy_icon(square, side), os.path.join(out_dir, name))
+        write_png(legacy_icon(square, side), os.path.join(out_dir, name), launcher=True)
+
+
+ICON_GLOSS = os.path.join(ROOT, "resources/icons/source/icon_gloss.png")
+
+
+def glossed_icon(icon, side):
+    """the rounded icon with the glass highlight laid over it, inside the corners of the icon"""
+    base = legacy_icon(icon, side, force=True)
+    with Image.open(ICON_GLOSS) as gloss:
+        veil = gloss.convert("RGBA").resize((side, side), Image.LANCZOS)
+    glossed = Image.alpha_composite(base, veil)
+    glossed.putalpha(base.getchannel("A"))
+    return glossed
+
+
+def deb_icon_files():
+    """every launcher file the deb may rewrite: the primary icon and each alternate icon at its sizes, as name and side in pixels"""
+    files = list(APP_ICONS.items())
+    for alternate in ALTERNATE_ICON_NAMES:
+        files.extend((alternate + suffix + ".png", side) for suffix, side in ALTERNATE_ICON_SIZES)
+    return files
 
 
 def build_deb_icons(source_dir, out_dir):
-    # ios 6 can use any listed icon for an app in /Applications without masking its corners
-    for name, side in APP_ICONS.items():
-        if side in LEGACY_ICON_SIDES:
-            continue
+    # ios 6 can use any listed icon for an app in /Applications without masking its corners. the sizes that ios 5 and 6 take for the home screen
+    # (LEGACY_ICON_SIDES) are pre-rendered, so springboard adds no gloss to them and the highlight is part of the file; ios 7 and later mask and
+    # flatten the other sizes, which stay without it
+    for name, side in deb_icon_files():
         with Image.open(os.path.join(source_dir, name)) as icon:
-            write_png(legacy_icon(icon, side, force=True), os.path.join(out_dir, name))
+            write_png(glossed_icon(icon, side) if side in LEGACY_ICON_SIDES else legacy_icon(icon, side, force=True), os.path.join(out_dir, name), launcher=True)
 
 
 def build_qr_logo(rgb, alpha, out_dir):
@@ -470,7 +499,7 @@ SYMBOL_ICONS = (
     ("ellipsisvertical", "ic_ab_other", 0, True), ("bell", "msg_unmute", 0, True), ("eye", "msg_views", 0, True),
     ("share", "msg_share", 0, True), ("bellmuted", "msg_mute", 0, True), ("pinnedlist", "msg_pinnedlist", 0, True),
     ("broom", "msg_clearcache", 0, True), ("back", "ic_ab_back", 0, True), ("externallink", "mini_external_link", 0, True),
-    ("apps", "input_bot2", 0, True), ("copy", "msg_copy", 0, True),
+    ("apps", "input_bot2", 0, True), ("copy", "msg_copy", 0, True), ("fingerprint", "fingerprint", 0, True),
     ("stars", "star", 0, True),
     ("filehq", "msg_filehq", 0, True), ("spoiler", "msg_spoiler", 0, True),
     ("qualitysd", "menu_quality_sd", 0, True), ("qualityhd", "menu_quality_hd", 0, True),
@@ -603,6 +632,24 @@ def split_trash(image):
     return pieces[0], pieces[1]
 
 
+def build_material_icons(src_dir, out_dir):
+    """the Material Symbols of tools/material as white masks, material_<name> at the three densities of the symbols; they do not start with symbol_, so a run of the symbols
+    does not take them away"""
+    svgs = sorted(glob.glob(os.path.join(src_dir, "*.svg")))
+    if not svgs:
+        sys.exit("no svg in %s" % src_dir)
+    for svg in svgs:
+        name = os.path.splitext(os.path.basename(svg))[0]
+        text = open(svg, encoding="utf-8").read()
+        if "<path " not in text:
+            sys.exit("%s has no path to fill" % svg)
+        white = text.replace("<path ", '<path fill="#ffffff" ')
+        for folder, suffix, side in SYMBOL_DENSITIES:
+            png = subprocess.check_output(["rsvg-convert", "-w", str(side), "-h", str(side)], input=white.encode("utf-8"))
+            image = Image.open(io.BytesIO(png)).convert("RGBA")
+            write_png(image, os.path.join(out_dir, "material_%s%s.png" % (name, suffix)))
+
+
 def build_symbol_icons(res_dir, out_dir):
     """the glyphs of the app from the reference drawables, as white masks the app tints at run time"""
     for old in glob.glob(os.path.join(out_dir, "symbol_*.png")):
@@ -676,6 +723,8 @@ def build_animations(source_dir, out_dir):
 # the alternate app icons of the chat settings: the launcher icons that are a plain color with a
 # picture over it
 ALTERNATE_ICONS = ("exteraless", "blueprint", "red", "nya", "ayu", "quack")
+# the names of the files, which the images of SenkoGram and Telegram share with the color icons above
+ALTERNATE_ICON_NAMES = tuple(name.capitalize() for name in ALTERNATE_ICONS) + ("SenkoGram", "Telegram")
 # name of the file, side in pixels: the sizes the home screen of an iPhone and an iPad ask for
 ALTERNATE_ICON_SIZES = (("-60@2x", 120), ("-60@3x", 180), ("-76", 76), ("-76@2x", 152), ("-83.5@2x", 167),
                         ("-57", 57), ("-57@2x", 114), ("-72", 72), ("-72@2x", 144))
@@ -697,8 +746,8 @@ def background_color(path):
 
 
 def build_alternate_icons(res_dir, out_dir):
-    """opaque squares at every iphone and ipad size, from the color and picture of the adaptive icon. these are not marked pre-rendered, so springboard of ios 5 and 6
-    masks them and lays its own gloss over them; a corner baked into the file would only show black under that mask"""
+    """the icon at every iphone and ipad size, from the color and picture of the adaptive icon. the sizes ios 5 and 6 take for the home screen carry their own corners,
+    as the primary icon does, since springboard does not mask an icon of an app in /Applications; the others stay opaque squares"""
     os.makedirs(out_dir, exist_ok=True)
     for name in ALTERNATE_ICONS:
         color = background_color(os.path.join(res_dir, "drawable", name + "_icon_background.xml"))
@@ -710,7 +759,7 @@ def build_alternate_icons(res_dir, out_dir):
         icon.alpha_composite(picture)
         icon = icon.convert("RGB")
         for suffix, pixels in ALTERNATE_ICON_SIZES:
-            write_png(icon.resize((pixels, pixels), Image.LANCZOS), os.path.join(out_dir, name.capitalize() + suffix + ".png"))
+            write_png(legacy_icon(icon, pixels), os.path.join(out_dir, name.capitalize() + suffix + ".png"), launcher=True)
 
 
 # the splash shows the icon the person chose, so each alternate icon also has the picture the splash draws: rounded, at the three scales of splash_icon
@@ -722,7 +771,7 @@ def build_image_icons(source, name, out_dir):
     if icon.width != icon.height:
         raise ValueError("%s icon must be square" % name)
     for suffix, pixels in ALTERNATE_ICON_SIZES:
-        write_png(icon.resize((pixels, pixels), Image.LANCZOS), os.path.join(out_dir, name + suffix + ".png"))
+        write_png(legacy_icon(icon, pixels), os.path.join(out_dir, name + suffix + ".png"), launcher=True)
     for suffix, pixels in SPLASH_SIDES:
         write_png(rounded_icon(icon, pixels), os.path.join(out_dir, "splash_" + name.lower() + suffix + ".png"))
 
@@ -855,7 +904,7 @@ def build_flags(svg_dir, countries, out_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("part", choices=("icons", "debicons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "alticons", "senkogram", "telegram", "phone", "flags", "all"))
+    parser.add_argument("part", choices=("icons", "debicons", "qrlogo", "splash", "giftanon", "launch", "animations", "symbols", "material", "alticons", "senkogram", "telegram", "phone", "flags", "all"))
     parser.add_argument("--source", default=os.path.join(ROOT, "resources/icons/source/exteria.png"))
     parser.add_argument("--animations", default=os.environ.get("EXTERIA_LOTTIE_RAW", ""))
     parser.add_argument("--phone-video", default=os.environ.get("EXTERIA_PHONE_VIDEO", ""))
@@ -890,6 +939,8 @@ def main():
         if not args.icon_res:
             sys.exit("set EXTERIA_ICON_RES to the res directory of the reference tree")
         build_symbol_icons(args.icon_res, os.path.join(args.out, "icons"))
+    if args.part in ("material", "all"):
+        build_material_icons(os.path.join(ROOT, "tools/material"), os.path.join(args.out, "icons"))
     if args.part in ("alticons", "all"):
         if not args.icon_res:
             sys.exit("set EXTERIA_ICON_RES to the res directory of the reference tree")

@@ -65,6 +65,7 @@ typedef enum {
     ExteriaSymbolExternalLink,
     ExteriaSymbolApps,
     ExteriaSymbolCopy,
+    ExteriaSymbolFingerprint,
     ExteriaSymbolStars,
     ExteriaSymbolCrop,
     ExteriaSymbolAdjust,
@@ -140,7 +141,18 @@ typedef enum {
     ExteriaSymbolPipette,
     ExteriaSymbolUndo,
     /* the cross of the exteraless editors, which closes the photo and video editors */
-    ExteriaSymbolCross
+    ExteriaSymbolCross,
+    /* the microphone with the slash of the exteraless call buttons: a clear gap cut beside a round line across the glyph, drawn over the microphone mask */
+    ExteriaSymbolMicrophoneSlash,
+    /* Material Symbols Rounded, filled, from Google (tools/material, resources/icons/material_*): the glyphs of the modern player strip */
+    ExteriaSymbolMaterialPlay,
+    ExteriaSymbolMaterialPause,
+    ExteriaSymbolMaterialSkipPrevious,
+    ExteriaSymbolMaterialSkipNext,
+    ExteriaSymbolMaterialClose,
+    ExteriaSymbolMaterialMusicNote,
+    ExteriaSymbolMaterialMic,
+    ExteriaSymbolMaterialVideocam
 } ExteriaSymbol;
 
 /* the glyph in one color, a square of pointSize points; every symbol is a mask cut drawables, so the look is the

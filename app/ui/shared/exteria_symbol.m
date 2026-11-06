@@ -26,7 +26,8 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolDocument: return @"symbol_document";
     case ExteriaSymbolSticker: return @"symbol_sticker";
     case ExteriaSymbolBackspace: return @"symbol_backspace";
-    case ExteriaSymbolMicrophone: return @"symbol_microphone";
+    case ExteriaSymbolMicrophone:
+    case ExteriaSymbolMicrophoneSlash: return @"symbol_microphone";
     case ExteriaSymbolVideoCamera: return @"symbol_videocamera";
     case ExteriaSymbolCameraFlip: return @"symbol_cameraflip";
     case ExteriaSymbolPaperclip: return @"symbol_paperclip";
@@ -70,6 +71,7 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolExternalLink: return @"symbol_externallink";
     case ExteriaSymbolApps: return @"symbol_apps";
     case ExteriaSymbolCopy: return @"symbol_copy";
+    case ExteriaSymbolFingerprint: return @"symbol_fingerprint";
     case ExteriaSymbolStars: return @"symbol_stars";
     case ExteriaSymbolCrop: return @"symbol_crop";
     case ExteriaSymbolAdjust: return @"symbol_adjust";
@@ -134,6 +136,14 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolFave: return @"symbol_fave";
     case ExteriaSymbolPinLine: return @"symbol_pinline";
     case ExteriaSymbolGhost: return @"symbol_ghost";
+    case ExteriaSymbolMaterialPlay: return @"material_play_arrow";
+    case ExteriaSymbolMaterialPause: return @"material_pause";
+    case ExteriaSymbolMaterialSkipPrevious: return @"material_skip_previous";
+    case ExteriaSymbolMaterialSkipNext: return @"material_skip_next";
+    case ExteriaSymbolMaterialClose: return @"material_close";
+    case ExteriaSymbolMaterialMusicNote: return @"material_music_note";
+    case ExteriaSymbolMaterialMic: return @"material_mic";
+    case ExteriaSymbolMaterialVideocam: return @"material_videocam";
     case ExteriaSymbolHammer: return nil;
     case ExteriaSymbolCameraPlus: return nil;
     case ExteriaSymbolBlur: return nil;
@@ -329,6 +339,24 @@ static UIImage *ExteriaRenderSymbolImage(ExteriaSymbol symbol, CGFloat pointSize
             CGContextClipToMask(context, box, lid.CGImage);
             CGContextFillRect(context, box);
         }
+    }
+    if (symbol == ExteriaSymbolMicrophoneSlash) {
+        /* VoIPToggleButton: a 3 unit gap cut 2 units above a 2 unit round line, both from just outside the top left of the glyph to just outside its bottom right.
+           the numbers are fractions of the mask's own canvas, and the context is still flipped by the mask drawing above */
+        CGFloat from[2] = {0.171, 0.160}, to[2] = {0.829, 0.840};
+        CGFloat lift = 0.080, slash = 0.082, gap = 0.123;
+        CGContextSetLineCap(context, kCGLineCapRound);
+        CGContextSetBlendMode(context, kCGBlendModeClear);
+        CGContextSetLineWidth(context, gap * size.width);
+        CGContextMoveToPoint(context, from[0] * size.width, (1 - from[1] + lift) * size.height);
+        CGContextAddLineToPoint(context, to[0] * size.width, (1 - to[1] + lift) * size.height);
+        CGContextStrokePath(context);
+        CGContextSetBlendMode(context, kCGBlendModeNormal);
+        [color setStroke];
+        CGContextSetLineWidth(context, slash * size.width);
+        CGContextMoveToPoint(context, from[0] * size.width, (1 - from[1]) * size.height);
+        CGContextAddLineToPoint(context, to[0] * size.width, (1 - to[1]) * size.height);
+        CGContextStrokePath(context);
     }
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
