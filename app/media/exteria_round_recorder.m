@@ -4,6 +4,7 @@
 #import <CoreAudio/CoreAudioTypes.h>
 #import <CoreMedia/CoreMedia.h>
 #import "exteria_audio_session.h"
+#import "exteria_chat_settings.h"
 
 /* the picture the clients draw in a circle; small enough for an old phone to encode while it records */
 #define SIDE 384
@@ -91,7 +92,8 @@ static void ExteriaUpright(AVCaptureVideoDataOutput *output) {
     }
     AVAudioSession *audio = ExteriaAudioSession();
     NSString *mode = ExteriaAudioConstant("AVAudioSessionModeDefault");
-    if (!audio || !mode || ![audio setCategory:ExteriaAudioCategoryPlayAndRecord() error:&error] ||
+    /* the microphone chosen in the chat settings counts for round videos as for voice messages; the category carries the bluetooth option */
+    if (!audio || !mode || !ExteriaAudioSessionBeginRecording(ExteriaChatRecordViaBluetooth()) ||
         ![audio setMode:mode error:&error] || ![audio setActive:YES error:&error]) {
         NSLog(@"exteria: audio session refused the video: %@", error);
         return NO;
