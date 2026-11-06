@@ -1,5 +1,7 @@
 #import "exteria_mini_player.h"
 
+#import <QuartzCore/QuartzCore.h>
+
 #import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_music_player.h"
@@ -11,7 +13,8 @@
 
 #define STRIP_HEIGHT 46.0
 #define BUTTON_WIDTH 40.0
-/* the modern strip is a tonal card with room round it: 8 points at the sides, 4 above and below, so the height the owners lay out is the card and its gutters */
+/* the modern strip is a tonal card that hangs from the bar above it: 8 points of room at the sides and 4 below, none above, so no gap shows between it and the pinned message
+   or the header. the height the owners lay out is the card and the room below it */
 #define CARD_HEIGHT 56.0
 #define CARD_SIDE 8.0
 #define CARD_GUTTER 4.0
@@ -55,7 +58,7 @@
 @synthesize wearsBarColor = _wearsBarColor;
 @synthesize changeHandler = _changeHandler;
 
-+ (CGFloat)height { return ExteriaThemeIsClassic() ? STRIP_HEIGHT : CARD_HEIGHT + 2 * CARD_GUTTER; }
++ (CGFloat)height { return ExteriaThemeIsClassic() ? STRIP_HEIGHT : CARD_HEIGHT + CARD_GUTTER; }
 
 /* the tonal colors of the card from the accent, the way a Material You scheme makes them from its key color: a container a little off the surface, a stronger one for the
    glyph tile, the accent itself for the play key and a dark or light ink for what stands on each */
@@ -124,7 +127,6 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     if (!classic) {
         _card = [[UIView alloc] init];
         _card.backgroundColor = ExteriaStripContainer(ExteriaColorCard());
-        _card.layer.cornerRadius = CARD_RADIUS;
         [self addSubview:_card];
         _lead = [[UIView alloc] init];
         _lead.backgroundColor = ExteriaStripTile();
@@ -369,7 +371,16 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 /* the card keeps its own height while the owner animates the strip open or shut, and the strip's clipping hides the rest, so the content does not squeeze */
 - (void)layoutCard {
     CGFloat width = self.bounds.size.width;
-    _card.frame = CGRectMake(CARD_SIDE, CARD_GUTTER, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
+    _card.frame = CGRectMake(CARD_SIDE, 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
+    /* only the lower corners are round, since the upper edge stands against the bar above */
+    CAShapeLayer *shape = (CAShapeLayer *)_card.layer.mask;
+    if (![shape isKindOfClass:[CAShapeLayer class]]) {
+        shape = [CAShapeLayer layer];
+        _card.layer.mask = shape;
+    }
+    shape.frame = _card.bounds;
+    shape.path = [UIBezierPath bezierPathWithRoundedRect:_card.bounds byRoundingCorners:UIRectCornerBottomLeft | UIRectCornerBottomRight
+                                             cornerRadii:CGSizeMake(CARD_RADIUS, CARD_RADIUS)].CGPath;
     CGFloat cardWidth = _card.bounds.size.width;
     BOOL narrow = cardWidth < CARD_NARROW;
     CGFloat key = narrow ? KEY_SIDE_NARROW : KEY_SIDE, lead = narrow ? LEAD_SIDE_NARROW : LEAD_SIDE;
