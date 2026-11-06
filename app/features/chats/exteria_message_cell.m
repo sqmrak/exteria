@@ -84,6 +84,27 @@ static void ExteriaMaskCorners(UIView *view, CGSize size, CGFloat topLeft, CGFlo
 }
 
 
+/* the video layer of a gif sits over the picture and cuts nothing by itself: it takes the corners of the picture, the mask with four radii or the single radius */
+static void ExteriaMirrorCorners(UIView *view, UIView *source) {
+    CAShapeLayer *shape = [source.layer.mask isKindOfClass:[CAShapeLayer class]] ? (CAShapeLayer *)source.layer.mask : nil;
+    if (!shape) {
+        view.layer.mask = nil;
+        view.layer.cornerRadius = source.layer.cornerRadius;
+        return;
+    }
+    view.layer.cornerRadius = 0;
+    CAShapeLayer *mask = [view.layer.mask isKindOfClass:[CAShapeLayer class]] ? (CAShapeLayer *)view.layer.mask : nil;
+    if (!mask) {
+        mask = [CAShapeLayer layer];
+        view.layer.mask = mask;
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    mask.frame = shape.frame;
+    mask.path = shape.path;
+    [CATransaction commit];
+}
+
 @interface ExteriaBubbleView : UIView {
     ExteriaChatItem *_item;
     ExteriaBubbleLayer _layerKind;
@@ -1796,6 +1817,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         }
     }
     _gifView.frame = _picture.frame;
+    if (_gifView) ExteriaMirrorCorners(_gifView, _picture);
     if (content.kind == EXTERIA_PREVIEW_GIF && item.content == ExteriaChatItemContentPicture && !item.albumFrames.count) {
         if (!_gifLabel) {
             _gifLabel = [[UILabel alloc] init];
@@ -2475,7 +2497,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _gifPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
     _gifView = [[ExteriaRoundVideoView alloc] initWithFrame:_picture.frame];
     _gifView.userInteractionEnabled = NO;
-    _gifView.layer.cornerRadius = _picture.layer.cornerRadius;
+    ExteriaMirrorCorners(_gifView, _picture);
     _gifView.clipsToBounds = YES;
     ((AVPlayerLayer *)_gifView.layer).videoGravity = AVLayerVideoGravityResizeAspectFill;
     ((AVPlayerLayer *)_gifView.layer).player = _gifPlayer;
