@@ -196,6 +196,90 @@ static void test_photo_delete(void) {
     CHECK_EQ_INT(exteria_profile_photo_delete_request(&arena, NULL, &request), EXTERIA_E_ARG);
 }
 
+/* the note, the photo the account set for a contact and the public photo of the account itself come out of the full user */
+static void test_full_user_photos_note(void) {
+    exteria_full_user full;
+    exteria_tl_value *answer = obj("users.userFull"), *inner = obj("userFull"), *note = obj("textWithEntities"), *photo = obj("photo");
+    set(answer, "full_user", inner);
+    CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+    CHECK_EQ_INT(full.note[0], 0);
+    CHECK_EQ_INT(full.has_personal_photo, 0);
+    CHECK_EQ_INT(full.has_public_photo, 0);
+    str(note, "text", "met at the fair");
+    CHECK_EQ_INT(exteria_tl_set(note, "entities", exteria_tl_new_vec(&arena, 0)), EXTERIA_OK);
+    set(inner, "note", note);
+    set(inner, "personal_photo", obj("photo"));
+    CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+    CHECK(!strcmp(full.note, "met at the fair"));
+    CHECK_EQ_INT(full.has_personal_photo, 1);
+    /* a fallback photo that cannot be fetched is not offered */
+    set(inner, "fallback_photo", photo);
+    CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+    CHECK_EQ_INT(full.has_public_photo, 0);
+    /* and one with an id, a reference and a size is */
+    {
+        exteria_tl_value *fallback = obj("photo"), *size = obj("photoSize"), *sizes;
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, fallback, "id", 4242), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, fallback, "access_hash", 7), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_bytes(&arena, fallback, "file_reference", "ref", 3), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, fallback, "date", 100), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, fallback, "dc_id", 2), EXTERIA_OK);
+        str(size, "type", "x");
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, size, "w", 800), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, size, "h", 800), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, size, "size", 5000), EXTERIA_OK);
+        sizes = exteria_tl_new_vec(&arena, 1);
+        CHECK(sizes != NULL);
+        CHECK_EQ_INT(exteria_tl_vec_set(sizes, 0, size), EXTERIA_OK);
+        set(fallback, "sizes", sizes);
+        set(inner, "fallback_photo", fallback);
+        CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+        CHECK_EQ_INT(full.has_public_photo, 1);
+        CHECK_EQ_INT(full.public_photo.ref.id, 4242);
+    }
+}
+
+static void test_contact_note_photo(void) {
+    exteria_tl_value *request = NULL, *file = obj("inputFile");
+    exteria_peer_ref contact = {1, 77, 99, 0, 0}, no_hash = {1, 77, 0, 0, 0}, group = {2, 77, 99, 0, 0};
+    char big[EXTERIA_CONTACT_NOTE_MAX + 1];
+    CHECK_EQ_INT(exteria_tl_set_i64(&arena, file, "id", 5), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, file, "parts", 1), EXTERIA_OK);
+    str(file, "name", "photo.jpg");
+    str(file, "md5_checksum", "");
+    /* a note is plain text; an empty one takes the note off, and a user without a hash or a note that does not fit is refused */
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &contact, "met at the fair", &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_contacts_updateContactNote);
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &contact, "", &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &no_hash, "x", &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &group, "x", &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &contact, NULL, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, NULL, "x", &request), EXTERIA_E_ARG);
+    memset(big, 'a', sizeof(big));
+    big[EXTERIA_CONTACT_NOTE_MAX - 1] = 0;
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &contact, big, &request), EXTERIA_OK);
+    big[EXTERIA_CONTACT_NOTE_MAX - 1] = 'a';
+    big[EXTERIA_CONTACT_NOTE_MAX] = 0;
+    CHECK_EQ_INT(exteria_contact_note_request(&arena, &contact, big, &request), EXTERIA_E_ARG);
+    /* a photo for the contact: set on the account's side, or suggested to them with the suggest flag */
+    CHECK_EQ_INT(exteria_contact_photo_request(&arena, &contact, file, 0, &request), EXTERIA_OK);
+    CHECK(exteria_tl_has(request, "file") && !exteria_tl_has(request, "suggest") && !exteria_tl_has(request, "save"));
+    roundtrip(request, EXTERIA_TL_ID_photos_uploadContactProfilePhoto);
+    CHECK_EQ_INT(exteria_contact_photo_request(&arena, &contact, file, 1, &request), EXTERIA_OK);
+    CHECK(exteria_tl_has(request, "file") && exteria_tl_has(request, "suggest") && !exteria_tl_has(request, "save"));
+    roundtrip(request, EXTERIA_TL_ID_photos_uploadContactProfilePhoto);
+    CHECK_EQ_INT(exteria_contact_photo_request(&arena, &contact, NULL, 0, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_contact_photo_request(&arena, &no_hash, file, 0, &request), EXTERIA_E_ARG);
+    /* taking the photo away is the save flag without a file */
+    CHECK_EQ_INT(exteria_contact_photo_reset_request(&arena, &contact, &request), EXTERIA_OK);
+    CHECK(exteria_tl_has(request, "save") && !exteria_tl_has(request, "file") && !exteria_tl_has(request, "suggest"));
+    roundtrip(request, EXTERIA_TL_ID_photos_uploadContactProfilePhoto);
+    CHECK_EQ_INT(exteria_contact_photo_reset_request(&arena, &no_hash, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+}
+
 static exteria_tl_value *vec_of(exteria_tl_value **items, uint32_t n) {
     exteria_tl_value *vec = exteria_tl_new_vec(&arena, n);
     uint32_t i;
@@ -451,6 +535,8 @@ int main(void) {
     test_username();
     test_photo();
     test_photo_delete();
+    test_contact_note_photo();
+    test_full_user_photos_note();
     test_peer_profile();
     test_birthday_channels();
     test_music();

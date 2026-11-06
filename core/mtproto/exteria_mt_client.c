@@ -506,6 +506,36 @@ static exteria_status build_init_prefix(exteria_mt_client *c) {
     return EXTERIA_OK;
 }
 
+exteria_status exteria_mt_client_set_device(exteria_mt_client *c, const char *device_model, const char *system_version, const char *app_version) {
+    exteria_mt_client_config before;
+    uint8_t *old_prefix;
+    size_t old_len;
+    exteria_status s;
+    if (!c || c->closing || !device_model || !system_version || !app_version || !device_model[0] || !system_version[0]) return EXTERIA_E_ARG;
+    if (strnlen(device_model, EXTERIA_MT_DEVICE_TEXT_MAX + 1) > EXTERIA_MT_DEVICE_TEXT_MAX ||
+        strnlen(system_version, EXTERIA_MT_DEVICE_TEXT_MAX + 1) > EXTERIA_MT_DEVICE_TEXT_MAX ||
+        strnlen(app_version, EXTERIA_MT_DEVICE_TEXT_MAX + 1) > EXTERIA_MT_DEVICE_TEXT_MAX) return EXTERIA_E_ARG;
+    before = c->config;
+    old_prefix = c->init_prefix;
+    old_len = c->init_prefix_len;
+    c->config.device_model = device_model;
+    c->config.system_version = system_version;
+    c->config.app_version = app_version;
+    c->init_prefix = NULL;
+    c->init_prefix_len = 0;
+    s = build_init_prefix(c);
+    if (s != EXTERIA_OK) {
+        c->config = before;
+        c->init_prefix = old_prefix;
+        c->init_prefix_len = old_len;
+        return s;
+    }
+    free(old_prefix);
+    /* the next request carries the new metadata again; the server keeps the last initConnection it saw on the session */
+    c->init_confirmed = 0;
+    return EXTERIA_OK;
+}
+
 exteria_status exteria_mt_client_init(exteria_mt_client *c, const exteria_mt_client_config *config,
                                       const exteria_mt_client_events *events) {
     exteria_status s;

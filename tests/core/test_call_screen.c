@@ -140,19 +140,35 @@ static void rejects_bad_input(void) {
 
 static void moods(void) {
     uint32_t light[4], dark[4], none[4];
-    int mood;
+    const uint32_t accent = 0xA44BBE;
+    int mood, corner;
     for (mood = 0; mood < EXTERIA_CALL_MOOD_COUNT; ++mood) {
-        CHECK_EQ_INT(exteria_call_mood_colors((exteria_call_mood)mood, 0, light), EXTERIA_OK);
-        CHECK_EQ_INT(exteria_call_mood_colors((exteria_call_mood)mood, 1, dark), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_call_mood_colors((exteria_call_mood)mood, accent, 0, light), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_call_mood_colors((exteria_call_mood)mood, accent, 1, dark), EXTERIA_OK);
         CHECK(memcmp(light, dark, sizeof(light)) != 0);
-        CHECK(light[0] <= 0xFFFFFF && dark[3] <= 0xFFFFFF);
+        for (corner = 0; corner < 4; ++corner) {
+            uint32_t l = light[corner], d = dark[corner];
+            CHECK(l <= 0xFFFFFF && d <= 0xFFFFFF);
+            /* every channel of the dark shade is at most the light one: the dark theme is never the lighter field */
+            CHECK(((d >> 16) & 0xFF) <= ((l >> 16) & 0xFF) && ((d >> 8) & 0xFF) <= ((l >> 8) & 0xFF) && (d & 0xFF) <= (l & 0xFF));
+        }
     }
-    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_CONNECTING, 0, light), EXTERIA_OK);
-    CHECK(light[0] == 0xB456D8 && light[2] == 0x20A4D7);
-    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_COUNT, 0, none), EXTERIA_E_ARG);
+    /* the top left corner of the connecting screen in a light theme is the accent itself */
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_CONNECTING, accent, 0, light), EXTERIA_OK);
+    CHECK(light[0] == accent);
+    /* the weak link drains the color: the channels come closer together */
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_WEAK, 0xFF0000, 0, light), EXTERIA_OK);
+    CHECK((light[0] & 0xFF) > 0 && ((light[0] >> 16) & 0xFF) < 0xFF);
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_COUNT, accent, 0, none), EXTERIA_E_ARG);
     CHECK(none[0] == 0);
-    CHECK_EQ_INT(exteria_call_mood_colors((exteria_call_mood)-1, 0, none), EXTERIA_E_ARG);
-    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_TALKING, 0, NULL), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_call_mood_colors((exteria_call_mood)-1, accent, 0, none), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_TALKING, 0x1000000u, 0, none), EXTERIA_E_ARG);
+    CHECK(none[0] == 0 && none[3] == 0);
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_TALKING, accent, 0, NULL), EXTERIA_E_ARG);
+    /* black and white accents stay in range */
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_TALKING, 0x000000, 1, none), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_call_mood_colors(EXTERIA_CALL_MOOD_TALKING, 0xFFFFFF, 0, none), EXTERIA_OK);
+    CHECK(none[0] == 0xFFFFFF);
 }
 
 static void mesh(void) {

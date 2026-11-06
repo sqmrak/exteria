@@ -127,18 +127,40 @@ exteria_status exteria_call_screen_layout_compute(const exteria_call_screen_metr
     return EXTERIA_OK;
 }
 
-/* the reference palettes: mesh backgrounds of the android call screen, light set for the modern theme */
-static const uint32_t moods[EXTERIA_CALL_MOOD_COUNT][2][4] = {
-    {{0xB456D8, 0x8148EC, 0x20A4D7, 0x3F8BEA}, {0xA736D0, 0x6A2BDD, 0x0F95C9, 0x287AE1}},
-    {{0x4576E9, 0x3B7AF1, 0x08B0A3, 0x17AAE4}, {0x2D60D6, 0x2C6ADF, 0x009595, 0x0291C9}},
-    {{0xE86958, 0xE7618F, 0xDB904C, 0xDE7238}, {0xE23F29, 0xE6306F, 0xC77616, 0xD75A16}}
-};
+/* how far each corner of the mesh goes toward black, by theme: the corners differ so the field reads as a gradient and not as a flat fill */
+static const double shade_light[4] = {0.00, 0.16, 0.32, 0.12};
+static const double shade_dark[4] = {0.34, 0.50, 0.66, 0.44};
 
-exteria_status exteria_call_mood_colors(exteria_call_mood mood, int dark, uint32_t out[4]) {
+static uint32_t blend(uint32_t from, uint32_t to, double share) {
+    uint32_t out = 0;
+    int shift;
+    for (shift = 16; shift >= 0; shift -= 8) {
+        double a = (double)((from >> shift) & 0xFF), b = (double)((to >> shift) & 0xFF);
+        out |= (uint32_t)(a + (b - a) * share + 0.5) << shift;
+    }
+    return out;
+}
+
+exteria_status exteria_call_mood_colors(exteria_call_mood mood, uint32_t accent, int dark, uint32_t out[4]) {
+    uint32_t base = accent;
+    const double *shade = dark ? shade_dark : shade_light;
+    double lift = 0;
+    int i;
     if (!out) return EXTERIA_E_ARG;
     memset(out, 0, 4 * sizeof(out[0]));
-    if ((int)mood < 0 || mood >= EXTERIA_CALL_MOOD_COUNT) return EXTERIA_E_ARG;
-    memcpy(out, moods[mood][dark ? 1 : 0], 4 * sizeof(out[0]));
+    if ((int)mood < 0 || mood >= EXTERIA_CALL_MOOD_COUNT || accent > 0xFFFFFFu) return EXTERIA_E_ARG;
+    if (mood == EXTERIA_CALL_MOOD_TALKING) lift = 0.06;
+    if (mood == EXTERIA_CALL_MOOD_WEAK) {
+        /* the luma of the accent as a grey, and the accent pulled 60 percent of the way to it */
+        uint32_t r = (base >> 16) & 0xFF, g = (base >> 8) & 0xFF, b = base & 0xFF;
+        uint32_t luma = (r * 77 + g * 150 + b * 29) >> 8;
+        base = blend(base, (luma << 16) | (luma << 8) | luma, 0.6);
+    }
+    for (i = 0; i < 4; ++i) {
+        double toward_black = shade[i] - lift;
+        if (toward_black < 0) toward_black = 0;
+        out[i] = blend(base, 0x000000u, toward_black);
+    }
     return EXTERIA_OK;
 }
 

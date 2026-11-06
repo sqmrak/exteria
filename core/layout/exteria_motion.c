@@ -27,6 +27,10 @@ double exteria_motion_duration(exteria_motion_curve curve) {
     case EXTERIA_MOTION_LIST_MOVE: return 0.25;
     case EXTERIA_MOTION_DISMISS: return 0.2;
     case EXTERIA_MOTION_SHEET_DISMISS: return 0.25;
+    case EXTERIA_MOTION_POPUP_MODERN_ENTER: return 0.34;
+    case EXTERIA_MOTION_POPUP_MODERN_EXIT: return 0.2;
+    case EXTERIA_MOTION_POPUP_CLASSIC_ENTER: return 0.25;
+    case EXTERIA_MOTION_POPUP_CLASSIC_EXIT: return 0.2;
     }
     return 0.0;
 }
@@ -65,6 +69,12 @@ double exteria_motion_progress(exteria_motion_curve curve, double time) {
     /* BottomSheet.dismiss: 250 ms on CubicBezierInterpolator.EASE_OUT. The quint of the way in is the wrong curve for a sheet that leaves: it covers most of the
        distance in the first frames and then crawls, which reads as a jerk */
     case EXTERIA_MOTION_SHEET_DISMISS: return bezier(time, 0.0, 0.0, 0.58, 1.0);
+    /* material 3: emphasized decelerate in, emphasized accelerate out */
+    case EXTERIA_MOTION_POPUP_MODERN_ENTER: return bezier(time, 0.05, 0.7, 0.1, 1.0);
+    case EXTERIA_MOTION_POPUP_MODERN_EXIT: return bezier(time, 0.3, 0.0, 0.8, 0.15);
+    /* the ease out and the ease in of UIKit */
+    case EXTERIA_MOTION_POPUP_CLASSIC_ENTER: return bezier(time, 0.0, 0.0, 0.58, 1.0);
+    case EXTERIA_MOTION_POPUP_CLASSIC_EXIT: return bezier(time, 0.42, 0.0, 1.0, 1.0);
     }
     return 0.0;
 }

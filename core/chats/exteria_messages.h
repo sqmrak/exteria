@@ -400,6 +400,7 @@ typedef enum exteria_upload_kind {
 
 #define EXTERIA_UPLOAD_NAME_MAX 128
 #define EXTERIA_UPLOAD_CAPTION_MAX 4096
+#define EXTERIA_UPLOAD_MUSIC_TEXT_MAX 128
 
 /* what a message about an uploaded file needs beyond the file itself */
 typedef struct exteria_upload_spec {
@@ -416,6 +417,9 @@ typedef struct exteria_upload_spec {
     uint8_t spoiler;                /* a photo or a video that is shown blurred until it is tapped */
     uint8_t animated;               /* a file kind only: a gif that plays in the chat as an animation and not as a file to open */
     uint8_t view_once;              /* a photo, video, voice note or round video that is gone after the other side has opened it; files and albums cannot be */
+    uint8_t music;                  /* a file kind only: the file is a song, sent with the title, performer and duration below and not forced to be a file */
+    char title[EXTERIA_UPLOAD_MUSIC_TEXT_MAX];
+    char performer[EXTERIA_UPLOAD_MUSIC_TEXT_MAX];
 } exteria_upload_spec;
 
 /* messages.sendMedia for a file already uploaded: file is the inputFile or inputFileBig the upload gave */

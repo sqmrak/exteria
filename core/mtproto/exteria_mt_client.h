@@ -142,6 +142,12 @@ exteria_status exteria_mt_client_init(exteria_mt_client *c, const exteria_mt_cli
 /* teardown must resolve pending requests instead of leaving their owners waiting */
 void exteria_mt_client_free(exteria_mt_client *c);
 
+/* the longest device model, system version or app version, in bytes */
+#define EXTERIA_MT_DEVICE_TEXT_MAX 128
+/* tells the server another device model, system version and app version, with the next request that goes out. the strings are borrowed like the ones
+   of the config and must outlive the client or the next call; a model or system version that is empty or longer than EXTERIA_MT_DEVICE_TEXT_MAX is
+   EXTERIA_E_ARG and leaves the old ones in force. a client made without an api_id sends no metadata, so this changes nothing there */
+exteria_status exteria_mt_client_set_device(exteria_mt_client *c, const char *device_model, const char *system_version, const char *app_version);
 exteria_status exteria_mt_client_connect(exteria_mt_client *c);
 /* a socket failure must not discard requests needed after reconnect */
 void exteria_mt_client_disconnected(exteria_mt_client *c);

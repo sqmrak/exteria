@@ -13,6 +13,8 @@
 #define EXTERIA_NAME_PART_MAX 64
 #define EXTERIA_USERNAME_MIN 5
 #define EXTERIA_USERNAME_MAX 32
+/* the private note on a contact, in bytes of utf-8 with the terminator */
+#define EXTERIA_CONTACT_NOTE_MAX 512
 
 typedef struct exteria_star_rating {
     int32_t level;
@@ -45,6 +47,10 @@ typedef struct exteria_full_user {
     char intro_text[256];
     uint8_t has_intro_sticker;
     exteria_sticker_row intro_sticker;
+    char note[EXTERIA_CONTACT_NOTE_MAX];    /* the note the account keeps on this contact, empty when there is none */
+    uint8_t has_personal_photo;     /* the account set its own photo for this contact, which the server shows instead of the one they chose */
+    uint8_t has_public_photo;       /* the photo those who may not see the main one get; only the answer for the signed in user carries it */
+    exteria_media_info public_photo;
     uint8_t has_rating;
     uint8_t has_pending_rating;
     int32_t pending_rating_date;
@@ -102,5 +108,13 @@ exteria_status exteria_profile_public_photo_request(exteria_arena *arena, exteri
 exteria_status exteria_profile_photo_delete_request(exteria_arena *arena, const exteria_media_ref *photo, exteria_tl_value **out);
 /* a profile picture that moves: the uploaded mp4 and the second of it that stands for it while it does not play */
 exteria_status exteria_profile_video_request(exteria_arena *arena, exteria_tl_value *video, double start_seconds, exteria_tl_value **out);
+
+/* contacts.updateContactNote: the note is plain text without entities, empty to take it off; a user needs a hash, and a note of EXTERIA_CONTACT_NOTE_MAX bytes or more is EXTERIA_E_ARG */
+exteria_status exteria_contact_note_request(exteria_arena *arena, const exteria_peer_ref *user, const char *note, exteria_tl_value **out);
+/* photos.uploadContactProfilePhoto for a file already uploaded: suggest sends it to the contact as a proposal for their own photo; without it the photo is set for
+   this contact on the account's side only */
+exteria_status exteria_contact_photo_request(exteria_arena *arena, const exteria_peer_ref *user, exteria_tl_value *file, int suggest, exteria_tl_value **out);
+/* the same call with the save flag and no file, which takes away the photo the account set for the contact, so the contact's own photo shows again */
+exteria_status exteria_contact_photo_reset_request(exteria_arena *arena, const exteria_peer_ref *user, exteria_tl_value **out);
 
 #endif

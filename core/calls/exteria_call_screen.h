@@ -49,15 +49,16 @@ exteria_status exteria_call_screen_layout_compute(const exteria_call_screen_metr
                                                   exteria_call_screen_layout *out);
 
 typedef enum exteria_call_mood {
-    EXTERIA_CALL_MOOD_CONNECTING,   /* blue to violet: ringing, key exchange, connecting */
-    EXTERIA_CALL_MOOD_TALKING,      /* blue to green: the audio is up */
-    EXTERIA_CALL_MOOD_WEAK,         /* orange to red: the link broke while talking */
+    EXTERIA_CALL_MOOD_CONNECTING,   /* the accent: ringing, key exchange, connecting */
+    EXTERIA_CALL_MOOD_TALKING,      /* the accent a little brighter: the audio is up */
+    EXTERIA_CALL_MOOD_WEAK,         /* the accent drained of color: the link broke while talking */
     EXTERIA_CALL_MOOD_COUNT
 } exteria_call_mood;
 
-/* the four colors of a mood as 0xRRGGBB: top left, top right, bottom right, bottom left. dark picks the muted set the
-   classic theme uses */
-exteria_status exteria_call_mood_colors(exteria_call_mood mood, int dark, uint32_t out[4]);
+/* the four colors of a mood as 0xRRGGBB, top left, top right, bottom right, bottom left, all shades of accent (0xRRGGBB, the accent color of the theme).
+   dark is the theme being dark: the shades are deeper there, so the white text and the buttons of the screen do not sit on a glaring field. E_ARG for an accent
+   past 0xFFFFFF; out is zeroed on every failure */
+exteria_status exteria_call_mood_colors(exteria_call_mood mood, uint32_t accent, int dark, uint32_t out[4]);
 
 /* a width by height RGBA bitmap that blends the four corner colors bilinearly; every side from 2 to
    EXTERIA_CALL_MESH_MAX_SIDE; capacity is the size of rgba in bytes and must hold width * height * 4 */

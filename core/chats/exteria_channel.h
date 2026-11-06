@@ -109,6 +109,9 @@ typedef struct exteria_channel_member {
     char rank[EXTERIA_MEMBER_RANK_MAX];
 } exteria_channel_member;
 
+/* the inputChannel of a channel (kind 3 with an access hash); anything else is EXTERIA_E_ARG */
+exteria_status exteria_channel_input(exteria_arena *arena, const exteria_peer_ref *channel, exteria_tl_value **out);
+
 /* channels.getParticipants for one page of a list */
 exteria_status exteria_channel_members_request(exteria_arena *arena, const exteria_peer_ref *channel, exteria_member_list list, const char *query,
                                               int32_t offset, int32_t limit, exteria_tl_value **out);

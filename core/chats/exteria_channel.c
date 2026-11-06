@@ -321,6 +321,11 @@ static exteria_status input_channel(exteria_arena *arena, const exteria_peer_ref
     return status;
 }
 
+exteria_status exteria_channel_input(exteria_arena *arena, const exteria_peer_ref *channel, exteria_tl_value **out) {
+    if (!out) return EXTERIA_E_ARG;
+    return input_channel(arena, channel, out);
+}
+
 static exteria_status input_user(exteria_arena *arena, const exteria_peer_ref *user, exteria_tl_value **out) {
     exteria_tl_value *input;
     exteria_status status;

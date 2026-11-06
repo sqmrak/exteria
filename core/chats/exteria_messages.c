@@ -1664,18 +1664,26 @@ static exteria_status upload_media(exteria_arena *arena, exteria_tl_value *file,
         if (!attribute) return status == EXTERIA_OK ? EXTERIA_E_ARG : status;
         mime = spec->kind == EXTERIA_UPLOAD_VOICE ? "audio/ogg" : (spec->kind == EXTERIA_UPLOAD_FILE ? spec->mime : "video/mp4");
         media = exteria_tl_new_obj(arena, "inputMediaUploadedDocument");
-        attributes = exteria_tl_new_vec(arena, spec->animated ? 2 : 1);
+        attributes = exteria_tl_new_vec(arena, (spec->animated || spec->music) ? 2 : 1);
         if (!media || !attributes) return EXTERIA_E_NOMEM;
         status = exteria_tl_vec_set(attributes, 0, attribute);
         if (status == EXTERIA_OK && spec->animated) {
             exteria_tl_value *animated = exteria_tl_new_obj(arena, "documentAttributeAnimated");
             status = animated ? exteria_tl_vec_set(attributes, 1, animated) : EXTERIA_E_NOMEM;
         }
+        if (status == EXTERIA_OK && spec->music) {
+            /* not a voice note: the server lists it as a song, which is what the saved music of a profile takes */
+            exteria_tl_value *song = exteria_tl_new_obj(arena, "documentAttributeAudio");
+            status = song ? exteria_tl_set_i32(arena, song, "duration", (spec->duration_ms + 500) / 1000) : EXTERIA_E_NOMEM;
+            if (status == EXTERIA_OK && spec->title[0]) status = exteria_tl_set_str(arena, song, "title", spec->title);
+            if (status == EXTERIA_OK && spec->performer[0]) status = exteria_tl_set_str(arena, song, "performer", spec->performer);
+            if (status == EXTERIA_OK) status = exteria_tl_vec_set(attributes, 1, song);
+        }
         if (status == EXTERIA_OK) status = exteria_tl_set(media, "file", file);
         if (status == EXTERIA_OK) status = exteria_tl_set_str(arena, media, "mime_type", mime);
         if (status == EXTERIA_OK) status = exteria_tl_set(media, "attributes", attributes);
         /* a sent video is not played in a circle, and a file is never turned into a picture on the other side */
-        if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_FILE && !spec->animated) status = exteria_tl_set_flag(media, "force_file");
+        if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_FILE && !spec->animated && !spec->music) status = exteria_tl_set_flag(media, "force_file");
         if (status == EXTERIA_OK && spec->kind == EXTERIA_UPLOAD_VIDEO && spec->spoiler) status = exteria_tl_set_flag(media, "spoiler");
         if (status == EXTERIA_OK && spec->view_once) status = exteria_tl_set_i32(arena, media, "ttl_seconds", EXTERIA_VIEW_ONCE_TTL);
     }
@@ -1686,6 +1694,8 @@ static exteria_status upload_media(exteria_arena *arena, exteria_tl_value *file,
 static int upload_spec_valid(const exteria_upload_spec *spec) {
     /* a document sent as a file keeps its bytes for good, so a one-time file is a mistake of the caller */
     return spec->kind >= EXTERIA_UPLOAD_VOICE && spec->kind <= EXTERIA_UPLOAD_FILE && !(spec->animated && (spec->kind != EXTERIA_UPLOAD_FILE || strcmp(spec->mime, "image/gif"))) &&
+           !(spec->music && (spec->kind != EXTERIA_UPLOAD_FILE || spec->animated || strncmp(spec->mime, "audio/", 6))) && spec->duration_ms >= 0 &&
+           memchr(spec->title, 0, sizeof(spec->title)) != NULL && memchr(spec->performer, 0, sizeof(spec->performer)) != NULL &&
            !(spec->view_once && spec->kind == EXTERIA_UPLOAD_FILE) && memchr(spec->name, 0, sizeof(spec->name)) != NULL &&
            memchr(spec->mime, 0, sizeof(spec->mime)) != NULL && memchr(spec->caption, 0, sizeof(spec->caption)) != NULL;
 }

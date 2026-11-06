@@ -10,7 +10,14 @@ typedef enum exteria_motion_curve {
     /* a card or a menu that goes away: it starts to leave at once and settles, where EXIT starts slowly and the card seems to hang for a moment */
     EXTERIA_MOTION_DISMISS,
     /* the in-app browser sheet leaves on the same quint curve it arrives on, in 250 ms */
-    EXTERIA_MOTION_SHEET_DISMISS
+    EXTERIA_MOTION_SHEET_DISMISS,
+    /* the way every popup comes and goes, menus, dialogs and sheets, in the modern theme: the emphasized curves of material 3, a long deceleration in and a
+       short sharp acceleration out */
+    EXTERIA_MOTION_POPUP_MODERN_ENTER,
+    EXTERIA_MOTION_POPUP_MODERN_EXIT,
+    /* and in the classic theme: the ease out and the ease in of the system of the time, a little quicker and with no overshoot anywhere */
+    EXTERIA_MOTION_POPUP_CLASSIC_ENTER,
+    EXTERIA_MOTION_POPUP_CLASSIC_EXIT
 } exteria_motion_curve;
 
 double exteria_motion_duration(exteria_motion_curve curve);

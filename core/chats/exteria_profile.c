@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "exteria_avatars.h"
 #include "exteria_store.h"
 #include "exteria_tl_ids.h"
 
@@ -100,6 +101,15 @@ exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_f
         }
         memcpy(out->about, data, len);
         out->about[len] = 0;
+    }
+    if (exteria_tl_has(full, "note")) {
+        const exteria_tl_value *note = exteria_tl_get(full, "note");
+        if (exteria_tl_is(note, EXTERIA_TL_ID_textWithEntities)) copy_field(out->note, sizeof(out->note), note, "text");
+    }
+    out->has_personal_photo = exteria_tl_has(full, "personal_photo") ? 1 : 0;
+    if (exteria_tl_has(full, "fallback_photo")) {
+        exteria_photo_read(exteria_tl_get(full, "fallback_photo"), EXTERIA_AVATAR_TARGET, &out->public_photo);
+        out->has_public_photo = out->public_photo.ref.source == EXTERIA_MEDIA_SOURCE_PHOTO && out->public_photo.ref.id != 0;
     }
     out->require_premium = exteria_tl_has(full, "contact_require_premium") ? 1 : 0;
     out->blocked = exteria_tl_has(full, "blocked") ? 1 : 0;
@@ -442,6 +452,71 @@ exteria_status exteria_profile_photo_delete_request(exteria_arena *arena, const 
     if (status == EXTERIA_OK) status = exteria_tl_set_bytes(arena, input, "file_reference", photo->file_ref, photo->ref_len);
     if (status == EXTERIA_OK) status = exteria_tl_vec_set(list, 0, input);
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "id", list);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+static exteria_status contact_input_user(exteria_arena *arena, const exteria_peer_ref *user, exteria_tl_value **out) {
+    exteria_tl_value *input;
+    exteria_status status;
+    *out = NULL;
+    if (!arena || !user || user->kind != 1 || user->id <= 0 || user->access_hash == 0) return EXTERIA_E_ARG;
+    input = exteria_tl_new_obj(arena, "inputUser");
+    if (!input) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_i64(arena, input, "user_id", user->id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, input, "access_hash", user->access_hash);
+    if (status == EXTERIA_OK) *out = input;
+    return status;
+}
+
+exteria_status exteria_contact_note_request(exteria_arena *arena, const exteria_peer_ref *user, const char *note, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *text;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!note || strlen(note) >= EXTERIA_CONTACT_NOTE_MAX) return EXTERIA_E_ARG;
+    status = contact_input_user(arena, user, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "contacts.updateContactNote");
+    text = exteria_tl_new_obj(arena, "textWithEntities");
+    if (!request || !text) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_str(arena, text, "text", note);
+    if (status == EXTERIA_OK) status = exteria_tl_set(text, "entities", exteria_tl_new_vec(arena, 0));
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "id", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "note", text);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_contact_photo_request(exteria_arena *arena, const exteria_peer_ref *user, exteria_tl_value *file, int suggest, exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!file) return EXTERIA_E_ARG;
+    status = contact_input_user(arena, user, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "photos.uploadContactProfilePhoto");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "user_id", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "file", file);
+    if (status == EXTERIA_OK && suggest) status = exteria_tl_set_flag(request, "suggest");
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_contact_photo_reset_request(exteria_arena *arena, const exteria_peer_ref *user, exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    status = contact_input_user(arena, user, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "photos.uploadContactProfilePhoto");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "user_id", input);
+    /* the save flag without a file is how the server is told to take the personal photo away */
+    if (status == EXTERIA_OK) status = exteria_tl_set_flag(request, "save");
     if (status == EXTERIA_OK) *out = request;
     return status;
 }

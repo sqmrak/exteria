@@ -11,7 +11,7 @@ static void reference_curves(void) {
     /* bezier parameter 0.5 gives these exact x and y coordinates */
     CHECK(near(exteria_motion_progress(EXTERIA_MOTION_ENTER, 0.33125), 0.875));
     CHECK(near(exteria_motion_progress(EXTERIA_MOTION_EXIT, 0.6575), 0.5));
-    for (int curve = EXTERIA_MOTION_ENTER; curve <= EXTERIA_MOTION_SHEET_DISMISS; ++curve) {
+    for (int curve = EXTERIA_MOTION_ENTER; curve <= EXTERIA_MOTION_POPUP_CLASSIC_EXIT; ++curve) {
         exteria_motion_curve kind = (exteria_motion_curve)curve;
         CHECK(near(exteria_motion_progress(kind, -1), 0));
         CHECK(near(exteria_motion_progress(kind, 0), 0));
@@ -31,6 +31,26 @@ static void reference_curves(void) {
             }
             previous = progress;
         }
+    }
+}
+
+/* the popup curves: bezier parameter 0.5 gives these exact points, and the modern one decelerates in and accelerates out where the classic ones are the plain
+   ease out and ease in */
+static void popup_curves(void) {
+    CHECK(near(exteria_motion_duration(EXTERIA_MOTION_POPUP_MODERN_ENTER), 0.34));
+    CHECK(near(exteria_motion_duration(EXTERIA_MOTION_POPUP_MODERN_EXIT), 0.2));
+    CHECK(near(exteria_motion_duration(EXTERIA_MOTION_POPUP_CLASSIC_ENTER), 0.25));
+    CHECK(near(exteria_motion_duration(EXTERIA_MOTION_POPUP_CLASSIC_EXIT), 0.2));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_POPUP_MODERN_ENTER, 0.18125), 0.7625));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_POPUP_MODERN_EXIT, 0.5375), 0.18125));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_POPUP_CLASSIC_ENTER, 0.3425), 0.5));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_POPUP_CLASSIC_EXIT, 0.6575), 0.5));
+    /* a popup that comes in is over 85 percent of the way in the first third of the time, and one that leaves has hardly moved at the half */
+    CHECK(exteria_motion_progress(EXTERIA_MOTION_POPUP_MODERN_ENTER, 0.33) > 0.85);
+    CHECK(exteria_motion_progress(EXTERIA_MOTION_POPUP_MODERN_EXIT, 0.5) < 0.18);
+    /* nothing overshoots: the cards stop on their size and place */
+    for (int curve = EXTERIA_MOTION_POPUP_MODERN_ENTER; curve <= EXTERIA_MOTION_POPUP_CLASSIC_EXIT; ++curve) {
+        for (int sample = 0; sample <= 1000; ++sample) CHECK(exteria_motion_progress((exteria_motion_curve)curve, sample / 1000.0) <= 1);
     }
 }
 
@@ -200,6 +220,7 @@ static void ambient_phase_survives_rebuild(void) {
 
 int main(void) {
     reference_curves();
+    popup_curves();
     navigation_decelerates();
     spring_settles();
     list_move_curve();

@@ -70,6 +70,9 @@ static void state(void *ctx, exteria_mt_client_state st, exteria_status reason) 
     f->state_reason = reason;
 }
 
+/* nonzero makes the client wrap its requests with initConnection */
+static int32_t fixture_api_id;
+
 static void fixture_init(client_fixture *f, size_t arena_limit) {
     exteria_mt_client_config config;
     exteria_mt_client_events events;
@@ -89,6 +92,10 @@ static void fixture_init(client_fixture *f, size_t arena_limit) {
     config.clock = &f->clock;
     config.restore = &restore;
     config.transport = EXTERIA_MT_INTERMEDIATE;
+    config.api_id = fixture_api_id;
+    config.device_model = "iPhone4,1";
+    config.system_version = "iPhone OS 6.1";
+    config.app_version = "1.0";
     config.result_arena_limit = (uint32_t)arena_limit;
     events.ctx = f;
     events.send = sent;
@@ -824,7 +831,87 @@ static void test_teardown_and_send_error(void) {
     fixture_free(&f);
 }
 
+/* the metadata of the next request: the strings of its initConnection, or empty when the request goes out bare */
+static void next_metadata(client_fixture *f, char *model, char *system, char *app, size_t cap, int *wrapped) {
+    exteria_arena a;
+    exteria_tl_value *request, *init;
+    exteria_mt_frame frame;
+    exteria_mt_header h;
+    exteria_writer plain;
+    const uint8_t *body, *text;
+    size_t len, n;
+    static uint64_t next_id = 1000;
+    model[0] = system[0] = app[0] = 0;
+    exteria_arena_init(&a, 16384);
+    request = exteria_tl_new_obj(&a, "account.updateStatus");
+    CHECK(request != NULL);
+    CHECK_EQ_INT(exteria_tl_set(request, "offline", exteria_tl_new_obj(&a, "boolFalse")), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_mt_client_submit(&f->client, next_id++, request, 0), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_mt_transport_next(&f->server, &frame), EXTERIA_OK);
+    exteria_writer_init(&plain, 1 << 20);
+    CHECK_EQ_INT(exteria_mt_decrypt(&f->client.key, 1, 0, frame.data, frame.len, &plain, &h, &body, &len), EXTERIA_OK);
+    *wrapped = exteria_get_u32le(body) == EXTERIA_TL_ID_invokeWithLayer;
+    if (*wrapped) {
+        exteria_tl_value *whole = NULL;
+        CHECK_EQ_INT(exteria_tl_decode_all(&a, NULL, EXTERIA_TL_REF_ANY, body, len, &whole), EXTERIA_OK);
+        init = (exteria_tl_value *)exteria_tl_get(whole, "query");
+        CHECK(exteria_tl_is(init, EXTERIA_TL_ID_initConnection));
+        CHECK_EQ_INT(exteria_tl_get_bytes(init, "device_model", &text, &n), EXTERIA_OK);
+        snprintf(model, cap, "%.*s", (int)n, (const char *)text);
+        CHECK_EQ_INT(exteria_tl_get_bytes(init, "system_version", &text, &n), EXTERIA_OK);
+        snprintf(system, cap, "%.*s", (int)n, (const char *)text);
+        CHECK_EQ_INT(exteria_tl_get_bytes(init, "app_version", &text, &n), EXTERIA_OK);
+        snprintf(app, cap, "%.*s", (int)n, (const char *)text);
+    }
+    exteria_writer_free(&plain);
+    exteria_arena_free(&a);
+}
+
+static void test_set_device(void) {
+    client_fixture f;
+    char model[160], system[160], app[160], long_text[EXTERIA_MT_DEVICE_TEXT_MAX + 2];
+    int wrapped = 0;
+    fixture_api_id = 777;
+    fixture_init(&f, 0);
+    next_metadata(&f, model, system, app, sizeof(model), &wrapped);
+    CHECK(wrapped);
+    CHECK(!strcmp(model, "iPhone4,1") && !strcmp(system, "iPhone OS 6.1") && !strcmp(app, "1.0"));
+    /* once the server has taken the metadata the requests go out bare */
+    f.client.init_confirmed = 1;
+    next_metadata(&f, model, system, app, sizeof(model), &wrapped);
+    CHECK(!wrapped);
+    /* another device brings the metadata back, with the new strings, on the next request */
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "samsungSM-S928B", "SDK 34", "12.1.1"), EXTERIA_OK);
+    CHECK_EQ_INT(f.client.init_confirmed, 0);
+    next_metadata(&f, model, system, app, sizeof(model), &wrapped);
+    CHECK(wrapped);
+    CHECK(!strcmp(model, "samsungSM-S928B") && !strcmp(system, "SDK 34") && !strcmp(app, "12.1.1"));
+    /* an empty app version is allowed, an empty model or system version, a missing string and a text that is too long are refused and change nothing */
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "Pixel 8", "SDK 35", ""), EXTERIA_OK);
+    memset(long_text, 'x', sizeof(long_text) - 1);
+    long_text[sizeof(long_text) - 1] = 0;
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "", "SDK 34", "1"), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "Pixel", "", "1"), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, NULL, "SDK 34", "1"), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "Pixel", "SDK 34", NULL), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, long_text, "SDK 34", "1"), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "Pixel", "SDK 34", long_text), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_mt_client_set_device(NULL, "Pixel", "SDK 34", "1"), EXTERIA_E_ARG);
+    next_metadata(&f, model, system, app, sizeof(model), &wrapped);
+    CHECK(wrapped);
+    CHECK(!strcmp(model, "Pixel 8") && !strcmp(system, "SDK 35") && !strcmp(app, ""));
+    fixture_free(&f);
+    fixture_api_id = 0;
+    /* a client without an api_id sends no metadata, and keeps sending none */
+    fixture_init(&f, 0);
+    CHECK_EQ_INT(exteria_mt_client_set_device(&f.client, "Pixel 8", "SDK 35", "1"), EXTERIA_OK);
+    next_metadata(&f, model, system, app, sizeof(model), &wrapped);
+    CHECK(!wrapped);
+    fixture_free(&f);
+}
+
 int main(void) {
+    test_set_device();
     test_reconnect_services();
     test_teardown_and_send_error();
     test_rpc_gzip();
