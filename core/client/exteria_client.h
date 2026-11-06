@@ -2,6 +2,7 @@
 #define EXTERIA_CLIENT_H
 
 #include "exteria_auth.h"
+#include "exteria_people.h"
 #include "exteria_typing.h"
 #include "exteria_updates.h"
 
@@ -25,6 +26,8 @@ typedef struct exteria_client_events {
     /* the other side read our messages of a chat up to max_id (updateReadHistoryOutbox, updateReadChannelOutbox);
        peer_kind is 1 for a user, 2 for a basic group, 3 for a channel; live only */
     void (*read_outbox)(void *ctx, int32_t peer_kind, int64_t peer_id, int32_t max_id);
+    /* a person came online or went offline (updateUserStatus); seen is the time they left, zero for any other state; live only, the stored user is updated by the updates layer */
+    void (*user_status)(void *ctx, int64_t user_id, exteria_presence presence, int32_t seen);
     /* the draft of a chat changed, here or on another client (updateDraftMessage); read it with exteria_draft_update_read, valid only during the callback;
        live only, the account keeps the draft */
     void (*draft)(void *ctx, const exteria_tl_value *update);

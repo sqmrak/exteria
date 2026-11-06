@@ -60,6 +60,11 @@
 @synthesize readOutboxMaxId = _readOutboxMaxId;
 @synthesize presence = _presence;
 @synthesize seen = _seen;
+
+- (void)setPresence:(exteria_presence)presence seen:(int32_t)seen {
+    _presence = presence;
+    _seen = seen;
+}
 @synthesize unreadCount = _unreadCount;
 @synthesize mentions = _mentions;
 @synthesize reactions = _reactions;

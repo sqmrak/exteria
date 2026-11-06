@@ -336,6 +336,32 @@ static exteria_status apply_reactions(exteria_updates *u, const exteria_tl_value
     return status;
 }
 
+/* the status of a person who came online or left: the stored user is what the chat list and a reopened chat read, and the server sends this update
+   instead of the whole user */
+static exteria_status apply_user_status(exteria_updates *u, const exteria_tl_value *v) {
+    exteria_peer peer = {0, 0};
+    int64_t user_id;
+    exteria_arena arena;
+    exteria_tl_value *user = NULL, *status = (exteria_tl_value *)exteria_tl_get(v, "status");
+    exteria_status result;
+    if (exteria_tl_get_i64(v, "user_id", &user_id) != EXTERIA_OK || user_id <= 0 || !status) return EXTERIA_E_MALFORMED;
+    exteria_arena_init(&arena, 1024u * 1024u);
+    result = exteria_store_get(u->store, EXTERIA_RECORD_USER, peer, user_id, &arena, &user);
+    /* a user that is not held arrives whole, with its status, when it is needed */
+    if (result == EXTERIA_E_NOTFOUND) result = EXTERIA_OK;
+    else if (result == EXTERIA_OK) {
+        exteria_writer encoded;
+        exteria_writer_init(&encoded, 256);
+        result = exteria_tl_encode(status, &encoded, NULL);
+        if (result == EXTERIA_OK) result = exteria_tl_decode_all(&arena, NULL, EXTERIA_TL_REF_ANY, encoded.data, encoded.len, &status);
+        exteria_writer_free(&encoded);
+        if (result == EXTERIA_OK) result = exteria_tl_set(user, "status", status);
+        if (result == EXTERIA_OK) result = exteria_store_put(u->store, EXTERIA_RECORD_USER, peer, user_id, user);
+    }
+    exteria_arena_free(&arena);
+    return result;
+}
+
 static exteria_status apply_one(exteria_updates *u, const exteria_tl_value *v, int authoritative,
                                int apply_unordered, exteria_cursor *global) {
     int64_t channel = 0;
@@ -413,6 +439,8 @@ static exteria_status apply_one(exteria_updates *u, const exteria_tl_value *v, i
                id == EXTERIA_TL_ID_updateChannelUserTyping) {
         /* typing expires in seconds and cannot be replayed from the journal */
         return EXTERIA_OK;
+    } else if (id == EXTERIA_TL_ID_updateUserStatus) {
+        status = apply_user_status(u, v);
     } else if (id == EXTERIA_TL_ID_updateNotifySettings) {
         /* the settings of the account are read through account.getNotifySettings and getNotifyExceptions, which answer with a list of these, and nothing
            consumes them from the journal */

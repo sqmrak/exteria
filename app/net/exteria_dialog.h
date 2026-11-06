@@ -155,6 +155,8 @@
 /* the account is gone: the avatar is the ghost and the status reads "a very long time ago" */
 @property (nonatomic, readonly) BOOL deleted;
 @property (nonatomic, readonly) int32_t seen;
+/* the status line of an open chat follows the person coming online or leaving, while the row itself is a snapshot from when the dialog was built */
+- (void)setPresence:(exteria_presence)presence seen:(int32_t)seen;
 @property (nonatomic, readonly) NSInteger unreadCount;
 @property (nonatomic, readonly) NSInteger mentions;
 /* messages of the person that got a reaction they have not seen yet */

@@ -106,6 +106,16 @@ static void deliver_read_outbox(exteria_client *c, const exteria_tl_value *item)
     if (max_id > 0 && peer.id > 0) c->events.read_outbox(c->events.ctx, peer.kind, peer.id, max_id);
 }
 
+static void deliver_user_status(exteria_client *c, const exteria_tl_value *item) {
+    exteria_presence presence;
+    int64_t user_id;
+    int32_t seen;
+    if (!c->events.user_status || !exteria_tl_is(item, EXTERIA_TL_ID_updateUserStatus)) return;
+    if (exteria_tl_get_i64(item, "user_id", &user_id) != EXTERIA_OK || user_id <= 0) return;
+    exteria_presence_read(exteria_tl_get(item, "status"), &presence, &seen);
+    c->events.user_status(c->events.ctx, user_id, presence, seen);
+}
+
 static void deliver_draft(exteria_client *c, const exteria_tl_value *item) {
     if (c->events.draft && exteria_tl_is(item, EXTERIA_TL_ID_updateDraftMessage)) c->events.draft(c->events.ctx, item);
 }
@@ -125,6 +135,7 @@ static void dispatch_live_updates(exteria_client *c, const exteria_tl_value *v) 
     if (exteria_tl_is(one, EXTERIA_TL_ID_updatePhoneCallSignalingData)) deliver_signaling(c, one);
     deliver_typing(c, one);
     deliver_read_outbox(c, one);
+    deliver_user_status(c, one);
     deliver_draft(c, one);
     deliver_group_call(c, one, v);
     for (i = 0; vec && vec->kind == EXTERIA_TL_V_VEC && i < vec->u.vec.count; ++i) {
@@ -133,6 +144,7 @@ static void dispatch_live_updates(exteria_client *c, const exteria_tl_value *v) 
         if (exteria_tl_is(item, EXTERIA_TL_ID_updatePhoneCallSignalingData)) deliver_signaling(c, item);
         deliver_typing(c, item);
         deliver_read_outbox(c, item);
+        deliver_user_status(c, item);
         deliver_draft(c, item);
         deliver_group_call(c, item, v);
         if (folder_update(item)) folders = 1;

@@ -366,7 +366,63 @@ static void test_contents_read(void) {
     exteria_arena_free(&read);
 }
 
+/* a person who comes online has the stored user updated, so a chat reopened or a list rebuilt does not show the time of the last talk */
+static void status_update(exteria_updates *u, exteria_arena *a, int64_t user, exteria_tl_value *status, exteria_status want) {
+    exteria_tl_value *wrapper = exteria_tl_new_obj(a, "updateShort"), *update = exteria_tl_new_obj(a, "updateUserStatus");
+    CHECK_EQ_INT(exteria_tl_set_i64(a, update, "user_id", user), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(update, "status", status), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(wrapper, "update", update), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(a, wrapper, "date", 102), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_apply(u, wrapper), want);
+}
+
+static void stored_presence(exteria_store *s, exteria_arena *read, int64_t user, exteria_presence want, int32_t want_seen) {
+    exteria_peer zero = {0, 0};
+    exteria_tl_value *got;
+    exteria_presence presence;
+    int32_t seen;
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_USER, zero, user, read, &got), EXTERIA_OK);
+    exteria_presence_read(exteria_tl_get(got, "status"), &presence, &seen);
+    CHECK_EQ_INT(presence, want);
+    CHECK_EQ_INT(seen, want_seen);
+}
+
+static void test_user_status(void) {
+    exteria_store *s = NULL;
+    exteria_updates u;
+    exteria_arena a, read;
+    exteria_peer zero = {0, 0};
+    exteria_tl_value *user, *offline, *online, *left;
+    exteria_arena_init(&a, 2u * 1024u * 1024u);
+    exteria_arena_init(&read, 2u * 1024u * 1024u);
+    CHECK_EQ_INT(exteria_store_open(&s, ":memory:", 1), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_init(&u, s, 1), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_updates_state(&u, state(&a, 10, 5, 2)), EXTERIA_OK);
+    user = exteria_tl_new_obj(&a, "user");
+    CHECK_EQ_INT(exteria_tl_set_i64(&a, user, "id", 7), EXTERIA_OK);
+    offline = exteria_tl_new_obj(&a, "userStatusOffline");
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, offline, "was_online", 100), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(user, "status", offline), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_store_put(s, EXTERIA_RECORD_USER, zero, 7, user), EXTERIA_OK);
+    stored_presence(s, &read, 7, EXTERIA_PRESENCE_OFFLINE, 100);
+    online = exteria_tl_new_obj(&a, "userStatusOnline");
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, online, "expires", 400), EXTERIA_OK);
+    status_update(&u, &a, 7, online, EXTERIA_OK);
+    stored_presence(s, &read, 7, EXTERIA_PRESENCE_ONLINE, 0);
+    left = exteria_tl_new_obj(&a, "userStatusOffline");
+    CHECK_EQ_INT(exteria_tl_set_i32(&a, left, "was_online", 500), EXTERIA_OK);
+    status_update(&u, &a, 7, left, EXTERIA_OK);
+    stored_presence(s, &read, 7, EXTERIA_PRESENCE_OFFLINE, 500);
+    /* a user the store does not hold needs nothing: it arrives whole with its status when it is wanted */
+    status_update(&u, &a, 99, online, EXTERIA_OK);
+    CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_USER, zero, 99, &read, &user), EXTERIA_E_NOTFOUND);
+    CHECK_EQ_INT(exteria_store_close(s), EXTERIA_OK);
+    exteria_arena_free(&a);
+    exteria_arena_free(&read);
+}
+
 int main(void) {
+    test_user_status();
     test_contents_read();
     test_min_keeps_whole();
     test_atomic();

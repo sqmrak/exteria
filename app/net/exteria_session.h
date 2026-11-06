@@ -118,6 +118,8 @@ extern NSString *const ExteriaSessionConnectionDidChangeNotification;
 extern NSString *const ExteriaSessionDialogsUpdatedNotification;
 /* the other side read more of our messages in a chat; userInfo has kind, peer and maxId */
 extern NSString *const ExteriaReadOutboxDidChangeNotification;
+/* a person came online or left: userInfo has "user" (NSNumber long long), "presence" (NSNumber int) and "seen" (NSNumber int) */
+extern NSString *const ExteriaUserStatusDidChangeNotification;
 /* the parts of a file sent in a message that the server has taken, on the main thread; userInfo has "randomId" (the NSNumber of the pending message)
    and "fraction" (an NSNumber float from 0 to 1) */
 extern NSString *const ExteriaUploadProgressNotification;

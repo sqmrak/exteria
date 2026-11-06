@@ -1196,6 +1196,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liteModeChanged) name:ExteriaLiteModeDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(readOutboxChanged:) name:ExteriaReadOutboxDidChangeNotification object:_session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(userStatusChanged:) name:ExteriaUserStatusDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(timesChanged) name:ExteriaTimeDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(uploadProgressed:) name:ExteriaUploadProgressNotification object:_session];
     if (_dialog.saved) {
@@ -3918,6 +3919,14 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpa
 /* what the dialog said when it was listed, or what an update told since */
 - (int32_t)readOutboxMaxId {
     return MAX(_dialog.readOutboxMaxId, [_session readOutboxOfKind:_dialog.peerKind peer:_dialog.peerId]);
+}
+
+/* the dialog is a snapshot from when the chat opened, so a person who comes online while it is open would keep the old last seen time until the chat is reopened */
+- (void)userStatusChanged:(NSNotification *)note {
+    if (_dialog.kind != EXTERIA_DIALOG_USER || _dialog.saved || _dialog.peerKind != 1) return;
+    if ([[note.userInfo objectForKey:@"user"] longLongValue] != _dialog.peerId) return;
+    [_dialog setPresence:(exteria_presence)[[note.userInfo objectForKey:@"presence"] intValue] seen:[[note.userInfo objectForKey:@"seen"] intValue]];
+    [self refreshStatusLine];
 }
 
 - (void)readOutboxChanged:(NSNotification *)note {

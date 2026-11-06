@@ -221,6 +221,7 @@ NSString *const ExteriaSessionDialogsUpdatedNotification = @"ExteriaSessionDialo
 @synthesize drafts = _drafts;
 
 NSString *const ExteriaReadOutboxDidChangeNotification = @"ExteriaReadOutboxDidChange";
+NSString *const ExteriaUserStatusDidChangeNotification = @"ExteriaUserStatusDidChange";
 NSString *const ExteriaUploadProgressNotification = @"ExteriaUploadProgress";
 NSString *const ExteriaOwnProfileDidChangeNotification = @"ExteriaOwnProfileDidChange";
 
@@ -1397,6 +1398,14 @@ static void ExteriaClientReadOutbox(void *ctx, int32_t kind, int64_t peer, int32
     [session deliverMain:^{ [session noteReadOutbox:maxId ofKind:kind peer:peer]; }];
 }
 
+static void ExteriaClientUserStatus(void *ctx, int64_t user, exteria_presence presence, int32_t seen) {
+    ExteriaSession *session = (ExteriaSession *)ctx;
+    [session deliverMain:^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaUserStatusDidChangeNotification object:session
+            userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:user], @"user", [NSNumber numberWithInt:(int)presence], @"presence", [NSNumber numberWithInt:seen], @"seen", nil]];
+    }];
+}
+
 static void ExteriaClientTyping(void *ctx, const exteria_typing *typing) {
     ExteriaSession *session = (ExteriaSession *)ctx;
     int32_t kind = typing->peer_kind, top = typing->top_message;
@@ -1557,6 +1566,7 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
     events.group_call = ExteriaClientGroupCall;
     events.typing = ExteriaClientTyping;
     events.read_outbox = ExteriaClientReadOutbox;
+    events.user_status = ExteriaClientUserStatus;
     events.draft = ExteriaClientDraft;
     events.folders_changed = ExteriaClientFoldersChanged;
     events.result = ExteriaRpcResult;
