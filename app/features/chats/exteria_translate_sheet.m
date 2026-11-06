@@ -361,8 +361,8 @@
     [self layoutIfNeeded];
     CGFloat shift = self.bounds.size.height - _card.frame.origin.y;
     _card.transform = CGAffineTransformMakeTranslation(0, shift);
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.42, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.42, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 - (void)dismiss {
@@ -371,8 +371,8 @@
     self.userInteractionEnabled = NO;
     [_job cancel];
     [self retain];
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         [self release];

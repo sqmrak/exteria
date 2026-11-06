@@ -435,7 +435,7 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
         /* the picture goes when the first frame stands in its place, so there is no blank between them */
         overlay.firstFrameHandler = ^{ picture.alpha = 0; };
         [overlay setPlaying:YES];
-        [_playing addObject:[NSDictionary dictionaryWithObjectsAndKeys:overlay, @"overlay", picture, @"picture", row, @"row", nil]];
+        [_playing addObject:[NSDictionary dictionaryWithObjectsAndKeys:overlay, @"overlay", picture, @"picture", row, @"row", key, @"key", nil]];
     }];
 }
 
@@ -543,12 +543,42 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
     return image;
 }
 
+/* the animation that already plays on this sticker in this place: in the same picture, or in the picture of a cell the table took off the screen for the
+   reload, which then moves to this one. nil when none does; the entry returned is the one in _playing now */
+- (NSDictionary *)carriedEntryFrom:(NSArray *)candidates key:(NSString *)key row:(ExteriaStickerRow *)row view:(UIImageView *)view item:(NSInteger)item {
+    for (NSDictionary *entry in candidates) {
+        if (![[entry objectForKey:@"key"] isEqualToString:key] || ![_playing containsObject:entry]) continue;
+        ExteriaStickerRow *oldRow = [entry objectForKey:@"row"];
+        UIView *oldPicture = [entry objectForKey:@"picture"];
+        if (oldRow == row && oldPicture == view) {
+            [(UIView *)[entry objectForKey:@"overlay"] setFrame:view.frame];
+            return entry;
+        }
+        if (oldRow == row || oldPicture.tag != item || [_table indexPathForCell:oldRow]) continue;
+        ExteriaLottieView *overlay = [entry objectForKey:@"overlay"];
+        NSDictionary *moved = [NSDictionary dictionaryWithObjectsAndKeys:overlay, @"overlay", view, @"picture", row, @"row", key, @"key", nil];
+        [_playing replaceObjectAtIndex:[_playing indexOfObject:entry] withObject:moved];
+        [overlay removeFromSuperview];
+        overlay.frame = view.frame;
+        [row.contentView addSubview:overlay];
+        /* the picture of the new cell goes with the first frame, which an animation that already plays has shown */
+        if (overlay.firstFrameHandler) overlay.firstFrameHandler = ^{ view.alpha = 0; };
+        oldPicture.alpha = 1;
+        return moved;
+    }
+    return nil;
+}
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *identifier = @"stickers";
     ExteriaStickerRow *row = (ExteriaStickerRow *)[tableView dequeueReusableCellWithIdentifier:identifier];
     if (!row) row = [[[ExteriaStickerRow alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier] autorelease];
     row.target = self;
-    [self stopAnimationsInRow:row];
+    /* a reload hands the rows back, maybe to other cells than before, with the stickers they had: what plays on the same sticker goes on, in whichever cell
+       now shows it, and only the rest is stopped. stopping all and starting again showed the first frame of the animations on screen once more, a blink in the
+       first rows, which the sets that arrive after the panel opens reload */
+    NSArray *candidates = [[_playing copy] autorelease];
+    NSMutableArray *kept = [NSMutableArray array];
     [row setColumns:_columns cellSize:_cellSize];
     NSDictionary *section = [_sections objectAtIndex:(NSUInteger)indexPath.section];
     NSArray *stickers = [section objectForKey:@"stickers"];
@@ -559,8 +589,12 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
         UIImageView *view = [row.views objectAtIndex:(NSUInteger)i];
         NSInteger item = indexPath.row * _columns + i;
         NSInteger index = recent ? item - 1 : item;
+        BOOL real = !(recent && item == 0) && index >= 0 && index < (NSInteger)stickers.count && item < [self itemCountOfSection:section];
+        NSString *wanted = real ? [[[stickers objectAtIndex:(NSUInteger)index] media] file].key : nil;
+        NSDictionary *carried = wanted ? [self carriedEntryFrom:candidates key:wanted row:row view:view item:item] : nil;
+        if (carried) [kept addObject:carried];
         view.image = nil;
-        view.alpha = 1;
+        view.alpha = carried ? 0 : 1;
         view.tag = item;
         if (item >= [self itemCountOfSection:section]) {
             view.hidden = YES;
@@ -588,6 +622,8 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
             }];
         }];
     }
+    /* what played in this cell and was not carried over is for another sticker now */
+    for (NSDictionary *entry in [[_playing copy] autorelease]) if ([entry objectForKey:@"row"] == row && ![kept containsObject:entry]) [self stopOverlay:entry];
     [self animateRow:row atIndexPath:indexPath];
     return row;
 }

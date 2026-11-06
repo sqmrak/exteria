@@ -1,4 +1,5 @@
 #import "exteria_chat_item.h"
+#import "exteria_album_layout.h"
 #import "exteria_platform.h"
 
 #import "exteria_person.h"
@@ -24,7 +25,8 @@
 #define PAD_X 11.0
 #define PAD_TOP 6.0
 #define PAD_BOTTOM 6.0
-#define PICTURE_INSET 3.0
+/* a picture runs to the edge of the bubble, as in the other clients; the bubble shows only around the caption and the time */
+#define PICTURE_INSET 0.0
 #define TIME_GAP 7.0
 /* the plate of a quote: where the text starts, the room right of it, and the room above and below */
 #define QUOTE_LEFT 17.0
@@ -209,7 +211,8 @@ static void ExteriaGiftCardLines(ExteriaMessage *message, NSString *who, NSStrin
 }
 
 static NSString *ExteriaServiceText(ExteriaMessage *message, NSDictionary *people) {
-    ExteriaPerson *actor = [people objectForKey:[NSNumber numberWithLongLong:message.fromId]];
+    /* a service line sent in the name of a channel (a video chat started by an anonymous admin or by the group itself) has no user id, and its sender is kept under the negative id of the channel */
+    ExteriaPerson *actor = [people objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
     ExteriaPerson *target = [people objectForKey:[NSNumber numberWithLongLong:message.targetId]];
     NSString *who = actor.name.length ? actor.name : NSLocalizedString(@"chat.someone", nil);
     if (message.service - 1 == EXTERIA_SERVICE_GIFT) return ExteriaGiftText(message, who);
@@ -734,7 +737,7 @@ static void ExteriaAlbumStack(NSMutableArray *frames, NSArray *ratios, NSUIntege
 }
 
 /* the rows of a collage in a width, as rects from the top left, and the height they take */
-static CGFloat ExteriaAlbumLayout(NSArray *ratios, CGFloat width, NSMutableArray *frames) {
+CGFloat ExteriaAlbumLayout(NSArray *ratios, CGFloat width, NSMutableArray *frames) {
     NSUInteger count = ratios.count;
     if (count < 2 || count > 10) return 0;
     CGFloat limit = floor(width * 1.0);
@@ -837,9 +840,8 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
         return;
     }
     [_pillLayout release];
-    /* on the linen the dark capsule with white text reads as a stain, so a classic date is plain grey text with a shadow */
-    UIColor *pillColor = ExteriaThemeIsClassic() ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.78 alpha:1] : [UIColor colorWithWhite:0.33 alpha:1])
-                                                 : [UIColor whiteColor];
+    /* plain grey text lost against a chat wallpaper (a pinned or renamed line over a photo), so the classic line stands on a light capsule too, in white text */
+    UIColor *pillColor = [UIColor whiteColor];
     _pillLayout = [[ExteriaTextLayout layoutForText:_pillText entities:nil font:ExteriaFontMedium(12) color:pillColor
                                           linkColor:pillColor width:width - 2 * SIDE_MARGIN - 24 maxLines:2 flush:0.5] retain];
     _pillShift = floor((width - 2 * SIDE_MARGIN - 24 - _pillLayout.size.width) / 2);
@@ -1166,8 +1168,9 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     _pollFooterOwnRow = NO;
     if (poll) {
         y = [self layoutPollAt:y width:textMax color:textColor contentWidth:&contentWidth metaWidth:metaWidth];
-        /* the chips take the row the count of votes shares with the time, so the count gets a row above them */
-        if (chipsInside) {
+        /* the chips, or a text under the poll (a forwarded poll can carry one), take the row the count of votes shares with the time, so the count gets a row above them;
+           without it the text was drawn over the count */
+        if (chipsInside || hasText) {
             _pollFooterOwnRow = YES;
             _pollFooterY = y;
             y += META_HEIGHT;

@@ -768,7 +768,7 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     UILabel *title = [[[UILabel alloc] initWithFrame:CGRectMake(14, 0, 200, SECTION_HEIGHT)] autorelease];
     title.backgroundColor = [UIColor clearColor];
     title.font = ExteriaFontSemibold(15);
-    title.textColor = ExteriaColorSecondary();
+    title.textColor = ExteriaColorAccent();
     title.text = NSLocalizedString(@"search.recent", nil);
     [header addSubview:title];
     UIButton *clear = [UIButton buttonWithType:UIButtonTypeCustom];

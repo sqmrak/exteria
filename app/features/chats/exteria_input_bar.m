@@ -127,12 +127,12 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     [self addSubview:_hairline];
 
     _field = [[UIView alloc] init];
-    _field.backgroundColor = classic ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.23 alpha:1] : [UIColor whiteColor]) : (ExteriaImportedThemeColor("chat.inputPanel.inputBg") ?: ExteriaColorField());
+    _field.backgroundColor = classic ? ExteriaClassicInputFill() : (ExteriaImportedThemeColor("chat.inputPanel.inputBg") ?: ExteriaColorField());
     _field.layer.cornerRadius = FIELD_MIN / 2;
     if (classic) {
-        /* the thin gray outline of the text box of the old messaging bars */
+        /* the thin edge of the text box of the old messaging bars: the fill a little darker, not the accent */
         _field.layer.borderWidth = 1;
-        _field.layer.borderColor = (classic ? (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.1 alpha:1] : [UIColor colorWithWhite:0.62 alpha:1]) : (ExteriaImportedThemeColor("chat.inputPanel.inputStroke") ?: ExteriaColorHairline())).CGColor;
+        _field.layer.borderColor = [ExteriaMixedColor(ExteriaClassicInputFill(), [UIColor blackColor], 0.28) CGColor];
     }
     [self addSubview:_field];
 
@@ -144,6 +144,10 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _text.delegate = self;
     _text.scrollsToTop = NO;
     _text.scrollEnabled = NO;
+    /* a text view bounces on both axes by default, so a drag moves a short text out of its field */
+    _text.bounces = NO;
+    _text.alwaysBounceVertical = NO;
+    _text.alwaysBounceHorizontal = NO;
     _text.showsHorizontalScrollIndicator = NO;
     _text.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     /* tintColor came with ios 7, and the ios 6.1 headers the build checks against do not know it */
@@ -651,7 +655,9 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 - (void)updateTextHeight {
     CGFloat height = [self textHeight];
     CGFloat want = MIN(FIELD_MAX, MAX(FIELD_MIN, height + 1));
-    _text.scrollEnabled = height > FIELD_MAX;
+    BOOL overflows = height > FIELD_MAX;
+    _text.scrollEnabled = overflows;
+    _text.bounces = overflows;
     if (want != _fieldHeight) {
         _fieldHeight = want;
         [_delegate inputBarDidChangeHeight:self];

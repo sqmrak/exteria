@@ -228,6 +228,8 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     close.tag = 3; [_panel addSubview:close];
     _table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     _table.backgroundColor = [UIColor clearColor];
+    /* the system draws a light line between the songs of the queue, which shows as a white stripe on the dark sheet; the rows have their own spacing */
+    _table.separatorStyle = UITableViewCellSeparatorStyleNone;
     _table.rowHeight = ROW_HEIGHT;
     _table.dataSource = self; _table.delegate = self;
     [_panel addSubview:_table];
@@ -319,15 +321,15 @@ static NSString *SheetTime(NSTimeInterval value) {
 - (void)enter {
     [self layoutIfNeeded];
     _panel.transform = CGAffineTransformMakeTranslation(0, [self panelTravel]);
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.5, EXTERIA_MOTION_ENTER, nil);
-    ExteriaAnimateView(_panel, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0.5, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_panel, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 - (void)dismiss {
     if (_closing) return;
     _closing = YES;
     self.userInteractionEnabled = NO;
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_SHEET_DISMISS, nil);
-    ExteriaAnimateView(_panel, CGAffineTransformMakeTranslation(0, [self panelTravel]), 1, EXTERIA_MOTION_SHEET_DISMISS, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_panel, CGAffineTransformMakeTranslation(0, [self panelTravel]), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
     });

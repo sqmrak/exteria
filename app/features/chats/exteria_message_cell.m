@@ -28,6 +28,7 @@
 #import "exteria_wave.h"
 #import "exteria_chat_settings.h"
 #import "exteria_theme.h"
+#import "exteria_classic_bubble.h"
 #import "exteria_imported_theme.h"
 #import "exteria_burn_effect.h"
 #include "exteria_message_actions.h"
@@ -39,7 +40,6 @@ static CGFloat ExteriaBubbleRadius(void) {
 }
 #define MEDIA_BUTTON 48.0
 #define VOICE_BUTTON 44.0
-#define CLASSIC_TAIL 6.0
 #define PAD_X_POLL 11.0
 #define META_HEIGHT_POLL 14.0
 #define SWIPE_TRIGGER 50.0
@@ -58,6 +58,32 @@ static char ExteriaGifStatusContext;
 typedef enum { ExteriaBubbleLayerBody, ExteriaBubbleLayerOverlay, ExteriaBubbleLayerReply } ExteriaBubbleLayer;
 
 /* draws the bubble with its text, or the time capsule over a picture */
+/* a picture with a radius of its own at each corner: the corner radius of a layer is one value for the four, so the cut is a mask */
+static void ExteriaMaskCorners(UIView *view, CGSize size, CGFloat topLeft, CGFloat topRight, CGFloat bottomRight, CGFloat bottomLeft) {
+    CGFloat width = size.width, height = size.height;
+    CGFloat limit = MIN(width, height) / 2;
+    topLeft = MIN(topLeft, limit); topRight = MIN(topRight, limit); bottomRight = MIN(bottomRight, limit); bottomLeft = MIN(bottomLeft, limit);
+    CGMutablePathRef path = CGPathCreateMutable();
+    CGPathMoveToPoint(path, NULL, topLeft, 0);
+    CGPathAddArcToPoint(path, NULL, width, 0, width, topRight, topRight);
+    CGPathAddArcToPoint(path, NULL, width, height, width - bottomRight, height, bottomRight);
+    CGPathAddArcToPoint(path, NULL, 0, height, 0, height - bottomLeft, bottomLeft);
+    CGPathAddArcToPoint(path, NULL, 0, 0, topLeft, 0, topLeft);
+    CGPathCloseSubpath(path);
+    CAShapeLayer *mask = [view.layer.mask isKindOfClass:[CAShapeLayer class]] ? (CAShapeLayer *)view.layer.mask : nil;
+    if (!mask) {
+        mask = [CAShapeLayer layer];
+        view.layer.mask = mask;
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    mask.frame = CGRectMake(0, 0, width, height);
+    mask.path = path;
+    [CATransaction commit];
+    CGPathRelease(path);
+}
+
+
 @interface ExteriaBubbleView : UIView {
     ExteriaChatItem *_item;
     ExteriaBubbleLayer _layerKind;
@@ -167,15 +193,8 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
 - (void)drawPill:(CGContextRef)context {
     CGRect rect = self.bounds;
     ExteriaTextLayout *text = _item.pillLayout;
-    if (ExteriaThemeIsClassic()) {
-        CGContextSaveGState(context);
-        CGContextSetShadowWithColor(context, CGSizeMake(0, ExteriaThemeIsDark() ? -1 : 1), 0,
-                                    (ExteriaThemeIsDark() ? [UIColor colorWithWhite:0 alpha:0.7] : [UIColor colorWithWhite:1 alpha:0.8]).CGColor);
-        [text drawAtPoint:CGPointMake(11 - _item.pillShift, (rect.size.height - text.size.height) / 2)];
-        CGContextRestoreGState(context);
-        return;
-    }
-    ExteriaFillCapsule(context, rect, ExteriaColorBubbleCapsule());
+    /* the classic capsule is a plain grey wash, lighter than the modern one so it does not read as a stain on the linen */
+    ExteriaFillCapsule(context, rect, ExteriaThemeIsClassic() ? [UIColor colorWithWhite:0 alpha:ExteriaThemeIsDark() ? 0.42 : 0.3] : ExteriaColorBubbleCapsule());
     [text drawAtPoint:CGPointMake(11 - _item.pillShift, (rect.size.height - text.size.height) / 2)];
 }
 
@@ -335,67 +354,6 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
     else ExteriaDrawStringIn(_fileProgressText ? _fileProgressText : _item.fileDetail, ExteriaFontRegular(13), CGRectMake(textX, frame.origin.y + 25, textWidth, 18), ExteriaStringTailTruncate, ExteriaTextAlignmentLeft);
 }
 
-/* the outline of a classic bubble; with a tail the outer bottom corner runs out into a small point beside the bubble */
-static void ExteriaClassicBubblePath(CGContextRef context, CGRect rect, BOOL outgoing, CGFloat topLeft, CGFloat topRight,
-                                     CGFloat bottomRight, CGFloat bottomLeft, CGFloat tail) {
-    CGFloat x0 = CGRectGetMinX(rect), y0 = CGRectGetMinY(rect), x1 = CGRectGetMaxX(rect), y1 = CGRectGetMaxY(rect);
-    if (tail <= 0) {
-        ExteriaAddCorners(context, rect, topLeft, topRight, bottomRight, bottomLeft);
-        return;
-    }
-    CGContextMoveToPoint(context, x0 + topLeft, y0);
-    CGContextAddLineToPoint(context, x1 - topRight, y0);
-    CGContextAddArcToPoint(context, x1, y0, x1, y0 + topRight, topRight);
-    if (outgoing) {
-        CGContextAddLineToPoint(context, x1, y1 - 16);
-        CGContextAddCurveToPoint(context, x1, y1 - 6, x1 + 1.5, y1 - 1.5, x1 + tail, y1);
-        CGContextAddCurveToPoint(context, x1 + tail - 3, y1 - 0.5, x1 - 4, y1, x1 - 12, y1);
-    } else {
-        CGContextAddLineToPoint(context, x1, y1 - bottomRight);
-        CGContextAddArcToPoint(context, x1, y1, x1 - bottomRight, y1, bottomRight);
-        CGContextAddLineToPoint(context, x0 + 12, y1);
-        CGContextAddCurveToPoint(context, x0 + 4, y1, x0 - tail + 3, y1 - 0.5, x0 - tail, y1);
-        CGContextAddCurveToPoint(context, x0 - 1.5, y1 - 1.5, x0, y1 - 6, x0, y1 - 16);
-    }
-    if (outgoing) {
-        CGContextAddLineToPoint(context, x0 + bottomLeft, y1);
-        CGContextAddArcToPoint(context, x0, y1, x0, y1 - bottomLeft, bottomLeft);
-    }
-    CGContextAddLineToPoint(context, x0, y0 + topLeft);
-    CGContextAddArcToPoint(context, x0, y0, x0 + topLeft, y0, topLeft);
-    CGContextClosePath(context);
-}
-
-/* the old Messages look: a soft shadow, a gradient, a lit top edge and a thin outline */
-static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL outgoing, CGFloat topLeft, CGFloat topRight,
-                                     CGFloat bottomRight, CGFloat bottomLeft, CGFloat tail) {
-    UIColor *top, *bottom, *outline;
-    ExteriaClassicBubbleColors(outgoing, &top, &bottom, &outline);
-    CGFloat from[4], to[4];
-    [top getRed:&from[0] green:&from[1] blue:&from[2] alpha:&from[3]];
-    [bottom getRed:&to[0] green:&to[1] blue:&to[2] alpha:&to[3]];
-    CGRect body = CGRectInset(rect, 0.5, 0.5);
-    CGContextSaveGState(context);
-    CGContextSetShadowWithColor(context, CGSizeMake(0, 1), 2, [UIColor colorWithWhite:0 alpha:0.3].CGColor);
-    ExteriaClassicBubblePath(context, body, outgoing, topLeft, topRight, bottomRight, bottomLeft, tail);
-    [bottom setFill];
-    CGContextFillPath(context);
-    CGContextRestoreGState(context);
-    CGContextSaveGState(context);
-    ExteriaClassicBubblePath(context, body, outgoing, topLeft, topRight, bottomRight, bottomLeft, tail);
-    CGContextClip(context);
-    CGFloat colors[8] = {from[0], from[1], from[2], from[3], to[0], to[1], to[2], to[3]};
-    ExteriaFillGradient(context, CGPointMake(0, CGRectGetMinY(body)), CGPointMake(0, CGRectGetMaxY(body)), colors, 2);
-    /* a one point light line under the top edge, as a bevel */
-    [[UIColor colorWithWhite:1 alpha:ExteriaThemeIsDark() ? 0.18 : 0.6] setFill];
-    CGContextFillRect(context, CGRectMake(CGRectGetMinX(body) + topLeft, CGRectGetMinY(body) + 1, CGRectGetWidth(body) - topLeft - topRight, 1));
-    CGContextRestoreGState(context);
-    ExteriaClassicBubblePath(context, body, outgoing, topLeft, topRight, bottomRight, bottomLeft, tail);
-    [outline setStroke];
-    CGContextSetLineWidth(context, 1);
-    CGContextStrokePath(context);
-}
-
 - (void)drawReply {
     if (CGRectIsEmpty(_item.replyFrame)) return;
     CGRect frame = _layerKind == ExteriaBubbleLayerReply ? self.bounds : _item.replyFrame;
@@ -430,23 +388,19 @@ static void ExteriaDrawClassicBubble(CGContextRef context, CGRect rect, BOOL out
     ExteriaMessage *message = _item.message;
     BOOL outgoing = message.outgoing;
     BOOL classic = ExteriaThemeIsClassic();
-    CGRect rect = self.bounds;
-    CGFloat inner = classic ? (CGFloat)ExteriaChatClassicBubbleRadius() : ExteriaBubbleRadius();
-    CGFloat join = MIN(JOIN_RADIUS, inner);
-    CGFloat joinTop = _item.joinsPrevious ? join : inner, joinBottom = _item.joinsNext ? join : inner;
-    if (_tailWidth > 0) {
-        /* the content is laid out from the bubble's own corner, so a bubble with its tail on the left slides over by the tail */
-        rect.size.width -= _tailWidth;
-        if (!outgoing) {
-            CGContextTranslateCTM(context, _tailWidth, 0);
-            rect.origin.x = 0;
-        }
-    }
-    /* the corner on the side the bubble leans towards is the one that tucks in against its neighbour */
     if (classic) {
-        ExteriaDrawClassicBubble(context, rect, outgoing, outgoing ? inner : joinTop, outgoing ? joinTop : inner, outgoing ? joinBottom : inner,
-                                 outgoing ? inner : joinBottom, _tailWidth);
+        /* the picture holds the tail, so it takes the whole bounds, which are as wide as the bubble and its tail */
+        UIImage *bubble = ExteriaClassicBubbleImage(outgoing, _tailWidth > 0);
+        [bubble drawInRect:self.bounds];
+        if (bubble) ExteriaClassicBubbleGloss(context, self.bounds, outgoing, _tailWidth > 0);
+        /* the content is laid out from the bubble's own corner, so a bubble with its tail on the left slides over by the tail */
+        if (_tailWidth > 0 && !outgoing) CGContextTranslateCTM(context, _tailWidth, 0);
     } else {
+        CGRect rect = self.bounds;
+        CGFloat inner = ExteriaBubbleRadius();
+        CGFloat join = MIN(JOIN_RADIUS, inner);
+        CGFloat joinTop = _item.joinsPrevious ? join : inner, joinBottom = _item.joinsNext ? join : inner;
+        /* the corner on the side the bubble leans towards is the one that tucks in against its neighbour */
         ExteriaAddCorners(context, rect, outgoing ? inner : joinTop, outgoing ? joinTop : inner, outgoing ? joinBottom : inner, outgoing ? inner : joinBottom);
         [(outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn()) setFill];
         CGContextFillPath(context);
@@ -1688,8 +1642,9 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _replyPreview.hidden = item.kind == ExteriaChatItemBubble || CGRectIsEmpty(item.replyFrame);
     _replyPreview.frame = CGRectOffset(item.replyFrame, bubble.origin.x, bubble.origin.y);
     [_replyPreview setNeedsDisplay];
-    /* a classic bubble ends its run with a tail, which takes a few points beside it */
-    CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.bare && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? CLASSIC_TAIL : 0;
+    /* a classic bubble ends its run with a tail, which takes a few points beside it. a picture without words is a frame around the picture, and a tail on it points at nothing */
+    BOOL pictureAlone = item.content == ExteriaChatItemContentPicture && !item.textLayout;
+    CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.bare && !pictureAlone && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? EXTERIA_CLASSIC_BUBBLE_TAIL : 0;
     _body.tailWidth = tail;
     CGRect bodyFrame = bubble;
     if (item.kind != ExteriaChatItemBubble && !CGRectIsEmpty(item.commentsFrame)) {
@@ -1710,6 +1665,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [self hideAlbumViews];
     if (!keepMedia) _picture.image = nil;
     _picture.layer.cornerRadius = 0;
+    _picture.layer.mask = nil;
     _play.hidden = YES;
     _voiceAction.hidden = YES;
     _overlay.hidden = YES;
@@ -1811,14 +1767,24 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         }
         _map.hidden=NO;
         _map.frame=CGRectOffset(item.pictureFrame,bubble.origin.x,bubble.origin.y);
-        _map.layer.cornerRadius=MAX(0,ExteriaBubbleRadius()-3);
+        _map.layer.cornerRadius=ExteriaBubbleRadius();
         [_map showLocation:content.location zoom:15];
         _picture.frame=_map.frame;
     } else if (item.content == ExteriaChatItemContentPicture) {
         _picture.hidden = NO;
         _picture.contentMode = UIViewContentModeScaleAspectFill;
         _picture.frame = CGRectOffset(item.pictureFrame, bubble.origin.x, bubble.origin.y);
-        _picture.layer.cornerRadius = MAX(0, ExteriaBubbleRadius() - 3);
+        /* the picture runs to the edge of the bubble, so its outer corners are the bubble's; where a caption, a reply or a name meets it the corner is small, as in the other clients */
+        CGFloat bubbleRadius = ExteriaBubbleRadius(), nearRadius = MIN(4, bubbleRadius);
+        BOOL captionBelow = item.textLayout.length > 0, lineAbove = item.pictureFrame.origin.y > 0.5;
+        if (captionBelow || lineAbove) {
+            _picture.layer.cornerRadius = 0;
+            ExteriaMaskCorners(_picture, _picture.frame.size, lineAbove ? nearRadius : bubbleRadius, lineAbove ? nearRadius : bubbleRadius,
+                               captionBelow ? nearRadius : bubbleRadius, captionBelow ? nearRadius : bubbleRadius);
+        } else {
+            _picture.layer.mask = nil;
+            _picture.layer.cornerRadius = bubbleRadius;
+        }
         BOOL video = content.kind != EXTERIA_PREVIEW_PHOTO;
         [self loadPictureForItem:item];
         if (video || [self uploading]) {
@@ -1881,9 +1847,19 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _albumMarks = [[NSMutableArray alloc] init];
     }
     NSUInteger token = _token;
-    CGFloat radius = MAX(0, ExteriaBubbleRadius() - 3);
+    CGFloat radius = ExteriaBubbleRadius();
     /* a list that holds only some of an album (the pinned messages, a search) gives frames and messages of different counts, and each view needs both */
     NSUInteger shown = MIN(item.albumFrames.count, item.albumMessages.count);
+    CGFloat near = MIN(4, radius);
+    CGFloat bubbleLeft = CGFLOAT_MAX, bubbleRight = 0, collageTop = CGFLOAT_MAX, collageBottom = 0;
+    for (NSUInteger i = 0; i < shown; ++i) {
+        CGRect box = CGRectOffset([[item.albumFrames objectAtIndex:i] CGRectValue], bubble.origin.x, bubble.origin.y);
+        bubbleLeft = MIN(bubbleLeft, box.origin.x);
+        bubbleRight = MAX(bubbleRight, CGRectGetMaxX(box));
+        collageTop = MIN(collageTop, box.origin.y);
+        collageBottom = MAX(collageBottom, CGRectGetMaxY(box));
+    }
+    BOOL captioned = item.textLayout.length > 0;
     for (NSUInteger i = 0; i < shown; ++i) {
         while (_albumViews.count <= i) {
             UIImageView *view = [[[UIImageView alloc] init] autorelease];
@@ -1906,8 +1882,12 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         view.layer.cornerRadius = 0;
         mark.frame = frame;
         mark.hidden = message.media.kind == EXTERIA_PREVIEW_PHOTO;
-        /* the outer corners of the collage follow the bubble; the cells inside stay square */
-        if (i == 0 || i == shown - 1) view.layer.cornerRadius = radius;
+        /* the outer corners of the collage follow the bubble and the corners that meet another picture are small, as in the other clients; a caption under the collage
+           makes the bottom corners small too, since the bubble goes on below them */
+        BOOL left = frame.origin.x <= bubbleLeft + 0.5, right = CGRectGetMaxX(frame) >= bubbleRight - 0.5;
+        BOOL top = frame.origin.y <= collageTop + 0.5, bottom = CGRectGetMaxY(frame) >= collageBottom - 0.5 && !captioned;
+        CGFloat topRadius = item.pictureFrame.origin.y > 0.5 ? near : radius;
+        ExteriaMaskCorners(view, frame.size, top && left ? topRadius : near, top && right ? topRadius : near, bottom && right ? radius : near, bottom && left ? radius : near);
         ExteriaMedia *media = message.media;
         ExteriaRemoteFile *file = media.kind == EXTERIA_PREVIEW_PHOTO ? media.file : media.previewFile;
         UIImage *local = message.pendingSend ? message.pendingSend->preview : nil;
@@ -2473,16 +2453,22 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     NSString *slot = [NSString stringWithFormat:@"gif-%p", self];
     _gifURL = [ExteriaPlayableLink(_loadedPath, @"mp4", slot) retain];
     if (!_gifURL) { _gifFailed = YES; return; }
-    _gifItem = [[AVPlayerItem playerItemWithURL:_gifURL] retain];
-    NSMutableArray *parameters = [NSMutableArray array];
-    for (AVAssetTrack *track in [_gifItem.asset tracksWithMediaType:AVMediaTypeAudio]) {
-        AVMutableAudioMixInputParameters *input = [AVMutableAudioMixInputParameters audioMixInputParametersWithTrack:track];
-        [input setVolume:0 atTime:kCMTimeZero];
-        [parameters addObject:input];
+    /* an item with an audio track takes the audio session when it plays, even with its volume at zero, and that stops the music of other apps; the item gets the picture alone */
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:_gifURL options:nil];
+    NSArray *videoTracks = [asset tracksWithMediaType:AVMediaTypeVideo];
+    AVAssetTrack *video = videoTracks.count ? [videoTracks objectAtIndex:0] : nil;
+    AVMutableComposition *silent = [AVMutableComposition composition];
+    AVMutableCompositionTrack *picture = video ? [silent addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid] : nil;
+    NSError *composeError = nil;
+    if (!picture || ![picture insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration) ofTrack:video atTime:kCMTimeZero error:&composeError]) {
+        NSLog(@"exteria: inline animation has no picture to play: %@", composeError);
+        _gifFailed = YES;
+        [[NSFileManager defaultManager] removeItemAtPath:_gifURL.path.stringByDeletingLastPathComponent error:NULL];
+        [_gifURL release]; _gifURL = nil;
+        return;
     }
-    AVMutableAudioMix *mix = [AVMutableAudioMix audioMix];
-    mix.inputParameters = parameters;
-    _gifItem.audioMix = mix;
+    picture.preferredTransform = video.preferredTransform;
+    _gifItem = [[AVPlayerItem playerItemWithAsset:silent] retain];
     _gifPlayer = [[AVPlayer playerWithPlayerItem:_gifItem] retain];
     _gifPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
     _gifView = [[ExteriaRoundVideoView alloc] initWithFrame:_picture.frame];
@@ -2676,6 +2662,13 @@ static void ExteriaSwipeTick(void) {
     UIGraphicsEndImageContext();
     if (_roundView) _picture.transform = pictureTransform;
     return image;
+}
+
+/* setSelecting runs while the table configures the cell, before it gives the cell its row height, so the cover took the height of the row the cell showed last and its bottom
+   part answered no touch; it follows the bounds of the cell from here on */
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    _selectCover.frame = self.bounds;
 }
 
 - (void)setSelecting:(BOOL)selecting selected:(BOOL)selected animated:(BOOL)animated {

@@ -4,6 +4,7 @@
 #import "exteria_attach_pager.h"
 #import "exteria_caption_view.h"
 #import "exteria_attach_options.h"
+#import "exteria_album_layout.h"
 
 #import "exteria_chat_settings.h"
 #import "exteria_image_decoder.h"
@@ -57,6 +58,10 @@
     UIButton *_edit;
     UIButton *_add;
     UIButton *_remove;
+    /* a selection of two or more opens as the collage the chat will show, and a tap on a picture goes into it; the button in the bar comes back */
+    UIView *_collage;
+    UIButton *_grid;
+    BOOL _collageMode;
     ExteriaCaptionView *_caption;
     UIButton *_sendButton;
     NSInteger _index;
@@ -92,6 +97,7 @@ static char ExteriaPlayerStatusContext;
     self = [super init];
     if (!self) return nil;
     _items = [items mutableCopy];
+    _collageMode = _items.count > 1;
     _initialCaption = [caption copy];
     _send = [send copy];
     _cancel = [cancel copy];
@@ -129,6 +135,8 @@ static char ExteriaPlayerStatusContext;
     [_edit release];
     [_add release];
     [_remove release];
+    [_collage release];
+    [_grid release];
     [_caption release];
     [_sendButton release];
     [super dealloc];
@@ -158,6 +166,9 @@ static char ExteriaPlayerStatusContext;
     _strip.showsHorizontalScrollIndicator = NO;
     ExteriaScrollViewOwnsInsets(_strip);
     [root addSubview:_strip];
+    _collage = [[UIView alloc] init];
+    _collage.backgroundColor = [UIColor blackColor];
+    [root addSubview:_collage];
     _top = [[UIView alloc] init];
     _top.backgroundColor = [UIColor blackColor];
     [root addSubview:_top];
@@ -178,6 +189,8 @@ static char ExteriaPlayerStatusContext;
     [_top addSubview:_edit];
     _add = [self newButtonWithSymbol:ExteriaSymbolPlusCircle action:@selector(addPhoto) label:NSLocalizedString(@"attach.pager.add", nil)];
     [_top addSubview:_add];
+    _grid = [self newButtonWithSymbol:ExteriaSymbolGallery action:@selector(showCollage) label:NSLocalizedString(@"attach.pager.collage", nil)];
+    [_top addSubview:_grid];
     _remove = [self newButtonWithSymbol:ExteriaSymbolTrash action:@selector(remove) label:NSLocalizedString(@"attach.pager.remove", nil)];
     [_top addSubview:_remove];
     _caption = [[ExteriaCaptionView alloc] init];
@@ -303,8 +316,75 @@ static char ExteriaPlayerStatusContext;
         [thumb addTarget:self action:@selector(thumbTapped:) forControlEvents:UIControlEventTouchUpInside];
         [_strip addSubview:thumb];
     }
+    if (_items.count < 2) _collageMode = NO;
+    [self rebuildCollage];
     if (_index >= (NSInteger)_items.count) _index = (NSInteger)_items.count - 1;
     if (_index < 0) _index = 0;
+    [self.view setNeedsLayout];
+    [self layoutAll];
+}
+
+- (void)rebuildCollage {
+    for (UIView *view in [[_collage.subviews copy] autorelease]) [view removeFromSuperview];
+    if (_items.count < 2) return;
+    for (NSUInteger i = 0; i < _items.count; ++i) {
+        ExteriaAttachItem *item = [_items objectAtIndex:i];
+        UIImageView *tile = [[[UIImageView alloc] initWithImage:[self pictureOfItem:item]] autorelease];
+        tile.contentMode = UIViewContentModeScaleAspectFill;
+        tile.clipsToBounds = YES;
+        tile.userInteractionEnabled = YES;
+        tile.tag = (NSInteger)i;
+        tile.accessibilityLabel = [NSString stringWithFormat:@"%lu / %lu", (unsigned long)i + 1, (unsigned long)_items.count];
+        [tile addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tileTapped:)] autorelease]];
+        [_collage addSubview:tile];
+        if (item->movie) {
+            UIImageView *play = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPlay, 30, [UIColor whiteColor])] autorelease];
+            play.contentMode = UIViewContentModeCenter;
+            play.tag = -1;
+            [tile addSubview:play];
+        }
+    }
+}
+
+/* the tiles take the width of the screen less a margin, and a collage taller than the room is laid out again narrower so the whole of it shows */
+- (void)layoutCollageInSize:(CGSize)room {
+    NSMutableArray *ratios = [NSMutableArray arrayWithCapacity:_items.count];
+    for (ExteriaAttachItem *item in _items) {
+        UIImage *picture = [self pictureOfItem:item];
+        CGFloat ratio = picture.size.height > 0 ? picture.size.width / picture.size.height : 1;
+        [ratios addObject:[NSNumber numberWithFloat:(float)MAX(0.2, MIN(5, ratio))]];
+    }
+    CGFloat width = floor(MAX(0, MIN(room.width - 32, 480)));
+    NSMutableArray *frames = [NSMutableArray array];
+    CGFloat height = ExteriaAlbumLayout(ratios, width, frames);
+    if (height > room.height - 24 && height > 0 && room.height > 60) {
+        width = floor(width * (room.height - 24) / height);
+        [frames removeAllObjects];
+        height = ExteriaAlbumLayout(ratios, width, frames);
+    }
+    CGFloat left = floor((room.width - width) / 2), top = floor((room.height - height) / 2);
+    for (UIView *tile in _collage.subviews) {
+        if (tile.tag < 0 || (NSUInteger)tile.tag >= frames.count) continue;
+        CGRect frame = [[frames objectAtIndex:(NSUInteger)tile.tag] CGRectValue];
+        tile.frame = CGRectOffset(frame, left, top);
+        UIView *play = [tile viewWithTag:-1];
+        play.frame = tile.bounds;
+    }
+}
+
+- (void)tileTapped:(UITapGestureRecognizer *)tap {
+    [self.view endEditing:YES];
+    _index = tap.view.tag;
+    _collageMode = NO;
+    [self.view setNeedsLayout];
+    [self layoutAll];
+    [_pages setContentOffset:CGPointMake((CGFloat)_index * _pages.bounds.size.width, 0) animated:NO];
+}
+
+- (void)showCollage {
+    [self stopPlayback];
+    [self resetZoomAnimated:NO];
+    _collageMode = _items.count > 1;
     [self.view setNeedsLayout];
     [self layoutAll];
 }
@@ -331,7 +411,7 @@ static char ExteriaPlayerStatusContext;
     if (size.height - keyboard < safe.top + BAR_HEIGHT + INPUT_BAR + 60) keyboard = 0;
     /* on a 3.5 inch screen the keyboard leaves about 265 points, and the strip of thumbnails would push the caption field under the keyboard or the picture to nothing,
        so the strip steps aside while the person types */
-    BOOL stripShown = keyboard <= 0 || size.height - keyboard >= safe.top + BAR_HEIGHT + INPUT_BAR + THUMB_STRIP + 160;
+    BOOL stripShown = !_collageMode && (keyboard <= 0 || size.height - keyboard >= safe.top + BAR_HEIGHT + INPUT_BAR + THUMB_STRIP + 160);
     CGFloat stripHeight = stripShown ? THUMB_STRIP : 0;
     CGFloat bottomInset = keyboard > 0 ? 0 : safe.bottom;
     CGFloat inputBottom = size.height - keyboard;
@@ -344,6 +424,10 @@ static char ExteriaPlayerStatusContext;
     CGRect pagesFrame = CGRectMake(0, pagesTop, size.width, pagesHeight);
     BOOL resized = !CGSizeEqualToSize(_pages.frame.size, pagesFrame.size);
     _pages.frame = pagesFrame;
+    _pages.hidden = _collageMode;
+    _collage.hidden = !_collageMode;
+    _collage.frame = pagesFrame;
+    if (_collageMode) [self layoutCollageInSize:pagesFrame.size];
     _pages.contentSize = CGSizeMake(size.width * (CGFloat)_items.count, pagesHeight);
     for (UIView *view in _pages.subviews) {
         NSInteger tag = view.tag;
@@ -374,7 +458,8 @@ static char ExteriaPlayerStatusContext;
     _remove.frame = CGRectMake(size.width - safe.right - buttonSide, barTop + 2, buttonSide, buttonSide);
     _edit.frame = CGRectMake(size.width - safe.right - 2 * buttonSide, barTop + 2, buttonSide, buttonSide);
     _add.frame = CGRectMake(size.width - safe.right - 3 * buttonSide, barTop + 2, buttonSide, buttonSide);
-    _count.frame = CGRectMake(buttonSide + 8 + safe.left, barTop + 2, MAX(0, size.width - 4 * buttonSide - 16 - safe.left - safe.right), buttonSide);
+    _grid.frame = CGRectMake(size.width - safe.right - 4 * buttonSide, barTop + 2, buttonSide, buttonSide);
+    _count.frame = CGRectMake(buttonSide + 8 + safe.left, barTop + 2, MAX(0, size.width - 5 * buttonSide - 16 - safe.left - safe.right), buttonSide);
     _sendButton.frame = CGRectMake(size.width - safe.right - buttonSide - 8, (INPUT_BAR - buttonSide) / 2, buttonSide, buttonSide);
     _caption.frame = CGRectMake(16 + safe.left, 8, MAX(0, size.width - safe.left - safe.right - buttonSide - 32), INPUT_BAR - 16);
     [self centerCaptionLines];
@@ -383,9 +468,12 @@ static char ExteriaPlayerStatusContext;
 }
 
 - (void)showSelection {
-    _count.text = [NSString stringWithFormat:@"%ld / %lu", (long)_index + 1, (unsigned long)_items.count];
+    _count.text = _collageMode ? [NSString stringWithFormat:@"%lu", (unsigned long)_items.count]
+                               : [NSString stringWithFormat:@"%ld / %lu", (long)_index + 1, (unsigned long)_items.count];
     ExteriaAttachItem *current = _index < (NSInteger)_items.count ? [_items objectAtIndex:(NSUInteger)_index] : nil;
-    _edit.hidden = !current;
+    _edit.hidden = !current || _collageMode;
+    _remove.hidden = _collageMode;
+    _grid.hidden = _collageMode || _items.count < 2;
     _add.enabled = _items.count < ATTACH_SELECTION_MAX && !_loadingPhoto;
     _add.alpha = _add.enabled ? 1 : 0.4;
     for (UIView *view in _strip.subviews) {

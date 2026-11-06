@@ -173,6 +173,7 @@
     CGFloat _heroHeight;
     BOOL _heroOpen;
     BOOL _heroMoving;
+    BOOL _viewerWanted;
     CGFloat _headWidth;
     BOOL _working;
     BOOL _uploading;
@@ -204,6 +205,7 @@
     hero.name.text = _name.text;
     hero.name.entities = _name.entities;
     hero.status.text = _status.text;
+    hero.publicPhoto = _full.publicPhoto;
     [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
     _heroCircle = [_identity convertRect:_avatar.frame toView:_head];
     _heroHeight = [ExteriaProfileHeroView heightForWidth:_grid.bounds.size.width screenHeight:self.view.bounds.size.height];
@@ -227,6 +229,10 @@
         _heroMoving = NO;
         _identity.hidden = YES;
         [_hero finishOpen];
+        if (_viewerWanted) {
+            _viewerWanted = NO;
+            [self openAvatarViewer];
+        }
     }];
 }
 
@@ -237,9 +243,16 @@
 }
 
 /* the photos on the whole screen; the arrow of the viewer comes back to the wide photo, which stays open under it */
+/* a long pull goes through the whole opening of the wide photo in one drag: the part that came while it opened is kept, or the photos would ask for a second pull */
+- (BOOL)holdsPullWhileOpening:(CGFloat)pull {
+    if (!_heroMoving) return NO;
+    if (_heroOpen && pull > 130) _viewerWanted = YES;
+    return YES;
+}
+
 /* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo */
 - (void)heroFollowsPull:(CGFloat)pull {
-    if (_heroMoving) return;
+    if ([self holdsPullWhileOpening:pull]) return;
     if (!_hero) {
         if (pull > 60) [self openHero];
     } else if (_heroOpen) {
@@ -552,6 +565,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 }
 
 - (void)refreshProfile {
+    _hero.publicPhoto = _full.publicPhoto;
     _ratingBadge.hidden = !_full.hasRating;
     if (_full.hasRating) {
         _ratingBadge.level = _full.rating.level;

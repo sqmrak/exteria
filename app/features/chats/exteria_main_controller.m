@@ -1,4 +1,6 @@
 #import "exteria_main_controller.h"
+#import "exteria_plugin_account.h"
+#import "exteria_plugin_ui.h"
 #import "exteria_accounts.h"
 #import "exteria_popup_menu.h"
 #import "exteria_chat_settings.h"
@@ -84,10 +86,13 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickers;
     ExteriaLinkRouter *_linkRouter;
+    ExteriaPluginAccount *_pluginAccount;
     ExteriaTabBar *_tabBar;
     NSMutableArray *_screens;
     UIViewController *_current;
     UITabBarController *_classicTabs;
+    /* the tab that wears the profile photo in the classic bar; the tab controller owns it */
+    UITabBarItem *_classicProfileItem;
     UIImageView *_veil;
     ExteriaThemeBusyView *_busy;
     BOOL _busyShown;
@@ -116,6 +121,9 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     /* the files past the days the person chose to keep them go when the screens start */
     [_media removeFilesOlderThanDays:ExteriaCacheKeepDays()];
     _stickers = [[ExteriaStickerLibrary alloc] initWithSession:session];
+    /* the plugins that read Saved Messages and the saved music of the profile (see exteria_plugin_account.h) talk to this session */
+    _pluginAccount = [[ExteriaPluginAccount alloc] initWithSession:session];
+    ExteriaPluginUISetOwnUser([[session ownPerson] userId], [[session ownPerson] name]);
     return self;
 }
 
@@ -128,6 +136,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [_busy removeFromSuperview];
     [_busy release];
     [self releaseContent];
+    [_pluginAccount invalidate];
+    [_pluginAccount release];
     [_session release];
     [_avatars release];
     [_media release];
@@ -154,6 +164,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [_classicTabs removeFromParentViewController];
     [_classicTabs release];
     _classicTabs = nil;
+    _classicProfileItem = nil;
     _tabBar.delegate = nil;
     [_tabBar removeFromSuperview];
     [_tabBar release];
@@ -182,6 +193,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(languageChanged)
                                                  name:ExteriaLanguageDidChangeNotification object:nil];
     [self buildContentWithTab:-1];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(ownProfileChanged) name:ExteriaOwnProfileDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openTeamPerson:) name:ExteriaOpenTeamPersonNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openChatRequested:) name:ExteriaOpenChatNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openLinkRequested:) name:ExteriaOpenLinkNotification object:nil];
@@ -212,6 +224,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
             [chosen addObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:dialog.peerId], @"id", kind, @"kind", nil]];
         }
         ExteriaPluginsCallHost(@"pick_result", [NSArray arrayWithObjects:token, chosen, nil]);
+    } cancelled:^{
+        ExteriaPluginsCallHost(@"pick_cancelled", [NSArray arrayWithObject:token]);
     }];
 }
 
@@ -361,7 +375,6 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         if (total <= 0) return;
         UILabel *badge = ExteriaClassicBadge(total > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)total], NO);
         badge.tag = CLASSIC_BADGE_TAG;
-        badge.backgroundColor = ExteriaColorAccent();
         badge.userInteractionEnabled = NO;
         [bar addSubview:badge];
         ExteriaPlaceClassicBadge(bar, bar.bounds.size.width, ExteriaTabIndexOfKind(_kinds, ExteriaTabChats));
@@ -375,17 +388,31 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     /* the profile tab, when the layout has one, wears the profile photo once it is here */
     NSInteger profileIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabProfile);
     if (profileIndex < 0) return;
-    UITabBarItem *profileItem = ((UIViewController *)[navigations objectAtIndex:(NSUInteger)profileIndex]).tabBarItem;
+    _classicProfileItem = ((UIViewController *)[navigations objectAtIndex:(NSUInteger)profileIndex]).tabBarItem;
+    [self loadClassicProfileTab];
+}
+
+/* a tab picture drawn from the photo, or the symbol of the tab again when the person has none (the photo was removed) */
+- (void)showClassicProfilePhoto:(UIImage *)photo onItem:(UITabBarItem *)item {
+    if (![item respondsToSelector:@selector(setFinishedSelectedImage:withFinishedUnselectedImage:)]) return;
+    if (!photo) {
+        /* nil takes the finished pictures away, and the plain tab picture the item was made with shows again */
+        [item setFinishedSelectedImage:nil withFinishedUnselectedImage:nil];
+        return;
+    }
+    UIImage *tab = ExteriaClassicProfileTabImage(photo);
+    [item setFinishedSelectedImage:tab withFinishedUnselectedImage:tab];
+}
+
+- (void)loadClassicProfileTab {
+    UITabBarItem *profileItem = _classicProfileItem;
+    if (!profileItem) return;
     /* the photo of the last time is on the tab before the answer comes */
     ExteriaPerson *known = [_session ownPerson];
     if (known.photo) {
         [_avatars pinPhoto:known.photo];
         [_avatars loadImageForPhoto:known.photo completion:^(UIImage *photo) {
-            if (!photo) return;
-            UIImage *tab = ExteriaClassicProfileTabImage(photo);
-            if ([profileItem respondsToSelector:@selector(setFinishedSelectedImage:withFinishedUnselectedImage:)]) {
-                [profileItem setFinishedSelectedImage:tab withFinishedUnselectedImage:tab];
-            }
+            if (photo && profileItem == _classicProfileItem) [self showClassicProfilePhoto:photo onItem:profileItem];
         }];
     }
     [_session loadSelf:^(NSArray *items, NSString *errorName) {
@@ -399,15 +426,21 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         NSString *accountName = [[ExteriaAccountActive() copy] autorelease];
         if (person.photo) [_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) { if (image) ExteriaAccountSetPhoto(accountName, image); }];
         ExteriaLiteSetPremium(ExteriaPremiumEffective(person.premium));
-        if (!person.photo) return;
+        if (profileItem != _classicProfileItem) return;
+        if (!person.photo) {
+            [self showClassicProfilePhoto:nil onItem:profileItem];
+            return;
+        }
         [_avatars loadImageForPhoto:person.photo completion:^(UIImage *photo) {
-            if (!photo) return;
-            UIImage *tab = ExteriaClassicProfileTabImage(photo);
-            if ([profileItem respondsToSelector:@selector(setFinishedSelectedImage:withFinishedUnselectedImage:)]) {
-                [profileItem setFinishedSelectedImage:tab withFinishedUnselectedImage:tab];
-            }
+            if (photo && profileItem == _classicProfileItem) [self showClassicProfilePhoto:photo onItem:profileItem];
         }];
     }];
+}
+
+/* the photo of the account was set or removed: the tab that wears it is asked for again, since it is made once when the bar is */
+- (void)ownProfileChanged {
+    if (_classicTabs) [self loadClassicProfileTab];
+    else if (_tabBar) [self loadProfileTab];
 }
 
 /* the system tab bar swaps its screens at once; a push transition on the container of the screens, not on the bar, gives the same
@@ -417,6 +450,9 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     if (from == to || to == NSNotFound) return YES;
     for (UIView *container in tabs.view.subviews) {
         if ([container isKindOfClass:[UITabBar class]]) continue;
+        /* ios 6 fills the clear corners of the bar with black in the snapshot of a push transition when the container has no opaque color */
+        tabs.view.backgroundColor = ExteriaColorScreen();
+        container.backgroundColor = ExteriaColorScreen();
         CATransition *slide = [CATransition animation];
         slide.type = kCATransitionPush;
         slide.subtype = to > from ? kCATransitionFromRight : kCATransitionFromLeft;

@@ -294,7 +294,10 @@ BOOL ExteriaIsDetailRoot(UIViewController *screen) {
     CGFloat hair = 1.0 / ExteriaScreenScale();
     _masterNavigation.view.frame = CGRectMake(0, 0, master, size.height);
     _detailNavigation.view.frame = CGRectMake(master, 0, size.width - master, size.height);
-    _divider.frame = CGRectMake(master - hair, 0, hair, size.height);
+    /* the system tab bar of the classic theme and the input bar of the chat are one strip along the bottom, so the line between the columns stops above it and
+       does not cut the strip in two. a screen that hides the tab bar loses the line over the same height */
+    CGFloat stripHeight = ExteriaThemeIsClassic() ? MIN(size.height, ExteriaClassicTabBarHeight()) : 0;
+    _divider.frame = CGRectMake(master - hair, 0, hair, size.height - stripHeight);
     _divider.backgroundColor = ExteriaColorHairline();
 }
 

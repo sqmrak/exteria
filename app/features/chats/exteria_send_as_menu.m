@@ -71,14 +71,14 @@
         [scroll addSubview:row];
     }
     [self addSubview:_card]; [host addSubview:self];
-    _card.transform = CGAffineTransformMakeScale(0.85, 0.85); _card.alpha = 0;
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    _card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()); _card.alpha = 0;
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 - (void)leave:(NSInteger)index {
     if (_closing) return;
     _closing = YES; self.userInteractionEnabled = NO;
     [self retain];
-    ExteriaAnimateView(_card, CGAffineTransformMakeScale(0.85, 0.85), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
         if (index >= 0 && _handler) _handler((NSUInteger)index);

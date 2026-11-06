@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
+#import "exteria_date_time_picker.h"
 #import "exteria_person.h"
 #import "exteria_session.h"
 #import "exteria_session_bots.h"
@@ -45,76 +46,6 @@ static ExteriaTextEntity *ExteriaRunLike(ExteriaTextEntity *base, NSRange range)
     run.flags = base.flags;
     return run;
 }
-
-#pragma mark date picker
-
-/* a card with a wheel for the day and the time, over the host; the date is asked for the same way, one moment and
-   no shapes */
-@interface ExteriaFormatDatePicker : UIView {
-    UIView *_card;
-    UIDatePicker *_picker;
-    void (^_done)(NSDate *date);
-}
-- (id)initWithFrame:(CGRect)frame done:(void (^)(NSDate *date))done;
-@end
-
-@implementation ExteriaFormatDatePicker
-
-- (id)initWithFrame:(CGRect)frame done:(void (^)(NSDate *date))done {
-    self = [super initWithFrame:frame];
-    if (!self) return nil;
-    _done = [done copy];
-    self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.4];
-    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _card = [[UIView alloc] init];
-    _card.backgroundColor = ExteriaColorCard();
-    _card.layer.cornerRadius = 14;
-    _card.layer.masksToBounds = YES;
-    [self addSubview:_card];
-    _picker = [[UIDatePicker alloc] init];
-    _picker.datePickerMode = UIDatePickerModeDateAndTime;
-    [_card addSubview:_picker];
-    NSString *titles[2] = {NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"tr.ok", nil)};
-    for (int i = 0; i < 2; ++i) {
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-        button.tag = i;
-        [button setTitle:titles[i] forState:UIControlStateNormal];
-        [button setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
-        button.titleLabel.font = i ? ExteriaFontSemibold(17) : ExteriaFontRegular(17);
-        [button addTarget:self action:@selector(tapped:) forControlEvents:UIControlEventTouchUpInside];
-        [_card addSubview:button];
-    }
-    return self;
-}
-
-- (void)dealloc {
-    [_card release];
-    [_picker release];
-    [_done release];
-    [super dealloc];
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    CGFloat width = MIN(self.bounds.size.width - 20, 360), pickerHeight = 216, bar = 50;
-    CGFloat height = bar + pickerHeight;
-    _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - height) / 2), width, height);
-    _picker.frame = CGRectMake(0, bar, width, pickerHeight);
-    for (UIView *view in _card.subviews) {
-        if (![view isKindOfClass:[UIButton class]]) continue;
-        view.frame = CGRectMake(view.tag ? width - 110 : 0, 0, 110, bar);
-    }
-}
-
-- (void)tapped:(UIButton *)button {
-    NSDate *date = button.tag ? _picker.date : nil;
-    void (^done)(NSDate *) = [_done retain];
-    [self removeFromSuperview];
-    if (date && done) done(date);
-    [done release];
-}
-
-@end
 
 #pragma mark runs
 
@@ -440,13 +371,13 @@ static ExteriaTextEntity *ExteriaRunLike(ExteriaTextEntity *base, NSRange range)
 
 - (void)askDateInRange:(NSRange)range {
     ExteriaWeakReference *weak = _weak;
-    ExteriaFormatDatePicker *picker = [[[ExteriaFormatDatePicker alloc] initWithFrame:_host.bounds done:^(NSDate *date) {
+    ExteriaDateTimePicker *picker = [[[ExteriaDateTimePicker alloc] initWithFrame:_host.bounds mode:UIDatePickerModeDateAndTime initialDate:nil minimumDate:nil done:^(NSDate *date) {
         ExteriaInputFormat *format = weak.target;
         if (!format || ![format stillHolds:range]) return;
         ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleDate range:range url:nil] autorelease];
         entity.date = (int32_t)[date timeIntervalSince1970];
         [format applyTarget:entity];
-    }] autorelease];
+    } cancelled:nil] autorelease];
     [_host addSubview:picker];
 }
 

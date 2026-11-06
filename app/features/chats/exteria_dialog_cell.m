@@ -212,6 +212,7 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     [_slider addSubview:_avatar];
     _storyRing = [[ExteriaStoryRing alloc] init];
     _storyRing.hidden = YES;
+    _storyRing.followsAvatarShape = YES;
     [_slider addSubview:_storyRing];
     _onlineDot = [[ExteriaOnlineDotView alloc] init];
     _onlineDot.hidden = YES;

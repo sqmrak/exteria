@@ -62,6 +62,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     /* the picture of the old rows that is leaving while a change of folder slides the new ones in */
     UIView *_leavingRows;
     BOOL _archiveHidden;
+    /* the channels the feed of unread channels has shown since the person opened one from this list */
+    NSMutableSet *_feedSeen;
     BOOL _vpnHidden;
     ExteriaDialogCell *_openCell;
     ExteriaChatListStyle _listStyle;
@@ -204,6 +206,11 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 /* the rows are laid out when they are built, so a new row style (one line of the preview or two) needs them built
    again */
 - (void)chatSettingsChanged {
+    /* the title was set when the screen was made, so a new choice (the word, the name, the username, a text of the person's own) waited for the next start; the person of the
+       account is the one the session already holds, and the answer of the server follows */
+    NSString *heading = [self titleForMode:ExteriaChatListTitleStored() person:[self.session ownPerson]];
+    if (![heading isEqualToString:self.heading]) self.heading = heading;
+    [self loadOwnTitle];
     [self syncStoriesWithSettings];
     if (!_folderId && !self.showsBack && _vpnHidden != ExteriaChatFlagGet(ExteriaChatFlagHideVpnButton)) [self syncVpnButtonWithSettings];
     BOOL archiveChanged = _archiveHidden != ExteriaArchiveHidden();
@@ -326,6 +333,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 - (BOOL)playerStripShowing { return _miniPlayer.showing; }
 
 - (void)dealloc {
+    [_feedSeen release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogsChangedNotification object:nil];
@@ -1113,6 +1121,8 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
                                                                            media:_media stickers:_stickerLibrary] autorelease];
     /* reading changed the counts of the list, so it asks again once the person is back */
     chat.closeHandler = ^{ [self reload]; };
+    /* a feed starts from the channel that was opened: the ones it has gone through are forgotten */
+    [_feedSeen removeAllObjects];
     chat.nextChatProvider = ^ExteriaDialog *(ExteriaDialog *current) { return [self nextUnreadChannelAfter:current]; };
     [self.navigationController pushViewController:chat animated:YES];
 }
@@ -1128,10 +1138,16 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
     [self.navigationController pushViewController:archive animated:YES];
 }
 
-/* the first broadcast channel of the list with unread posts that is not the one read now, in the order of the list as exteraGram takes it */
+/* the first broadcast channel of the list with unread posts that the feed has not shown yet, in the order of the list as exteraGram takes it. the list is read again only when
+   the person is back on it, so a channel that was just read still counts as unread there: asking for "not the one read now" took the feed from A to B and from B to A, and
+   it never got past two channels */
 - (ExteriaDialog *)nextUnreadChannelAfter:(ExteriaDialog *)current {
+    if (!_feedSeen) _feedSeen = [[NSMutableSet alloc] init];
+    [_feedSeen addObject:[NSString stringWithFormat:@"%d/%lld", (int)current.peerKind, current.peerId]];
     for (ExteriaDialog *dialog in _dialogs) {
-        if (dialog.kind == EXTERIA_DIALOG_CHANNEL && dialog.unread && !dialog.forum && !dialog.community && !(dialog.peerKind == current.peerKind && dialog.peerId == current.peerId)) return dialog;
+        if (dialog.kind != EXTERIA_DIALOG_CHANNEL || !dialog.unread || dialog.forum || dialog.community) continue;
+        if ([_feedSeen containsObject:[NSString stringWithFormat:@"%d/%lld", (int)dialog.peerKind, dialog.peerId]]) continue;
+        return dialog;
     }
     return nil;
 }

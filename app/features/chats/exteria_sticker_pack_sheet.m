@@ -187,10 +187,10 @@
 
 - (void)enter {
     [self layoutIfNeeded];
-    _card.transform = CGAffineTransformMakeScale(0.9, 0.9);
+    _card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
     _card.alpha = 0;
-    [UIView animateWithDuration:0.2 animations:^{ _dim.alpha = DIM_ALPHA; }];
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, DIM_ALPHA, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
     _spinner.hidden = NO;
     [_spinner startAnimating];
 }
@@ -200,8 +200,11 @@
     _closing = YES;
     [_menu dismiss];
     self.userInteractionEnabled = NO;
-    [UIView animateWithDuration:0.18 animations:^{ _dim.alpha = 0; _card.alpha = 0; _card.transform = CGAffineTransformMakeScale(0.94, 0.94); }
-                     completion:^(BOOL finished) { (void)finished; [self removeFromSuperview]; }];
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
+        (void)finished;
+        [self removeFromSuperview];
+    });
 }
 
 #pragma mark pack

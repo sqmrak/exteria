@@ -24,6 +24,7 @@
 #define CAPTION_LINES_MAX_HEIGHT 110.0
 #define CAPTION_CHARACTERS_MAX 1024
 #define HEADER_HEIGHT 56.0
+#define HEADER_TAG 9201
 
 #define PANEL_RADIUS 14.0
 /* the sheet comes and goes like the card of the Shiro screen: the same time, the same curves, the same throw that sends it away */
@@ -49,6 +50,10 @@
     CGFloat _pullStart;
     CGFloat _pullRestY;
     UIView *_bar;
+    UIImageView *_barPlate;
+    UIImageView *_captionPlate;
+    UIImageView *_headerPlate;
+    BOOL _captionShown;
     UIView *_line;
     UIView *_grabber;
     UILabel *_title;
@@ -97,12 +102,12 @@ static UIImage *ExteriaAttachBlurred(UIImage *image) {
 @synthesize offersGift = _offersGift;
 @synthesize profilePicker = _profilePicker;
 
-/* the glossy purple of the navigation bar under the five buttons and under the caption field */
-static void ExteriaAttachClassicBackdrop(UIView *strip) {
+/* the glossy purple of the navigation bar under the header, the five buttons and the caption field. the strips have no size when they are made, so the plate is sized in layoutSubviews:
+   autoresizing from an empty frame kept it empty and the strips showed the dark panel through it */
+static UIImageView *ExteriaAttachClassicBackdrop(UIView *strip) {
     UIImageView *plate = ExteriaClassicStripBackdrop();
-    plate.frame = strip.bounds;
-    plate.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [strip addSubview:plate];
+    [strip insertSubview:plate atIndex:0];
+    return plate;
 }
 
 - (id)initWithFrame:(CGRect)frame {
@@ -116,7 +121,7 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     [_dim addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)] autorelease]];
     [self addSubview:_dim];
     _panel = [[UIView alloc] init];
-    _panel.backgroundColor = ExteriaColorCard();
+    _panel.backgroundColor = ExteriaThemeIsClassic() ? ExteriaColorScreen() : ExteriaColorCard();
     _panelMask = [[CAShapeLayer alloc] init];
     _panel.layer.mask = _panelMask;
     [self addSubview:_panel];
@@ -131,30 +136,44 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     _grabber.userInteractionEnabled = NO;
     _title = [[UILabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
-    _title.font = ExteriaFontBold(20);
-    _title.textColor = ExteriaColorTitle();
+    _title.font = ExteriaThemeIsClassic() ? [UIFont boldSystemFontOfSize:19] : ExteriaFontBold(20);
+    _title.textColor = ExteriaThemeIsClassic() ? [UIColor whiteColor] : ExteriaColorTitle();
+    if (ExteriaThemeIsClassic()) {
+        _title.shadowColor = [UIColor colorWithWhite:0 alpha:0.5];
+        _title.shadowOffset = CGSizeMake(0, -1);
+    }
     _more = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    [_more setImage:ExteriaSymbolImage(ExteriaSymbolEllipsisVertical, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
+    [_more setImage:ExteriaSymbolImage(ExteriaSymbolEllipsisVertical, 24, ExteriaThemeIsClassic() ? [UIColor whiteColor] : ExteriaColorTitle()) forState:UIControlStateNormal];
     [_more addTarget:self action:@selector(showMenu) forControlEvents:UIControlEventTouchUpInside];
     _more.accessibilityLabel = NSLocalizedString(@"attach.more", nil);
     _more.hidden = YES;
     _grid = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-    _grid.backgroundColor = ExteriaColorField();
+    _grid.backgroundColor = ExteriaThemeIsClassic() ? ExteriaColorScreen() : ExteriaColorField();
     _grid.separatorStyle = UITableViewCellSeparatorStyleNone;
     _grid.dataSource = self; _grid.delegate = self;
     _grid.scrollsToTop = NO;
     [_panel addSubview:_grid];
+    /* the header of the classic sheet is a bar of its own, lit like the navigation bar, and the pill that says it can be pulled is left out of it */
+    if (ExteriaThemeIsClassic()) {
+        UIView *header = [[[UIView alloc] init] autorelease];
+        _headerPlate = [ExteriaAttachClassicBackdrop(header) retain];
+        header.tag = HEADER_TAG;
+        [_panel addSubview:header];
+        _grabber.hidden = YES;
+    }
     [_panel addSubview:_title];
     [_panel addSubview:_more];
     [_panel addSubview:_grabber];
     _bar = [[UIView alloc] init];
     BOOL classic = ExteriaThemeIsClassic();
-    if (classic) ExteriaAttachClassicBackdrop(_bar);
+    if (classic) _barPlate = [ExteriaAttachClassicBackdrop(_bar) retain];
     else _bar.backgroundColor = ExteriaColorCard();
     [_panel addSubview:_bar];
     _line = [[UIView alloc] init];
-    _line.backgroundColor = classic ? [UIColor blackColor] : ExteriaColorSecondary();
-    _line.alpha = classic ? 0.55 : 0.25;
+    _line.backgroundColor = ExteriaColorSecondary();
+    _line.alpha = 0.25;
+    /* the plate of the classic bar has its own lit top edge, and a black line over it made a second stripe */
+    _line.hidden = classic;
     [_bar addSubview:_line];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"attach.gallery", nil), NSLocalizedString(@"attach.file", nil),
         NSLocalizedString(@"attach.location", nil), NSLocalizedString(@"attach.gift", nil), NSLocalizedString(@"attach.contact", nil), nil];
@@ -185,13 +204,17 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
 
     /* once something is picked the bar of five buttons gives way to the words for the pictures and the round button that sends them */
     _captionBar = [[UIView alloc] init];
-    if (classic) ExteriaAttachClassicBackdrop(_captionBar);
+    if (classic) _captionPlate = [ExteriaAttachClassicBackdrop(_captionBar) retain];
     else _captionBar.backgroundColor = ExteriaColorCard();
     _captionBar.hidden = YES;
     [_panel addSubview:_captionBar];
     UIView *field = [[[UIView alloc] init] autorelease];
-    field.backgroundColor = ExteriaColorField();
+    field.backgroundColor = classic ? ExteriaClassicInputFill() : ExteriaColorField();
     field.layer.cornerRadius = SEND_SIDE / 2;
+    if (classic) {
+        field.layer.borderWidth = 1;
+        field.layer.borderColor = [ExteriaMixedColor(ExteriaClassicInputFill(), [UIColor blackColor], 0.28) CGColor];
+    }
     field.tag = 1;
     [_captionBar addSubview:field];
     _caption = [[ExteriaCaptionView alloc] init];
@@ -236,7 +259,7 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     _grid.delegate = nil; _grid.dataSource = nil;
     _caption.delegate = nil;
     [_menu release];
-    [_dim release]; [_panelMask release]; [_panel release]; [_bar release]; [_line release]; [_grabber release]; [_title release]; [_more release]; [_captionBar release];
+    [_dim release]; [_panelMask release]; [_panel release]; [_bar release]; [_barPlate release]; [_captionPlate release]; [_headerPlate release]; [_line release]; [_grabber release]; [_title release]; [_more release]; [_captionBar release];
     [_caption release]; [_send release]; [_count release]; [_grid release];
     [_library release]; [_assets release]; [_selected release];
     [_buttons release]; [_labels release];
@@ -323,7 +346,7 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     }
     _grabber.frame = CGRectMake(floor((width - GRABBER_WIDTH) / 2), 7, GRABBER_WIDTH, GRABBER_HEIGHT);
     _more.frame = CGRectMake(width - 52, 14, 44, 44);
-    _title.frame = CGRectMake(20, 16, width - 20 - 56, 40);
+    _title.frame = CGRectMake(20, ExteriaThemeIsClassic() ? 8 : 16, width - 20 - 56, 40);
     CGFloat bottom = _keyboard > 0 ? 0 : safe.bottom;
     BOOL picking = _selected.count > 0;
     /* the field grows with its lines up to five, and the bar with it */
@@ -335,6 +358,11 @@ static void ExteriaAttachClassicBackdrop(UIView *strip) {
     _bar.frame = CGRectMake(0, height - BAR_HEIGHT - bottom, width, BAR_HEIGHT + bottom);
     _captionBar.frame = CGRectMake(0, height - barHeight, width, barHeight);
     _line.frame = CGRectMake(0, 0, width, 1 / ExteriaScreenScale());
+    _barPlate.frame = _bar.bounds;
+    _captionPlate.frame = _captionBar.bounds;
+    UIView *header = [_panel viewWithTag:HEADER_TAG];
+    header.frame = CGRectMake(0, 0, width, HEADER_HEIGHT);
+    _headerPlate.frame = header.bounds;
     _grid.frame = CGRectMake(0, HEADER_HEIGHT, width, MAX(0, height - HEADER_HEIGHT - barHeight));
     UIView *field = [_captionBar viewWithTag:1];
     /* the field runs the whole width of the sheet and the round button sits inside its right end */
@@ -489,11 +517,39 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
     return _photos ? ExteriaPhotoURL(asset) : [(ALAsset *)asset defaultRepresentation].url;
 }
 
+/* the five buttons give way to the caption bar, and back, with a short cross fade, while the grid takes the height they leave and the caption bar grows up from the bottom; the swap used to cut from one bar to the other */
+- (void)showCaptionBar:(BOOL)picking {
+    BOOL changed = picking != _captionShown;
+    _captionShown = picking;
+    void (^settle)(void) = ^{
+        _bar.hidden = _captionShown || _profilePicker;
+        _captionBar.hidden = !_captionShown;
+        _more.hidden = !_captionShown;
+        _bar.alpha = _captionBar.alpha = _more.alpha = 1;
+    };
+    if (!changed || !self.window || _leaving || _profilePicker || ExteriaReduceMotionEnabled()) {
+        settle();
+        return;
+    }
+    UIView *entering = picking ? _captionBar : _bar, *leaving = picking ? _bar : _captionBar;
+    entering.hidden = NO;
+    entering.alpha = 0;
+    leaving.hidden = NO;
+    _more.hidden = NO;
+    _more.alpha = picking ? 0 : 1;
+    [UIView animateWithDuration:0.24 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut animations:^{
+        entering.alpha = 1;
+        leaving.alpha = 0;
+        _more.alpha = picking ? 1 : 0;
+        [self layoutIfNeeded];
+    } completion:^(BOOL finished) {
+        (void)finished;
+        settle();
+    }];
+}
+
 - (void)updateSelection {
     BOOL picking = _selected.count > 0 && !_profilePicker;
-    _bar.hidden = picking || _profilePicker;
-    _captionBar.hidden = !picking;
-    _more.hidden = !picking;
     if (_profilePicker) {
         /* the line is long for the width of the title, and it is shrunk before it is cut */
         _title.text = NSLocalizedString(@"attach.pick.profile", nil);
@@ -508,6 +564,7 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
     }
     _count.text = [NSString stringWithFormat:@"%lu", (unsigned long)_selected.count];
     [self setNeedsLayout];
+    [self showCaptionBar:picking];
 }
 
 - (void)toggleAsset:(UIButton *)button {

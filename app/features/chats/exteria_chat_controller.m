@@ -1,5 +1,7 @@
 #import "exteria_gift_detail_controller.h"
 #import "exteria_emoji_label.h"
+#import "exteria_pinned_line.h"
+#import "exteria_round_glow.h"
 #import "exteria_chat_controller.h"
 #import "exteria_group_call_engine.h"
 #import "exteria_location_controller.h"
@@ -8,6 +10,9 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_alert.h"
+#import "exteria_senko_popup.h"
+#import "exteria_text_parts.h"
+#include "exteria_text_split.h"
 #import "exteria_session_privacy.h"
 #import "exteria_chat_search.h"
 #import "exteria_attach_flow.h"
@@ -107,11 +112,14 @@
 #import "exteria_saved_media_controller.h"
 
 #define BAR_HEIGHT 44.0
+/* what the buttons on the wider side of the classic bar of a chat take of a phone's width: the picture and the dots, or the arrow and a count of three digits */
+#define CLASSIC_BAR_SIDE_WIDTH 96.0
 /* what a reaction that is new on a message plays once its chip stands: nothing, the 80 point burst or the large one of the picker */
 #define EXTERIA_BURST_NONE 0
 #define EXTERIA_BURST_SHORT 1
 #define EXTERIA_BURST_LONG 2
 #define PINNED_HEIGHT 46.0
+#define PINNED_FOOT_TAG 9146
 #define VOICE_HEIGHT 44.0
 /* the pages of older history a tap on the pinned message will fetch looking for it */
 #define PINNED_SEARCH_PAGES 12
@@ -295,6 +303,9 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _layingOutChat;
     BOOL _followingBottom;
     BOOL _livePending;
+    /* how long the last rebuild of the rows took and when it ended, so a busy chat is rebuilt no more often than the main thread can afford */
+    CFTimeInterval _rebuildCost;
+    CFTimeInterval _rebuildEndedAt;
     /* the list shows a stretch of old history opened around a message, so its end is not the newest message of the chat */
     BOOL _window;
     BOOL _loadingWindow;
@@ -364,6 +375,9 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     CGFloat _roundZoomStart;
     BOOL _roundFlipping;
     UIView *_roundShade;
+    ExteriaRoundGlow *_roundGlow;
+    /* the flash the person asked for: the torch on the back camera, the screen light on the front one */
+    BOOL _roundFlash;
     NSTimer *_recordTimer;
     ExteriaAttachFlow *_attach;
     ExteriaFullChannel *_channelFull;
@@ -423,6 +437,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     NSArray *_pinnedAll;
     UIImageView *_pinnedThumb;
     UIButton *_pinnedListButton;
+    ExteriaPinnedLine *_pinnedLine;
     NSUInteger _pinnedThumbToken;
     ExteriaLinkRouter *_router;
     ExteriaChatBots *_bots;
@@ -631,6 +646,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_pinnedAll release];
     [_pinnedThumb release];
     [_pinnedListButton release];
+    [_pinnedLine release];
     [_retry release];
     [_server release];
     [_local release];
@@ -795,7 +811,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [_subtitle setStatus:line kind:[self statusKind]];
         [self.view setNeedsLayout];
     } else if (ExteriaThemeIsClassic() && [self isViewLoaded]) {
-        self.navigationItem.titleView = ExteriaClassicTitleViewWithStatus(_dialog.title, line, (int)[self statusKind]);
+        self.navigationItem.titleView = ExteriaClassicTitleViewWithStatusWidth(_dialog.title, line, (int)[self statusKind], [self classicTitleWidth]);
         self.navigationItem.titleView.userInteractionEnabled = YES;
         [self.navigationItem.titleView addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
     }
@@ -895,19 +911,25 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _pinnedBar = [[UIControl alloc] init];
     _pinnedBar.backgroundColor = ExteriaColorBar();
     _pinnedBar.clipsToBounds = YES;
+    if (classic) {
+        /* the same plain ground as the strip of the player, black on the dark theme and white on the light one: the wallpaper showed through the bar, and the purple plate made a stripe */
+        _pinnedBar.backgroundColor = ExteriaClassicStripGround();
+    }
     _pinnedBar.hidden = YES;
     [_pinnedBar addTarget:self action:@selector(pinnedTapped) forControlEvents:UIControlEventTouchUpInside];
-    UIView *stripe = [[[UIView alloc] initWithFrame:CGRectMake(12, 7, 2, PINNED_HEIGHT - 14)] autorelease];
-    stripe.backgroundColor = ExteriaColorAccent();
-    stripe.userInteractionEnabled = NO;
-    [_pinnedBar addSubview:stripe];
-    _pinnedTitle = ExteriaChatLabel(ExteriaColorAccent(), ExteriaTextAlignmentLeft);
+    _pinnedLine = [[ExteriaPinnedLine alloc] initWithFrame:CGRectMake(12, 0, 2, PINNED_HEIGHT)];
+    [_pinnedBar addSubview:_pinnedLine];
+    _pinnedTitle = ExteriaChatLabel(classic && ExteriaThemeIsDark() ? [UIColor colorWithRed:0.82 green:0.94 blue:1 alpha:1] : ExteriaColorAccent(), ExteriaTextAlignmentLeft);
     _pinnedTitle.text = NSLocalizedString(@"chat.pinned", nil);
     _pinnedTitle.userInteractionEnabled = NO;
     [_pinnedBar addSubview:_pinnedTitle];
     /* the pinned message is somebody's text, so its emoji come from the app's pictures */
     _pinnedText = [[ExteriaEmojiLabel alloc] init];
-    _pinnedText.textColor = ExteriaColorTitle();
+    _pinnedText.textColor = classic ? ExteriaClassicStripInk() : ExteriaColorTitle();
+    if (classic && ExteriaThemeIsDark()) {
+        _pinnedText.shadowColor = [UIColor colorWithWhite:0 alpha:0.5];
+        _pinnedText.shadowOffset = CGSizeMake(0, -1);
+    }
     _pinnedText.userInteractionEnabled = NO;
     [_pinnedBar addSubview:_pinnedText];
     /* a photo or video shows as a small rounded square at the left, and a chat with several pinned messages gets the list button */
@@ -919,11 +941,18 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _pinnedThumb.userInteractionEnabled = NO;
     [_pinnedBar addSubview:_pinnedThumb];
     _pinnedListButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    [_pinnedListButton setImage:ExteriaSymbolImage(ExteriaSymbolPinnedList, 22, ExteriaColorSecondary()) forState:UIControlStateNormal];
+    [_pinnedListButton setImage:ExteriaSymbolImage(ExteriaSymbolPinnedList, 22, classic ? ExteriaClassicStripInk() : ExteriaColorSecondary()) forState:UIControlStateNormal];
     [_pinnedListButton addTarget:self action:@selector(openPinnedList) forControlEvents:UIControlEventTouchUpInside];
     _pinnedListButton.accessibilityLabel = NSLocalizedString(@"chat.pinned.all", nil);
     _pinnedListButton.hidden = YES;
     [_pinnedBar addSubview:_pinnedListButton];
+    if (classic) {
+        UIView *foot = [[[UIView alloc] init] autorelease];
+        foot.backgroundColor = ExteriaClassicStripEdge();
+        foot.userInteractionEnabled = NO;
+        foot.tag = PINNED_FOOT_TAG;
+        [_pinnedBar addSubview:foot];
+    }
     [root addSubview:_pinnedBar];
     /* the voice chat that runs in a group or channel: a bar under the pinned message with who is in it and the way to join */
     _voiceBar = [[UIControl alloc] init];
@@ -1009,7 +1038,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }
     if (classic) {
         /* the system's navigation bar carries the name and the status, the person's picture and the back button */
-        self.navigationItem.titleView = ExteriaClassicTitleViewWithStatus(_dialog.title, [self statusLine], (int)[self statusKind]);
+        self.navigationItem.titleView = ExteriaClassicTitleViewWithStatusWidth(_dialog.title, [self statusLine], (int)[self statusKind], [self classicTitleWidth]);
         _classicBack = !ExteriaIsDetailRoot(self);
         if (_classicBack) {
             self.navigationItem.hidesBackButton = YES;
@@ -1036,7 +1065,14 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         _storyRing.hidden = YES;
         [avatarBox addSubview:_storyRing];
         mini.frame = CGRectMake(outset, outset, 32, 32);
-        [avatarBox addSubview:mini];
+        if ([self isForumTopic]) {
+            /* a topic wears its own icon, as in the modern bar, and not the initials of the group; loadTopicIcon swaps in the custom emoji once it is in memory */
+            _topicIcon = [[UIImageView alloc] initWithFrame:mini.frame];
+            _topicIcon.contentMode = UIViewContentModeScaleAspectFit;
+            _topicIcon.userInteractionEnabled = YES;
+            [_topicIcon addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
+            [avatarBox addSubview:_topicIcon];
+        } else [avatarBox addSubview:mini];
         UIBarButtonItem *avatarItem = [[[UIBarButtonItem alloc] initWithCustomView:avatarBox] autorelease];
         UIBarButtonItem *dotsItem = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolEllipsisVertical, 22, [UIColor whiteColor])
                                                                        style:UIBarButtonItemStyleBordered target:self action:@selector(showChatMenu)] autorelease];
@@ -1698,6 +1734,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }];
         [chat->_pinnedAll release];
         chat->_pinnedAll = [newestFirst retain];
+        [chat updatePinnedMarker];
         if (messages.count) {
             [chat showPinnedMessage:[newestFirst objectAtIndex:0]];
             [chat refreshPinnedForVisible];
@@ -1752,9 +1789,27 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if (newline.location != NSNotFound) line = [line substringToIndex:newline.location];
     _pinnedId = message.messageId;
     _pinnedText.text = line;
+    [self updatePinnedMarker];
     [self showPinnedThumbOf:message];
     [self setPinnedBarHidden:line.length == 0];
     [self.view setNeedsLayout];
+}
+
+/* the line shows which pin the bar holds among all of them, oldest first, and the title carries the same number once there are several; the post of a thread keeps its own title */
+- (void)updatePinnedMarker {
+    NSUInteger index = NSNotFound;
+    for (NSUInteger i = 0; i < _pinnedAll.count; i++) {
+        if (((ExteriaMessage *)[_pinnedAll objectAtIndex:i]).messageId == _pinnedId) { index = i; break; }
+    }
+    NSInteger total = _pinnedAll.count;
+    if (index == NSNotFound || total < 2 || _commentsPost) {
+        [_pinnedLine setPosition:0 total:1];
+        if (!_commentsPost) _pinnedTitle.text = NSLocalizedString(@"chat.pinned", nil);
+        return;
+    }
+    NSInteger fromOldest = total - 1 - (NSInteger)index;
+    [_pinnedLine setPosition:fromOldest total:total];
+    _pinnedTitle.text = [NSString stringWithFormat:@"%@ #%ld", NSLocalizedString(@"chat.pinned", nil), (long)(fromOldest + 1)];
 }
 
 /* the pinned message is fetched by id, and its first words or the word for its media stand in the bar */
@@ -1789,6 +1844,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }];
         [chat->_pinnedAll release];
         chat->_pinnedAll = [sorted retain];
+        [chat updatePinnedMarker];
         [chat refreshPinnedForVisible];
         [chat.view setNeedsLayout];
     }];
@@ -2102,16 +2158,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 
 #pragma mark menu
 
-typedef enum { ExteriaChatMenuCall, ExteriaChatMenuVideoCall, ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete } ExteriaChatMenuEntry;
+typedef enum { ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete } ExteriaChatMenuEntry;
 enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDeleteMessage, ExteriaChatAlertSearch, ExteriaChatAlertDeleteSelected, ExteriaChatAlertStartVoice };
-
-/* a call goes to a person: not to a bot, a group, a channel or the saved messages */
-- (BOOL)canCall {
-    if (_dialog.kind != EXTERIA_DIALOG_USER || _dialog.saved || _pinnedList || _dialog.peerId == EXTERIA_TELEGRAM_SERVICE_USER_ID) return NO;
-    /* a dialog made from a mention or a link may not know yet that the user is a bot; the user object the history brings does */
-    ExteriaPerson *person = [_people objectForKey:[NSNumber numberWithLongLong:_dialog.peerId]];
-    return !person.bot;
-}
 
 /* asks the question first when the person wants it asked (the setting), then runs the block; declined runs when the answer is no */
 - (void)askFirst:(ExteriaChatFlag)flag message:(NSString *)message action:(NSString *)action then:(void (^)(void))go declined:(void (^)(void))declined {
@@ -2130,18 +2178,6 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
     });
 }
 
-- (void)startCall {
-    [self askFirst:ExteriaChatFlagAskCall message:[NSString stringWithFormat:NSLocalizedString(@"chat.ask.call", nil), _dialog.title] action:NSLocalizedString(@"chat.ask.call.action", nil) then:^{
-        [_session startCallToDialog:_dialog];
-    } declined:nil];
-}
-
-- (void)startVideoCall {
-    [self askFirst:ExteriaChatFlagAskCall message:[NSString stringWithFormat:NSLocalizedString(@"chat.ask.call", nil), _dialog.title] action:NSLocalizedString(@"chat.ask.call.action", nil) then:^{
-        [_session startVideoCallToDialog:_dialog];
-    } declined:nil];
-}
-
 - (void)showChatMenu {
     NSMutableArray *titles = [NSMutableArray array];
     NSMutableArray *entries = [NSMutableArray array];
@@ -2150,11 +2186,6 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
     BOOL bot = _dialog.kind == EXTERIA_DIALOG_BOT;
 /* the rows are the ones the three dots give, in its order */
 #define MENU_ROW(symbol, key, entry) do { symbols[titles.count] = (symbol); [titles addObject:NSLocalizedString((key), nil)]; [entries addObject:[NSNumber numberWithInt:(entry)]]; } while (0)
-    /* the calls live behind the dots: a button for them in the bar sat where the thumb goes to change the music, and a call was one slip away */
-    if ([self canCall]) {
-        MENU_ROW(ExteriaSymbolCallback, @"chat.menu.call", ExteriaChatMenuCall);
-        MENU_ROW(ExteriaSymbolVideoCallMenu, @"chat.menu.videocall", ExteriaChatMenuVideoCall);
-    }
     MENU_ROW(ExteriaSymbolMagnifier, @"chat.menu.search", ExteriaChatMenuSearch);
     MENU_ROW(ExteriaSymbolPinLine, @"chat.menu.pinned", ExteriaChatMenuPinned);
     if ((_dialog.peerKind == 2 || _dialog.peerKind == 3) && !_dialog.saved && !_pinnedList && !_joinPending) {
@@ -2186,8 +2217,6 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         ExteriaChatController *chat = weak.target;
         if (!chat || index >= entries.count) return;
         switch ([[entries objectAtIndex:index] intValue]) {
-        case ExteriaChatMenuCall: [chat startCall]; break;
-        case ExteriaChatMenuVideoCall: [chat startVideoCall]; break;
         case ExteriaChatMenuSearch: [chat askSearchQuery]; break;
         case ExteriaChatMenuPinned: [chat openPinnedList]; break;
         case ExteriaChatMenuVoiceChat: [chat openVoiceChat]; break;
@@ -2708,7 +2737,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _backBadge.frame = CGRectMake(left + 30, insets.top + 9, badge, 18);
     _avatar.frame = CGRectMake(left + 48 - shift, insets.top + 5, 34, 34);
     _storyRing.frame = CGRectInset(_avatar.frame, -3, -3);
-    _topicIcon.frame = _avatar.frame;
+    /* the classic icon stands in the box of the bar item, and this layout would move it to the place of the header's picture, outside the box where nothing shows it */
+    if (!ExteriaThemeIsClassic()) _topicIcon.frame = _avatar.frame;
     _menuButton.frame = CGRectMake(edge - 48, insets.top, 44, BAR_HEIGHT);
     CGFloat textX = left + (_pinnedList ? 60 : 90) - shift, textWidth = edge - textX - (_pinnedList ? 12 : 56);
     BOOL hasStatus = _subtitle.text.length > 0;
@@ -2724,10 +2754,13 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     CGRect previousViewport = _table.frame;
     CGFloat previousOffset = _table.contentOffset.y;
     _pinnedBar.frame = CGRectMake(left, headerHeight, width, pinnedHeight);
+    UIView *pinnedFoot = [_pinnedBar viewWithTag:PINNED_FOOT_TAG];
+    pinnedFoot.frame = CGRectMake(0, pinnedHeight - 1.0 / ExteriaScreenScale(), width, 1.0 / ExteriaScreenScale());
     _pinnedTitle.font = ExteriaFontSemibold(13);
     _pinnedText.font = ExteriaFontRegular(14);
     CGFloat pinnedX = _pinnedThumb.hidden ? 24 : 24 + 34 + 10;
     CGFloat pinnedRight = _pinnedListButton.hidden ? 12 : 52;
+    _pinnedLine.frame = CGRectMake(12, 0, 2, PINNED_HEIGHT);
     _pinnedThumb.frame = CGRectMake(24, (PINNED_HEIGHT - 34) / 2, 34, 34);
     _pinnedListButton.frame = CGRectMake(width - 48, 0, 44, PINNED_HEIGHT);
     _pinnedTitle.frame = CGRectMake(pinnedX, 6, width - pinnedX - pinnedRight, 17);
@@ -2829,32 +2862,27 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 #pragma mark keyboard
 
 /* the count of the other chats: this one is left out, since it is the one that is read now */
-/* the button of the classic bar: with nothing unread the arrow alone, as the same bordered item the dots are, so the two icons match; with unread chats the arrow
-   and the count in the blue badge of the lists, on a custom plate, since a system item cannot hold the badge */
+/* the width of the name in the classic bar. the bar centers it, so it can take only what is left beside the wider side: the back arrow with its count on one side, the picture
+   and the dots on the other. the 190 points of the default run under the picture on a phone 320 points wide */
+- (CGFloat)classicTitleWidth {
+    if (ExteriaIsPad()) return 420;
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    return MIN(190, MIN(screen.width, screen.height) - 2 * CLASSIC_BAR_SIDE_WIDTH);
+}
+
+/* the back button of the classic bar is the same bordered item as the dots, so the two plates match; the count of the other unread chats stands in a glossy badge of its own
+   right beside it, since a system item cannot hold a badge and a plate drawn by the app never matched the system's */
 - (void)refreshClassicBackWithCount:(NSInteger)count {
+    UIBarButtonItem *item = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])
+                                                              style:UIBarButtonItemStyleBordered target:self action:@selector(goBack)] autorelease];
+    item.accessibilityLabel = NSLocalizedString(@"phone.back", nil);
     if (count <= 0) {
-        UIBarButtonItem *item = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])
-                                                                  style:UIBarButtonItemStyleBordered target:self action:@selector(goBack)] autorelease];
-        item.accessibilityLabel = NSLocalizedString(@"phone.back", nil);
-        self.navigationItem.leftBarButtonItem = item;
+        self.navigationItem.leftBarButtonItems = [NSArray arrayWithObject:item];
         return;
     }
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    UIImageView *arrow = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])] autorelease];
-    /* the plate the system draws under the bordered dots item, which a custom view does not get */
-    [button setBackgroundImage:ExteriaClassicBarButtonImage(NO) forState:UIControlStateNormal];
-    [button setBackgroundImage:ExteriaClassicBarButtonImage(YES) forState:UIControlStateHighlighted];
-    arrow.frame = CGRectMake(8, 4, 22, 22);
-    arrow.userInteractionEnabled = NO;
-    [button addSubview:arrow];
-    UIView *tail = ExteriaClassicBadge(count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count], NO);
-    tail.frame = CGRectMake(34, 4, tail.frame.size.width, 22);
-    tail.userInteractionEnabled = NO;
-    [button addSubview:tail];
-    button.frame = CGRectMake(0, 0, CGRectGetMaxX(tail.frame) + 10, 30);
-    [button addTarget:self action:@selector(goBack) forControlEvents:UIControlEventTouchUpInside];
-    button.accessibilityLabel = NSLocalizedString(@"phone.back", nil);
-    self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithCustomView:button] autorelease];
+    UIView *badge = ExteriaClassicCounterBadge(count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count]);
+    UIBarButtonItem *counter = [[[UIBarButtonItem alloc] initWithCustomView:badge] autorelease];
+    self.navigationItem.leftBarButtonItems = [NSArray arrayWithObjects:item, counter, nil];
 }
 
 - (void)refreshBackBadge {
@@ -3612,8 +3640,18 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [_liveLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 
+/* a rebuild walks every loaded message, so in a group with a long history it costs tens of milliseconds on an old phone, and a burst of messages asked for one at every frame.
+   the next one waits three times as long as the last took, which holds the rebuilds to a quarter of the main thread and is no wait at all for a short chat */
+#define REBUILD_WAIT_FACTOR 3.0
+
 - (void)flushLiveMessages {
     if ([self replySwipeActive]) return;
+    if (_livePending && _visible && !_interacting && [UIApplication sharedApplication].applicationState == UIApplicationStateActive &&
+        CACurrentMediaTime() - _rebuildEndedAt < _rebuildCost * REBUILD_WAIT_FACTOR) {
+        /* called by hand (the screen came back) there is no link running, and the wait would lose the rebuild */
+        [self scheduleLiveMessages];
+        return;
+    }
     [_liveLink invalidate];
     [_liveLink release];
     _liveLink = nil;
@@ -3778,10 +3816,13 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
 - (NSArray *)localWithoutServerTwins {
     NSMutableArray *kept = [NSMutableArray arrayWithCapacity:_local.count];
     NSMutableSet *claimed = [NSMutableSet set];
+    NSArray *held = nil;
     for (ExteriaMessage *pending in _local) {
         BOOL twin = NO;
         if (pending.messageId <= 0 && pending.state != ExteriaMessageStateFailed) {
-            for (ExteriaMessage *copy in [_server allValues]) {
+            /* one copy of the list for all the pending messages, and none when nothing is pending */
+            if (!held) held = [_server allValues];
+            for (ExteriaMessage *copy in held) {
                 NSNumber *key = [NSNumber numberWithInt:copy.messageId];
                 if (!copy.outgoing || [claimed containsObject:key]) continue;
                 if (copy.date < pending.date - 2 || copy.date > pending.date + 120) continue;
@@ -3839,11 +3880,27 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
     return [NSNumber numberWithLongLong:message.randomId ? message.randomId : (long long)message.messageId];
 }
 
-/* one number per calendar day, so a list compares days with one components call per message */
-static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date) {
-    NSDateComponents *parts = [calendar components:NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit
-                                          fromDate:[NSDate dateWithTimeIntervalSince1970:date]];
-    return parts.year * 10000 + parts.month * 100 + parts.day;
+/* one number per calendar day. the components call costs tens of microseconds on an old phone and a rebuild asks it twice for every message, so the span of the day that was
+   asked last is kept: messages come in the order of their ids, which is the order of their dates, and all but the first of a day are answered by two compares */
+typedef struct { int32_t from; int32_t to; NSInteger key; } ExteriaDaySpan;
+
+static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpan *span) {
+    if (span->to > span->from && date >= span->from && date < span->to) return span->key;
+    NSDate *moment = [NSDate dateWithTimeIntervalSince1970:date];
+    NSDateComponents *parts = [calendar components:NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit fromDate:moment];
+    NSInteger key = parts.year * 10000 + parts.month * 100 + parts.day;
+    NSDate *start = nil;
+    NSTimeInterval length = 0;
+    span->from = span->to = 0;
+    if ([calendar rangeOfUnit:NSDayCalendarUnit startDate:&start interval:&length forDate:moment] && start && length > 0) {
+        NSTimeInterval from = [start timeIntervalSince1970], to = from + length;
+        if (from >= INT32_MIN && to <= INT32_MAX && date >= from && date < to) {
+            span->from = (int32_t)from;
+            span->to = (int32_t)to;
+            span->key = key;
+        }
+    }
+    return key;
 }
 
 /* two messages share a run when the same side wrote both within a few minutes of each other on one day */
@@ -3865,7 +3922,8 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date) {
 
 - (void)readOutboxChanged:(NSNotification *)note {
     if ([[note.userInfo objectForKey:@"kind"] intValue] != _dialog.peerKind || [[note.userInfo objectForKey:@"peer"] longLongValue] != _dialog.peerId) return;
-    if (_loadedFirst) [self rebuildItems];
+    /* every read of a busy group moves this number */
+    if (_loadedFirst) [self scheduleLiveMessages];
 }
 
 /* the ring on the cross of a message that is going up; the row is touched in place, since a rebuild of the list for every part of a file would redraw the screen */
@@ -3896,6 +3954,34 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date) {
     });
 }
 
+/* the rows laid out before the words of a custom emoji were known are laid out again; every other row keeps its layout, where a flush of the whole cache made a chat of
+   thousands of messages measure all of them again each time a batch of emoji arrived */
+- (void)dropItemsWearingDocuments:(NSDictionary *)documents {
+    NSMutableArray *stale = [NSMutableArray array];
+    [_itemCache enumerateKeysAndObjectsUsingBlock:^(id key, ExteriaChatItem *item, BOOL *stop) {
+        (void)stop;
+        for (ExteriaTextEntity *entity in item.replyEntities) {
+            if (entity.style == ExteriaTextStyleCustomEmoji && [documents objectForKey:[NSNumber numberWithLongLong:entity.documentId]]) { [stale addObject:key]; return; }
+        }
+        NSMutableArray *messages = [NSMutableArray arrayWithObject:item.message ? item.message : (id)[NSNull null]];
+        if (item.albumMessages.count) [messages addObjectsFromArray:item.albumMessages];
+        for (id entry in messages) {
+            if (![entry isKindOfClass:[ExteriaMessage class]]) continue;
+            ExteriaMessage *message = entry;
+            BOOL wears = NO;
+            for (ExteriaTextEntity *entity in message.entities) {
+                if (entity.style == ExteriaTextStyleCustomEmoji && [documents objectForKey:[NSNumber numberWithLongLong:entity.documentId]]) { wears = YES; break; }
+            }
+            for (ExteriaReaction *reaction in message.reactions) {
+                if (wears) break;
+                if (reaction.row.kind == EXTERIA_REACTION_CUSTOM && [documents objectForKey:[NSNumber numberWithLongLong:reaction.row.document_id]]) wears = YES;
+            }
+            if (wears) { [stale addObject:key]; break; }
+        }
+    }];
+    [_itemCache removeObjectsForKeys:stale];
+}
+
 - (void)loadCustomEmoji {
     NSMutableArray *wanted = [NSMutableArray array];
     for (ExteriaMessage *message in [_server allValues]) {
@@ -3919,8 +4005,8 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date) {
         NSMutableDictionary *texts = [NSMutableDictionary dictionaryWithCapacity:documents.count];
         for (ExteriaCustomEmojiDocument *document in documents) [texts setObject:document.alt forKey:[NSNumber numberWithLongLong:document.documentId]];
         [ExteriaReaction rememberCustomTexts:texts];
-        [chat->_itemCache removeAllObjects];
-        [chat rebuildItems];
+        [chat dropItemsWearingDocuments:texts];
+        [chat scheduleLiveMessages];
     } picture:^{
         ExteriaChatController *chat = weak.target;
         if (chat) [chat redrawVisibleCells];
@@ -4092,6 +4178,7 @@ static void ExteriaRedrawTree(UIView *view) {
     if (!_rebuildNow && (_interacting || _keyboardMoving || _table.dragging || _table.decelerating)) { _livePending = YES; return; }
     if ([self replySwipeActive]) { [self scheduleLiveMessages]; return; }
     _livePending = NO;
+    CFTimeInterval rebuildBegan = CACurrentMediaTime();
     /* an item keeps the colors of the palette it was laid out in, and the palette may change under a screen that stays (a night that comes by the clock, a switch made on the other
        pane of an ipad): items of an earlier one are dropped, so no row stays in the old colors */
     if (_themeRevision != ExteriaThemeRevision()) {
@@ -4112,6 +4199,7 @@ static void ExteriaRedrawTree(UIView *view) {
     ExteriaMessage *previous = nil;
     ExteriaChatItem *previousItem = nil;
     NSCalendar *calendar = ExteriaDisplayCalendar();
+    ExteriaDaySpan daySpan = {0, 0, 0}, nextSpan = {0, 0, 0};
     NSInteger previousDay = 0;
     BOOL unreadShown = _unreadAnchor < 0 || _pinnedList || _startMessageId > 0;
     for (NSUInteger at = 0; at < messages.count; ++at) {
@@ -4130,13 +4218,13 @@ static void ExteriaRedrawTree(UIView *view) {
             while (at + 1 < messages.count) {
                 ExteriaMessage *next = [messages objectAtIndex:at + 1];
                 if (next.groupedId != message.groupedId || next.senderKey != message.senderKey || next.outgoing != message.outgoing || ![self isAlbumPicture:next] ||
-                    ExteriaDayKey(calendar, next.date) != ExteriaDayKey(calendar, message.date) || album.count >= 10) break;
+                    ExteriaDayKey(calendar, next.date, &nextSpan) != ExteriaDayKey(calendar, message.date, &daySpan) || album.count >= 10) break;
                 [album addObject:next];
                 ++at;
             }
             if (album.count < 2) album = nil;
         }
-        NSInteger day = ExteriaDayKey(calendar, message.date);
+        NSInteger day = ExteriaDayKey(calendar, message.date, &daySpan);
         if (!previous || day != previousDay) {
             [items addObject:[ExteriaChatItem pillWithText:ExteriaDayText(message.date)]];
             previous = nil;
@@ -4160,8 +4248,9 @@ static void ExteriaRedrawTree(UIView *view) {
         int32_t replyId = message.replyTo ? message.replyTo : message.sendReplyTo;
         BOOL localReply = [self replyIsInThisChat:message];
         ExteriaDialog *replySource = replyId > 0 ? [self replySourceOfMessage:message] : nil;
-        id cachedReply = replySource ? [_replyCache objectForKey:[self replyCacheKey:replyId source:replySource]] : nil;
         ExteriaMessage *original = replyId > 0 && localReply ? [self messageWithId:replyId] : nil;
+        /* the key is a formatted string, so it is made only for a reply whose original is not in the list */
+        id cachedReply = replySource && !original ? [_replyCache objectForKey:[self replyCacheKey:replyId source:replySource]] : nil;
         if (!original && [cachedReply isKindOfClass:[ExteriaMessage class]]) original = cachedReply;
         NSString *replyTitle = replyId > 0 ? (original ? (original.post && !localReply ? replySource.title : [self senderNameOfMessage:original]) : NSLocalizedString(@"chat.reply.title", nil)) : nil;
         NSString *replyText = replyId > 0 ? (original ? ExteriaMessageSummary(original) : NSLocalizedString(cachedReply || !replySource ? @"chat.reply.unavailable" : @"chat.reply.loading", nil)) : nil;
@@ -4171,14 +4260,17 @@ static void ExteriaRedrawTree(UIView *view) {
             replyTitle = NSLocalizedString(@"chat.reply.story", nil);
             replyText = NSLocalizedString(message.outgoing ? @"chat.reply.story.out" : @"chat.reply.story.in", nil);
         }
-        replyText = [[replyText stringByReplacingOccurrencesOfString:@"\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\r" withString:@" "];
+        /* every rebuild walks all loaded replies, and the original of a reply can be a whole post: copy it only when it has a line break */
+        if (replyText.length && [replyText rangeOfCharacterFromSet:[NSCharacterSet newlineCharacterSet]].location != NSNotFound)
+            replyText = [[replyText stringByReplacingOccurrencesOfString:@"\n" withString:@" "] stringByReplacingOccurrencesOfString:@"\r" withString:@" "];
         NSArray *replyEntities = original && !message.replyQuote.length ? original.entities : nil;
         if (replyEntities.count && !ExteriaChatFlagGet(ExteriaChatFlagShowReplyCustomEmoji)) {
             NSMutableArray *visible = [NSMutableArray array];
             for (ExteriaTextEntity *entity in replyEntities) if (entity.style != ExteriaTextStyleCustomEmoji) [visible addObject:entity];
             replyEntities = visible;
         }
-        UIColor *replyColor = ExteriaColorBubbleLink(message.outgoing);
+        /* the classic bubble is a neutral plate, and the accent on it reads as a link */
+        UIColor *replyColor = ExteriaThemeIsClassic() ? [UIColor colorWithWhite:ExteriaThemeIsDark() ? 0.74 : 0.40 alpha:1] : ExteriaColorBubbleLink(message.outgoing);
         if (original && !message.outgoing) {
             ExteriaPerson *author = [_people objectForKey:[NSNumber numberWithLongLong:original.senderKey]];
             if (author && !ExteriaThemeIsClassic() && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) replyColor = ExteriaNameColor(author.nameColor, llabs(original.senderKey), ExteriaThemeIsDark());
@@ -4226,6 +4318,8 @@ static void ExteriaRedrawTree(UIView *view) {
         [self performSelector:@selector(sharingExpiryReached) withObject:nil afterDelay:nextExpiry - serverNow];
     [self scheduleReplyPreviews];
     if (!_pinnedList) [_bots messagesChanged:messages loaded:_loadedFirst];
+    _rebuildEndedAt = CACurrentMediaTime();
+    _rebuildCost = _rebuildEndedAt - rebuildBegan;
 }
 
 - (BOOL)sharingExpired:(ExteriaMessage *)message {
@@ -4677,7 +4771,10 @@ static void ExteriaRedrawTree(UIView *view) {
     NSUInteger count = MIN(ahead.count, (NSUInteger)PREPARE_ROWS_MAX);
     for (NSUInteger i = 0; i < count; ++i) {
         NSUInteger row = [[[ahead objectAtIndex:i] objectAtIndex:1] unsignedIntegerValue];
-        [ExteriaMessageCell prepareItem:[_items objectAtIndex:row] media:_media];
+        ExteriaChatItem *aheadItem = [_items objectAtIndex:row];
+        [ExteriaMessageCell prepareItem:aheadItem media:_media];
+        /* in a group every run of messages has a picture of its author: without this it decodes after the row is shown and fades in over the initials */
+        if (aheadItem.showsAvatar && aheadItem.senderPerson.photo) [_avatars loadImageForPhoto:aheadItem.senderPerson.photo completion:nil];
     }
 }
 
@@ -5161,7 +5258,8 @@ static void ExteriaRedrawTree(UIView *view) {
 
 /* the chips were built before the server's icons were known */
 - (void)reactionArtworkLoaded {
-    [self rebuildItems];
+    /* one icon lands after another when the chat opens, and each used to rebuild every row on the spot */
+    [self scheduleLiveMessages];
 }
 
 - (void)chooseReaction:(ExteriaReaction *)reaction messageId:(int32_t)messageId burst:(int)burst {
@@ -5758,6 +5856,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     ExteriaWeakReference *weak = _weak;
     int32_t messageId = message.messageId;
     ExteriaMessageMenu *menu = [[[ExteriaMessageMenu alloc] init] autorelease];
+    menu.media = _media;
     menu.icons = ExteriaMenuItems(ExteriaMessageActionIcons, sizeof(ExteriaMessageActionIcons) / sizeof(ExteriaMessageActionIcons[0]), mask);
     NSMutableArray *rows = [NSMutableArray arrayWithArray:ExteriaMenuItems(ExteriaMessageActionRows, sizeof(ExteriaMessageActionRows) / sizeof(ExteriaMessageActionRows[0]), mask)];
     /* the items of plugins close the list; a text the person can read has to exist to be voiced or quoted, so a message with no text has none */
@@ -6245,8 +6344,21 @@ static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
         if (!path) { completion(index, @"DOWNLOAD_FAILED"); return; }
         int32_t duration = media.duration * 1000;
         switch (media.kind) {
-        case EXTERIA_PREVIEW_PHOTO:
-            [_session sendPhotoAtPath:path caption:message.text spoiler:media.spoiler toDialog:target randomId:randomId completion:done]; break;
+        case EXTERIA_PREVIEW_PHOTO: {
+            /* the cache names a file by its key with no extension, and the upload sends that name: the server answers PHOTO_EXT_INVALID to a photo without .jpg */
+            NSString *named = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"copy-%08x%08x.jpg", arc4random(), arc4random()]];
+            NSError *copyError = nil;
+            if (![[NSFileManager defaultManager] copyItemAtPath:path toPath:named error:&copyError]) {
+                NSLog(@"exteria: the photo to copy could not be staged: %@", copyError);
+                completion(index, @"INTERNAL");
+                return;
+            }
+            [_session sendPhotoAtPath:named caption:message.text spoiler:media.spoiler toDialog:target randomId:randomId completion:^(int32_t messageId, NSString *error) {
+                [[NSFileManager defaultManager] removeItemAtPath:named error:NULL];
+                done(messageId, error);
+            }];
+            break;
+        }
         case EXTERIA_PREVIEW_VIDEO:
             [_session sendVideoAtPath:path durationMs:duration width:media.width height:media.height caption:message.text spoiler:media.spoiler toDialog:target randomId:randomId completion:done]; break;
         case EXTERIA_PREVIEW_VIDEO_MESSAGE:
@@ -6936,11 +7048,15 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     (void)bar;
     if (_voice || _roundRecorder) return NO;
     [self.view endEditing:YES];
+    /* before the recorder takes the audio session: switching to the record category under a playing song cuts it off without a pause, and it would never come back */
+    ExteriaMusicPlayer *music = [ExteriaMusicPlayer sharedPlayer];
+    [music pauseForRecording];
     if (mode == ExteriaRecordVoice) {
         _voice = [[ExteriaVoiceRecorder alloc] init];
         if (![_voice start]) {
             [_voice release];
             _voice = nil;
+            [music resumeAfterRecording];
             [self showRecordingFailure:nil];
             return NO;
         }
@@ -6950,11 +7066,11 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
             NSString *reason = [[_roundRecorder.failure copy] autorelease];
             [_roundRecorder release];
             _roundRecorder = nil;
+            [music resumeAfterRecording];
             [self showRecordingFailure:reason];
             return NO;
         }
         [self showRoundPreview];
-        [[ExteriaMusicPlayer sharedPlayer] pauseForRecording];
     }
     _recordTimer = [[NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(recordTick) userInfo:nil repeats:YES] retain];
     return YES;
@@ -6969,9 +7085,22 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     _roundShade.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view insertSubview:_roundShade belowSubview:_input];
     [UIView animateWithDuration:0.2 animations:^{ _roundShade.alpha = 0.5; }];
+    _roundGlow = [[ExteriaRoundGlow alloc] initWithFrame:self.view.bounds];
+    _roundGlow.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [self.view insertSubview:_roundGlow belowSubview:_input];
+    _roundFlash = NO;
 }
 
 - (void)removeRoundShade {
+    ExteriaRoundGlow *glow = _roundGlow;
+    _roundGlow = nil;
+    _roundFlash = NO;
+    if (glow) {
+        [glow setLit:NO];
+        /* the light fades for 0.24 s, and the view holds the screen brightness until it is released */
+        [glow performSelector:@selector(removeFromSuperview) withObject:nil afterDelay:0.3];
+        [glow performSelector:@selector(release) withObject:nil afterDelay:0.35];
+    }
     UIView *shade = _roundShade;
     _roundShade = nil;
     if (!shade) return;
@@ -7052,6 +7181,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         ExteriaChatController *chat = weak.target;
         if (!chat) return;
         chat->_roundFlipping = NO;
+        [chat applyRoundFlash];
         [chat refreshRoundTorch];
         /* a little later than the swap, so the first frame of the new camera is already in the layer */
         [UIView animateWithDuration:0.3 delay:switched ? 0.12 : 0 options:UIViewAnimationOptionCurveEaseOut animations:^{
@@ -7063,25 +7193,41 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)refreshRoundTorch {
-    _roundTorch.hidden = !_roundRecorder || _roundFlipping || !_roundRecorder.canUseTorch;
+    _roundTorch.hidden = !_roundRecorder || _roundFlipping || !(_roundRecorder.canUseTorch || _roundRecorder.usesFrontCamera);
     _roundTorch.enabled = !_roundTorchBusy;
-    [_roundTorch setImage:ExteriaRoundTorchImage(_roundRecorder.torchOn ? ExteriaColorAccent() : [UIColor whiteColor]) forState:UIControlStateNormal];
-    _roundTorch.accessibilityValue = NSLocalizedString(_roundRecorder.torchOn ? @"chat.round.torch.on" : @"chat.round.torch.off", nil);
+    [_roundTorch setImage:ExteriaRoundTorchImage(_roundFlash ? ExteriaColorAccent() : [UIColor whiteColor]) forState:UIControlStateNormal];
+    _roundTorch.accessibilityValue = NSLocalizedString(_roundFlash ? @"chat.round.torch.on" : @"chat.round.torch.off", nil);
+}
+
+/* the front camera has no torch, so its flash is the light of the screen; the back camera lights its torch, and a camera swap carries the choice over */
+- (void)applyRoundFlash {
+    if (!_roundRecorder) return;
+    if (_roundRecorder.usesFrontCamera) {
+        [_roundGlow setLit:_roundFlash];
+        return;
+    }
+    [_roundGlow setLit:NO];
+    if (_roundRecorder.torchOn == _roundFlash || !_roundRecorder.canUseTorch) return;
+    _roundTorchBusy = YES;
+    ExteriaRoundRecorder *recorder = _roundRecorder;
+    ExteriaWeakReference *weak = _weak;
+    [recorder setTorchOn:_roundFlash completion:^(BOOL success) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat || chat->_roundRecorder != recorder) return;
+        chat->_roundTorchBusy = NO;
+        if (!success) {
+            chat->_roundFlash = recorder.torchOn;
+            ExteriaShowNotice(nil, NSLocalizedString(@"chat.round.torch.failed", nil));
+        }
+        [chat refreshRoundTorch];
+    }];
 }
 
 - (void)toggleRoundTorch {
     if (!_roundRecorder || _roundFlipping || _roundTorchBusy) return;
-    _roundTorchBusy = YES;
+    _roundFlash = !_roundFlash;
+    [self applyRoundFlash];
     [self refreshRoundTorch];
-    ExteriaRoundRecorder *recorder = _roundRecorder;
-    ExteriaWeakReference *weak = _weak;
-    [recorder setTorchOn:!recorder.torchOn completion:^(BOOL success) {
-        ExteriaChatController *chat = weak.target;
-        if (!chat || chat->_roundRecorder != recorder) return;
-        chat->_roundTorchBusy = NO;
-        [chat refreshRoundTorch];
-        if (!success) ExteriaShowNotice(nil, NSLocalizedString(@"chat.round.torch.failed", nil));
-    }];
 }
 
 /* two fingers on the circle zoom the camera, and a small label says how far; ios 7 and later, where the lens has the zoom */
@@ -7356,12 +7502,28 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         text = planned;
         entities = nil;
     }
-    ExteriaMessage *message = [ExteriaMessage pendingText:text entities:entities randomId:[self newRandomId] date:(int32_t)[[NSDate date] timeIntervalSince1970]];
-    message.sendReplyTo = replyTo;
-    message.sendQuote = plannedQuote;
-    message.sendQuoteOffset = plannedOffset;
-    [self afterAppendingLocal:message];
-    [self dispatchLocal:message];
+    [self appendPendingText:text entities:entities replyTo:replyTo quote:plannedQuote quoteOffset:plannedOffset];
+}
+
+/* the server refuses a text over 4096 units (8192 with Premium), so a longer one goes as several messages cut at the same places as the Android client; the plugin hooks have run already */
+- (void)appendPendingText:(NSString *)text entities:(NSArray *)entities replyTo:(int32_t)replyTo quote:(NSString *)plannedQuote quoteOffset:(int32_t)plannedOffset {
+    NSArray *parts = ExteriaTextPartsForLimit(text, entities, [_session ownPerson].premium ? EXTERIA_MESSAGE_LIMIT_PREMIUM : EXTERIA_MESSAGE_LIMIT);
+    if (!parts) {
+        ExteriaShowNotice(nil, NSLocalizedString(@"chat.send.toolong", nil));
+        return;
+    }
+    if (!parts.count) return;
+    BOOL first = YES;
+    for (ExteriaTextPart *part in parts) {
+        ExteriaMessage *message = [ExteriaMessage pendingText:part.text entities:part.entities randomId:[self newRandomId] date:(int32_t)[[NSDate date] timeIntervalSince1970]];
+        message.sendReplyTo = replyTo;
+        /* the quote belongs to the first message only, the others answer the same message */
+        message.sendQuote = first ? plannedQuote : nil;
+        message.sendQuoteOffset = first ? plannedOffset : -1;
+        first = NO;
+        [self afterAppendingLocal:message];
+        [self dispatchLocal:message];
+    }
 }
 
 - (ExteriaDialog *)openDialog {
@@ -7375,10 +7537,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)sendPluginText:(NSString *)text replyTo:(int32_t)replyTo {
-    ExteriaMessage *message = [ExteriaMessage pendingText:text entities:nil randomId:[self newRandomId] date:(int32_t)[[NSDate date] timeIntervalSince1970]];
-    message.sendReplyTo = replyTo;
-    [self afterAppendingLocal:message];
-    [self dispatchLocal:message];
+    [self appendPendingText:text entities:nil replyTo:replyTo quote:nil quoteOffset:-1];
 }
 
 - (NSString *)sendPluginPhotoAtPath:(NSString *)path caption:(NSString *)caption replyTo:(int32_t)replyTo {
@@ -7836,8 +7995,8 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         if (index == 1) {
             NSString *installed = nil;
             NSString *failure = ExteriaPluginsImport(path, name, &installed);
-            ExteriaShowNotice(NSLocalizedString(@"plugins.import.title", nil),
-                              failure ? failure : [NSString stringWithFormat:NSLocalizedString(@"plugins.import.done", nil), installed]);
+            if (failure) ExteriaShowPicturePopup(NSLocalizedString(@"plugins.import.title", nil), failure, @"plugin_import_fail.png", 150);
+            else ExteriaShowNotice(NSLocalizedString(@"plugins.import.title", nil), [NSString stringWithFormat:NSLocalizedString(@"plugins.import.done", nil), installed]);
         } else if (index == 2) {
             [chat openDocumentAtPath:path name:name fromCell:cell];
         }
