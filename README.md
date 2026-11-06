@@ -102,6 +102,14 @@ ssh root@<device-ip> 'chown -R mobile:wheel /Applications/Exteria.app && su mobi
 
 the owner must be `mobile:wheel`, or the app cannot change its own icon on ios 6.
 
+on ios 5 and 6 an app in `/Applications` gets no banners, no notification center entry and no settings row, because springboard gives notification settings to user apps only. after the copy run
+
+```bash
+ssh root@<device-ip> '/Applications/Exteria.app/Exteria --system-notifications on'
+```
+
+before `uicache`, then respring. it adds the `SBInternalAppTag` to the bundle's `Info.plist` and sets `SBShowInternalApps` in the springboard preferences (without it the icon of an internal app is hidden); `off` takes the preference back. the deb runs this in its postinst and postrm, and the in-app update runs it again after it replaces the files. an ipa installed as a user app (ipainstaller, appsync) and the rootless `/var/jb` install need nothing, and ios 7 and later are left alone by the command.
+
 ## updates
 
 on start the app asks `api.github.com` for the latest release and shows a notice when its tag is newer. a release needs `Exteria-v<version>.ipa` and `Exteria-v<version>.ipa.sha256`, the tag is `v<version>`.

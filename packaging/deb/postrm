@@ -9,6 +9,9 @@ case "$1" in
       JBROOT=
     fi
     killall -9 Exteria >/dev/null 2>&1 || true
+    if [ -z "$JBROOT" ] && [ -x /Applications/Exteria.app/Exteria ]; then
+      /Applications/Exteria.app/Exteria --system-notifications off || echo "exteria: the switch for internal apps could not be taken back" >&2
+    fi
     if [ -z "$JBROOT" ] && [ -f /Applications/Exteria.app/.exteria-rootful-copy ]; then
       rm -rf /Applications/Exteria.app
     fi

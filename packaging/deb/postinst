@@ -31,6 +31,18 @@ fi
 chown -R mobile:wheel "$APP" 2>/dev/null || true
 chmod 755 "$APP" "$APP/Exteria" 2>/dev/null || true
 
+# ios 5 and 6 give notification settings only to the apps of the user, so an app in /Applications gets no banner, no entry in the notification center and no
+# row in the settings; the executable tags the bundle as internal and sets the switch that keeps the icon, which the removal of the package takes back
+if [ -z "$JBROOT" ]; then
+  "$APP/Exteria" --system-notifications on || echo "exteria: the notification setup for /Applications failed, banners will not show" >&2
+fi
+
+# the app writes imported plugins to Documents/Plugins as mobile; a Documents folder made by root (a file manager or an ssh copy) makes mkdir fail with "permission denied" and every import with it
+for DIR in /var/mobile/Documents /var/mobile/Documents/Plugins; do
+  [ -d "$DIR" ] || mkdir "$DIR" 2>/dev/null || true
+  [ -d "$DIR" ] && { chown mobile:mobile "$DIR" 2>/dev/null || chown mobile "$DIR" 2>/dev/null || true; }
+done
+
 # the old binary keeps running from memory after an upgrade
 "$KILLALL" -9 Exteria >/dev/null 2>&1 || true
 
