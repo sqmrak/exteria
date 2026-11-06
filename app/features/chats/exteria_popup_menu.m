@@ -4,7 +4,6 @@
 
 #import "exteria_animation.h"
 #import "exteria_classic_chrome.h"
-#import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 
@@ -131,7 +130,6 @@
         }
     }
     [self addSubview:_card];
-    ExteriaAddDismissPan(_card, self, @selector(dismiss));
 }
 
 - (void)rowDown:(UIButton *)row {
