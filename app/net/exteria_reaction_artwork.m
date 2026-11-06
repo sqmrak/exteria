@@ -1,5 +1,6 @@
 #import "exteria_reaction_artwork.h"
 
+#import "exteria_custom_emoji.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_image_decoder.h"
 #import "exteria_lottie_view.h"
@@ -65,6 +66,37 @@ static NSMutableDictionary *sArt;
     [sArt release];
     sArt = next;
     [ExteriaReaction rememberCustomTexts:icons];
+}
+
++ (UIImageView *)attachStillOfArtwork:(ExteriaReactionArtwork *)artwork toButton:(UIButton *)button side:(CGFloat)side media:(ExteriaMediaCache *)media {
+    if (!artwork.icon.file || !media) return nil;
+    UIImageView *still = [[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, side, side)] autorelease];
+    still.tag = EXTERIA_REACTION_STILL_TAG;
+    still.contentMode = UIViewContentModeScaleAspectFit;
+    still.userInteractionEnabled = NO;
+    still.hidden = YES;
+    still.center = CGPointMake(button.bounds.size.width / 2, button.bounds.size.height / 2);
+    [button addSubview:still];
+    /* the same side as the picture of the custom emoji path, so the cache of the images holds one decode for both */
+    [media loadImageForFile:artwork.icon.file maxSide:[ExteriaCustomEmoji pictureSide] completion:^(UIImage *image) {
+        if (!image || !still.superview) return;
+        still.image = image;
+        BOOL animating = NO;
+        for (UIView *view in button.subviews) if ([view isKindOfClass:[ExteriaLottieView class]] && !view.hidden) animating = YES;
+        still.hidden = animating;
+        [button viewWithTag:EXTERIA_REACTION_LABEL_TAG].hidden = YES;
+    }];
+    return still;
+}
+
++ (void)showRestingViewInButton:(UIButton *)button {
+    UIImageView *still = (UIImageView *)[button viewWithTag:EXTERIA_REACTION_STILL_TAG];
+    if (still.image) {
+        still.hidden = NO;
+        [button viewWithTag:EXTERIA_REACTION_LABEL_TAG].hidden = YES;
+    } else {
+        [button viewWithTag:EXTERIA_REACTION_LABEL_TAG].hidden = NO;
+    }
 }
 
 + (void)animationViewForDocument:(ExteriaCustomEmojiDocument *)document media:(ExteriaMediaCache *)media completion:(void (^)(ExteriaLottieView *))completion {

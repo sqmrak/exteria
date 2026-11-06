@@ -332,6 +332,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     if (reaction.row.kind != EXTERIA_REACTION_EMOJI || !_media || ExteriaReduceMotionEnabled()) return;
     ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:reaction.emoji];
     if (!artwork) return;
+    [ExteriaReactionArtwork attachStillOfArtwork:artwork toButton:button side:APPEAR_SIDE media:_media];
     if (!_weak) _weak = [[ExteriaWeakReference referenceTo:self] retain];
     ExteriaWeakReference *weak = _weak;
     [ExteriaReactionArtwork animationViewForDocument:artwork.appear media:_media completion:^(ExteriaLottieView *view) {
@@ -341,10 +342,9 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         view.frame = CGRectMake(floor((button.bounds.size.width - APPEAR_SIDE) / 2), floor((button.bounds.size.height - APPEAR_SIDE) / 2), APPEAR_SIDE, APPEAR_SIDE);
         view.hidden = YES;
         [button addSubview:view];
-        __block UIView *icon = label;
         __block ExteriaLottieView *playing = view;
-        view.firstFrameHandler = ^{ playing.hidden = NO; icon.hidden = YES; };
-        view.finishHandler = ^{ icon.hidden = NO; [playing removeFromSuperview]; };
+        view.firstFrameHandler = ^{ playing.hidden = NO; label.hidden = YES; [button viewWithTag:EXTERIA_REACTION_STILL_TAG].hidden = YES; };
+        view.finishHandler = ^{ [playing removeFromSuperview]; [ExteriaReactionArtwork showRestingViewInButton:button]; };
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((double)order * APPEAR_STAGGER * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (view.superview) [view playOnce];
         });
@@ -389,6 +389,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         label.textAlignment = ExteriaTextAlignmentCenter;
         label.frame = button.bounds;
         label.userInteractionEnabled = NO;
+        label.tag = EXTERIA_REACTION_LABEL_TAG;
         [button addSubview:label];
         [pill addSubview:button];
         [self playAppearOfReaction:reaction inButton:button label:label order:i];
