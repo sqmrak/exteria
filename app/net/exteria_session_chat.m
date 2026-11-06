@@ -458,6 +458,21 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     [job release];
 }
 
+/* a file from another app can carry a name longer than the 128 bytes the upload spec holds, and the document is better sent under a cut name than refused: the stem is cut on a character boundary and the extension stays */
+static NSString *ExteriaFittedFileName(NSString *name, size_t capacity) {
+    if (!name.length || [name lengthOfBytesUsingEncoding:NSUTF8StringEncoding] < capacity) return name;
+    NSString *extension = name.pathExtension;
+    NSString *tail = extension.length && [extension lengthOfBytesUsingEncoding:NSUTF8StringEncoding] < capacity / 2 ? [@"." stringByAppendingString:extension] : @"";
+    NSString *stem = tail.length ? [name substringToIndex:name.length - tail.length] : name;
+    while (stem.length) {
+        NSString *fitted = [stem stringByAppendingString:tail];
+        if ([fitted lengthOfBytesUsingEncoding:NSUTF8StringEncoding] < capacity) return fitted;
+        NSRange last = [stem rangeOfComposedCharacterSequenceAtIndex:stem.length - 1];
+        stem = [stem substringToIndex:last.location];
+    }
+    return tail.length ? tail : name;
+}
+
 - (void)sendUploadAtPath:(NSString *)path spec:(exteria_upload_spec)spec waveform:(NSData *)waveform toDialog:(ExteriaDialog *)dialog
                randomId:(long long)randomId completion:(ExteriaSendCompletion)completion {
     ExteriaUploadJob *job = [[ExteriaUploadJob alloc] init];
@@ -775,7 +790,7 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
     spec.animated = outgoing->animated && kind == EXTERIA_UPLOAD_FILE ? 1 : 0;
     if (!ExteriaUploadCaption(&spec, outgoing->caption)) { completion(0, @"CAPTION_TOO_LONG"); return; }
     if (kind == EXTERIA_UPLOAD_FILE) {
-        int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", outgoing->name.UTF8String);
+        int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", ExteriaFittedFileName(outgoing->name, sizeof(spec.name)).UTF8String);
         int mimeLength = snprintf(spec.mime, sizeof(spec.mime), "%s", outgoing->mime.length ? outgoing->mime.UTF8String : "application/octet-stream");
         if (nameLength < 0 || (size_t)nameLength >= sizeof(spec.name) || mimeLength < 0 || (size_t)mimeLength >= sizeof(spec.mime)) { completion(0, @"FILE_NAME_TOO_LONG"); return; }
         if (outgoing->music) {
