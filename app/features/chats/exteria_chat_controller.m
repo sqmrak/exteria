@@ -6389,12 +6389,15 @@ static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
     }
     BOOL allowCopy = ExteriaChatFlagGet(ExteriaChatFlagAyuCopyProtected);
     void (^copy)(void) = ^{
-        for (ExteriaMessage *message in messages) {
-            if (!ExteriaCanCopyForward(message)) { completion(NSLocalizedString(@"ayu.copyprotected.failed", nil)); return; }
-        }
-        [self copyForwardMessages:messages index:0 toDialog:target completion:^(NSUInteger sent, NSString *error) {
+        /* a poll, a place or a contact in the pick cannot be sent again; the rest of a pick must still go, and the person is told how many stayed behind */
+        NSMutableArray *copyable = [NSMutableArray arrayWithCapacity:messages.count];
+        for (ExteriaMessage *message in messages) if (ExteriaCanCopyForward(message)) [copyable addObject:message];
+        long skipped = (long)(messages.count - copyable.count);
+        if (!copyable.count) { completion(NSLocalizedString(@"ayu.copyprotected.failed", nil)); return; }
+        [self copyForwardMessages:copyable index:0 toDialog:target completion:^(NSUInteger sent, NSString *error) {
             if (error && sent) completion([NSString stringWithFormat:NSLocalizedString(@"ayu.copyprotected.partial", nil), (long)sent, ExteriaGiftErrorText(error)]);
-            else completion(error ? ExteriaGiftErrorText(error) : nil);
+            else if (error) completion(ExteriaGiftErrorText(error));
+            else completion(skipped ? [NSString stringWithFormat:NSLocalizedString(@"ayu.copyprotected.skipped", nil), (long)copyable.count, skipped] : nil);
         }];
     };
     if (allowCopy && restricted) { copy(); return; }

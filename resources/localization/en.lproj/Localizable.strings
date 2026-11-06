@@ -1889,6 +1889,7 @@
 "ayu.copyprotected.info" = "Send a copy when forwarding is restricted. The copy has no original sender; formatting or albums may differ.";
 "ayu.copyprotected.failed" = "Could not copy this message. Some message types or files over 150 MB are not supported.";
 "ayu.copyprotected.partial" = "%ld messages were sent before the copy failed: %@";
+"ayu.copyprotected.skipped" = "%ld messages were copied, %ld could not be: this type or a file over 150 MB is not supported.";
 "ayu.regex.title" = "Filters";
 "ayu.regex.add" = "Add a filter";
 "ayu.regex.change" = "Change";
