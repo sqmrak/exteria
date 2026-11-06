@@ -541,6 +541,10 @@
 "call.incoming.video" = "видеозвонок";
 "call.mute" = "микрофон";
 "call.speaker" = "динамик";
+"call.route.title" = "звук звонка";
+"call.route.phone" = "телефон";
+"call.route.speaker" = "динамик";
+"call.route.bluetooth" = "bluetooth";
 "call.end" = "завершить";
 "call.accept" = "принять";
 "call.decline" = "отклонить";

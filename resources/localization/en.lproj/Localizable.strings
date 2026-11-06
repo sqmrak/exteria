@@ -539,6 +539,10 @@
 "call.incoming.video" = "Video call";
 "call.mute" = "mute";
 "call.speaker" = "speaker";
+"call.route.title" = "Call audio";
+"call.route.phone" = "Phone";
+"call.route.speaker" = "Speaker";
+"call.route.bluetooth" = "Bluetooth";
 "call.end" = "end";
 "call.accept" = "accept";
 "call.decline" = "decline";

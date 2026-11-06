@@ -7,6 +7,7 @@
 
 #import "exteria_audio_session.h"
 #import "exteria_avatar_view.h"
+#import "exteria_call_route.h"
 #import "exteria_call_tones.h"
 #import "exteria_call_video.h"
 #import "exteria_emoji_label.h"
@@ -732,6 +733,10 @@ static CGImageRef CreateMeshImage(exteria_call_mood mood) {
 }
 
 - (void)toggleSpeaker {
+    if (ExteriaCallPresentRouteSheet(self, ^(ExteriaAudioRoute route) {
+        _speakerOn = route != ExteriaAudioRouteEarpiece;
+        [self render];
+    })) return;
     _speakerOn = !_speakerOn;
     ExteriaAudioSessionSetSpeaker(_speakerOn);
     [self render];

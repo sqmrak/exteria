@@ -29,3 +29,14 @@ BOOL ExteriaAudioSessionBeginRecording(BOOL bluetooth);
 BOOL ExteriaAudioSessionCanUseBluetoothMicrophone(void);
 /* the category the session has now, nil without one */
 NSString *ExteriaAudioSessionCategory(void);
+
+typedef enum { ExteriaAudioRouteEarpiece, ExteriaAudioRouteSpeaker, ExteriaAudioRouteBluetooth } ExteriaAudioRoute;
+/* whether a Bluetooth headset can carry the call now, with its name when the system tells it (ios 7 and later list the inputs; ios 6 shows the headset
+   only once it is the route; ios 5 never) */
+BOOL ExteriaAudioSessionBluetoothInputAvailable(NSString **name);
+/* where the sound goes now; the earpiece when the system cannot say (ios 5) */
+ExteriaAudioRoute ExteriaAudioSessionCurrentRoute(void);
+/* moves a call to the earpiece, the loudspeaker or the headset: the microphone follows the output. NO when the system refuses, with the reason logged */
+BOOL ExteriaAudioSessionSelectRoute(ExteriaAudioRoute route);
+/* the name of the notification that says the route changed (ios 6 and later), nil before */
+NSString *ExteriaAudioRouteChangeNotificationName(void);

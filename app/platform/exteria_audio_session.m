@@ -92,22 +92,127 @@ NSString *ExteriaAudioCategoryPlayback(void) {
     return ExteriaAudioConstant("AVAudioSessionCategoryPlayback");
 }
 
-BOOL ExteriaAudioSessionBeginCall(void) {
-    NSError *error = nil;
-    AVAudioSession *audio = ExteriaAudioSession();
+/* the record category of a call, with the Bluetooth option where the system has it: without it a headset never carries the microphone of a call (ios 6 and later) */
+static BOOL ExteriaAudioSetCallCategory(AVAudioSession *audio, BOOL bluetooth, NSError **error) {
     NSString *category = ExteriaAudioCategoryPlayAndRecord();
-    if (!audio || !category || ![audio setCategory:category error:&error]) {
-        NSLog(@"exteria: audio session refused the call: %@", error);
-        return NO;
+    SEL withOptions = NSSelectorFromString(@"setCategory:withOptions:error:");
+    if (!category) return NO;
+    if ([audio respondsToSelector:withOptions]) {
+        /* AVAudioSessionCategoryOptionAllowBluetooth is 4 */
+        return ((BOOL (*)(id, SEL, NSString *, NSUInteger, NSError **))objc_msgSend)(audio, withOptions, category, bluetooth ? 4 : 0, error);
     }
+    return [audio setCategory:category error:error];
+}
+
+static void ExteriaAudioSetVoiceChatMode(AVAudioSession *audio) {
+    NSError *error = nil;
     /* the mode came with ios 5 and only tunes the microphone for speech; a call runs without it */
     NSString *mode = ExteriaAudioConstant("AVAudioSessionModeVoiceChat");
     if (mode && [audio respondsToSelector:@selector(setMode:error:)] && ![audio setMode:mode error:&error]) NSLog(@"exteria: voice chat mode refused: %@", error);
+}
+
+BOOL ExteriaAudioSessionBeginCall(void) {
+    NSError *error = nil;
+    AVAudioSession *audio = ExteriaAudioSession();
+    if (!audio || !ExteriaAudioSetCallCategory(audio, YES, &error)) {
+        NSLog(@"exteria: audio session refused the call: %@", error);
+        return NO;
+    }
+    ExteriaAudioSetVoiceChatMode(audio);
     if (![audio setActive:YES error:&error]) {
         NSLog(@"exteria: audio session refused the call: %@", error);
         return NO;
     }
     return YES;
+}
+
+static BOOL ExteriaAudioPortIsBluetooth(NSString *type) {
+    return type && ([type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortBluetoothHFP")] || [type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortBluetoothA2DP")] ||
+                    [type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortBluetoothLE")]);
+}
+
+/* the input ports of ios 7 and later: the headset when a type matches, else the built in microphone */
+static id ExteriaAudioInputPort(AVAudioSession *audio, BOOL bluetooth) {
+    if (![audio respondsToSelector:NSSelectorFromString(@"availableInputs")]) return nil;
+    NSString *builtIn = ExteriaAudioConstant("AVAudioSessionPortBuiltInMic");
+    for (id port in [audio valueForKey:@"availableInputs"]) {
+        NSString *type = [port valueForKey:@"portType"];
+        if (bluetooth ? ExteriaAudioPortIsBluetooth(type) : [type isEqualToString:builtIn]) return port;
+    }
+    return nil;
+}
+
+BOOL ExteriaAudioSessionBluetoothInputAvailable(NSString **name) {
+    AVAudioSession *audio = ExteriaAudioSession();
+    if (name) *name = nil;
+    if (!audio) return NO;
+    id port = ExteriaAudioInputPort(audio, YES);
+    if (port) {
+        if (name) *name = [port valueForKey:@"portName"];
+        return YES;
+    }
+    if (![audio respondsToSelector:NSSelectorFromString(@"currentRoute")]) return NO;
+    id route = [audio valueForKey:@"currentRoute"];
+    for (id output in [route valueForKey:@"outputs"]) {
+        if (ExteriaAudioPortIsBluetooth([output valueForKey:@"portType"])) {
+            if (name) *name = [output valueForKey:@"portName"];
+            return YES;
+        }
+    }
+    return NO;
+}
+
+ExteriaAudioRoute ExteriaAudioSessionCurrentRoute(void) {
+    AVAudioSession *audio = ExteriaAudioSession();
+    if (!audio || ![audio respondsToSelector:NSSelectorFromString(@"currentRoute")]) return ExteriaAudioRouteEarpiece;
+    NSString *speaker = ExteriaAudioConstant("AVAudioSessionPortBuiltInSpeaker");
+    for (id output in [[audio valueForKey:@"currentRoute"] valueForKey:@"outputs"]) {
+        NSString *type = [output valueForKey:@"portType"];
+        if (ExteriaAudioPortIsBluetooth(type)) return ExteriaAudioRouteBluetooth;
+        if (speaker && [type isEqualToString:speaker]) return ExteriaAudioRouteSpeaker;
+    }
+    return ExteriaAudioRouteEarpiece;
+}
+
+BOOL ExteriaAudioSessionSelectRoute(ExteriaAudioRoute route) {
+    AVAudioSession *audio = ExteriaAudioSession();
+    NSError *error = nil;
+    if (!audio) return NO;
+    if (route == ExteriaAudioRouteSpeaker) {
+        ExteriaAudioSessionSetSpeaker(YES);
+        return YES;
+    }
+    BOOL bluetooth = route == ExteriaAudioRouteBluetooth;
+    /* ios 6 has no preferred input: the headset is the route while the category allows it, and the earpiece once it does not; a category change drops the mode and the override, so both are set again */
+    BOOL preferred = [audio respondsToSelector:NSSelectorFromString(@"setPreferredInput:error:")];
+    if (!preferred || bluetooth) {
+        if (!ExteriaAudioSetCallCategory(audio, bluetooth, &error)) {
+            NSLog(@"exteria: audio session refused the call route: %@", error);
+            return NO;
+        }
+        ExteriaAudioSetVoiceChatMode(audio);
+        if (![audio setActive:YES error:&error]) {
+            NSLog(@"exteria: audio session refused the call route: %@", error);
+            return NO;
+        }
+    }
+    ExteriaAudioSessionSetSpeaker(NO);
+    if (preferred) {
+        id port = ExteriaAudioInputPort(audio, bluetooth);
+        if (!port && bluetooth) {
+            NSLog(@"exteria: no bluetooth input to prefer");
+            return NO;
+        }
+        if (!((BOOL (*)(id, SEL, id, NSError **))objc_msgSend)(audio, NSSelectorFromString(@"setPreferredInput:error:"), port, &error)) {
+            NSLog(@"exteria: the preferred input was refused: %@", error);
+            return NO;
+        }
+    }
+    return YES;
+}
+
+NSString *ExteriaAudioRouteChangeNotificationName(void) {
+    return ExteriaAudioConstant("AVAudioSessionRouteChangeNotification");
 }
 
 void ExteriaAudioSessionEndCall(void) {

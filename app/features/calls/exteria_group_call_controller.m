@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_audio_session.h"
+#import "exteria_call_route.h"
 #import "exteria_avatar_view.h"
 #import "exteria_emoji_label.h"
 #import "exteria_name_badge.h"
@@ -344,6 +345,11 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
 }
 
 - (void)speakerTapped {
+    if (ExteriaCallPresentRouteSheet(self, ^(ExteriaAudioRoute route) {
+        _speakerOn = route != ExteriaAudioRouteEarpiece;
+        _speakerSet = YES;
+        [self render];
+    })) return;
     _speakerOn = !_speakerOn;
     _speakerSet = YES;
     ExteriaAudioSessionSetSpeaker(_speakerOn);
