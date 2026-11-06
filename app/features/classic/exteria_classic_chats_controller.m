@@ -770,6 +770,11 @@
     return (NSInteger)_shown.count;
 }
 
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if ((NSUInteger)indexPath.row >= _shown.count) return tableView.rowHeight;
+    return [ExteriaClassicDialogCell rowHeightForDialog:[_shown objectAtIndex:(NSUInteger)indexPath.row]];
+}
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *identifier = @"dialog";
     ExteriaClassicDialogCell *cell = (ExteriaClassicDialogCell *)[tableView dequeueReusableCellWithIdentifier:identifier];

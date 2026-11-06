@@ -330,6 +330,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     CGRect _heroCircle;
     BOOL _heroOpen;
     BOOL _heroMoving;
+    BOOL _viewerWanted;
     ExteriaEmojiLabel *_name;
     UILabel *_detail;
     ExteriaRatingBadge *_ratingBadge;
@@ -392,6 +393,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         _heroMoving = NO;
         _avatar.hidden = YES;
         [_hero finishOpen];
+        if (_viewerWanted) {
+            _viewerWanted = NO;
+            [self openAvatarViewer];
+        }
     }];
 }
 
@@ -589,10 +594,17 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     [self loadProfile];
 }
 
+/* a long pull goes through the whole opening of the wide photo in one drag: the part that came while it opened is kept, or the photos would ask for a second pull */
+- (BOOL)holdsPullWhileOpening:(CGFloat)pull {
+    if (!_heroMoving) return NO;
+    if (_heroOpen && pull > 130) _viewerWanted = YES;
+    return YES;
+}
+
 /* the screen's own swipes: a pull down opens the photo wide, a longer one opens the photos, and scrolling up closes the wide photo */
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    if (_heroMoving) return;
     CGFloat pull = -(scrollView.contentOffset.y + scrollView.contentInset.top);
+    if ([self holdsPullWhileOpening:pull]) return;
     if (!_hero) {
         if (pull > 60) [self openAvatars];
     } else if (_heroOpen) {

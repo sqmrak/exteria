@@ -64,6 +64,10 @@ UIView *ExteriaClassicTitleView(NSString *title, NSString *subtitle);
 /* the same with a status that colors itself: kind is an ExteriaStatusKind (0 quiet, 1 on line, 2 typing, which
    also runs three dots after the words); the bar is purple, so the colors are light ones */
 UIView *ExteriaClassicTitleViewWithStatus(NSString *title, NSString *subtitle, int kind);
+/* the same with the width of the view given, for a bar whose buttons take more of a phone's width than the 190 points the default leaves them */
+UIView *ExteriaClassicTitleViewWithStatusWidth(NSString *title, NSString *subtitle, int kind, CGFloat width);
+/* a count in the glossy badge of the old home screen: a white ring, the accent lit from above, a gloss on the upper half and a shadow under it */
+UIView *ExteriaClassicCounterBadge(NSString *text);
 
 /* the small round count on a row, in the accent color or gray */
 UILabel *ExteriaClassicBadge(NSString *text, BOOL muted);
@@ -88,6 +92,9 @@ UIImage *ExteriaClassicPlateImage(void);
 /* the menu plate of the classic style: a charcoal plate in the dark tone and a pale glossy one in the white tone, each with a lit edge
    and a soft shadow; the layer is named "plate" and sized to the bounds of the view */
 void ExteriaClassicApplyMenuPlate(UIView *view, CGFloat radius);
+/* sizes the plate of a view that got one from ExteriaClassicApplyMenuPlate to the view's bounds, bleed points taller at the bottom, and gives the shadow a path: without one the shadow of a
+   card is worked out from its content at every frame of a scroll */
+void ExteriaClassicFitPlate(UIView *view, CGFloat bleed);
 /* the colors of the rows on that plate */
 UIColor *ExteriaClassicMenuTextColor(void);
 UIColor *ExteriaClassicMenuRedColor(void);
@@ -97,3 +104,15 @@ void ExteriaClassicStyleMenuLabel(UILabel *label, CGFloat size);
 
 /* the glossy purple of the navigation bar, stretched to fill a strip such as the mini player or the selection bar */
 UIImageView *ExteriaClassicStripBackdrop(void);
+/* the fill of the text boxes of the classic bars: the white or dark grey of the screen with a fifth of the accent mixed in, opaque since emoji are drawn over it */
+UIColor *ExteriaClassicInputFill(void);
+/* the plain ground of the strips that stand over a chat, the pinned message and the player: dark grey with a little of the accent on the dark theme and white with a trace of it on the light one, so the wallpaper never shows
+   through them; the ink is for their text and glyphs and the edge for the line under them */
+UIColor *ExteriaClassicStripGround(void);
+/* a key in the color of the ground it stands on, for a profile that has a color of its own: a soft gradient, a thin darker outline, and no gloss, streak or lit line over it */
+UIImage *ExteriaClassicGroundKeyImage(UIColor *ground, BOOL pressed);
+/* a glossy key or pill in any color, as the blue microphone key of the old messaging apps: the color lit from above and darker below, a hard-edged gloss over the upper half, a streak,
+   a lit line under the top edge and a dark outline; it stretches from its middle, and radius is the corner */
+UIImage *ExteriaClassicTintedGlossImage(UIColor *base, CGFloat radius, BOOL pressed);
+UIColor *ExteriaClassicStripInk(void);
+UIColor *ExteriaClassicStripEdge(void);

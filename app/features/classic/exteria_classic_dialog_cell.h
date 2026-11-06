@@ -22,6 +22,8 @@
 - (void)setStoryPeer:(ExteriaStoryPeer *)peer;
 
 + (CGFloat)rowHeight;
+/* a forum whose topics were read stands taller: the name, the topic of its last message in a plate and the message in another */
++ (CGFloat)rowHeightForDialog:(ExteriaDialog *)dialog;
 - (void)configureWithDialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars;
 /* replaces the preview with what the chat is doing right now, in the accent color; nil leaves the last message */
 - (void)showTypingText:(NSString *)text;

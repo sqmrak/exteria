@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_avatar_view.h"
+#import "exteria_chat_settings.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
 #import "exteria_developers.h"
@@ -18,6 +19,12 @@
 #define PADDING 12.0
 #define SHOW_SECONDS 4.0
 #define SLIDE_SECONDS 0.25
+/* the classic bar covers the status bar and is as tall as a title and two lines of text; the icon is the size of a home screen icon in the old bars */
+#define CLASSIC_BAND 58.0
+#define CLASSIC_ICON 38.0
+/* the backdrop reaches this far above the bar, so the landing bounce never shows a gap over it */
+#define CLASSIC_BLEED 16.0
+#define CLASSIC_SWEEP_WIDTH 96.0
 
 static ExteriaInAppBanner *ExteriaShownBanner;
 
@@ -27,7 +34,13 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     UIImageView *_picture;
     ExteriaEmojiLabel *_title;
     ExteriaEmojiLabel *_body;
-    CAGradientLayer *_gloss;
+    UIImageView *_backdrop;
+    CAGradientLayer *_glass;
+    CALayer *_lip;
+    CALayer *_press;
+    UIView *_shine;
+    CAGradientLayer *_sweep;
+    CGFloat _contentTop;
     BOOL _leaving;
 }
 @end
@@ -85,18 +98,25 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     UIEdgeInsets insets = ExteriaSafeInsets(window);
     CGFloat width = MIN(CARD_MAX_WIDTH, window.bounds.size.width - 2 * CARD_SIDE - insets.left - insets.right);
     CGFloat top = MAX(insets.top, [UIApplication sharedApplication].statusBarHidden ? 0 : 20) + 4;
+    BOOL classic = ExteriaThemeIsClassic();
     CGFloat height = picture ? 132 : CARD_HEIGHT;
-    if (ExteriaThemeIsClassic()) {
-        /* the ios 5 banner is a full width black bar under the status bar, not a floating card */
-        banner.frame = CGRectMake(0, top - 4, window.bounds.size.width, height);
+    if (classic) {
+        /* the ios 5 banner is a full width bar that covers the status bar, not a floating card */
+        banner->_contentTop = MAX(insets.top, [UIApplication sharedApplication].statusBarHidden ? 0 : 20);
+        height = banner->_contentTop + (picture ? 132 : CLASSIC_BAND);
+        banner.frame = CGRectMake(0, 0, window.bounds.size.width, height);
     } else {
         banner.frame = CGRectMake(floor((window.bounds.size.width - width) / 2), top, width, height);
     }
     [window addSubview:banner];
     ExteriaShownBanner = [banner retain];
-    banner.transform = CGAffineTransformMakeTranslation(0, -(top + height + 20));
-    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : SLIDE_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseOut
-                     animations:^{ banner.transform = CGAffineTransformIdentity; } completion:nil];
+    if (classic && !ExteriaReduceMotionEnabled()) {
+        [banner dropWithBounce];
+    } else if (!classic) {
+        banner.transform = CGAffineTransformMakeTranslation(0, -(top + height + 20));
+        [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : SLIDE_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseOut
+                         animations:^{ banner.transform = CGAffineTransformIdentity; } completion:nil];
+    }
     [banner performSelector:@selector(leave) withObject:nil afterDelay:SHOW_SECONDS];
 }
 
@@ -105,16 +125,37 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     if (!self) return nil;
     BOOL classic = ExteriaThemeIsClassic();
     if (classic) {
-        _gloss = [[CAGradientLayer layer] retain];
-        _gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0.32 alpha:0.97].CGColor, (id)[UIColor colorWithWhite:0.10 alpha:0.97].CGColor,
-                         (id)[UIColor colorWithWhite:0.02 alpha:0.97].CGColor, nil];
-        _gloss.locations = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.5], [NSNumber numberWithFloat:1], nil];
-        [self.layer insertSublayer:_gloss atIndex:0];
-        self.layer.borderColor = [UIColor colorWithWhite:0.55 alpha:1].CGColor;
-        self.layer.borderWidth = 1;
+        /* the bar of the navigation bars, so the notice wears the accent of the theme on both tones. the glass over its upper half has a hard edge like the keys of the
+           old chrome, and the dark lip under it and the lit line over it set the bar off the screen */
+        _backdrop = [ExteriaClassicStripBackdrop() retain];
+        [self addSubview:_backdrop];
+        _glass = [[CAGradientLayer layer] retain];
+        _glass.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:1 alpha:0.30].CGColor, (id)[UIColor colorWithWhite:1 alpha:0.08].CGColor, nil];
+        [self.layer addSublayer:_glass];
+        _lip = [[CALayer layer] retain];
+        _lip.backgroundColor = [UIColor colorWithWhite:0 alpha:0.55].CGColor;
+        [self.layer addSublayer:_lip];
+        /* the sheen that runs over the bar once it has landed lives in a clipped view, as the shadow of the bar needs the bar itself to stay unclipped */
+        _shine = [[UIView alloc] init];
+        _shine.userInteractionEnabled = NO;
+        _shine.clipsToBounds = YES;
+        _sweep = [[CAGradientLayer layer] retain];
+        _sweep.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:1 alpha:0].CGColor, (id)[UIColor colorWithWhite:1 alpha:0.38].CGColor,
+                         (id)[UIColor colorWithWhite:1 alpha:0].CGColor, nil];
+        _sweep.startPoint = CGPointMake(0, 0.5);
+        _sweep.endPoint = CGPointMake(1, 0.5);
+        _sweep.bounds = CGRectMake(0, 0, CLASSIC_SWEEP_WIDTH, 10);
+        _sweep.position = CGPointMake(-CLASSIC_SWEEP_WIDTH, 0);
+        [_shine.layer addSublayer:_sweep];
+        [self addSubview:_shine];
+        /* a touch lights the bar like a pressed row of the old tables */
+        _press = [[CALayer layer] retain];
+        _press.backgroundColor = [UIColor colorWithWhite:1 alpha:0.2].CGColor;
+        _press.opacity = 0;
+        [self.layer addSublayer:_press];
         self.layer.shadowColor = [UIColor blackColor].CGColor;
-        self.layer.shadowOpacity = 0.5f;
-        self.layer.shadowRadius = 4;
+        self.layer.shadowOpacity = 0.55f;
+        self.layer.shadowRadius = 5;
         self.layer.shadowOffset = CGSizeMake(0, 2);
     } else {
         self.backgroundColor = ExteriaColorCard();
@@ -125,17 +166,33 @@ static ExteriaInAppBanner *ExteriaShownBanner;
         self.layer.shadowOffset = CGSizeMake(0, 3);
     }
     _avatar = [[ExteriaAvatarView alloc] init];
-    _avatar.circular = YES;
+    _avatar.circular = !classic;
     _avatar.hidden = YES;
     [self addSubview:_avatar];
+    if (classic) {
+        /* the picture sits on the bar like an app icon: a pale rim and a drop shadow */
+        _avatar.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.7].CGColor;
+        _avatar.layer.borderWidth = 1;
+        /* the rim follows the corner the person chose for pictures, as the avatar draws itself with it */
+        _avatar.layer.cornerRadius = CLASSIC_ICON * MIN(100, ExteriaAvatarCornerPercent()) / 200.0;
+        _avatar.layer.shadowColor = [UIColor blackColor].CGColor;
+        _avatar.layer.shadowOpacity = 0.6f;
+        _avatar.layer.shadowRadius = 1.5f;
+        _avatar.layer.shadowOffset = CGSizeMake(0, 1);
+    }
     _title = [[ExteriaEmojiLabel alloc] init];
     _title.font = classic ? [UIFont boldSystemFontOfSize:15] : ExteriaFontSemibold(15);
     _title.textColor = classic ? [UIColor whiteColor] : ExteriaColorTitle();
     [self addSubview:_title];
     /* the body names who wrote, and a UILabel shows a box for every letter of a styled name that the system font lacks */
     _body = [[ExteriaEmojiLabel alloc] init];
-    _body.font = ExteriaFontRegular(14);
-    _body.textColor = classic ? [UIColor colorWithWhite:0.85 alpha:1] : ExteriaColorSecondary();
+    _body.font = classic ? [UIFont systemFontOfSize:13] : ExteriaFontRegular(14);
+    _body.textColor = classic ? [UIColor colorWithWhite:1 alpha:0.9] : ExteriaColorSecondary();
+    if (classic) {
+        /* the text is stamped into the bar, as the titles of the navigation bar are */
+        _title.shadowColor = _body.shadowColor = [UIColor colorWithWhite:0 alpha:0.55];
+        _title.shadowOffset = _body.shadowOffset = CGSizeMake(0, -1);
+    }
     _body.numberOfLines = 2;
     /* the body starts with the sender of a group message, so a styled nick that no font draws is left out of it as it is out of the title, not drawn as a box */
     _body.dropsUndrawable = YES;
@@ -153,21 +210,91 @@ static ExteriaInAppBanner *ExteriaShownBanner;
     [_picture release];
     [_title release];
     [_body release];
-    [_gloss release];
+    [_backdrop release];
+    [_glass release];
+    [_lip release];
+    [_press release];
+    [_sweep release];
+    [_shine release];
     [super dealloc];
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    _gloss.frame = self.bounds;
+    BOOL classic = ExteriaThemeIsClassic();
+    CGSize size = self.bounds.size;
+    CGFloat band = size.height - _contentTop;
+    CGFloat icon = classic ? CLASSIC_ICON : AVATAR_SIDE;
+    CGFloat edge = classic ? 10 : PADDING;
+    if (classic) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        _backdrop.frame = CGRectMake(0, -CLASSIC_BLEED, size.width, size.height + CLASSIC_BLEED);
+        _glass.frame = CGRectMake(0, -CLASSIC_BLEED, size.width, size.height / 2 + CLASSIC_BLEED);
+        CGFloat line = 1.0 / ExteriaScreenScale();
+        _lip.frame = CGRectMake(0, size.height - line, size.width, line);
+        _press.frame = self.bounds;
+        _shine.frame = self.bounds;
+        _sweep.bounds = CGRectMake(0, 0, CLASSIC_SWEEP_WIDTH, size.height);
+        _sweep.position = CGPointMake(-CLASSIC_SWEEP_WIDTH / 2, size.height / 2);
+        self.layer.shadowPath = [UIBezierPath bezierPathWithRect:self.bounds].CGPath;
+        [CATransaction commit];
+    }
     /* the text starts after the picture, and at the old edge when the card has none */
-    CGFloat left = _picture ? 122 : (_avatar.hidden ? 14 : PADDING + AVATAR_SIDE + 10);
-    CGFloat width = MAX(0, self.bounds.size.width - left - 14);
-    if (_picture) _picture.frame = CGRectMake(8, 6, 104, self.bounds.size.height - 12);
-    _avatar.frame = CGRectMake(PADDING, (CARD_HEIGHT - AVATAR_SIDE) / 2, AVATAR_SIDE, AVATAR_SIDE);
-    CGFloat textTop = _picture ? floor((self.bounds.size.height - 60) / 2) : 8;
-    _title.frame = CGRectMake(left, textTop, width, 20);
-    _body.frame = CGRectMake(left, textTop + 20, width, _picture ? 40 : 28);
+    CGFloat left = _picture ? 122 : (_avatar.hidden ? 14 : edge + icon + 10);
+    CGFloat width = MAX(0, size.width - left - 14);
+    if (_picture) _picture.frame = CGRectMake(8, _contentTop + 6, 104, band - 12);
+    _avatar.frame = CGRectMake(edge, _contentTop + floor((band - icon) / 2), icon, icon);
+    CGFloat textTop = _contentTop + (_picture ? floor((band - 60) / 2) : (classic ? 6 : 8));
+    _title.frame = CGRectMake(left, textTop, width, classic ? 18 : 20);
+    _body.frame = CGRectMake(left, textTop + (classic ? 18 : 20), width, _picture ? 40 : (classic ? 32 : 28));
+}
+
+/* the classic bar falls from the top edge, sinks a little past its place and rises back, then the picture pops and a sheen runs over the bar */
+- (void)dropWithBounce {
+    CGFloat height = self.bounds.size.height;
+    CAKeyframeAnimation *fall = [CAKeyframeAnimation animationWithKeyPath:@"transform.translation.y"];
+    fall.values = [NSArray arrayWithObjects:[NSNumber numberWithDouble:-height - 12], [NSNumber numberWithDouble:7], [NSNumber numberWithDouble:-3], [NSNumber numberWithDouble:0], nil];
+    fall.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithDouble:0], [NSNumber numberWithDouble:0.58], [NSNumber numberWithDouble:0.8], [NSNumber numberWithDouble:1], nil];
+    fall.timingFunctions = [NSArray arrayWithObjects:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn],
+                            [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut], [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut], nil];
+    fall.duration = 0.45;
+    [self.layer addAnimation:fall forKey:@"classicDrop"];
+    if (!_avatar.hidden) {
+        CAKeyframeAnimation *pop = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+        pop.values = [NSArray arrayWithObjects:[NSNumber numberWithDouble:0.5], [NSNumber numberWithDouble:1.15], [NSNumber numberWithDouble:0.96], [NSNumber numberWithDouble:1], nil];
+        pop.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithDouble:0], [NSNumber numberWithDouble:0.5], [NSNumber numberWithDouble:0.8], [NSNumber numberWithDouble:1], nil];
+        pop.duration = 0.35;
+        pop.beginTime = CACurrentMediaTime() + 0.3;
+        pop.fillMode = kCAFillModeBackwards;
+        [_avatar.layer addAnimation:pop forKey:@"classicPop"];
+    }
+    CABasicAnimation *sweep = [CABasicAnimation animationWithKeyPath:@"position.x"];
+    sweep.fromValue = [NSNumber numberWithDouble:-CLASSIC_SWEEP_WIDTH / 2];
+    sweep.toValue = [NSNumber numberWithDouble:self.bounds.size.width + CLASSIC_SWEEP_WIDTH / 2];
+    sweep.duration = 0.7;
+    sweep.beginTime = CACurrentMediaTime() + 0.4;
+    sweep.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+    [_sweep addAnimation:sweep forKey:@"classicSweep"];
+}
+
+- (void)lightPress:(BOOL)on {
+    _press.opacity = on ? 1 : 0;
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+    [self lightPress:YES];
+    [super touchesBegan:touches withEvent:event];
+}
+
+- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
+    [self lightPress:NO];
+    [super touchesEnded:touches withEvent:event];
+}
+
+- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
+    [self lightPress:NO];
+    [super touchesCancelled:touches withEvent:event];
 }
 
 - (void)removeNow {

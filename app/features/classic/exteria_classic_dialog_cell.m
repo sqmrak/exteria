@@ -28,6 +28,16 @@
 #define ONLINE_BORDER 2.0
 #define SIDE 8.0
 #define ACCESSORY_WIDTH 62.0
+/* a forum row has the name, a plate with the topic of the last message and a plate with the message */
+#define FORUM_ROW_HEIGHT 90.0
+#define FORUM_TITLE_Y 9.0
+#define FORUM_TOPIC_Y 32.0
+#define PLATE_HEIGHT 22.0
+#define PLATE_GAP 3.0
+#define PLATE_PAD 7.0
+#define PLATE_RADIUS 6.0
+#define FORUM_TOPIC_ICON 14.0
+#define CHEVRON_SIDE 12.0
 
 @interface ExteriaClassicDialogCell () {
     ExteriaAvatarView *_avatar;
@@ -35,6 +45,15 @@
     /* the green dot on the corner of the avatar of a user who is on line */
     UIView *_onlineDot;
     UIImageView *_topicIcon;
+    /* the plates of a forum row and what stands in them; hidden for every other row */
+    UIView *_topicPlate;
+    UIView *_messagePlate;
+    UIImageView *_plateChevron;
+    UIImageView *_forumTopicIcon;
+    ExteriaEmojiLabel *_forumTopic;
+    UIImageView *_secondIcon;
+    ExteriaEmojiLabel *_secondTopic;
+    BOOL _forumLine;
     UIImageView *_communityBadge;
     UIButton *_communityHit;
     void (^_communityHandler)(void);
@@ -77,6 +96,30 @@
     return ROW_HEIGHT;
 }
 
+static BOOL ExteriaClassicShowsTopics(ExteriaDialog *dialog) {
+    return dialog.forum && dialog.forumTopicTitle.length > 0;
+}
+
++ (CGFloat)rowHeightForDialog:(ExteriaDialog *)dialog {
+    return ExteriaClassicShowsTopics(dialog) ? FORUM_ROW_HEIGHT : ROW_HEIGHT;
+}
+
+static UIView *ExteriaClassicPlate(void) {
+    UIView *plate = [[UIView alloc] init];
+    plate.layer.cornerRadius = PLATE_RADIUS;
+    plate.layer.borderWidth = 1;
+    plate.hidden = YES;
+    plate.userInteractionEnabled = NO;
+    return plate;
+}
+
+static UIImageView *ExteriaClassicTopicImageView(void) {
+    UIImageView *view = [[UIImageView alloc] init];
+    view.contentMode = UIViewContentModeScaleAspectFit;
+    view.hidden = YES;
+    return view;
+}
+
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
     self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
     if (!self) return nil;
@@ -88,6 +131,7 @@
     [self.contentView addSubview:_avatar];
     _storyRing = [[ExteriaStoryRing alloc] init];
     _storyRing.hidden = YES;
+    _storyRing.followsAvatarShape = YES;
     [self.contentView addSubview:_storyRing];
     _onlineDot = [[ExteriaOnlineDotView alloc] init];
     _onlineDot.hidden = YES;
@@ -100,6 +144,10 @@
     _topicIcon.contentMode = UIViewContentModeScaleAspectFit;
     _topicIcon.hidden = YES;
     [self.contentView addSubview:_topicIcon];
+    _topicPlate = ExteriaClassicPlate();
+    [self.contentView addSubview:_topicPlate];
+    _messagePlate = ExteriaClassicPlate();
+    [self.contentView addSubview:_messagePlate];
     _communityBadge = [[UIImageView alloc] initWithImage:ExteriaCommunityBadgeImage()];
     _communityBadge.hidden = YES;
     _communityHit.hidden = YES;
@@ -128,6 +176,22 @@
     _forwardIcon = [[UIImageView alloc] init];
     _forwardIcon.hidden = YES;
     [self.contentView addSubview:_forwardIcon];
+    _plateChevron = ExteriaClassicTopicImageView();
+    [self.contentView addSubview:_plateChevron];
+    _forumTopicIcon = ExteriaClassicTopicImageView();
+    [self.contentView addSubview:_forumTopicIcon];
+    _forumTopic = [[ExteriaEmojiLabel alloc] init];
+    _forumTopic.dropsUndrawable = YES;
+    _forumTopic.font = ExteriaFontSemibold(14);
+    _forumTopic.hidden = YES;
+    [self.contentView addSubview:_forumTopic];
+    _secondIcon = ExteriaClassicTopicImageView();
+    [self.contentView addSubview:_secondIcon];
+    _secondTopic = [[ExteriaEmojiLabel alloc] init];
+    _secondTopic.dropsUndrawable = YES;
+    _secondTopic.font = [UIFont systemFontOfSize:14];
+    _secondTopic.hidden = YES;
+    [self.contentView addSubview:_secondTopic];
     _muted = [[UIImageView alloc] init];
     [self.contentView addSubview:_muted];
     _accessory = [[UIView alloc] initWithFrame:CGRectMake(0, 0, ACCESSORY_WIDTH, ROW_HEIGHT - 20)];
@@ -158,6 +222,13 @@
     [_storyRing release];
     [_onlineDot release];
     [_topicIcon release];
+    [_topicPlate release];
+    [_messagePlate release];
+    [_plateChevron release];
+    [_forumTopicIcon release];
+    [_forumTopic release];
+    [_secondIcon release];
+    [_secondTopic release];
     [_communityBadge release];
     [_communityHit release];
     [_communityHandler release];
@@ -176,6 +247,33 @@
     [_previewColor release];
     [_timeColor release];
     [super dealloc];
+}
+
+/* the accessory is centered in the row, so its height follows the row to keep the time and the count level with the lines they belong to */
+- (void)setForumLine:(BOOL)on dialog:(ExteriaDialog *)dialog {
+    _forumLine = on;
+    BOOL dark = ExteriaThemeIsDark();
+    UIColor *fill = [UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? 0.08 : 0.05];
+    CGColorRef border = [UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? 0.12 : 0.10].CGColor;
+    for (UIView *plate in [NSArray arrayWithObjects:_topicPlate, _messagePlate, nil]) {
+        plate.hidden = !on;
+        plate.backgroundColor = fill;
+        plate.layer.borderColor = border;
+    }
+    _plateChevron.hidden = !on;
+    _plateChevron.image = on ? ExteriaSymbolImage(ExteriaSymbolChevronRight, CHEVRON_SIDE, [UIColor grayColor]) : nil;
+    _forumTopic.hidden = _forumTopicIcon.hidden = !on;
+    _forumTopic.text = on ? dialog.forumTopicTitle : @"";
+    _forumTopic.textColor = ExteriaColorAccent();
+    _forumTopicIcon.image = on ? ExteriaTopicIconImageOf(dialog.forumTopicEmoji, dialog.forumTopicColor) : nil;
+    BOOL second = on && dialog.forumSecondTitle.length > 0;
+    _secondIcon.hidden = _secondTopic.hidden = !second;
+    _secondTopic.text = second ? dialog.forumSecondTitle : @"";
+    _secondTopic.textColor = [UIColor grayColor];
+    _secondIcon.image = second ? ExteriaTopicIconImageOf(dialog.forumSecondEmoji, dialog.forumSecondColor) : nil;
+    CGFloat height = (on ? FORUM_ROW_HEIGHT : ROW_HEIGHT) - 20;
+    _accessory.frame = CGRectMake(0, 0, ACCESSORY_WIDTH, height);
+    _mutualButton.frame = CGRectMake(ACCESSORY_WIDTH - 40, 0, 40, height);
 }
 
 - (void)updateTextColors {
@@ -216,7 +314,9 @@
     _preview.hidden = NO;
     [_typing setStatus:@"" kind:ExteriaStatusPlain];
     _typing.hidden = YES;
-    _preview.numberOfLines = ExteriaChatListStyleStored() == ExteriaChatListTwoLines ? 1 : 2;
+    BOOL forumLine = ExteriaClassicShowsTopics(dialog);
+    [self setForumLine:forumLine dialog:dialog];
+    _preview.numberOfLines = forumLine || ExteriaChatListStyleStored() == ExteriaChatListTwoLines ? 1 : 2;
     [_thumb showFile:dialog.previewFile cache:_media];
     _forwardIcon.hidden = !dialog.forwarded;
     if (dialog.forwarded) _forwardIcon.image = ExteriaSymbolImage(ExteriaSymbolForward, FORWARD_SIDE, [UIColor grayColor]);
@@ -236,8 +336,8 @@
     BOOL unread = dialog.unreadCount > 0 || dialog.unread;
     if (unread) {
         NSString *count = dialog.unreadCount > 999 ? @"999+" : (dialog.unreadCount > 0 ? [NSString stringWithFormat:@"%ld", (long)dialog.unreadCount] : @" ");
+        /* the badge draws its own capsule and color; a background set on it would fill the whole rectangle */
         UILabel *badge = ExteriaClassicBadge(count, dialog.muted);
-        badge.backgroundColor = dialog.muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : ExteriaColorAccent();
         _mark = [badge retain];
     } else if (dialog.pinned) {
         UIImageView *pin = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPin, 16, [UIColor grayColor])] autorelease];
@@ -245,7 +345,9 @@
     }
     if (_mark) {
         CGRect frame = _mark.frame;
-        frame.origin = CGPointMake(ACCESSORY_WIDTH - frame.size.width, 26);
+        /* in a forum row the count sits level with the plate of the message */
+        CGFloat markY = _forumLine ? FORUM_TOPIC_Y + PLATE_HEIGHT + PLATE_GAP + (PLATE_HEIGHT - frame.size.height) / 2 - 10 : 26;
+        frame.origin = CGPointMake(ACCESSORY_WIDTH - frame.size.width, markY);
         _mark.frame = frame;
         [_accessory addSubview:_mark];
     }
@@ -290,6 +392,7 @@
 }
 
 - (void)configureWithPerson:(ExteriaPerson *)person avatars:(ExteriaAvatarCache *)avatars {
+    [self setForumLine:NO dialog:nil];
     _avatar.hidden = NO;
     _storyRing.hidden = YES;
     _onlineDot.hidden = person.presence != EXTERIA_PRESENCE_ONLINE;
@@ -325,6 +428,7 @@
 }
 
 - (void)configureWithCall:(ExteriaCallLogEntry *)call avatars:(ExteriaAvatarCache *)avatars {
+    [self setForumLine:NO dialog:nil];
     _mutualButton.hidden = YES;
     _avatar.hidden = NO;
     _storyRing.hidden = YES;
@@ -362,7 +466,8 @@
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat width = self.contentView.bounds.size.width;
-    _avatar.frame = CGRectMake(SIDE, (ROW_HEIGHT - AVATAR_SIZE) / 2, AVATAR_SIZE, AVATAR_SIZE);
+    CGFloat rowHeight = _forumLine ? FORUM_ROW_HEIGHT : ROW_HEIGHT;
+    _avatar.frame = CGRectMake(SIDE, (rowHeight - AVATAR_SIZE) / 2, AVATAR_SIZE, AVATAR_SIZE);
     _topicIcon.frame = _avatar.frame;
     _storyRing.frame = CGRectInset(_avatar.frame, -RING_OUTSET, -RING_OUTSET);
     _onlineDot.frame = CGRectMake(CGRectGetMaxX(_avatar.frame) - ONLINE_SIDE + 1, CGRectGetMaxY(_avatar.frame) - ONLINE_SIDE + 1, ONLINE_SIDE, ONLINE_SIDE);
@@ -372,8 +477,9 @@
     CGFloat textX = SIDE * 2 + AVATAR_SIZE;
     CGFloat textWidth = MAX(0, width - textX - 4);
     CGSize titleSize = [_title sizeThatFits:CGSizeMake(textWidth - (_muted.image ? 20 : 0), 20)];
-    _title.frame = CGRectMake(textX, 10, MIN(titleSize.width, textWidth - (_muted.image ? 20 : 0)), 20);
-    _muted.frame = CGRectMake(CGRectGetMaxX(_title.frame) + 4, 10 + (20 - _muted.image.size.height) / 2, _muted.image.size.width, _muted.image.size.height);
+    CGFloat titleY = _forumLine ? FORUM_TITLE_Y : 10;
+    _title.frame = CGRectMake(textX, titleY, MIN(titleSize.width, textWidth - (_muted.image ? 20 : 0)), 20);
+    _muted.frame = CGRectMake(CGRectGetMaxX(_title.frame) + 4, titleY + (20 - _muted.image.size.height) / 2, _muted.image.size.width, _muted.image.size.height);
     /* a label centers its text in its frame, so a one line preview in the full height of two sat far below the name; it gets
        a frame of its own line, which also puts it nearer the name */
     CGFloat thumbRoom = _thumb.hidden ? 0 : [ExteriaPreviewThumb room];
@@ -381,12 +487,38 @@
     CGFloat forwardRoom = _forwardIcon.hidden ? 0 : FORWARD_SIDE + 4;
     thumbRoom += forwardRoom;
     CGSize previewSize = [_preview sizeThatFits:CGSizeMake(textWidth - thumbRoom, 36)];
-    BOOL wraps = previewSize.height > _preview.font.lineHeight * 1.5;
-    CGFloat previewY = wraps ? 31 : 35;
-    _preview.frame = CGRectMake(textX + thumbRoom, previewY, textWidth - thumbRoom, wraps ? 36 : ceil(_preview.font.lineHeight) + 1);
-    _typing.frame = CGRectMake(textX, previewY, textWidth, ceil(_preview.font.lineHeight) + 1);
-    _forwardIcon.frame = CGRectMake(textX, previewY + (ceil(_preview.font.lineHeight) + 1 - FORWARD_SIDE) / 2, FORWARD_SIDE, FORWARD_SIDE);
-    _thumb.frame = CGRectMake(textX + forwardRoom, previewY + (ceil(_preview.font.lineHeight) + 1 - [ExteriaPreviewThumb side]) / 2, [ExteriaPreviewThumb side], [ExteriaPreviewThumb side]);
+    BOOL wraps = !_forumLine && previewSize.height > _preview.font.lineHeight * 1.5;
+    CGFloat lineHeight = ceil(_preview.font.lineHeight) + 1;
+    /* the message of a forum stands inside its plate, between the padding and the chevron */
+    CGFloat messageY = FORUM_TOPIC_Y + PLATE_HEIGHT + PLATE_GAP;
+    CGFloat previewX = _forumLine ? textX + PLATE_PAD : textX;
+    CGFloat chevronRoom = _forumLine ? PLATE_PAD + CHEVRON_SIDE + 4 : 0;
+    CGFloat previewY = _forumLine ? messageY + (PLATE_HEIGHT - lineHeight) / 2 : (wraps ? 31 : 35);
+    CGFloat lineWidth = MAX(0, textWidth - (previewX - textX) - chevronRoom);
+    _preview.frame = CGRectMake(previewX + thumbRoom, previewY, MAX(0, lineWidth - thumbRoom), wraps ? 36 : lineHeight);
+    _typing.frame = CGRectMake(previewX, previewY, lineWidth, lineHeight);
+    _forwardIcon.frame = CGRectMake(previewX, previewY + (lineHeight - FORWARD_SIDE) / 2, FORWARD_SIDE, FORWARD_SIDE);
+    _thumb.frame = CGRectMake(previewX + forwardRoom, previewY + (lineHeight - [ExteriaPreviewThumb side]) / 2, [ExteriaPreviewThumb side], [ExteriaPreviewThumb side]);
+    if (_forumLine) {
+        CGFloat rowRight = textX + textWidth;
+        CGFloat topicHeight = ceil(_forumTopic.font.lineHeight) + 1;
+        CGFloat nameX = textX + PLATE_PAD + FORUM_TOPIC_ICON + 4;
+        CGFloat nameWidth = MIN([_forumTopic sizeThatFits:CGSizeMake(4096, topicHeight)].width, MAX(0, rowRight - PLATE_PAD - nameX));
+        CGFloat plateRight = nameX + nameWidth + PLATE_PAD;
+        CGFloat iconY = FORUM_TOPIC_Y + (PLATE_HEIGHT - FORUM_TOPIC_ICON) / 2;
+        CGFloat textY = FORUM_TOPIC_Y + (PLATE_HEIGHT - topicHeight) / 2;
+        _topicPlate.frame = CGRectMake(textX, FORUM_TOPIC_Y, plateRight - textX, PLATE_HEIGHT);
+        _forumTopicIcon.frame = CGRectMake(textX + PLATE_PAD, iconY, FORUM_TOPIC_ICON, FORUM_TOPIC_ICON);
+        _forumTopic.frame = CGRectMake(nameX, textY, nameWidth, topicHeight);
+        /* the topic before it follows in plain words as far as the row reaches */
+        CGFloat secondX = plateRight + 8;
+        CGFloat secondNameX = secondX + FORUM_TOPIC_ICON + 4;
+        _secondIcon.hidden = _secondTopic.hidden || rowRight - secondNameX < 36;
+        _secondIcon.frame = CGRectMake(secondX, iconY, FORUM_TOPIC_ICON, FORUM_TOPIC_ICON);
+        _secondTopic.frame = CGRectMake(secondNameX, textY, MAX(0, rowRight - secondNameX), topicHeight);
+        _messagePlate.frame = CGRectMake(textX, messageY, textWidth, PLATE_HEIGHT);
+        _plateChevron.frame = CGRectMake(rowRight - PLATE_PAD - CHEVRON_SIDE, messageY + (PLATE_HEIGHT - CHEVRON_SIDE) / 2, CHEVRON_SIDE, CHEVRON_SIDE);
+    }
     CGFloat timeWidth = ceil(ExteriaStringSize(_time.text, _time.font).width);
     _check.frame = CGRectMake(ACCESSORY_WIDTH - timeWidth - 4 - _check.image.size.width, 4 + (12 - _check.image.size.height) / 2, _check.image.size.width, _check.image.size.height);
 }

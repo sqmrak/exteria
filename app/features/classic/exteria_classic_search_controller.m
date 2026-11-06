@@ -499,10 +499,41 @@ static NSString *ExteriaClassicKeyOf(ExteriaDialog *dialog) {
     return indexPath.section == 1 ? [_global objectAtIndex:(NSUInteger)indexPath.row] : [[self visibleRows] objectAtIndex:(NSUInteger)indexPath.row];
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    (void)tableView;
+- (NSString *)headerTextOfSection:(NSInteger)section {
     if (section == 1) return NSLocalizedString(@"search.global", nil);
     return _state == ExteriaClassicStateStart && [[self visibleRows] count] ? NSLocalizedString(@"search.recent", nil) : nil;
+}
+
+#define SECTION_HEADER_HEIGHT 28.0
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    (void)tableView;
+    return [self headerTextOfSection:section] ? SECTION_HEADER_HEIGHT : 0;
+}
+
+/* the title is in the accent on the plain ground of the strips that stand over the wallpaper, as the system's own grey band with white words took no part in the theme */
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    NSString *text = [self headerTextOfSection:section];
+    if (!text) return nil;
+    CGFloat width = tableView.bounds.size.width;
+    UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, SECTION_HEADER_HEIGHT)] autorelease];
+    header.backgroundColor = ExteriaClassicStripGround();
+    header.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(14, 0, MAX(0, width - 28), SECTION_HEADER_HEIGHT)] autorelease];
+    label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    label.backgroundColor = [UIColor clearColor];
+    label.font = [UIFont boldSystemFontOfSize:15];
+    label.textColor = ExteriaColorAccent();
+    label.text = text;
+    [header addSubview:label];
+    return header;
+}
+
+/* a chat of a forum or a community wears a row of its topics, and the fixed row height of the table cut it off */
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSArray *shown = indexPath.section == 1 ? _global : [self visibleRows];
+    if ((NSUInteger)indexPath.row >= shown.count) return tableView.rowHeight;
+    return [ExteriaClassicDialogCell rowHeightForDialog:[shown objectAtIndex:(NSUInteger)indexPath.row]];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {

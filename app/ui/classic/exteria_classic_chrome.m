@@ -26,7 +26,35 @@ static UIColor *ExteriaClassicBarColor(void) {
     return ExteriaThemeTinted([UIColor colorWithRed:0.60 green:0.44 blue:0.78 alpha:1]);
 }
 
+/* every picture of the classic chrome is drawn once for a palette and then kept: the lists, the bars and the buttons ask for the same few pictures at every configure and every touch, and
+   each ask drew a gradient into a new bitmap on the main thread. the key holds the revision of the theme, so a change of colors never finds a picture of the old ones */
+static NSCache *ExteriaClassicImageCache(void) {
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 120;
+    });
+    return cache;
+}
+
+static UIImage *ExteriaClassicRemembered(NSString *key, UIImage *(^make)(void)) {
+    NSCache *cache = ExteriaClassicImageCache();
+    NSString *full = [NSString stringWithFormat:@"%lu|%.1f|%@", (unsigned long)ExteriaThemeRevision(), ExteriaScreenScale(), key];
+    UIImage *image = [[[cache objectForKey:full] retain] autorelease];
+    if (image) return image;
+    image = make();
+    if (image) [cache setObject:image forKey:full];
+    return image;
+}
+
+static UIImage *ExteriaClassicBarImageMade(void);
+
 static UIImage *ExteriaClassicBarImage(void) {
+    return ExteriaClassicRemembered(@"bar", ^UIImage *{ return ExteriaClassicBarImageMade(); });
+}
+
+static UIImage *ExteriaClassicBarImageMade(void) {
     UIColor *base = ExteriaClassicBarColor();
     UIColor *top = ExteriaMixedColor(base, [UIColor whiteColor], 0.15);
     UIColor *bottom = ExteriaMixedColor(base, [UIColor blackColor], 0.12);
@@ -37,8 +65,22 @@ static UIImage *ExteriaClassicBarImage(void) {
     CGFloat stops[] = {0, 0.48, 1};
     CGGradientRef gradient = CGGradientCreateWithColors(space, (CFArrayRef)colors, stops);
     CGContextDrawLinearGradient(context, gradient, CGPointMake(0, 0), CGPointMake(0, 44), 0);
-    [[UIColor colorWithWhite:1 alpha:0.13] setFill];
+    /* the light on the upper half fades out by the middle: with a hard edge there, a strip of any height showed a band, and the pinned message, the player and the sheet headers
+       are all strips */
+    {
+        CGFloat shine[] = {1, 1, 1, 0.12, 1, 1, 1, 0};
+        CGGradientRef lit = CGGradientCreateWithColorComponents(space, shine, NULL, 2);
+        CGContextSaveGState(context);
+        CGContextClipToRect(context, CGRectMake(0, 0, 2, 22));
+        CGContextDrawLinearGradient(context, lit, CGPointMake(0, 0), CGPointMake(0, 22), 0);
+        CGContextRestoreGState(context);
+        CGGradientRelease(lit);
+    }
+    /* a bright line runs along the top and a dark one under the bar */
+    [[UIColor colorWithWhite:1 alpha:0.22] setFill];
     UIRectFill(CGRectMake(0, 0, 2, 1.0 / ExteriaScreenScale()));
+    [[UIColor colorWithWhite:0 alpha:0.35] setFill];
+    UIRectFill(CGRectMake(0, 44 - 1.0 / ExteriaScreenScale(), 2, 1.0 / ExteriaScreenScale()));
     CGGradientRelease(gradient);
     CGColorSpaceRelease(space);
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
@@ -90,12 +132,19 @@ void ExteriaClassicStyleToolbar(UIToolbar *bar) {
 }
 
 /* a stretchable pill: the fill is a little darker than the screen and light falls on its lower rim, with no shadow inside */
+static UIImage *ExteriaClassicSearchWellMade(void);
+
 static UIImage *ExteriaClassicSearchWell(void) {
+    return ExteriaClassicRemembered(@"well", ^UIImage *{ return ExteriaClassicSearchWellMade(); });
+}
+
+static UIImage *ExteriaClassicSearchWellMade(void) {
     BOOL dark = ExteriaThemeIsDark();
     CGFloat side = 30, rim = 1;
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    /* one point wider than the two caps, or ios 6 leaves a seam down the middle of the pill */
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side + 1, side), NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
-    CGRect pill = CGRectMake(0, 0, side, side - rim);
+    CGRect pill = CGRectMake(0, 0, side + 1, side - rim);
     CGFloat radius = (side - rim) / 2;
     UIBezierPath *shape = [UIBezierPath bezierPathWithRoundedRect:pill cornerRadius:radius];
     UIBezierPath *lower = [UIBezierPath bezierPathWithRoundedRect:CGRectOffset(pill, 0, rim) cornerRadius:radius];
@@ -347,7 +396,10 @@ void ExteriaClassicStyleTable(UITableView *table) {
     }
     if (!ExteriaThemeIsDark()) return;
     table.backgroundColor = ExteriaColorScreen();
-    table.separatorColor = ExteriaColorHairline();
+    /* the etched line of a grouped table on ios 5 and 6 adds a white line under the dark one, which glows on the dark cards; a single faint line sits quietly between the rows and
+       along the edge of each card */
+    table.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    table.separatorColor = [UIColor colorWithWhite:1 alpha:0.055];
 }
 
 CGFloat ExteriaClassicGroupedTextInset(CGFloat width) {
@@ -459,7 +511,14 @@ UIImage *ExteriaClassicTabImage(ExteriaSymbol symbol) {
     return ExteriaSymbolImage(symbol, 28, [UIColor blackColor]);
 }
 
+static UIImage *ExteriaClassicRoundImageMade(ExteriaSymbol symbol, CGFloat side, BOOL pressed, BOOL red);
+
 static UIImage *ExteriaClassicRoundImage(ExteriaSymbol symbol, CGFloat side, BOOL pressed, BOOL red) {
+    NSString *key = [NSString stringWithFormat:@"round|%d|%.1f|%d|%d", (int)symbol, side, pressed, red];
+    return ExteriaClassicRemembered(key, ^UIImage *{ return ExteriaClassicRoundImageMade(symbol, side, pressed, red); });
+}
+
+static UIImage *ExteriaClassicRoundImageMade(ExteriaSymbol symbol, CGFloat side, BOOL pressed, BOOL red) {
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGRect bounds = CGRectMake(0.5, 0.5, side - 1, side - 1);
@@ -531,9 +590,12 @@ UIView *ExteriaClassicTitleView(NSString *title, NSString *subtitle) {
 }
 
 UIView *ExteriaClassicTitleViewWithStatus(NSString *title, NSString *subtitle, int kind) {
-    BOOL flat = ExteriaClassicIsFlatSystem();
     /* a tablet's bar has the room for a long name, and the 190 points of a phone cut it and its emoji short */
-    CGFloat titleWidth = ExteriaIsPad() ? 420 : 190;
+    return ExteriaClassicTitleViewWithStatusWidth(title, subtitle, kind, ExteriaIsPad() ? 420 : 190);
+}
+
+UIView *ExteriaClassicTitleViewWithStatusWidth(NSString *title, NSString *subtitle, int kind, CGFloat titleWidth) {
+    BOOL flat = ExteriaClassicIsFlatSystem();
     UIView *view = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, titleWidth, 44)] autorelease];
     view.backgroundColor = [UIColor clearColor];
     BOOL hasSubtitle = subtitle.length > 0;
@@ -570,24 +632,121 @@ UIView *ExteriaClassicTitleViewWithStatus(NSString *title, NSString *subtitle, i
     return view;
 }
 
-UILabel *ExteriaClassicBadge(NSString *text, BOOL muted) {
+static UIImage *ExteriaClassicCounterImage(void) {
+    static UIImage *cached;
+    static CGFloat key[3];
+    CGFloat rgb[3], alpha;
+    [ExteriaColorAccent() getRed:&rgb[0] green:&rgb[1] blue:&rgb[2] alpha:&alpha];
+    if (cached && key[0] == rgb[0] && key[1] == rgb[1] && key[2] == rgb[2]) return cached;
+    const CGFloat side = 24, ring = 1.5;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGRect outer = CGRectMake(1, 0.5, side - 2, side - 3.5);
+    CGContextSaveGState(context);
+    CGContextSetShadowWithColor(context, CGSizeMake(0, 1.5), 2, [UIColor colorWithWhite:0 alpha:0.5].CGColor);
+    [[UIColor whiteColor] setFill];
+    [[UIBezierPath bezierPathWithRoundedRect:outer cornerRadius:outer.size.height / 2] fill];
+    CGContextRestoreGState(context);
+    CGRect inner = CGRectInset(outer, ring, ring);
+    UIBezierPath *face = [UIBezierPath bezierPathWithRoundedRect:inner cornerRadius:inner.size.height / 2];
+    CGContextSaveGState(context);
+    [face addClip];
+    CGFloat fill[] = {MIN(1, rgb[0] + (1 - rgb[0]) * 0.35), MIN(1, rgb[1] + (1 - rgb[1]) * 0.35), MIN(1, rgb[2] + (1 - rgb[2]) * 0.35), 1,
+                      rgb[0], rgb[1], rgb[2], 1,
+                      rgb[0] * 0.78, rgb[1] * 0.78, rgb[2] * 0.78, 1};
+    CGFloat at[] = {0, 0.5, 1};
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGGradientRef gradient = CGGradientCreateWithColorComponents(space, fill, at, 3);
+    CGContextDrawLinearGradient(context, gradient, CGPointMake(0, inner.origin.y), CGPointMake(0, CGRectGetMaxY(inner)), 0);
+    CGFloat shine[] = {1, 1, 1, 0.55, 1, 1, 1, 0.08};
+    CGGradientRef gloss = CGGradientCreateWithColorComponents(space, shine, NULL, 2);
+    CGContextClipToRect(context, CGRectMake(0, inner.origin.y, side, inner.size.height * 0.5));
+    CGContextDrawLinearGradient(context, gloss, CGPointMake(0, inner.origin.y), CGPointMake(0, inner.origin.y + inner.size.height * 0.5), 0);
+    CGGradientRelease(gloss);
+    CGGradientRelease(gradient);
+    CGColorSpaceRelease(space);
+    CGContextRestoreGState(context);
+    [[UIColor colorWithRed:rgb[0] * 0.55 green:rgb[1] * 0.55 blue:rgb[2] * 0.55 alpha:1] setStroke];
+    face.lineWidth = 0.5;
+    [face stroke];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    [cached release];
+    cached = [[image resizableImageWithCapInsets:UIEdgeInsetsMake(0, side / 2 - 1, 0, side / 2 - 1)] retain];
+    for (int i = 0; i < 3; ++i) key[i] = rgb[i];
+    return cached;
+}
+
+UIView *ExteriaClassicCounterBadge(NSString *text) {
     UIFont *font = [UIFont boldSystemFontOfSize:13];
-    CGFloat width = MAX(22, ceil(ExteriaStringSize(text, font).width) + 14);
-    UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(0, 0, width, 22)] autorelease];
+    CGFloat width = MAX(24, ceil(ExteriaStringSize(text, font).width) + 16);
+    UIImageView *badge = [[[UIImageView alloc] initWithImage:ExteriaClassicCounterImage()] autorelease];
+    badge.frame = CGRectMake(0, 0, width, 24);
+    UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(0, -1, width, 22)] autorelease];
+    label.backgroundColor = [UIColor clearColor];
     label.text = text;
     label.font = font;
     label.textColor = [UIColor whiteColor];
     label.textAlignment = ExteriaTextAlignmentCenter;
-    /* the color of the accent, as the count of the modern lists has; a muted chat keeps its grey */
-    label.backgroundColor = muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : ExteriaColorAccent();
-    label.layer.cornerRadius = 11;
-    label.layer.masksToBounds = YES;
+    label.shadowColor = [UIColor colorWithWhite:0 alpha:0.45];
+    label.shadowOffset = CGSizeMake(0, -1);
+    [badge addSubview:label];
+    return badge;
+}
+
+/* the count of a row: a capsule in the accent, drawn as a stretched picture under the text. a layer with a corner radius and a mask is drawn off screen at every frame of a scroll, and a
+   list has one of these on every row that has unread messages */
+@interface ExteriaClassicBadgeLabel : UILabel {
+    BOOL _muted;
+}
+@property (nonatomic, assign) BOOL muted;
+@end
+
+@implementation ExteriaClassicBadgeLabel
+@synthesize muted = _muted;
+- (void)drawRect:(CGRect)rect {
+    UIColor *color = _muted ? [UIColor colorWithRed:0.62 green:0.66 blue:0.71 alpha:1] : ExteriaColorAccent();
+    NSString *key = [NSString stringWithFormat:@"badge|%d", _muted];
+    UIImage *capsule = ExteriaClassicRemembered(key, ^UIImage *{
+        /* one point of stretch between the caps: with none, ios 6 leaves a seam down the middle of the capsule */
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(23, 22), NO, 0);
+        [color setFill];
+        [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, 23, 22) cornerRadius:11] fill];
+        UIImage *made = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        return [made resizableImageWithCapInsets:UIEdgeInsetsMake(0, 11, 0, 11)];
+    });
+    [capsule drawInRect:self.bounds];
+    [super drawRect:rect];
+}
+@end
+
+UILabel *ExteriaClassicBadge(NSString *text, BOOL muted) {
+    UIFont *font = [UIFont boldSystemFontOfSize:13];
+    CGFloat width = MAX(22, ceil(ExteriaStringSize(text, font).width) + 14);
+    ExteriaClassicBadgeLabel *label = [[[ExteriaClassicBadgeLabel alloc] initWithFrame:CGRectMake(0, 0, width, 22)] autorelease];
+    label.muted = muted;
+    label.text = text;
+    label.font = font;
+    label.textColor = [UIColor whiteColor];
+    label.textAlignment = ExteriaTextAlignmentCenter;
+    label.backgroundColor = [UIColor clearColor];
+    label.opaque = NO;
     return label;
 }
 
 /* one image for the glossy things: a rounded rect with a three stop fill, an outline, a lit line just inside the
    top and, for a button */
+static UIImage *ExteriaClassicGlossImageMade(const CGFloat *fill, const CGFloat *outline, CGFloat radius, CGFloat gloss, CGFloat lit);
+
 static UIImage *ExteriaClassicGlossImage(const CGFloat *fill, const CGFloat *outline, CGFloat radius, CGFloat gloss, CGFloat lit) {
+    NSMutableString *key = [NSMutableString stringWithFormat:@"gloss|%.1f|%.3f|%.3f", radius, gloss, lit];
+    for (int i = 0; i < 12; ++i) [key appendFormat:@"|%.3f", fill[i]];
+    for (int i = 0; i < 3; ++i) [key appendFormat:@"|%.3f", outline[i]];
+    return ExteriaClassicRemembered(key, ^UIImage *{ return ExteriaClassicGlossImageMade(fill, outline, radius, gloss, lit); });
+}
+
+static UIImage *ExteriaClassicGlossImageMade(const CGFloat *fill, const CGFloat *outline, CGFloat radius, CGFloat gloss, CGFloat lit) {
     CGFloat side = radius * 2 + 4;
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
@@ -600,11 +759,30 @@ static UIImage *ExteriaClassicGlossImage(const CGFloat *fill, const CGFloat *out
     [shape addClip];
     CGContextDrawLinearGradient(context, gradient, CGPointMake(0, 0), CGPointMake(0, side), 0);
     if (gloss > 0) {
-        CGFloat shine[] = {1, 1, 1, gloss, 1, 1, 1, gloss * 0.25};
+        /* the cap fades out by the middle of the picture, where it used to stop at a quarter of its strength: that edge ran across every button and plate as a band */
+        CGFloat shine[] = {1, 1, 1, gloss, 1, 1, 1, 0};
         CGGradientRef cap = CGGradientCreateWithColorComponents(space, shine, NULL, 2);
         CGContextClipToRect(context, CGRectMake(0, 0, side, side / 2));
         CGContextDrawLinearGradient(context, cap, CGPointMake(0, 0), CGPointMake(0, side / 2), 0);
         CGGradientRelease(cap);
+    }
+    if (gloss > 0) {
+        /* metal: a faint light bouncing up from the lower edge, and a thin specular streak that fades out toward the ends of the upper half */
+        CGFloat bounce[] = {1, 1, 1, 0, 1, 1, 1, gloss * 0.35};
+        CGGradientRef lower = CGGradientCreateWithColorComponents(space, bounce, NULL, 2);
+        CGContextSaveGState(context);
+        CGContextClipToRect(context, CGRectMake(0, side * 0.72, side, side * 0.28));
+        CGContextDrawLinearGradient(context, lower, CGPointMake(0, side * 0.72), CGPointMake(0, side), 0);
+        CGContextRestoreGState(context);
+        CGGradientRelease(lower);
+        CGFloat streak[] = {1, 1, 1, 0, 1, 1, 1, gloss * 0.9, 1, 1, 1, 0};
+        CGFloat streakAt[] = {0, 0.5, 1};
+        CGGradientRef across = CGGradientCreateWithColorComponents(space, streak, streakAt, 3);
+        CGContextSaveGState(context);
+        CGContextClipToRect(context, CGRectMake(radius * 0.6, 2, side - radius * 1.2, 1));
+        CGContextDrawLinearGradient(context, across, CGPointMake(radius * 0.6, 0), CGPointMake(side - radius * 0.6, 0), 0);
+        CGContextRestoreGState(context);
+        CGGradientRelease(across);
     }
     CGContextRestoreGState(context);
     if (lit > 0) {
@@ -706,21 +884,35 @@ void ExteriaClassicApplyMenuPlate(UIView *view, CGFloat radius) {
     view.layer.shadowOpacity = charcoal ? 0.6 : 0.35;
     view.layer.shadowRadius = 10;
     view.layer.shadowOffset = CGSizeMake(0, 4);
-    CAGradientLayer *gloss = [CAGradientLayer layer];
-    if (charcoal) {
-        gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0.30 alpha:1].CGColor, (id)[UIColor colorWithWhite:0.15 alpha:1].CGColor,
-                        (id)[UIColor colorWithWhite:0.10 alpha:1].CGColor, nil];
-    } else {
-        gloss.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:1.0 alpha:1].CGColor, (id)[UIColor colorWithWhite:0.95 alpha:1].CGColor,
-                        (id)[UIColor colorWithWhite:0.90 alpha:1].CGColor, nil];
-    }
-    gloss.locations = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.5], [NSNumber numberWithFloat:1], nil];
-    gloss.cornerRadius = radius;
-    gloss.borderColor = [UIColor colorWithWhite:charcoal ? 0.52 : 0.68 alpha:1].CGColor;
-    gloss.borderWidth = 1;
+    /* a plate of polished metal: the upper half is lit and fades out by the middle, light bounces up from the lower edge, a streak runs under the top edge, and the rim is a dark line over a
+       lit one. it is one stretchable picture, so a card of any size keeps its corners and its rim */
+    static const CGFloat paleFill[] = {1.00, 1.00, 1.00, 1, 0.95, 0.95, 0.96, 1, 0.88, 0.88, 0.90, 1};
+    static const CGFloat charcoalFill[] = {0.38, 0.38, 0.42, 1, 0.18, 0.18, 0.21, 1, 0.09, 0.09, 0.11, 1};
+    static const CGFloat paleRim[] = {0.60, 0.60, 0.64};
+    static const CGFloat charcoalRim[] = {0.52, 0.52, 0.57};
+    UIImage *picture = ExteriaClassicGlossImage(charcoal ? charcoalFill : paleFill, charcoal ? charcoalRim : paleRim, radius, charcoal ? 0.22 : 0.30, charcoal ? 0.38 : 0.70);
+    CALayer *gloss = [CALayer layer];
+    gloss.contents = (id)picture.CGImage;
+    gloss.contentsScale = picture.scale;
+    CGFloat side = radius * 2 + 4, cap = side / 2 - 1;
+    gloss.contentsCenter = CGRectMake(cap / side, cap / side, 2 / side, 2 / side);
     gloss.name = @"plate";
     gloss.frame = view.bounds;
     [view.layer insertSublayer:gloss atIndex:0];
+    ExteriaClassicFitPlate(view, 0);
+}
+
+void ExteriaClassicFitPlate(UIView *view, CGFloat bleed) {
+    CGRect bounds = view.bounds;
+    if (CGRectIsEmpty(bounds)) return;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (CALayer *layer in view.layer.sublayers) {
+        if ([layer.name isEqualToString:@"plate"]) layer.frame = CGRectMake(0, 0, bounds.size.width, bounds.size.height + bleed);
+    }
+    CGPathRef path = [UIBezierPath bezierPathWithRoundedRect:bounds cornerRadius:view.layer.cornerRadius].CGPath;
+    if (!view.layer.shadowPath || !CGPathEqualToPath(view.layer.shadowPath, path)) view.layer.shadowPath = path;
+    [CATransaction commit];
 }
 
 UIColor *ExteriaClassicMenuTextColor(void) {
@@ -745,6 +937,57 @@ void ExteriaClassicStyleMenuLabel(UILabel *label, CGFloat size) {
         label.shadowOffset = CGSizeMake(0, 1);
     }
 }
+
+/* the white (or dark gray) box of the classic bar with a fifth of the accent mixed in, so it reads as the color of the theme and not as grey; opaque since the emoji of the text are drawn over it */
+UIColor *ExteriaClassicInputFill(void) {
+    UIColor *base = ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.23 alpha:1] : [UIColor whiteColor];
+    CGFloat br, bg, bb, ba, ar, ag, ab, aa;
+    if (![base getRed:&br green:&bg blue:&bb alpha:&ba]) {
+        CGFloat white = 0;
+        if (![base getWhite:&white alpha:&ba]) return base;
+        br = bg = bb = white;
+    }
+    if (![ExteriaColorAccent() getRed:&ar green:&ag blue:&ab alpha:&aa]) return base;
+    return [UIColor colorWithRed:br * 0.8 + ar * 0.2 green:bg * 0.8 + ag * 0.2 blue:bb * 0.8 + ab * 0.2 alpha:1];
+}
+
+UIImage *ExteriaClassicTintedGlossImage(UIColor *base, CGFloat radius, BOOL pressed) {
+    CGFloat r = 0, g = 0, b = 0, a = 0;
+    if (![base getRed:&r green:&g blue:&b alpha:&a]) {
+        CGFloat white = 0;
+        [base getWhite:&white alpha:&a];
+        r = g = b = white;
+    }
+    CGFloat dim = pressed ? 0.8 : 1;
+    CGFloat fill[] = {MIN(1, r + (1 - r) * 0.30) * dim, MIN(1, g + (1 - g) * 0.30) * dim, MIN(1, b + (1 - b) * 0.30) * dim, 1,
+                      r * dim, g * dim, b * dim, 1,
+                      r * 0.74 * dim, g * 0.74 * dim, b * 0.74 * dim, 1};
+    CGFloat outline[] = {r * 0.45, g * 0.45, b * 0.45};
+    return ExteriaClassicGlossImage(fill, outline, radius, pressed ? 0.12 : 0.34, 0.45);
+}
+
+UIImage *ExteriaClassicGroundKeyImage(UIColor *ground, BOOL pressed) {
+    CGFloat r = 0, g = 0, b = 0, a = 0;
+    if (![ground getRed:&r green:&g blue:&b alpha:&a]) {
+        CGFloat white = 0;
+        [ground getWhite:&white alpha:&a];
+        r = g = b = white;
+    }
+    CGFloat dim = pressed ? 0.78 : 1;
+    CGFloat fill[] = {MIN(1, r * 1.12 + 0.04) * dim, MIN(1, g * 1.12 + 0.04) * dim, MIN(1, b * 1.12 + 0.04) * dim, 1,
+                      r * dim, g * dim, b * dim, 1,
+                      r * 0.84 * dim, g * 0.84 * dim, b * 0.84 * dim, 1};
+    CGFloat outline[] = {r * 0.55, g * 0.55, b * 0.55};
+    return ExteriaClassicGlossImage(fill, outline, 8, 0, 0);
+}
+
+UIColor *ExteriaClassicStripGround(void) {
+    /* a dark grey or white with a little of the accent in it, so the strips read as part of the theme and not as holes: the first version was near black */
+    BOOL dark = ExteriaThemeIsDark();
+    return ExteriaMixedColor(dark ? [UIColor colorWithWhite:0.17 alpha:1] : [UIColor whiteColor], ExteriaColorAccent(), dark ? 0.16 : 0.07);
+}
+UIColor *ExteriaClassicStripInk(void) { return ExteriaThemeIsDark() ? [UIColor whiteColor] : [UIColor colorWithWhite:0.1 alpha:1]; }
+UIColor *ExteriaClassicStripEdge(void) { return ExteriaThemeIsDark() ? [UIColor colorWithWhite:1 alpha:0.16] : [UIColor colorWithWhite:0 alpha:0.22]; }
 
 UIImageView *ExteriaClassicStripBackdrop(void) {
     UIImageView *view = [[[UIImageView alloc] initWithImage:ExteriaClassicBarImage()] autorelease];
