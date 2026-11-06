@@ -7,6 +7,9 @@
 #import "exteria_blur.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_emoji_label.h"
+#import "exteria_lottie_view.h"
+#import "exteria_reaction_artwork.h"
+#import "exteria_weak_reference.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 #include "exteria_reaction_layout.h"
@@ -61,6 +64,9 @@
     UIView *_litClip;
     UIImageView *_lit;
     CGRect _litOriginalFrame;
+    CGFloat _litShift;
+    ExteriaMediaCache *_media;
+    ExteriaWeakReference *_weak;
     UIView *_pill;
     UIView *_card;
     /* the parts of the header that a late answer changes in place, so the card does not have to be built again while it is still coming in */
@@ -87,8 +93,12 @@
 @synthesize moreReactionsHandler = _moreReactionsHandler;
 @synthesize dismissHandler = _dismissHandler;
 @synthesize headerHandler = _headerHandler;
+@synthesize media = _media;
 
 - (void)dealloc {
+    [_weak clear];
+    [_weak release];
+    [_media release];
     [_rows release];
     [_icons release];
     [_reactions release];
@@ -179,7 +189,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     _pill.alpha = 0;
     _pill.transform = CGAffineTransformMakeTranslation(0, 8);
     [self layoutStack];
-    ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 /* the rows that show now: all of them, or the first few and the entry that opens the rest */
@@ -311,6 +321,47 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     return card;
 }
 
+/* the reactions of the pill pop in one after another with the animation the server keeps for each, as they do in the pill of exteraless; the still icon stays under it until its
+   first frame is drawn and comes back when it has played, and the lottie view leaves as soon as it is done, since a parsed animation costs a few megabytes */
+#define APPEAR_STAGGER 0.035
+#define APPEAR_SIDE 30.0
+/* a reaction under a finger grows by this much */
+#define PRESS_SCALE 1.22
+
+- (void)playAppearOfReaction:(ExteriaReaction *)reaction inButton:(UIButton *)button label:(UIView *)label order:(NSUInteger)order {
+    if (reaction.row.kind != EXTERIA_REACTION_EMOJI || !_media || ExteriaReduceMotionEnabled()) return;
+    ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:reaction.emoji];
+    if (!artwork) return;
+    if (!_weak) _weak = [[ExteriaWeakReference referenceTo:self] retain];
+    ExteriaWeakReference *weak = _weak;
+    [ExteriaReactionArtwork animationViewForDocument:artwork.appear media:_media completion:^(ExteriaLottieView *view) {
+        ExteriaMessageMenu *menu = weak.target;
+        if (!view || !menu || menu->_closing || !button.superview) return;
+        view.userInteractionEnabled = NO;
+        view.frame = CGRectMake(floor((button.bounds.size.width - APPEAR_SIDE) / 2), floor((button.bounds.size.height - APPEAR_SIDE) / 2), APPEAR_SIDE, APPEAR_SIDE);
+        view.hidden = YES;
+        [button addSubview:view];
+        __block UIView *icon = label;
+        __block ExteriaLottieView *playing = view;
+        view.firstFrameHandler = ^{ playing.hidden = NO; icon.hidden = YES; };
+        view.finishHandler = ^{ icon.hidden = NO; [playing removeFromSuperview]; };
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((double)order * APPEAR_STAGGER * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (view.superview) [view playOnce];
+        });
+    }];
+}
+
+/* the reaction under the finger swells, and settles back when the finger lifts or leaves it */
+- (void)reactionDown:(UIButton *)button {
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.12 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+                     animations:^{ button.transform = CGAffineTransformMakeScale(PRESS_SCALE, PRESS_SCALE); } completion:nil];
+}
+
+- (void)reactionUp:(UIButton *)button {
+    [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.16 delay:0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+                     animations:^{ button.transform = CGAffineTransformIdentity; } completion:nil];
+}
+
 /* the pill of reactions: the first of them and an arrow that opens the whole list */
 - (UIView *)buildPill {
     NSUInteger shown = MIN(_reactions.count, (NSUInteger)REACTIONS_SHOWN);
@@ -329,6 +380,8 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         if (reaction.chosen) button.backgroundColor = [ExteriaColorAccent() colorWithAlphaComponent:0.35];
         button.accessibilityLabel = reaction.displayText;
         [button addTarget:self action:@selector(reactionTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [button addTarget:self action:@selector(reactionDown:) forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+        [button addTarget:self action:@selector(reactionUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel | UIControlEventTouchDragExit];
         ExteriaEmojiLabel *label = [[[ExteriaEmojiLabel alloc] init] autorelease];
         label.text = reaction.displayText;
         label.entities = reaction.displayEntities;
@@ -338,6 +391,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         label.userInteractionEnabled = NO;
         [button addSubview:label];
         [pill addSubview:button];
+        [self playAppearOfReaction:reaction inButton:button label:label order:i];
     }
     UIButton *more = [UIButton buttonWithType:UIButtonTypeCustom];
     more.frame = CGRectMake(width - PILL_PAD - arrow, (PILL_HEIGHT - arrow) / 2, arrow, arrow);
@@ -368,7 +422,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         pillY = (CGFloat)calculatedPill;
         cardY = (CGFloat)calculatedCard;
     }
-    if (_lit) _lit.frame = CGRectOffset(_litOriginalFrame, 0, (CGFloat)shift);
+    [self moveLitBy:(CGFloat)shift];
     CGFloat cardX = _outgoing ? CGRectGetMaxX(_bubble) - _card.frame.size.width : CGRectGetMinX(_bubble);
     cardX = MIN(MAX(EDGE, cardX), size.width - EDGE - _card.frame.size.width);
     _card.frame = CGRectMake(cardX, cardY, _card.frame.size.width, cardHeight);
@@ -377,6 +431,20 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         pillX = MIN(MAX(EDGE, pillX), size.width - EDGE - _pill.frame.size.width);
         _pill.frame = CGRectMake(pillX, pillY, _pill.frame.size.width, pillHeight);
     }
+}
+
+/* the lit copy of the message makes room for the pill and the card by the shift the layout asks for; once the menu is up it slides there, and it slides back when the menu
+   goes, so the message never jumps between the lit copy and the one in the list */
+- (void)moveLitBy:(CGFloat)shift {
+    if (!_lit) return;
+    BOOL changed = shift != _litShift;
+    _litShift = shift;
+    CGRect target = CGRectOffset(_litOriginalFrame, 0, shift);
+    if (!_shown || !changed || ExteriaReduceMotionEnabled()) {
+        _lit.frame = target;
+        return;
+    }
+    [UIView animateWithDuration:0.22 delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{ _lit.frame = target; } completion:nil];
 }
 
 - (void)rebuildAnimated:(BOOL)animated {
@@ -495,15 +563,69 @@ static void ExteriaRevealCard(UIView *card, BOOL fromTop) {
     }
     [self rebuildAnimated:NO];
     [host addSubview:self];
+    if (_lit && _litShift != 0 && !ExteriaReduceMotionEnabled()) {
+        /* it starts where the message is in the list, and rises to the place the layout gave it */
+        CGRect target = _lit.frame;
+        _lit.frame = _litOriginalFrame;
+        [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{ _lit.frame = target; } completion:nil];
+    }
     _shown = YES;
     _dim.alpha = 0;
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
     if (!ExteriaReduceMotionEnabled()) ExteriaRevealCard(_card, [self cardOpensDownward]);
     if (_pill && !ExteriaReduceMotionEnabled()) {
         _pill.alpha = 0;
         _pill.transform = CGAffineTransformMakeTranslation(0, 8);
-        ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+        ExteriaAnimateView(_pill, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
     }
+}
+
+/* the classic card closes the way it opened, backwards: its plate shrinks back into the edge that is next to the message while it fades, and the rows go first. the plate has a
+   gloss layer and a shadow, which the fade and the slip of the modern card left as a plain blink */
+static void ExteriaConcealCard(UIView *card, BOOL towardTop, void (^done)(void)) {
+    UIView *content = nil;
+    if (card.subviews.count) {
+        UIView *clip = [card.subviews objectAtIndex:0];
+        if (clip.subviews.count) content = [clip.subviews objectAtIndex:0];
+    }
+    CFTimeInterval duration = 0.2;
+    const CGFloat margin = 24;
+    CGRect full = CGRectInset(card.bounds, -margin, -margin);
+    CGRect end = CGRectMake(full.origin.x, towardTop ? full.origin.y : CGRectGetMaxY(full) - margin, full.size.width, margin);
+    CAShapeLayer *mask = [CAShapeLayer layer];
+    mask.frame = card.bounds;
+    mask.fillColor = [UIColor blackColor].CGColor;
+    mask.path = [UIBezierPath bezierPathWithRect:end].CGPath;
+    card.layer.mask = mask;
+    CAMediaTimingFunction *ease = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    card.layer.opacity = 0;
+    [CATransaction commit];
+    [CATransaction begin];
+    [CATransaction setCompletionBlock:done];
+    CABasicAnimation *shrink = [CABasicAnimation animationWithKeyPath:@"path"];
+    shrink.fromValue = (id)[UIBezierPath bezierPathWithRect:full].CGPath;
+    shrink.toValue = (id)[UIBezierPath bezierPathWithRect:end].CGPath;
+    shrink.duration = duration;
+    shrink.timingFunction = ease;
+    [mask addAnimation:shrink forKey:@"exteria.menu.conceal"];
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = [NSNumber numberWithFloat:1];
+    fade.toValue = [NSNumber numberWithFloat:0];
+    fade.duration = duration;
+    fade.timingFunction = ease;
+    [card.layer addAnimation:fade forKey:@"exteria.menu.fade"];
+    for (UIView *row in content.subviews) {
+        CABasicAnimation *gone = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        gone.fromValue = [NSNumber numberWithFloat:1];
+        gone.toValue = [NSNumber numberWithFloat:0];
+        gone.duration = duration * 0.6;
+        gone.fillMode = kCAFillModeForwards;
+        gone.removedOnCompletion = NO;
+        [row.layer addAnimation:gone forKey:@"exteria.menu.row.gone"];
+    }
+    [CATransaction commit];
 }
 
 - (void)leaveThen:(void (^)(void))after {
@@ -512,17 +634,34 @@ static void ExteriaRevealCard(UIView *card, BOOL fromTop) {
     self.userInteractionEnabled = NO;
     void (^next)(void) = [after copy];
     [self retain];
-    ExteriaCacheForMotion(_card);
-    if (_pill) ExteriaCacheForMotion(_pill);
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    /* the popup of exteraless leaves by fading while it slips 5 points toward the message */
-    if (_pill) ExteriaAnimateView(_pill, CGAffineTransformMakeTranslation(0, 5), 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, [self cardOpensDownward] ? -5 : 5), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
-        (void)finished;
+    void (^finish)(void) = ^{
         [self removeFromSuperview];
         if (next) next();
         [next release];
         [self release];
+    };
+    /* the block outlives this call in the animation that runs it */
+    finish = [[finish copy] autorelease];
+    BOOL still = ExteriaReduceMotionEnabled() || !self.window || ![UIView areAnimationsEnabled];
+    /* the lit copy of the message goes back to the place of the one in the list while the menu leaves */
+    if (_lit && _litShift != 0 && !still) {
+        [UIView animateWithDuration:0.2 delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{ _lit.frame = _litOriginalFrame; } completion:nil];
+    }
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    if (_pill) {
+        ExteriaCacheForMotion(_pill);
+        ExteriaAnimateView(_pill, CGAffineTransformMakeTranslation(0, 5), 0, ExteriaPopupCurve(NO), nil);
+    }
+    if (ExteriaMenuClassic() && !still) {
+        /* the dim fades for the same time, and the menu is taken away when the card is gone */
+        ExteriaConcealCard(_card, [self cardOpensDownward], finish);
+        return;
+    }
+    ExteriaCacheForMotion(_card);
+    /* the popup of exteraless leaves by fading while it slips 5 points toward the message */
+    ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, [self cardOpensDownward] ? -5 : 5), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
+        (void)finished;
+        finish();
     });
 }
 

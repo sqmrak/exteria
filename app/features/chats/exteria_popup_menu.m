@@ -168,11 +168,11 @@
     [host addSubview:self];
     _card.layer.anchorPoint = CGPointMake(1, 0);
     _card.layer.position = CGPointMake(x + CARD_WIDTH, top);
-    _card.transform = CGAffineTransformMakeScale(0.8, 0.8);
+    _card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
     _card.alpha = 0;
     ExteriaCacheForMotion(_card);
     UIView *card = _card;
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, ^(BOOL finished) {
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), ^(BOOL finished) {
         (void)finished;
         ExteriaUncacheAfterMotion(card);
     });
@@ -184,8 +184,11 @@
     void (^next)(void) = [after copy];
     self.userInteractionEnabled = NO;
     ExteriaCacheForMotion(_card);
-    ExteriaAnimateView(_card, CGAffineTransformMakeScale(0.8, 0.8), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
+        /* the completion runs at once when animations are off or reduce motion is on, inside the action of the row button; the host's release and the
+           one of picked: then freed the menu before the button sent rowUp: to it on ios 6, which crashed in objc_msgSend. the pool frees it after the touch */
+        [[self retain] autorelease];
         [self removeFromSuperview];
         if (next) next();
         [next release];

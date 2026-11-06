@@ -206,14 +206,14 @@
     [_sets prepare];
     [self layoutIfNeeded];
     _dim.alpha = 0;
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 1, EXTERIA_MOTION_ENTER, nil);
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
     CGPoint corner = [self cornerAnchor];
     CGRect frame = _card.frame;
     _card.layer.anchorPoint = corner;
     _card.layer.position = CGPointMake(frame.origin.x + frame.size.width * corner.x, frame.origin.y + frame.size.height * corner.y);
     _card.alpha = 0;
-    _card.transform = CGAffineTransformMakeScale(0.8, 0.8);
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    _card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
 }
 
 - (void)dismissAnimated:(BOOL)animated {
@@ -224,8 +224,8 @@
         [self removeFromSuperview];
         return;
     }
-    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, EXTERIA_MOTION_EXIT, nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeScale(0.8, 0.8), 0, EXTERIA_MOTION_EXIT, ^(BOOL finished) {
+    ExteriaAnimateView(_dim, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
     });

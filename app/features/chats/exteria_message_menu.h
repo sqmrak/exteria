@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 
+#import "exteria_media_cache.h"
 #import "exteria_message.h"
 #import "exteria_symbol.h"
 
@@ -26,6 +27,8 @@
 /* the menu was closed without a pick */
 @property (nonatomic, copy) void (^dismissHandler)(void);
 @property (nonatomic, copy) void (^headerHandler)(void);
+/* the cache the pill takes the lottie of each reaction from; without it the reactions stay still pictures */
+@property (nonatomic, retain) ExteriaMediaCache *media;
 
 /* the line at the top of the card, with a read mark when read is set; nil text takes the line away */
 - (void)setHeaderText:(NSString *)text read:(BOOL)read;
