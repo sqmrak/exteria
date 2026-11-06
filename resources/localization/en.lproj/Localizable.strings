@@ -2397,8 +2397,7 @@
 "logs.export.info" = "exteria-[username].zip with every log and a note about the phone goes to @sqmrak as a file";
 "logs.export.failed" = "The logs could not be packed.";
 "logs.export.sent" = "Your logs were sent to the main developer.";
-"logs.export.unsent" = "The logs could not be sent to the developer. Check the connection, or share the file yourself.";
-"logs.export.share" = "Share file";
+"logs.export.unsent" = "The logs could not be sent to the developer. Check the connection and try again.";
 "logs.share.unavailable" = "This system cannot share the file.";
 "logs.loading" = "Loading...";
 "logs.empty" = "The log is empty.";

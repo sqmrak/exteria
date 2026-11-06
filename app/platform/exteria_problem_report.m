@@ -192,8 +192,24 @@ BOOL ExteriaProblemReportIsDeveloper(ExteriaSession *session) {
     return [[[session ownPerson].username lowercaseString] isEqualToString:REPORT_USERNAME];
 }
 
+static void ExteriaSendArchiveTo(ExteriaSession *session, ExteriaDialog *target, NSString *path, void (^finish)(BOOL sent)) {
+    long long randomId = ((long long)arc4random() << 32) | arc4random();
+    [session sendDocumentAtPath:path name:[path lastPathComponent] mime:@"application/zip" caption:ExteriaProblemReportHeader() toDialog:target randomId:randomId
+                     completion:^(int32_t messageId, NSString *errorName) {
+        BOOL sent = messageId > 0 && !errorName;
+        if (!sent) NSLog(@"exteria: the logs were not sent to the developer: %@", errorName);
+        if (finish) finish(sent);
+        [finish release];
+    }];
+}
+
 void ExteriaProblemReportSendArchive(ExteriaSession *session, NSString *path, void (^done)(BOOL sent)) {
     void (^finish)(BOOL) = [done copy];
+    /* the developer's own account has nobody to write to, so the archive lands in its saved messages */
+    if (ExteriaProblemReportIsDeveloper(session)) {
+        ExteriaSendArchiveTo(session, [ExteriaDialog savedMessagesOfUserId:[session ownPerson].userId], path, finish);
+        return;
+    }
     /* the person pressed export, so neither the crash report switch nor the pause between reports applies */
     ExteriaWithReportTarget(session, ^(ExteriaDialog *target) {
         if (!target) {
@@ -201,13 +217,6 @@ void ExteriaProblemReportSendArchive(ExteriaSession *session, NSString *path, vo
             [finish release];
             return;
         }
-        long long randomId = ((long long)arc4random() << 32) | arc4random();
-        [session sendDocumentAtPath:path name:[path lastPathComponent] mime:@"application/zip" caption:ExteriaProblemReportHeader() toDialog:target randomId:randomId
-                         completion:^(int32_t messageId, NSString *errorName) {
-            BOOL sent = messageId > 0 && !errorName;
-            if (!sent) NSLog(@"exteria: the logs were not sent to the developer: %@", errorName);
-            if (finish) finish(sent);
-            [finish release];
-        }];
+        ExteriaSendArchiveTo(session, target, path, finish);
     });
 }

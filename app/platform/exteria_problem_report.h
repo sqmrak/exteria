@@ -14,5 +14,5 @@ void ExteriaProblemReportCallFailure(ExteriaSession *session);
 NSString *ExteriaProblemReportHeader(void);
 /* the account is the developer's own, so a report to the developer would go to itself */
 BOOL ExteriaProblemReportIsDeveloper(ExteriaSession *session);
-/* sends a zip to the developer as a file, whatever the crash report switch says; done runs on the queue of the session with whether the message went out */
+/* sends a zip to the developer as a file (to the saved messages when the account is the developer's), whatever the crash report switch says; done runs on the queue of the session with whether the message went out */
 void ExteriaProblemReportSendArchive(ExteriaSession *session, NSString *path, void (^done)(BOOL sent));
