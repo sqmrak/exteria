@@ -425,7 +425,8 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
     if (_item.content == ExteriaChatItemContentFile) [self drawFileRow:context];
     if (_item.content == ExteriaChatItemContentPoll) [self drawPoll:context];
     if (_item.textLayout && _pickRange.length) {
-        [[ExteriaColorAccent() colorWithAlphaComponent:0.35f] setFill];
+        /* a quarter of the text color mixed into the bubble keeps the text readable on any bubble color; an accent at partial alpha turned a custom bubble into a washed patch the text got lost on */
+        [ExteriaMixedColor(outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn(), ExteriaColorBubbleText(outgoing), 0.25) setFill];
         for (NSValue *box in [_item.textLayout rectsForRange:_pickRange]) UIRectFill(CGRectOffset(box.CGRectValue, _item.textOrigin.x, _item.textOrigin.y));
     }
     if (_item.textLayout) [_item.textLayout drawAtPoint:_item.textOrigin];
@@ -433,7 +434,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
         NSArray *boxes = [_item.textLayout rectsForRange:_pickRange];
         if (boxes.count) {
             CGRect first = [[boxes objectAtIndex:0] CGRectValue], last = [[boxes lastObject] CGRectValue];
-            [ExteriaColorAccent() setFill];
+            [ExteriaColorBubbleLink(outgoing) setFill];
             CGFloat left = _item.textOrigin.x + first.origin.x, top = _item.textOrigin.y + first.origin.y;
             CGFloat right = _item.textOrigin.x + CGRectGetMaxX(last), bottom = _item.textOrigin.y + CGRectGetMaxY(last);
             UIRectFill(CGRectMake(left - 1, top, 2, first.size.height));
