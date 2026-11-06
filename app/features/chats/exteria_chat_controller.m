@@ -4211,6 +4211,10 @@ static void ExteriaRedrawTree(UIView *view) {
     ExteriaDaySpan daySpan = {0, 0, 0}, nextSpan = {0, 0, 0};
     NSInteger previousDay = 0;
     BOOL unreadShown = _unreadAnchor < 0 || _pinnedList || _startMessageId > 0;
+    /* the colors of a quote do not depend on the message, so a walk over thousands of messages does not make them again for each */
+    BOOL classicTheme = ExteriaThemeIsClassic(), darkTheme = ExteriaThemeIsDark();
+    UIColor *classicOwnQuote = classicTheme ? (darkTheme ? ExteriaMixedColor(ExteriaColorAccent(), [UIColor whiteColor], 0.55) : ExteriaColorAccentDark()) : nil;
+    UIColor *classicOtherQuote = classicTheme ? [UIColor colorWithWhite:darkTheme ? 0.74 : 0.40 alpha:1] : nil;
     for (NSUInteger at = 0; at < messages.count; ++at) {
         ExteriaMessage *message = [messages objectAtIndex:at];
         BOOL sharingExpired = message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1 &&
@@ -4278,11 +4282,16 @@ static void ExteriaRedrawTree(UIView *view) {
             for (ExteriaTextEntity *entity in replyEntities) if (entity.style != ExteriaTextStyleCustomEmoji) [visible addObject:entity];
             replyEntities = visible;
         }
-        /* the classic bubble is a neutral plate, and the accent on it reads as a link */
-        UIColor *replyColor = ExteriaThemeIsClassic() ? [UIColor colorWithWhite:ExteriaThemeIsDark() ? 0.74 : 0.40 alpha:1] : ExteriaColorBubbleLink(message.outgoing);
-        if (original && !message.outgoing) {
-            ExteriaPerson *author = [_people objectForKey:[NSNumber numberWithLongLong:original.senderKey]];
-            if (author && !ExteriaThemeIsClassic() && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) replyColor = ExteriaNameColor(author.nameColor, llabs(original.senderKey), ExteriaThemeIsDark());
+        /* the classic bubble of somebody else is a neutral plate, and the accent on it reads as a link; our own bubble stands on the accent already, so the quote in it
+           takes a light tint of the accent on the dark theme and the deep accent on the light one, where grey looked like a hole in the bubble */
+        UIColor *replyColor = nil;
+        if (replyId > 0 || message.replyStory > 0) {
+            if (classicTheme) replyColor = message.outgoing ? classicOwnQuote : classicOtherQuote;
+            else replyColor = ExteriaColorBubbleLink(message.outgoing);
+            if (original && !message.outgoing && !classicTheme && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) {
+                ExteriaPerson *author = [_people objectForKey:[NSNumber numberWithLongLong:original.senderKey]];
+                if (author) replyColor = ExteriaNameColor(author.nameColor, llabs(original.senderKey), darkTheme);
+            }
         }
         if (item && (!(item.replyTitle == replyTitle || [item.replyTitle isEqualToString:replyTitle]) ||
                      !(item.replyText == replyText || [item.replyText isEqualToString:replyText]) ||

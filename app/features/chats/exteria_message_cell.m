@@ -366,7 +366,8 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
         UIRectFill(frame);
     }
     if (ExteriaChatFlagGet(ExteriaChatFlagReplyBackground)) {
-        [ExteriaMixedColor(bubbleColor, _item.replyColor, 0.3) setFill];
+        /* the plate of a quote in our own classic bubble carries more of the accent, so it does not fade into the bubble */
+        [ExteriaMixedColor(bubbleColor, _item.replyColor, ExteriaThemeIsClassic() && _item.message.outgoing ? 0.42 : 0.3) setFill];
         UIRectFill(frame);
     }
     CGContextRestoreGState(context);
