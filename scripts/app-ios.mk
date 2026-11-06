@@ -19,6 +19,9 @@ APP_M := $(sort $(wildcard app/*/*.m app/*/*/*.m))
 APP_C := $(sort $(wildcard core/*/*.c core/tl/generated/*.c))
 PY_LIB_V7 := $(EXTERIA_PYTHON_V7)/lib/libpython3.11.a
 PY_LIB_V64 := $(EXTERIA_PYTHON_V64)/lib/libpython3.11.a
+# bzip2, xz and sqlite behind _bz2, _lzma and _sqlite3, linked after libpython
+PY_EXT_V7 := $(EXTERIA_PYTHON_V7)/lib/libexteria_pyext.a
+PY_EXT_V64 := $(EXTERIA_PYTHON_V64)/lib/libexteria_pyext.a
 # the bundle is copied whole, so a changed file in it rebuilds the app
 PY_BUNDLE := $(shell find $(EXTERIA_PYTHON_BUNDLE)/python -type f 2>/dev/null)
 CREDENTIALS := $(EXTERIA_IOS_BUILD)/generated/exteria_credentials.h
@@ -96,7 +99,7 @@ inputs:
 	@test -f "$(EXTERIA_SDK_V7)/usr/include/stdlib.h" -a -f "$(EXTERIA_SDK_V64)/usr/include/stdlib.h" || { echo "missing iphoneos sdk headers" >&2; exit 1; }
 	@$(if $(EXTERIA_CRT_V7),test -f "$(EXTERIA_CRT_V7)" || { echo "missing EXTERIA_CRT_V7 startup object" >&2; exit 1; },:)
 	@test -f "$(EXTERIA_OPENSSL_V7)/lib/libcrypto.a" -a -f "$(EXTERIA_OPENSSL_V64)/lib/libcrypto.a" -a -f "$(EXTERIA_OPENSSL_V7)/lib/libssl.a" -a -f "$(EXTERIA_OPENSSL_V64)/lib/libssl.a" || { echo "missing openssl static libraries" >&2; exit 1; }
-	@test -f "$(PY_LIB_V7)" -a -f "$(PY_LIB_V64)" -a -d "$(EXTERIA_PYTHON_BUNDLE)/python/stdlib" || { echo "missing python build, run scripts/build_python.sh" >&2; exit 1; }
+	@test -f "$(PY_LIB_V7)" -a -f "$(PY_LIB_V64)" -a -f "$(PY_EXT_V7)" -a -f "$(PY_EXT_V64)" -a -d "$(EXTERIA_PYTHON_BUNDLE)/python/stdlib" || { echo "missing python build, run scripts/build_python.sh" >&2; exit 1; }
 	@test -f "$(EXTERIA_VIDEO_V7)/lib/libswresample.a" -a -f "$(EXTERIA_VIDEO_V64)/lib/libswresample.a" || { echo "missing ffmpeg audio libraries, rebuild the codecs with scripts/build_sticker_codecs.sh" >&2; exit 1; }
 
 # a changed sdk or flag set must not reuse objects from a previous invocation
@@ -143,12 +146,12 @@ endef
 $(eval $(call slice_rules,armv7,$(V7_CC),$(V7_CXX_FLAGS)))
 $(eval $(call slice_rules,arm64,$(V64_CC),))
 
-$(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME): $(call objects,armv7) $(VIDEO_V7_LIBS) $(PY_LIB_V7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V7_TARGET) $(call objects,armv7) $(PY_LIB_V7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a $(VIDEO_V7_LIBS) $(LINK_LIBS) \
+$(EXTERIA_IOS_BUILD)/armv7/$(APP_NAME): $(call objects,armv7) $(VIDEO_V7_LIBS) $(PY_LIB_V7) $(PY_EXT_V7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V7_TARGET) $(call objects,armv7) $(PY_LIB_V7) $(PY_EXT_V7) $(EXTERIA_OPENSSL_V7)/lib/libssl.a $(EXTERIA_OPENSSL_V7)/lib/libcrypto.a $(VIDEO_V7_LIBS) $(LINK_LIBS) \
 	  $(if $(EXTERIA_CRT_V7),-nostartfiles $(EXTERIA_CRT_V7),) -o $@
 
-$(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME): $(call objects,arm64) $(VIDEO_V64_LIBS) $(PY_LIB_V64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a
-	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V64_TARGET) $(call objects,arm64) $(PY_LIB_V64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a $(VIDEO_V64_LIBS) $(LINK_LIBS) -o $@
+$(EXTERIA_IOS_BUILD)/arm64/$(APP_NAME): $(call objects,arm64) $(VIDEO_V64_LIBS) $(PY_LIB_V64) $(PY_EXT_V64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a
+	"$(EXTERIA_TC)/clang" -B"$(EXTERIA_TC)" $(V64_TARGET) $(call objects,arm64) $(PY_LIB_V64) $(PY_EXT_V64) $(EXTERIA_OPENSSL_V64)/lib/libssl.a $(EXTERIA_OPENSSL_V64)/lib/libcrypto.a $(VIDEO_V64_LIBS) $(LINK_LIBS) -o $@
 
 # the share sheet extension is its own small executable. It starts at _NSExtensionMain, which dyld calls as main only from ios 6 on (the older load command starts a
 # program the way crt1 expects), so both slices carry a deployment target of 8.0, the first system with extensions

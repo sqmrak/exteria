@@ -17,7 +17,7 @@ cp -R "${APP}" "${STAGE}/Payload/"
 find "${STAGE}/Payload" -type d -exec chmod 755 {} +
 find "${STAGE}/Payload" -type f -exec chmod 644 {} +
 chmod 755 "${STAGE}/Payload/Exteria.app/Exteria" "${STAGE}/Payload/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare"
-(cd "${STAGE}" && zip -qrX "${OUT}" Payload)
+(cd "${STAGE}" && zip -qr9X "${OUT}" Payload)
 rm -rf "${STAGE}"
 unzip -tq "${OUT}"
 # the app checks the download against this file, which a release carries next to the ipa

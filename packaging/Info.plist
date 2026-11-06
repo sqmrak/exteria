@@ -22,9 +22,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.1.0-stable</string>
+	<string>2.2.0-stable</string>
 	<key>CFBundleVersion</key>
-	<string>2.1.0</string>
+	<string>2.2.0</string>
 	<key>CFBundleIconFiles</key>
 	<array>
 		<string>Icon-57.png</string>
@@ -74,7 +74,7 @@
 					<string>Telegram-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>SenkoGram</key>
 			<dict>
@@ -86,7 +86,7 @@
 					<string>SenkoGram-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Exteraless</key>
 			<dict>
@@ -98,7 +98,7 @@
 					<string>Exteraless-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Blueprint</key>
 			<dict>
@@ -110,7 +110,7 @@
 					<string>Blueprint-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Red</key>
 			<dict>
@@ -122,7 +122,7 @@
 					<string>Red-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Nya</key>
 			<dict>
@@ -134,7 +134,7 @@
 					<string>Nya-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Ayu</key>
 			<dict>
@@ -146,7 +146,7 @@
 					<string>Ayu-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Quack</key>
 			<dict>
@@ -158,7 +158,7 @@
 					<string>Quack-57@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 		</dict>
 	</dict>
@@ -196,7 +196,7 @@
 					<string>Telegram-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>SenkoGram</key>
 			<dict>
@@ -209,7 +209,7 @@
 					<string>SenkoGram-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Exteraless</key>
 			<dict>
@@ -222,7 +222,7 @@
 					<string>Exteraless-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Blueprint</key>
 			<dict>
@@ -235,7 +235,7 @@
 					<string>Blueprint-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Red</key>
 			<dict>
@@ -248,7 +248,7 @@
 					<string>Red-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Nya</key>
 			<dict>
@@ -261,7 +261,7 @@
 					<string>Nya-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Ayu</key>
 			<dict>
@@ -274,7 +274,7 @@
 					<string>Ayu-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>Quack</key>
 			<dict>
@@ -287,7 +287,7 @@
 					<string>Quack-72@2x.png</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
-				<false/>
+				<true/>
 			</dict>
 		</dict>
 	</dict>
