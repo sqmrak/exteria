@@ -1695,8 +1695,8 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
     exteria_peer peer = {dialog.peerKind, dialog.peerId};
     int32_t topic = dialog.topicId;
     BOOL discussion = dialog.discussion;
-    /* the same page twice in a row is not worth a trip to the main thread */
-    NSMutableString *signature = [[NSMutableString alloc] init];
+    /* the same page twice in a row is not worth a trip to the main thread: what each message of the last page looked like, by id */
+    NSMutableDictionary *seen = [[NSMutableDictionary alloc] init];
     /* the store counts the writes that touch this chat, so a change elsewhere (every update of every other chat
        reaches this observer) costs one compare and no page read */
     __block const exteria_store *seenStore = NULL;
@@ -1720,18 +1720,32 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
             NSMutableArray *deleted = ExteriaSavedDeletedOfPeer(store, peer, messages.count ? lowest : 0, INT32_MAX);
             ExteriaKeepTopic(deleted, topic, discussion);
             [messages addObjectsFromArray:deleted];
-            NSMutableString *sum = [NSMutableString string];
+            NSMutableDictionary *now = [NSMutableDictionary dictionaryWithCapacity:messages.count];
             NSDictionary *people = [self storedPeopleForMessages:messages];
+            int32_t pageLowest = INT32_MAX;
             for (ExteriaMessage *message in messages) {
                 ExteriaPerson *sender = [people objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
-                [sum appendFormat:@"%d:%d:%d:%lu:%@:%@:%lld:%lu:%@:%@:%@:%d|", message.messageId, message.edited, message.deletedLocally, (unsigned long)message.text.length,
+                NSString *one = [NSString stringWithFormat:@"%d:%d:%lu:%@:%@:%lld:%lu:%@:%@:%@:%d", message.edited, message.deletedLocally, (unsigned long)message.text.length,
                     message.reactionKey, message.markupKey, message.senderKey, (unsigned long)sender.name.length, sender.name, sender.photo.key,
                     message.senderRank, sender.bot];
+                [now setObject:one forKey:[NSNumber numberWithInt:message.messageId]];
+                pageLowest = MIN(pageLowest, message.messageId);
             }
             seenStore = store;
             seenVersion = version;
-            if ([sum isEqualToString:signature]) return;
-            [signature setString:sum];
+            /* a message is news when it is new or changed, or when one at or above the oldest of the page is gone. an oldest message that only fell out of the window of the
+               newest 60 is not: in a topic every message of any other topic of the forum pushes one of its own out, and each of those was a rebuild of the whole list */
+            BOOL changed = NO;
+            for (NSNumber *key in now) {
+                if (![[seen objectForKey:key] isEqualToString:[now objectForKey:key]]) { changed = YES; break; }
+            }
+            if (!changed) {
+                for (NSNumber *key in seen) {
+                    if ([key intValue] >= pageLowest && ![now objectForKey:key]) { changed = YES; break; }
+                }
+            }
+            [seen setDictionary:now];
+            if (!changed) return;
             NSArray *page = [[messages copy] autorelease];
             [self deliverMain:^{ deliver(page, people); }];
         } owner:key];
@@ -1739,7 +1753,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
         [self storeChanged];
     }];
     [deliver release];
-    [signature release];
+    [seen release];
 }
 
 #pragma mark reactions
