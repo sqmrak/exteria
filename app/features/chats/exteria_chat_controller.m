@@ -1021,6 +1021,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [_reactionJump setImage:ExteriaSymbolImage(ExteriaSymbolHeartOutline, 22, ExteriaColorTitle()) forState:UIControlStateNormal];
     }
     [_reactionJump addTarget:self action:@selector(reactionJumpTapped) forControlEvents:UIControlEventTouchUpInside];
+    UILongPressGestureRecognizer *reactionHold = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(reactionJumpHeld:)] autorelease];
+    [_reactionJump addGestureRecognizer:reactionHold];
     _reactionJump.accessibilityLabel = NSLocalizedString(@"chat.reactions.jump", nil);
     _reactionJump.hidden = YES;
     [root addSubview:_reactionJump];
@@ -4980,6 +4982,22 @@ static void ExteriaRedrawTree(UIView *view) {
     if (!seen) return;
     if (!_unreadReactionIds.count) [self sendReactionsRead:NO];
     [self refreshReactionJump];
+}
+
+- (void)reactionJumpHeld:(UILongPressGestureRecognizer *)press {
+    if (press.state != UIGestureRecognizerStateBegan || !_unreadReactionIds.count) return;
+    ExteriaSymbol symbols[1] = {ExteriaSymbolCheckDouble};
+    ExteriaWeakReference *weak = _weak;
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:[NSArray arrayWithObject:NSLocalizedString(@"chat.reactions.readall", nil)] symbols:symbols handler:^(NSUInteger index) {
+        (void)index;
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        [chat->_unreadReactionIds removeAllObjects];
+        [chat sendReactionsRead:YES];
+        [chat refreshReactionJump];
+    }] autorelease];
+    CGRect button = _reactionJump.frame;
+    [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(button), CGRectGetMaxY(button))];
 }
 
 - (void)toEndTapped {
