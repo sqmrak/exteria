@@ -13,7 +13,9 @@ static NSString *const ExteriaLinkAttribute = @"ExteriaLink";
 static NSString *const ExteriaEmojiAttribute = @"ExteriaEmoji";
 static NSString *const ExteriaCustomEmojiAttribute = @"ExteriaCustomEmoji";
 static NSString *const ExteriaStrikeAttribute = @"ExteriaStrike";
+/* the value is the offset where the entity of the quote starts, so two quotes that touch stay two blocks */
 static NSString *const ExteriaQuoteAttribute = @"ExteriaQuote";
+static NSString *const ExteriaQuoteFoldableAttribute = @"ExteriaQuoteFoldable";
 static NSString *const ExteriaSpoilerAttribute = @"ExteriaSpoiler";
 static NSString *const ExteriaMonoAttribute = @"ExteriaMono";
 static NSString *const ExteriaMonoEntityAttribute = @"ExteriaMonoEntity";
@@ -22,6 +24,9 @@ NSString *const ExteriaSpoilerTarget = @"exteria-spoiler:";
 /* a quote is set in from the left edge by its bar, which is drawn in that room */
 #define QUOTE_INDENT 11.0
 #define QUOTE_BAR 3.0
+/* a folded quote keeps this many lines, as in the other clients, and the row under it holds the arrow */
+#define QUOTE_FOLD_LINES 3
+#define QUOTE_FOOTER 20.0
 
 /* an emoji picture is a little wider than the letters around it, as the system's own emoji are */
 #define EMOJI_SCALE 1.25
@@ -123,7 +128,10 @@ static NSMutableAttributedString *ExteriaStyledString(NSString *text, NSArray *e
         case ExteriaTextStyleSpoiler: [string addAttribute:ExteriaSpoilerAttribute value:[NSNumber numberWithBool:YES] range:range]; break;
         /* a quote is shaped when the lines are broken; it is marked here, because an emoji that is set as one character moves every index after it, which
            the range of the entity would not follow */
-        case ExteriaTextStyleQuote: [string addAttribute:ExteriaQuoteAttribute value:[NSNumber numberWithBool:YES] range:range]; break;
+        case ExteriaTextStyleQuote:
+            [string addAttribute:ExteriaQuoteAttribute value:[NSNumber numberWithUnsignedInteger:range.location] range:range];
+            if (entity.flags & EXTERIA_ENTITY_COLLAPSED) [string addAttribute:ExteriaQuoteFoldableAttribute value:[NSNumber numberWithBool:YES] range:range];
+            break;
         case ExteriaTextStyleCustomEmoji: break;
         case ExteriaTextStyleDate: {
             int single = kCTUnderlineStyleSingle;
@@ -333,6 +341,13 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
 + (ExteriaTextLayout *)layoutForText:(NSString *)text entities:(NSArray *)entities font:(UIFont *)font
                                color:(UIColor *)color linkColor:(UIColor *)linkColor width:(CGFloat)width
                             maxLines:(NSUInteger)maxLines flush:(CGFloat)flush dropsUndrawable:(BOOL)drops {
+    return [self layoutForText:text entities:entities font:font color:color linkColor:linkColor width:width maxLines:maxLines flush:flush
+                  dropsUndrawable:drops expandedQuotes:nil];
+}
+
++ (ExteriaTextLayout *)layoutForText:(NSString *)text entities:(NSArray *)entities font:(UIFont *)font
+                               color:(UIColor *)color linkColor:(UIColor *)linkColor width:(CGFloat)width
+                            maxLines:(NSUInteger)maxLines flush:(CGFloat)flush dropsUndrawable:(BOOL)drops expandedQuotes:(NSIndexSet *)expanded {
     ExteriaTextLayout *layout = [[[ExteriaTextLayout alloc] init] autorelease];
     NSMutableAttributedString *string = ExteriaStyledString(text, entities, font, color, linkColor);
     /* before the emoji become single characters, so the offsets of the matches are those of the text */
@@ -350,6 +365,7 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
     layout->_text = [text copy];
     layout->_ink = [color retain];
     layout->_width = width;
+    layout->_expandedQuotes = [expanded copy];
     layout->_hasSpoilers = NO;
     for (ExteriaTextEntity *entity in entities) {
         if (entity.style == ExteriaTextStyleSpoiler && NSMaxRange(entity.range) <= text.length) layout->_hasSpoilers = YES;
@@ -369,10 +385,29 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
     layout->_ascents = calloc(capacity, sizeof(CGFloat));
     layout->_descents = calloc(capacity, sizeof(CGFloat));
     layout->_quoted = calloc(capacity, sizeof(BOOL));
+    layout->_toggles = calloc(capacity, sizeof(NSInteger));
+    layout->_footers = calloc(capacity, sizeof(CGFloat));
     CGFloat baseline = 0, widest = 0, previousDescent = 0;
     CFIndex start = 0;
-    while (start < length && layout->_lines && layout->_origins && layout->_ascents && layout->_descents && layout->_quoted) {
-        BOOL quoted = [string attribute:ExteriaQuoteAttribute atIndex:(NSUInteger)start effectiveRange:NULL] != nil;
+    /* the quote the lines are in now: its name, where it ends, the lines it has taken and whether the person can fold it */
+    NSInteger blockId = -1;
+    CFIndex blockEnd = 0;
+    NSUInteger blockLines = 0, blockFirst = 0;
+    BOOL blockFoldable = NO, blockOpen = NO, blockCut = NO;
+    while (start < length && layout->_lines && layout->_origins && layout->_ascents && layout->_descents && layout->_quoted && layout->_toggles && layout->_footers) {
+        NSRange quoteRange = NSMakeRange(0, 0);
+        NSNumber *quoteId = [string attribute:ExteriaQuoteAttribute atIndex:(NSUInteger)start longestEffectiveRange:&quoteRange inRange:NSMakeRange(0, string.length)];
+        BOOL quoted = quoteId != nil;
+        if (!quoted) blockId = -1;
+        else if ((NSInteger)quoteId.unsignedIntegerValue != blockId) {
+            blockId = (NSInteger)quoteId.unsignedIntegerValue;
+            blockEnd = (CFIndex)NSMaxRange(quoteRange);
+            blockLines = 0;
+            blockFirst = layout->_lineCount;
+            blockCut = NO;
+            blockFoldable = [string attribute:ExteriaQuoteFoldableAttribute atIndex:(NSUInteger)start effectiveRange:NULL] != nil;
+            blockOpen = [expanded containsIndex:(NSUInteger)blockId];
+        }
         CGFloat indent = quoted ? QUOTE_INDENT : 0, room = MAX(20, width - indent);
         if (layout->_lineCount == capacity) {
             capacity *= 2;
@@ -381,15 +416,21 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
             layout->_ascents = realloc(layout->_ascents, capacity * sizeof(CGFloat));
             layout->_descents = realloc(layout->_descents, capacity * sizeof(CGFloat));
             layout->_quoted = realloc(layout->_quoted, capacity * sizeof(BOOL));
-            if (!layout->_lines || !layout->_origins || !layout->_ascents || !layout->_descents || !layout->_quoted) break;
+            layout->_toggles = realloc(layout->_toggles, capacity * sizeof(NSInteger));
+            layout->_footers = realloc(layout->_footers, capacity * sizeof(CGFloat));
+            if (!layout->_lines || !layout->_origins || !layout->_ascents || !layout->_descents || !layout->_quoted || !layout->_toggles || !layout->_footers) break;
         }
         CFIndex fit = CTTypesetterSuggestLineBreak(typesetter, start, room);
         if (fit <= 0) break;
         BOOL lastAllowed = maxLines && layout->_lineCount + 1 == maxLines;
+        /* a folded quote ends on its third line, which takes the rest of the quote and ends in an ellipsis, as the text cut to a number of lines does */
+        BOOL foldHere = quoted && blockFoldable && !blockOpen && blockLines + 1 == QUOTE_FOLD_LINES && start + fit < blockEnd;
         CTLineRef line;
-        if (lastAllowed && start + fit < length) {
+        if ((lastAllowed && start + fit < length) || foldHere) {
+            CFIndex cutEnd = lastAllowed && start + fit < length ? length : blockEnd;
+            if (cutEnd == blockEnd && !(lastAllowed && start + fit < length)) blockCut = YES;
             /* the rest of the text goes into one line that is cut to the width and ends in an ellipsis */
-            CTLineRef rest = CTTypesetterCreateLine(typesetter, CFRangeMake(start, length - start));
+            CTLineRef rest = CTTypesetterCreateLine(typesetter, CFRangeMake(start, cutEnd - start));
             NSMutableDictionary *tokenAttributes = [NSMutableDictionary dictionaryWithDictionary:[string attributesAtIndex:(NSUInteger)start effectiveRange:NULL]];
             /* an emoji at the start must not turn the truncation ellipsis into another emoji */
             [tokenAttributes removeObjectForKey:(id)kCTRunDelegateAttributeName];
@@ -402,7 +443,7 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
             CFRelease(ellipsis);
             CFRelease(rest);
             if (!line) line = CTTypesetterCreateLine(typesetter, CFRangeMake(start, fit));
-            fit = length - start;
+            fit = cutEnd - start;
         } else {
             line = CTTypesetterCreateLine(typesetter, CFRangeMake(start, fit));
         }
@@ -413,6 +454,8 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
         NSUInteger i = layout->_lineCount++;
         layout->_lines[i] = line;
         layout->_quoted[i] = quoted;
+        layout->_toggles[i] = -1;
+        layout->_footers[i] = 0;
         layout->_origins[i] = CGPointMake((CGFloat)offset, baseline);
         layout->_ascents[i] = ascent;
         layout->_descents[i] = descent;
@@ -421,6 +464,15 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
         if (lineWidth > widest) widest = lineWidth;
         layout->_lastLineWidth = ceil(lineWidth);
         start += fit;
+        if (quoted) {
+            ++blockLines;
+            /* the arrow row stands under the last line of a quote that is longer than the lines a fold keeps, open or folded */
+            if (start >= blockEnd && blockFoldable && (blockCut || blockLines > QUOTE_FOLD_LINES)) {
+                for (NSUInteger k = blockFirst; k <= i; ++k) layout->_toggles[k] = blockId;
+                layout->_footers[i] = QUOTE_FOOTER;
+                baseline += QUOTE_FOOTER;
+            }
+        }
     }
     CFRelease(typesetter);
     layout->_size = CGSizeMake(ceil(widest), ceil(baseline + previousDescent) + 1);
@@ -438,6 +490,9 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
     free(_ascents);
     free(_descents);
     free(_quoted);
+    free(_toggles);
+    free(_footers);
+    [_expandedQuotes release];
     [_ink release];
     [_string release];
     [super dealloc];
@@ -482,13 +537,27 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
         }
     }
     for (NSUInteger i = 0; i < _lineCount; ++i) {
-        CGRect line = CGRectMake(origin.x, origin.y + _origins[i].y - _ascents[i], _width, _ascents[i] + _descents[i]);
+        CGRect line = CGRectMake(origin.x, origin.y + _origins[i].y - _ascents[i], _width, _ascents[i] + _descents[i] + _footers[i]);
         if (_quoted[i]) {
             /* a plate over the whole quote, one line at a time, with its bar on the left edge of the first and last line cut round */
             [[ink colorWithAlphaComponent:0.08] setFill];
             CGContextFillRect(context, line);
             [[ink colorWithAlphaComponent:0.55] setFill];
             CGContextFillRect(context, CGRectMake(origin.x, line.origin.y, QUOTE_BAR, line.size.height));
+        }
+        if (_footers[i] > 0) {
+            /* the arrow points down on a folded quote and up on an open one */
+            BOOL open = [_expandedQuotes containsIndex:(NSUInteger)_toggles[i]];
+            CGFloat centerX = origin.x + _width - 16, centerY = line.origin.y + line.size.height - _footers[i] / 2, lean = open ? 2.5f : -2.5f;
+            UIBezierPath *arrow = [UIBezierPath bezierPath];
+            [arrow moveToPoint:CGPointMake(centerX - 5, centerY + lean)];
+            [arrow addLineToPoint:CGPointMake(centerX, centerY - lean)];
+            [arrow addLineToPoint:CGPointMake(centerX + 5, centerY + lean)];
+            arrow.lineWidth = 1.8f;
+            arrow.lineCapStyle = kCGLineCapRound;
+            arrow.lineJoinStyle = kCGLineJoinRound;
+            [[ink colorWithAlphaComponent:0.7] setStroke];
+            [arrow stroke];
         }
         for (NSValue *box in [self boxesOfAttribute:ExteriaMonoAttribute inLine:i]) {
             CGRect rect = [box CGRectValue];
@@ -706,6 +775,15 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
         }
     }
     return CGRectNull;
+}
+
+- (NSUInteger)foldableQuoteAtPoint:(CGPoint)point {
+    for (NSUInteger i = 0; i < _lineCount; ++i) {
+        if (_toggles[i] < 0) continue;
+        CGFloat top = _origins[i].y - _ascents[i], bottom = _origins[i].y + _descents[i] + _footers[i];
+        if (point.x >= 0 && point.x <= _width && point.y >= top && point.y <= bottom) return (NSUInteger)_toggles[i];
+    }
+    return NSNotFound;
 }
 
 - (long long)customEmojiAtPoint:(CGPoint)point {

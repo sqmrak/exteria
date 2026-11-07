@@ -3099,6 +3099,13 @@ static void ExteriaSwipeTick(void) {
             return;
         }
     }
+    if (!_selecting && _item.textLayout && [_delegate respondsToSelector:@selector(messageCell:didToggleQuote:)]) {
+        NSUInteger quote = [_item.textLayout foldableQuoteAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)];
+        if (quote != NSNotFound) {
+            [_delegate messageCell:self didToggleQuote:quote];
+            return;
+        }
+    }
     if (_item.albumFrames.count) {
         CGPoint inBubble = [tap locationInView:self.contentView];
         inBubble.x -= _item.bubbleFrame.origin.x;

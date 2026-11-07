@@ -212,6 +212,7 @@ typedef enum {
     BOOL _mediaUnread;
     NSDate *_listenedDate;
     BOOL _spoilersRevealed;
+    NSIndexSet *_expandedQuotes;
     BOOL _viewOnceOpened;
     BOOL _post;
     BOOL _forwarded;
@@ -309,6 +310,8 @@ typedef enum {
 - (void)showAsChannelPost;
 /* the person tapped the spoilers of this message open; kept here so a rebuilt layout does not cover them again */
 @property (nonatomic, assign) BOOL spoilersRevealed;
+/* the collapsed quotes the person opened, each named by the offset where its entity starts; kept here so a rebuilt layout does not fold them again */
+@property (nonatomic, copy) NSIndexSet *expandedQuotes;
 /* the person opened this one-time media on this phone; kept so the row reads as expired at once, before the server's edit of the message arrives */
 @property (nonatomic, assign) BOOL viewOnceOpened;
 @property (nonatomic, readonly) BOOL forwarded;

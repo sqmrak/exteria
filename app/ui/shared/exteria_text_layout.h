@@ -26,6 +26,9 @@ extern NSString *const ExteriaSpoilerTarget;
     NSString *_text;
     NSString *_highlight;
     NSArray *_highlightRanges;
+    NSInteger *_toggles;
+    CGFloat *_footers;
+    NSIndexSet *_expandedQuotes;
 }
 
 /* entities may be nil. maxLines of zero means no limit. flush is 0 for left aligned text, 0.5 for centered and 1
@@ -47,6 +50,12 @@ extern NSString *const ExteriaSpoilerTarget;
                                color:(UIColor *)color linkColor:(UIColor *)linkColor width:(CGFloat)width
                             maxLines:(NSUInteger)maxLines flush:(CGFloat)flush dropsUndrawable:(BOOL)drops;
 
+/* the same, for a message: a quote that carries the collapsed flag shows its first three lines and a row with an arrow under them, unless the offset where its entity starts is in
+   expanded; a quote of three lines or fewer has no arrow and is always whole */
++ (ExteriaTextLayout *)layoutForText:(NSString *)text entities:(NSArray *)entities font:(UIFont *)font
+                               color:(UIColor *)color linkColor:(UIColor *)linkColor width:(CGFloat)width
+                            maxLines:(NSUInteger)maxLines flush:(CGFloat)flush dropsUndrawable:(BOOL)drops expandedQuotes:(NSIndexSet *)expanded;
+
 /* the smallest box the text fits in at the width it was laid out for */
 @property (nonatomic, readonly) CGSize size;
 /* how far the last line reaches, to tell whether the time can sit beside it */
@@ -65,6 +74,8 @@ extern NSString *const ExteriaSpoilerTarget;
 /* the original code or pre entity under the point, even when an emoji changed layout offsets */
 - (ExteriaTextEntity *)codeAtPoint:(CGPoint)point;
 - (long long)customEmojiAtPoint:(CGPoint)point;
+/* the offset that names the foldable quote under the point (relative to the text box), NSNotFound when the point is outside every one; a tap there folds or opens it */
+- (NSUInteger)foldableQuoteAtPoint:(CGPoint)point;
 /* where the first custom emoji of this document stands in the layout, in its coordinates; CGRectNull when the text has none */
 - (CGRect)rectOfCustomEmoji:(long long)document;
 

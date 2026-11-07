@@ -213,6 +213,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize listenedDate = _listenedDate;
 @synthesize post = _post;
 @synthesize spoilersRevealed = _spoilersRevealed;
+@synthesize expandedQuotes = _expandedQuotes;
 @synthesize viewOnceOpened = _viewOnceOpened;
 @synthesize forwarded = _forwarded;
 @synthesize edited = _edited;
@@ -506,6 +507,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
 }
 
 - (void)dealloc {
+    [_expandedQuotes release];
     [_listenedDate release];
     [_markup release];
     [_pendingSend release];

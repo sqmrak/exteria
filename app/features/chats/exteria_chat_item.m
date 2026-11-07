@@ -1076,7 +1076,8 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
         if (emojis >= 1 && emojis <= 9 && sizes[emojis] > textSize) textSize = sizes[emojis];
     }
     _textLayout = hasText ? [[ExteriaTextLayout layoutForText:bodyText entities:ownText ? _message.entities : nil font:ExteriaFontRegular(textSize)
-                                                        color:textColor linkColor:linkColor width:MAX(40, textMax) maxLines:0 flush:0] retain] : nil;
+                                                        color:textColor linkColor:linkColor width:MAX(40, textMax) maxLines:0 flush:0
+                                              dropsUndrawable:NO expandedQuotes:_message.expandedQuotes] retain] : nil;
     _textLayout.spoilersRevealed = _message.spoilersRevealed;
     _textLayout.highlight = _highlightQuery;
 

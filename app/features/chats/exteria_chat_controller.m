@@ -5057,6 +5057,23 @@ static void ExteriaRedrawTree(UIView *view) {
     }
 }
 
+- (void)messageCell:(ExteriaMessageCell *)cell didToggleQuote:(NSUInteger)quote {
+    NSIndexPath *path = [_table indexPathForCell:cell];
+    if (!path || (NSUInteger)path.row >= _items.count) return;
+    ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)path.row];
+    NSMutableIndexSet *opened = [[item.message.expandedQuotes mutableCopy] autorelease] ?: [NSMutableIndexSet indexSet];
+    if ([opened containsIndex:quote]) [opened removeIndex:quote];
+    else [opened addIndex:quote];
+    item.message.expandedQuotes = opened;
+    /* the cell that is on screen is configured again where it stands, and the table measures the row again under it */
+    CGFloat from = [cell bodyHeight];
+    [item invalidateLayout];
+    [self configureMessageCell:cell forRow:(NSUInteger)path.row];
+    [cell growBodyFromHeight:from];
+    [_table beginUpdates];
+    [_table endUpdates];
+}
+
 - (void)messageCellDidRevealSpoiler:(ExteriaMessageCell *)cell {
     (void)cell;
     [self refreshAnimations];

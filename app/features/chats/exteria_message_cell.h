@@ -56,6 +56,8 @@
 - (void)messageCellDidSwipeReply:(ExteriaMessageCell *)cell;
 @optional
 - (void)messageCell:(ExteriaMessageCell *)cell didTapCode:(ExteriaTextEntity *)entity;
+/* a tap on a collapsed quote that is longer than its fold; quote is the offset where its entity starts, and the chat folds or opens it */
+- (void)messageCell:(ExteriaMessageCell *)cell didToggleQuote:(NSUInteger)quote;
 - (void)messageCellDidRevealSpoiler:(ExteriaMessageCell *)cell;
 /* a tap on a sticker that belongs to a pack: the screen shows the pack */
 - (void)messageCellDidTapSticker:(ExteriaMessageCell *)cell;
