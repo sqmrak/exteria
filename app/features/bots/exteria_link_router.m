@@ -22,6 +22,7 @@
 #import "exteria_translate_config.h"
 #import "exteria_theme.h"
 #import "exteria_proxy_settings.h"
+#import "exteria_rewind.h"
 #import "exteria_user_profile_controller.h"
 
 #include "exteria_links.h"
@@ -286,6 +287,7 @@ static NSString *ExteriaCloudThemePath(void) {
     if (!url.length) return;
     NSURL *webURL = [NSURL URLWithString:url];
     if (ExteriaIsWebURL(webURL) && !ExteriaIsTelegramLink(webURL)) {
+        if (ExteriaRewindOpenLink(webURL)) return;
         NSString *choice = ExteriaBrowserChoice();
         if ([choice isEqualToString:@"exteria"]) ExteriaPresentBrowser(webURL, _anchor);
         else if (!ExteriaBrowserOpenExternal(webURL, choice)) [self showNote:NSLocalizedString(@"browser.settings.open.failed", nil)];

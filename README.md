@@ -54,7 +54,7 @@ the vpn of the app and of no other app: a wireguard tunnel to cloudflare warp in
 
 ## browser
 
-web links open in exteria, the system browser, or an installed chrome, firefox or brave, as chosen in the main settings. telegram links stay in the app.
+web links open in exteria, the system browser, or an installed chrome, firefox or brave, as chosen in the main settings. telegram links stay in the app. youtube track and playlist links (watch, playlist, shorts, live, embed, youtu.be) open in rewind when it is installed, whatever browser is chosen.
 
 ## proxy
 

@@ -698,6 +698,7 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>senko</string>
+		<string>rewind</string>
 		<string>googlechrome</string>
 		<string>firefox</string>
 		<string>brave</string>
