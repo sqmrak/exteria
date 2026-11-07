@@ -285,7 +285,7 @@ static void pump_dtls_in(exteria_tgc_call *c) {
     size_t n = 0;
     exteria_dtls_state st = exteria_dtls_get_state(c->dtls);
     if (st == EXTERIA_DTLS_FAILED) {
-        ctrace(c, "dtls failed");
+        ctrace(c, "dtls failed: %s", exteria_dtls_failure(c->dtls));
         fail(c);
         return;
     }

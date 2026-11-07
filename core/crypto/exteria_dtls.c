@@ -1,6 +1,7 @@
 #include "exteria_dtls.h"
 
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -48,6 +49,7 @@ struct exteria_dtls {
     uint8_t started;
     uint8_t mismatch;
     exteria_dtls_state state;
+    char failure[96];
     uint8_t keys[EXPORT_LEN];
 };
 
@@ -303,6 +305,13 @@ exteria_status exteria_dtls_set_peer_fingerprint(exteria_dtls *d, const char *ha
 }
 
 static exteria_status fail(exteria_dtls *d) {
+    /* the first failure is the cause, what follows is its echo */
+    if (d->state != EXTERIA_DTLS_FAILED) {
+        unsigned long code = ERR_peek_last_error();
+        if (d->mismatch) snprintf(d->failure, sizeof(d->failure), "peer certificate does not match its fingerprint");
+        else if (code) ERR_error_string_n(code, d->failure, sizeof(d->failure));
+        else snprintf(d->failure, sizeof(d->failure), "no openssl error queued");
+    }
     d->state = EXTERIA_DTLS_FAILED;
     ERR_clear_error();
     return d->mismatch ? EXTERIA_E_SECURITY : EXTERIA_E_CRYPTO;
@@ -408,6 +417,10 @@ exteria_status exteria_dtls_on_timeout(exteria_dtls *d) {
 
 exteria_dtls_state exteria_dtls_get_state(const exteria_dtls *d) {
     return d ? d->state : EXTERIA_DTLS_FAILED;
+}
+
+const char *exteria_dtls_failure(const exteria_dtls *d) {
+    return d ? d->failure : "";
 }
 
 exteria_status exteria_dtls_srtp_keys(exteria_dtls *d, uint8_t send_key[EXTERIA_DTLS_SRTP_KEY_LEN], uint8_t send_salt[EXTERIA_DTLS_SRTP_SALT_LEN],

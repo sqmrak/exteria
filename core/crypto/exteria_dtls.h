@@ -53,6 +53,8 @@ exteria_status exteria_dtls_timeout(exteria_dtls *d, uint32_t *ms);
 exteria_status exteria_dtls_on_timeout(exteria_dtls *d);
 
 exteria_dtls_state exteria_dtls_get_state(const exteria_dtls *d);
+/* why the session failed, empty until it did */
+const char *exteria_dtls_failure(const exteria_dtls *d);
 
 /* once CONNECTED: the SRTP keys of the two directions as a 16 byte key and a 14 byte salt each; send is for what
    this side sends; EXTERIA_E_STATE before that */
