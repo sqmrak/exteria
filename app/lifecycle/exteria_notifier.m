@@ -3,6 +3,7 @@
 #import <objc/message.h>
 
 #import "exteria_background_keeper.h"
+#import "exteria_chats_controller.h"
 #import "exteria_app_sounds.h"
 #import "exteria_inapp_banner.h"
 #import "exteria_lite_mode.h"
@@ -358,6 +359,21 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     [handler release];
 }
 
+/* the icon badge from the list the screen holds, for the moment the server cannot be asked: a flood wait on the chat list (a scan of folders pages through it) used to leave
+   the number of an earlier look on the icon after everything was read, and a timer cannot run for the length of the wait once the app is suspended */
+- (void)applyLocalBadgeInApplication:(UIApplication *)application {
+    NSArray *dialogs = ExteriaMainDialogsSnapshot();
+    if (!dialogs) return;
+    NSInteger badge = 0;
+    BOOL includeMuted = ExteriaNotifyBadgeMuted(), messages = ExteriaNotifyBadgeMessages();
+    for (ExteriaDialog *dialog in dialogs) {
+        if (dialog.folder || dialog.saved || dialog.unreadCount <= 0 || (dialog.peerKind == 3 && dialog.left)) continue;
+        if (dialog.muted && !includeMuted) continue;
+        badge += messages ? dialog.unreadCount : 1;
+    }
+    application.applicationIconBadgeNumber = ExteriaNotifyBadgeShown() ? badge : 0;
+}
+
 - (void)scanAnnouncing:(BOOL)announce application:(UIApplication *)application {
     if (!_started || !ExteriaNotifyEnabled()) return;
     if (_scanning) {
@@ -367,6 +383,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
     }
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     if (now < _blockedUntil) {
+        [self applyLocalBadgeInApplication:application];
         /* one look when the wait is over, whatever came in meanwhile */
         if (!_debounce) _debounce = [NSTimer scheduledTimerWithTimeInterval:_blockedUntil - now + 0.5 target:self selector:@selector(debounceFired:) userInfo:nil repeats:NO];
         [self finishFetch:1];
@@ -404,6 +421,7 @@ BOOL ExteriaBackgroundLinkWanted(void) {
                     NSTimeInterval seconds = colon.location == NSNotFound ? FLOOD_WAIT_DEFAULT_SECONDS : [[errorName substringFromIndex:colon.location + 1] doubleValue];
                     if (seconds < 1) seconds = FLOOD_WAIT_DEFAULT_SECONDS;
                     notifier->_blockedUntil = [NSDate timeIntervalSinceReferenceDate] + MIN(seconds, FLOOD_WAIT_MAX_SECONDS);
+                    [notifier applyLocalBadgeInApplication:application];
                     notifier->_rescan = YES;
                 } else if (![errorName isEqualToString:@"NO_ACCOUNT"]) {
                     /* a look that cannot be made says the link is down; one try to bring it back */

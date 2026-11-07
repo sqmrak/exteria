@@ -7,6 +7,9 @@
 /* the unread messages of the main list, those of muted chats left out: the count a chat shows by its way back; posted on the main thread when it changes */
 extern NSString *const ExteriaUnreadTotalDidChangeNotification;
 NSInteger ExteriaUnreadTotal(void);
+/* the rows of the main chat list as the screen last loaded it, nil before the first load; what the icon badge is counted from when the server cannot be asked */
+NSArray *ExteriaMainDialogsSnapshot(void);
+void ExteriaSetMainDialogsSnapshot(NSArray *dialogs);
 
 @protocol ExteriaChatsControllerDelegate <NSObject>
 /* the unread messages of the chats that are not muted, for the badge on the tab */

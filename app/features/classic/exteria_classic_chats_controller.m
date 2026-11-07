@@ -1,5 +1,6 @@
 #import "exteria_status_label.h"
 #import "exteria_classic_chats_controller.h"
+#import "exteria_chats_controller.h"
 
 #import "exteria_alert.h"
 #import "exteria_folder_tabs.h"
@@ -502,6 +503,7 @@
 
 - (void)reportUnread {
     if (_folders.selectedFolder.folderId) return;
+    if (!_folderId) ExteriaSetMainDialogsSnapshot(_dialogs);
     NSInteger total = 0;
     for (ExteriaDialog *dialog in _dialogs) if (dialog.unread && !dialog.folder && !dialog.muted && !(dialog.peerKind == 3 && dialog.left)) total += dialog.unreadCount;
     if (_unreadHandler) _unreadHandler(total);

@@ -668,6 +668,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     } else if (!_folderId) {
         [_mainDialogs release];
         _mainDialogs = [items retain];
+        ExteriaSetMainDialogsSnapshot(items);
         ExteriaQuickActionsUpdate(items);
     }
     [self loadBadgePictures];
@@ -694,6 +695,12 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 }
 
 NSString *const ExteriaUnreadTotalDidChangeNotification = @"ExteriaUnreadTotalDidChange";
+static NSArray *sMainDialogsSnapshot;
+NSArray *ExteriaMainDialogsSnapshot(void) { return sMainDialogsSnapshot; }
+void ExteriaSetMainDialogsSnapshot(NSArray *dialogs) {
+    [sMainDialogsSnapshot release];
+    sMainDialogsSnapshot = [dialogs retain];
+}
 static NSInteger sUnreadTotal;
 NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 
