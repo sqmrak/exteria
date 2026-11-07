@@ -30,6 +30,7 @@ static const exteria_team_member members[] = {
     {INT64_C(7752146730), "nowme77", ExteriaMarkTester, 0},
     {INT64_C(7073807722), "Radickdz", PROMO, 0},
     {INT64_C(5850832376), "Xmas_UnrealKot", PROMO, 0},
+    {INT64_C(5921838671), "jestik22", PROMO, 0},
     /* the author of ExteriaVideoFix, whose way of playing fragmented mp4 is in the app now; the username is not known, so the hint is empty */
     {INT64_C(8604942411), "", VIDEOFIX, 0}
 };
