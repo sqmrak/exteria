@@ -409,6 +409,27 @@ static char ExteriaPlayerStatusContext;
     return [[self.view valueForKey:@"safeAreaInsets"] UIEdgeInsetsValue];
 }
 
+/* the buttons that are shown stand from the right edge, and the counter is centered between the margins that the wider side needs; a hidden button used to keep its place,
+   which left the plus floating in the bar of the collage and the counter off the middle of an ipad */
+- (void)layoutBarButtons {
+    CGSize size = self.view.bounds.size;
+    UIEdgeInsets safe = [self safeInsets];
+    CGFloat barTop = safe.top;
+    CGFloat buttonSide = 48;
+    UIView *close = [_top viewWithTag:1];
+    close.frame = CGRectMake(safe.left, barTop + 2, buttonSide, buttonSide);
+    CGFloat edge = size.width - safe.right;
+    UIView *rightButtons[] = {_remove, _edit, _add, _grid};
+    for (NSUInteger i = 0; i < sizeof(rightButtons) / sizeof(rightButtons[0]); ++i) {
+        if (rightButtons[i].hidden) continue;
+        edge -= buttonSide;
+        rightButtons[i].frame = CGRectMake(edge, barTop + 2, buttonSide, buttonSide);
+    }
+    CGFloat leftReserve = safe.left + buttonSide + 8, rightReserve = size.width - edge + 8;
+    CGFloat margin = MAX(leftReserve, rightReserve);
+    _count.frame = CGRectMake(margin, barTop + 2, MAX(0, size.width - 2 * margin), buttonSide);
+}
+
 - (void)layoutAll {
     if (!self.isViewLoaded) return;
     CGSize size = self.view.bounds.size;
@@ -460,19 +481,12 @@ static char ExteriaPlayerStatusContext;
         x += THUMB_SIDE + THUMB_GAP;
     }
     _strip.contentSize = CGSizeMake(x, THUMB_STRIP);
+    [self showSelection];
     CGFloat buttonSide = 48;
-    UIView *close = [_top viewWithTag:1];
-    close.frame = CGRectMake(safe.left, barTop + 2, buttonSide, buttonSide);
-    _remove.frame = CGRectMake(size.width - safe.right - buttonSide, barTop + 2, buttonSide, buttonSide);
-    _edit.frame = CGRectMake(size.width - safe.right - 2 * buttonSide, barTop + 2, buttonSide, buttonSide);
-    _add.frame = CGRectMake(size.width - safe.right - 3 * buttonSide, barTop + 2, buttonSide, buttonSide);
-    _grid.frame = CGRectMake(size.width - safe.right - 4 * buttonSide, barTop + 2, buttonSide, buttonSide);
-    _count.frame = CGRectMake(buttonSide + 8 + safe.left, barTop + 2, MAX(0, size.width - 5 * buttonSide - 16 - safe.left - safe.right), buttonSide);
     _sendButton.frame = CGRectMake(size.width - safe.right - buttonSide - 8, (INPUT_BAR - buttonSide) / 2, buttonSide, buttonSide);
     _caption.frame = CGRectMake(16 + safe.left, 8, MAX(0, size.width - safe.left - safe.right - buttonSide - 32), INPUT_BAR - 16);
     [self centerCaptionLines];
     if (resized) _pages.contentOffset = CGPointMake((CGFloat)_index * size.width, 0);
-    [self showSelection];
 }
 
 - (void)showSelection {
@@ -491,6 +505,7 @@ static char ExteriaPlayerStatusContext;
     }
     CGRect shown = CGRectMake(THUMB_GAP + (CGFloat)_index * (THUMB_SIDE + THUMB_GAP), 0, THUMB_SIDE, THUMB_STRIP);
     [_strip scrollRectToVisible:CGRectInset(shown, -THUMB_GAP, 0) animated:NO];
+    [self layoutBarButtons];
 }
 
 #pragma mark zoom
