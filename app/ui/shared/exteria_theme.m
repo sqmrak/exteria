@@ -319,11 +319,14 @@ UIColor *ExteriaColorBubbleText(BOOL outgoing) {
 
 UIColor *ExteriaColorBubbleLink(BOOL outgoing) {
     if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.linkText" : "chat.message.incoming.linkText"); if (color) return color; }
-    if (outgoing && ExteriaClassic) {
-        /* the classic outgoing bubble is lit in the accent, so a link in the accent itself vanished into it; a light tint of the accent stays a color and reads on it */
-        return ExteriaMixedColor(ExteriaColorAccent(), [UIColor whiteColor], 0.82);
-    }
-    return outgoing ? [UIColor colorWithWhite:1 alpha:0.92] : ExteriaColorAccent();
+    return outgoing && !ExteriaClassic ? [UIColor colorWithWhite:1 alpha:0.92] : ExteriaColorAccent();
+}
+
+/* the links in the words of a message: the classic outgoing bubble is lit in the accent, so a link in the accent itself vanished into it. half way to white keeps the hue of the
+   theme and reads on the bubble, where the quote bars and names above keep the plain accent */
+UIColor *ExteriaColorBubbleLinkText(BOOL outgoing) {
+    if (outgoing && ExteriaClassic) return ExteriaMixedColor(ExteriaColorAccent(), [UIColor whiteColor], 0.5);
+    return ExteriaColorBubbleLink(outgoing);
 }
 
 UIColor *ExteriaColorBubbleMeta(BOOL outgoing) {

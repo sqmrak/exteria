@@ -64,6 +64,7 @@ UIColor *ExteriaColorQrPaper(void);
 UIColor *ExteriaColorChatBackground(void);
 UIColor *ExteriaColorBubbleText(BOOL outgoing);
 UIColor *ExteriaColorBubbleLink(BOOL outgoing);
+UIColor *ExteriaColorBubbleLinkText(BOOL outgoing);
 UIColor *ExteriaColorBubbleMeta(BOOL outgoing);
 /* the classic bubble as the old Messages drew it: a vertical gradient from top to bottom and an outline, none of them
    transparent so the wallpaper never shows through */

@@ -1064,7 +1064,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     CGFloat contentWidth = 0;
     CGFloat y = PAD_TOP;
     UIColor *textColor = ExteriaColorBubbleText(outgoing);
-    UIColor *linkColor = ExteriaColorBubbleLink(outgoing);
+    UIColor *linkColor = ExteriaColorBubbleLinkText(outgoing);
 
     [_textLayout release];
     /* a message of custom emoji alone shows them large, the fewer the larger, by the sizes of the official client */
