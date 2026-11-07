@@ -193,7 +193,8 @@ def _slide_rows(plugin_id, items):
 
 
 def settings(plugin_id):
-    return _slide_rows(plugin_id, json.loads(plugin_loader.get_settings_json(plugin_id)))
+    # the loader answers "null" for a plugin without a settings page, which is no rows and not a failure
+    return _slide_rows(plugin_id, json.loads(plugin_loader.get_settings_json(plugin_id)) or [])
 
 
 @_flushed
