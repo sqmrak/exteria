@@ -319,7 +319,11 @@ UIColor *ExteriaColorBubbleText(BOOL outgoing) {
 
 UIColor *ExteriaColorBubbleLink(BOOL outgoing) {
     if (!ExteriaClassic) { UIColor *color = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.linkText" : "chat.message.incoming.linkText"); if (color) return color; }
-    return outgoing && !ExteriaClassic ? [UIColor colorWithWhite:1 alpha:0.92] : ExteriaColorAccent();
+    if (outgoing && ExteriaClassic) {
+        /* the classic outgoing bubble is lit in the accent, so a link in the accent itself vanished into it; a light tint of the accent stays a color and reads on it */
+        return ExteriaMixedColor(ExteriaColorAccent(), [UIColor whiteColor], 0.82);
+    }
+    return outgoing ? [UIColor colorWithWhite:1 alpha:0.92] : ExteriaColorAccent();
 }
 
 UIColor *ExteriaColorBubbleMeta(BOOL outgoing) {
