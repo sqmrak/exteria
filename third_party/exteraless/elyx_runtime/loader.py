@@ -159,7 +159,7 @@ def _entry_module_name(refmap: Dict[str, str], extract_dir: str) -> str:
             relative = relative[: -len(suffix)]
             break
     parts = [part for part in relative.replace("\\", "/").split("/") if part]
-    if not parts:
+    if not parts or ".." in parts or "." in parts:
         raise MainModuleNotFoundError(f"bad `main` pointer in refmap: {main!r}")
     if namespace._resolve_at(os.path.join(extract_dir, *parts)) not in ("source", "bytecode"):
         raise MainModuleNotFoundError(
@@ -215,6 +215,9 @@ def _resolve_declared_dir(refmap: Dict[str, str], key: str, extract_dir: str,
             declared = autodetect
     if not declared:
         return None
+    parts = [part for part in declared.replace("\\", "/").split("/") if part]
+    if ".." in parts or "." in parts:
+        raise archive.ElyxArchiveError(f"directory {declared!r} declared in refmap key {key!r} leaves the archive")
     path = os.path.join(extract_dir, declared.strip("/"))
     if not os.path.isdir(path):
         if required_when_declared:

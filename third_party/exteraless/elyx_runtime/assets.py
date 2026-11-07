@@ -294,6 +294,8 @@ class Assets:
         segments = [part for part in name.strip("/").split("/") if part]
         if not segments:
             raise AssetNotFoundException("empty asset name")
+        if ".." in segments or "." in segments:
+            raise AssetNotFoundException(f"asset name {name!r} leaves the assets folder")
         node: Assets = self
         for index, segment in enumerate(segments):
             child = node._lookup_child(segment)
