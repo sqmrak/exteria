@@ -624,6 +624,118 @@ static void read_invoice(const exteria_tl_value *media, exteria_message_row *row
         snprintf(row->text + used, sizeof(row->text) - used, "\n\n\xE2\xAD\x90 %lld", (long long)total);
 }
 
+typedef struct {
+    char *buf;
+    size_t cap;
+    size_t len;
+} rich_out;
+
+#define RICH_DEPTH_MAX 16
+#define RICH_ITEMS_MAX 512
+
+static void rich_put(rich_out *o, const uint8_t *data, size_t len) {
+    size_t room = o->cap - 1 - o->len;
+    if (len > room) {
+        len = room;
+        /* a sequence that did not fit whole goes with its lead byte */
+        while (len > 0 && (data[len] & 0xC0u) == 0x80u) --len;
+    }
+    memcpy(o->buf + o->len, data, len);
+    o->len += len;
+    o->buf[o->len] = 0;
+}
+
+/* a block ends with a line break, and a paragraph with a blank line; nothing is added before the first block */
+static void rich_break(rich_out *o, size_t lines) {
+    size_t have = 0;
+    if (!o->len) return;
+    while (have < o->len && o->buf[o->len - 1 - have] == '\n') ++have;
+    for (; have < lines; ++have) rich_put(o, (const uint8_t *)"\n", 1);
+}
+
+static void rich_text(rich_out *o, const exteria_tl_value *v, unsigned depth) {
+    const uint8_t *data;
+    size_t len;
+    if (!v || depth > RICH_DEPTH_MAX) return;
+    if (exteria_tl_is(v, EXTERIA_TL_ID_textPlain)) {
+        if (exteria_tl_get_bytes(v, "text", &data, &len) == EXTERIA_OK) rich_put(o, data, len);
+    } else if (exteria_tl_is(v, EXTERIA_TL_ID_textConcat)) {
+        const exteria_tl_value *parts = exteria_tl_get(v, "texts");
+        if (!is_vec(parts)) return;
+        for (uint32_t i = 0; i < parts->u.vec.count && i < RICH_ITEMS_MAX; ++i) rich_text(o, parts->u.vec.items[i], depth + 1);
+    } else if (exteria_tl_is(v, EXTERIA_TL_ID_textCustomEmoji)) {
+        if (exteria_tl_get_bytes(v, "alt", &data, &len) == EXTERIA_OK) rich_put(o, data, len);
+    } else if (exteria_tl_is(v, EXTERIA_TL_ID_textMath)) {
+        if (exteria_tl_get_bytes(v, "source", &data, &len) == EXTERIA_OK) rich_put(o, data, len);
+    } else if (!exteria_tl_is(v, EXTERIA_TL_ID_textButton) && !exteria_tl_is(v, EXTERIA_TL_ID_textImage)) {
+        /* bold, links, dates and the rest wrap one more text */
+        rich_text(o, exteria_tl_get(v, "text"), depth + 1);
+    }
+}
+
+static void rich_blocks(rich_out *o, const exteria_tl_value *blocks, unsigned depth);
+
+static void rich_list(rich_out *o, const exteria_tl_value *items, int ordered, unsigned depth) {
+    if (!is_vec(items)) return;
+    for (uint32_t i = 0; i < items->u.vec.count && i < RICH_ITEMS_MAX; ++i) {
+        const exteria_tl_value *item = items->u.vec.items[i];
+        const uint8_t *num;
+        size_t num_len;
+        char label[24];
+        if (ordered && exteria_tl_get_bytes(item, "num", &num, &num_len) == EXTERIA_OK && num_len > 0 && num_len < sizeof(label) - 2) {
+            memcpy(label, num, num_len);
+            memcpy(label + num_len, " ", 2);
+        } else if (ordered) {
+            snprintf(label, sizeof(label), "%u. ", (unsigned)(i + 1));
+        } else {
+            snprintf(label, sizeof(label), "\xE2\x80\xA2 ");
+        }
+        rich_put(o, (const uint8_t *)label, strlen(label));
+        if (exteria_tl_is(item, EXTERIA_TL_ID_pageListItemText) || exteria_tl_is(item, EXTERIA_TL_ID_pageListOrderedItemText)) rich_text(o, exteria_tl_get(item, "text"), depth + 1);
+        else rich_blocks(o, exteria_tl_get(item, "blocks"), depth + 1);
+        rich_break(o, 1);
+    }
+}
+
+static void rich_blocks(rich_out *o, const exteria_tl_value *blocks, unsigned depth) {
+    if (!is_vec(blocks) || depth > RICH_DEPTH_MAX) return;
+    for (uint32_t i = 0; i < blocks->u.vec.count && i < RICH_ITEMS_MAX; ++i) {
+        const exteria_tl_value *b = blocks->u.vec.items[i];
+        if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockList)) {
+            rich_list(o, exteria_tl_get(b, "items"), 0, depth);
+            rich_break(o, 2);
+        } else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockOrderedList)) {
+            rich_list(o, exteria_tl_get(b, "items"), 1, depth);
+            rich_break(o, 2);
+        } else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockDetails)) {
+            rich_text(o, exteria_tl_get(b, "title"), depth + 1);
+            rich_break(o, 1);
+            rich_blocks(o, exteria_tl_get(b, "blocks"), depth + 1);
+        } else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockTitle) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockSubtitle) ||
+                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeader) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockSubheader) ||
+                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockParagraph) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockPreformatted) ||
+                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockFooter) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockKicker) ||
+                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockBlockquote) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockPullquote)) {
+            size_t before = o->len;
+            rich_text(o, exteria_tl_get(b, "text"), depth + 1);
+            if (o->len > before) rich_break(o, 2);
+        }
+    }
+}
+
+/* a bot that answers in blocks sends an empty "message" and the words in rich_message; the blocks are shown as plain text, without their styling */
+static void read_rich_message(const exteria_tl_value *m, exteria_message_row *out) {
+    const exteria_tl_value *rich = exteria_tl_get(m, "rich_message");
+    rich_out o;
+    if (!rich || !exteria_tl_is(rich, EXTERIA_TL_ID_richMessage)) return;
+    o.buf = out->text;
+    o.cap = sizeof(out->text);
+    o.len = 0;
+    out->text[0] = 0;
+    rich_blocks(&o, exteria_tl_get(rich, "blocks"), 0);
+    while (o.len > 0 && out->text[o.len - 1] == '\n') out->text[--o.len] = 0;
+}
+
 exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_row *out) {
     exteria_peer from;
     const exteria_tl_value *header;
@@ -729,6 +841,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     }
     if (exteria_tl_has(m, "grouped_id")) exteria_tl_get_i64(m, "grouped_id", &out->grouped_id);
     copy_text(out->text, sizeof(out->text), m, "message", 1);
+    if (!out->text[0]) read_rich_message(m, out);
     exteria_media_classify(exteria_tl_get(m, "media"), &out->media);
     exteria_entities_read(m, out->entities, EXTERIA_MESSAGE_ENTITIES_MAX, out->urls, sizeof(out->urls), &out->entity_count);
     read_invoice(exteria_tl_get(m, "media"), out);

@@ -470,6 +470,67 @@ static void test_bot_message(void) {
     free(row);
 }
 
+static exteria_tl_value *rich_plain(const char *text) {
+    exteria_tl_value *t = obj("textPlain");
+    set_str(t, "text", text);
+    return t;
+}
+
+static exteria_tl_value *rich_block(const char *name, exteria_tl_value *text) {
+    exteria_tl_value *b = obj(name);
+    set(b, "text", text);
+    return b;
+}
+
+static exteria_tl_value *rich_message_of(exteria_tl_value **blocks, uint32_t count) {
+    exteria_tl_value *rich = obj("richMessage");
+    set(rich, "blocks", vec_of(blocks, count));
+    return rich;
+}
+
+static void test_rich_message(void) {
+    exteria_message_row *row = calloc(1, sizeof(*row));
+    exteria_tl_value *m, *blocks[3], *parts[2], *entries[2], *list, *concat, *deep;
+    CHECK(row != NULL);
+    /* the words of a bot answer sit in the blocks, and the empty message is not an unsupported kind */
+    parts[0] = rich_plain("hello ");
+    parts[1] = rich_block("textBold", rich_plain("world"));
+    concat = obj("textConcat");
+    set(concat, "texts", vec_of(parts, 2));
+    entries[0] = rich_block("pageListItemText", rich_plain("one"));
+    entries[1] = rich_block("pageListItemText", rich_plain("two"));
+    list = obj("pageBlockList");
+    set(list, "items", vec_of(entries, 2));
+    blocks[0] = rich_block("pageBlockParagraph", concat);
+    blocks[1] = list;
+    blocks[2] = obj("pageBlockDivider");
+    m = message(20, "");
+    set(m, "rich_message", rich_message_of(blocks, 3));
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK(!strcmp(row->text, "hello world\n\n\xE2\x80\xA2 one\n\xE2\x80\xA2 two"));
+    CHECK_EQ_INT(row->media.kind, EXTERIA_PREVIEW_TEXT);
+    /* a message that has its own text keeps it */
+    m = message(21, "own words");
+    set(m, "rich_message", rich_message_of(blocks, 3));
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK(!strcmp(row->text, "own words"));
+    /* blocks with nothing readable leave the text empty */
+    blocks[0] = obj("pageBlockDivider");
+    m = message(22, "");
+    set(m, "rich_message", rich_message_of(blocks, 1));
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK(!row->text[0]);
+    /* nesting past the limit is dropped, not followed */
+    deep = rich_plain("deep");
+    for (int i = 0; i < 40; ++i) deep = rich_block("textBold", deep);
+    blocks[0] = rich_block("pageBlockParagraph", deep);
+    m = message(23, "");
+    set(m, "rich_message", rich_message_of(blocks, 1));
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK(!row->text[0]);
+    free(row);
+}
+
 static void test_invoice_message(void) {
     exteria_message_row *row = calloc(1, sizeof(*row));
     exteria_tl_value *m = message(10, ""), *media = obj("messageMediaInvoice");
@@ -2032,6 +2093,7 @@ int main(void) {
     test_formatting_entities();
     test_bot_message();
     test_invoice_message();
+    test_rich_message();
     test_text_limits();
     test_url_pool_overflow();
     test_sticker();
