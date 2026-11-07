@@ -168,6 +168,11 @@
     int32_t _migrateDc;
     BOOL _dropKeyPending;
     BOOL _archiveLoading;
+    BOOL _archiveSummaryStale;
+    BOOL _archiveSummarySeen;
+    uint64_t _archiveSummaryAtMs;
+    int32_t _archiveLiveUnread;
+    BOOL _archiveLiveMuted;
     int64_t _authorizedAccount;
     int64_t _account;
     NSMutableDictionary *_handlers;
@@ -834,12 +839,14 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item);
     }
     NSUInteger draftRevision = self.drafts.revision;
     ExteriaListCompletion shown = completion;
+    /* messages.dialogs is the whole list and messages.dialogsSlice has more behind it; a whole list needs no second request, which is one less getDialogs toward the flood wait */
+    __block BOOL hasMorePages = NO;
     if (folder > 0 && completion) {
         /* a request holds the newest hundred chats of the archive, and the older ones were never asked for, so a long archive ended at the hundredth chat; the pages that follow are
            walked here, up to the limit the search uses, and a page that fails leaves the chats that came */
         ExteriaListCompletion whole = [completion copy];
         shown = [[^(NSArray *items, NSString *errorName) {
-            if (!items || errorName) { whole(items, errorName); return; }
+            if (!items || errorName || !hasMorePages) { whole(items, errorName); return; }
             NSMutableArray *all = [NSMutableArray arrayWithArray:items];
             NSMutableSet *keys = [NSMutableSet set];
             ExteriaDialog *cursor = nil;
@@ -854,6 +861,7 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item);
     [self load:"messages.getDialogs" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
         return ExteriaConfigureDialogList(arena, request, folder);
     } parse:^NSArray *(const exteria_tl_value *answer) {
+        hasMorePages = exteria_tl_is(answer, EXTERIA_TL_ID_messages_dialogsSlice);
         NSArray *dialogs = [self dialogsFromAnswer:answer folder:folder];
         NSUInteger folders = 0;
         for (ExteriaDialog *entry in dialogs) if (entry.folder) ++folders;
@@ -965,6 +973,16 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
             return nil;
         }
         exteria_dialog_row summary;
+        if (folder == 0) {
+            /* the counters of the folder entry move when the chats inside it do, which is what asks for a new summary */
+            for (size_t i = 0; i < count; ++i) {
+                if (!rows[i].folder || rows[i].folder_id != 1) continue;
+                if (!_archiveSummarySeen || rows[i].unread_count != _archiveLiveUnread || (rows[i].muted != 0) != _archiveLiveMuted) _archiveSummaryStale = YES;
+                _archiveSummarySeen = YES;
+                _archiveLiveUnread = rows[i].unread_count;
+                _archiveLiveMuted = rows[i].muted != 0;
+            }
+        }
         if (folder == 0 && [self readArchiveSummary:&summary]) {
             for (size_t i = 0; i < count; ++i) if (rows[i].folder && rows[i].folder_id == 1) rows[i] = summary;
         }
@@ -1000,12 +1018,22 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
 
 - (void)finishArchiveRefreshWithError:(NSString *)error {
     _archiveLoading = NO;
+    /* a refresh that failed has not shown the new archive, so the next load asks again */
+    _archiveSummaryStale = YES;
     [self noteRpcError:error];
     NSLog(@"exteria: archive summary refresh failed: %@", error);
 }
 
+#define ARCHIVE_SUMMARY_FRESH_MS 120000u
+
 - (void)refreshArchiveSummary {
-    if (_archiveLoading || !_account) return;
+    /* the summary asks getPeerDialogs and getDialogs, and a list that reloads on every update asked for both each time, until getDialogs answered with a flood wait that held
+       back the list of the archive too. the entry is asked for again after a move, when its counters changed, and when the last answer is old */
+    if (_archiveLoading || !_account || [self folderFloodError]) return;
+    uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
+    if (!_archiveSummaryStale && _archiveSummaryAtMs && now - _archiveSummaryAtMs < ARCHIVE_SUMMARY_FRESH_MS) return;
+    _archiveSummaryStale = NO;
+    _archiveSummaryAtMs = now;
     _archiveLoading = YES;
     int64_t account = _account;
     [self submitBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **out) {
@@ -1095,6 +1123,7 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
     } handler:^(const exteria_mt_rpc_result *result) {
         NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
         NSLog(@"exteria: editPeerFolders of chat %lld to folder %d answered: %@", peerId, (int)folder, error ? error : @"ok");
+        if (!error) _archiveSummaryStale = YES;
         if (ExteriaIsRevokedError(error)) _dropKeyPending = YES;
         dispatch_async(dispatch_get_main_queue(), ^{ done(error); });
     }];
