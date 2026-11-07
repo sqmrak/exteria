@@ -358,7 +358,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    [_statusAnimation setPlaying:YES];
+    [_statusAnimation setPlaying:!_hero];
     NSLog(@"exteria: the profile screen is on screen");
 }
 
@@ -492,6 +492,8 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     ExteriaLottieView *view = [[[ExteriaLottieView alloc] initWithPackedData:data key:key] autorelease];
     view.userInteractionEnabled = NO;
     view.backgroundColor = [UIColor clearColor];
+    /* a status that lands while the photo is wide stays hidden with the name */
+    view.alpha = _hero ? 0 : 1;
     [_statusAnimation removeFromSuperview];
     [_statusAnimation release];
     _statusAnimation = [view retain];
@@ -504,7 +506,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     };
     [_head addSubview:view];
     [self placeStatusAnimation];
-    [view setPlaying:self.isViewLoaded && self.view.window != nil];
+    [view setPlaying:self.isViewLoaded && self.view.window != nil && !_hero];
 }
 
 /* the name keeps the still picture until the animation has its first frame */
@@ -1054,6 +1056,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
             [card setBlurred:YES];
         }
         _name.alpha = 0;
+        _statusAnimation.alpha = 0;
         _status.alpha = 0;
         _ratingBadge.alpha = 0;
         [self setBarOverPhoto:YES];
@@ -1062,6 +1065,8 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
         (void)finished;
         _heroMoving = NO;
         _avatar.hidden = YES;
+        /* the wide photo draws the name with its own still status, and the moving one under it would play over the picture */
+        [_statusAnimation setPlaying:NO];
         [_hero finishOpen];
         if (_viewerWanted) {
             _viewerWanted = NO;
@@ -1102,6 +1107,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     _heroOpen = NO;
     _avatar.hidden = NO;
     [_hero beginClose];
+    [_statusAnimation setPlaying:self.view.window != nil];
     NSArray *cards = [NSArray arrayWithObjects:_messageAction, _soundAction, _callAction, _videoAction, nil];
     BOOL motion = !ExteriaReduceMotionEnabled();
     [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
@@ -1111,6 +1117,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
             [card setInk:_cardInk];
         }
         _name.alpha = 1;
+        _statusAnimation.alpha = 1;
         _status.alpha = 1;
         _ratingBadge.alpha = 1;
         [self setBarOverPhoto:NO];
