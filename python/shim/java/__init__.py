@@ -63,16 +63,26 @@ def jboolean(value):
     return bool(value)
 
 
-def jbyte(value):
-    return int(value)
+def _wrapped(value, bits, truncate):
+    """chaquopy's truncate=True keeps the low bits of a python int that does not fit, as the sdk passes colors such as 0xFFE53935 to int parameters"""
+    value = int(value)
+    if truncate:
+        value &= (1 << bits) - 1
+        if value >= 1 << (bits - 1):
+            value -= 1 << bits
+    return value
 
 
-def jshort(value):
-    return int(value)
+def jbyte(value, truncate=False):
+    return _wrapped(value, 8, truncate)
 
 
-def jint(value):
-    return int(value)
+def jshort(value, truncate=False):
+    return _wrapped(value, 16, truncate)
+
+
+def jint(value, truncate=False):
+    return _wrapped(value, 32, truncate)
 
 
 def jlong(value):
