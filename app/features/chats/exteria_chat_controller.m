@@ -2786,6 +2786,13 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     BOOL wasBottom = _stickToBottom;
     CGRect previousViewport = _table.frame;
     CGFloat previousOffset = _table.contentOffset.y;
+    /* the strip stands right under the header, over the pinned message and the voice bar, as in the android client; on a tablet the chat list beside the chat already shows the strip, and a second one would stand over the messages */
+    BOOL listHasStrip = ExteriaListShowsPlayer(self);
+    CGFloat playerHeight = _miniPlayer.showing && !listHasStrip ? [ExteriaMiniPlayer height] : 0;
+    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
+    _miniPlayer.hidden = listHasStrip || (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
+    _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
+    headerHeight += playerHeight;
     _pinnedBar.frame = CGRectMake(left, headerHeight, width, pinnedHeight);
     UIView *pinnedFoot = [_pinnedBar viewWithTag:PINNED_FOOT_TAG];
     pinnedFoot.frame = CGRectMake(0, pinnedHeight - 1.0 / ExteriaScreenScale(), width, 1.0 / ExteriaScreenScale());
@@ -2813,13 +2820,6 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _voiceTitle.frame = CGRectMake(24, 5, width - 150, 18);
     _voiceInfo.frame = CGRectMake(24, 23, width - 150, 16);
     headerHeight += voiceHeight;
-    /* on a tablet the chat list beside the chat already shows the strip, and a second one would stand over the messages */
-    BOOL listHasStrip = ExteriaListShowsPlayer(self);
-    CGFloat playerHeight = _miniPlayer.showing && !listHasStrip ? [ExteriaMiniPlayer height] : 0;
-    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
-    _miniPlayer.hidden = listHasStrip || (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
-    _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
-    headerHeight += playerHeight;
     CGRect viewport = CGRectMake(left, headerHeight, width, MAX(0, inputY - contextHeight - headerHeight));
     if (!CGRectEqualToRect(_table.frame, viewport)) _table.frame = viewport;
     BOOL typingWasShown = _typingShown;
