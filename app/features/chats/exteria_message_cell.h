@@ -32,6 +32,10 @@
 - (void)messageCellDidTapShare:(ExteriaMessageCell *)cell;
 /* the name or picture of the sender of a group message was tapped */
 - (void)messageCellDidTapSender:(ExteriaMessageCell *)cell;
+/* a service line (somebody joined, left, was added, renamed the chat) was tapped; the delegate opens the profile of who it is about */
+@optional
+- (void)messageCellDidTapService:(ExteriaMessageCell *)cell;
+@required
 @optional
 - (void)messageCell:(ExteriaMessageCell *)cell answerSharingRequest:(BOOL)accept;
 /* the card of a one-time photo, video, voice note or round video was tapped */

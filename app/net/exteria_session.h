@@ -388,6 +388,9 @@ typedef enum { ExteriaChatCommandPin, ExteriaChatCommandUnpin, ExteriaChatComman
                /* the swipe of the chat list: everything read (messages.readHistory), the manual "unread" mark put on, and that mark taken off */
                ExteriaChatCommandMarkRead, ExteriaChatCommandMarkUnread, ExteriaChatCommandClearUnreadMark } ExteriaChatCommand;
 - (void)performAction:(ExteriaChatCommand)action onDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
+/* reads every unread chat of a folder, one after the other so the server is not asked for them all at once; the completion runs on the main thread with nil
+   when all were read, or the first error name, after which the rest are left as they were */
+- (void)markAllReadInFolder:(int32_t)folderId completion:(void (^)(NSString *errorName))completion;
 
 /* a search through every chat for the text: one ExteriaDialog per found message, naming the chat, with the found
    message as its last one, and the offset for the next page (zero when there is none) */

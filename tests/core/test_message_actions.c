@@ -110,6 +110,25 @@ static void test_sharing(void) {
     CHECK_EQ_INT(exteria_sharing_request(&arena, &peer, 1, -1, &request), EXTERIA_E_ARG);
 }
 
+static void test_chat_sharing(void) {
+    exteria_peer_ref user = {1, 123, 456, 0, 0}, group = {2, 123, 0, 0, 0}, channel = {3, 500, 7, 0, 0}, nohash = {3, 500, 0, 0, 0};
+    exteria_tl_value *request = NULL;
+    CHECK_EQ_INT(exteria_chat_sharing_request(&arena, &channel, 1, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(request, EXTERIA_TL_ID_messages_toggleNoForwards));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "peer"), EXTERIA_TL_ID_inputPeerChannel));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "enabled"), EXTERIA_TL_ID_boolTrue));
+    CHECK(!exteria_tl_has(request, "request_msg_id"));
+    CHECK_EQ_INT(exteria_chat_sharing_request(&arena, &group, 0, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "peer"), EXTERIA_TL_ID_inputPeerChat));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "enabled"), EXTERIA_TL_ID_boolFalse));
+    /* a private chat has its own request, and a channel without its hash cannot be addressed */
+    CHECK_EQ_INT(exteria_chat_sharing_request(&arena, &user, 1, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_chat_sharing_request(&arena, &nohash, 1, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_chat_sharing_request(&arena, &channel, 2, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_chat_sharing_request(&arena, NULL, 1, &request), EXTERIA_E_ARG);
+}
+
 static exteria_action_context sent_text(void) {
     exteria_action_context c;
     memset(&c, 0, sizeof(c));
@@ -711,6 +730,7 @@ int main(void) {
     test_ghost_read_policy();
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
     test_sharing();
+    test_chat_sharing();
     test_sharing_expiry();
     test_rules();
     test_broadcast();

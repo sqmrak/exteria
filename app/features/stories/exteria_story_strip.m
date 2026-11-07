@@ -30,10 +30,6 @@
 #define CLASSIC_TILE 58.0
 #define CLASSIC_MAT 3.0
 
-static UIColor *ExteriaStoryRGB(CGFloat red, CGFloat green, CGFloat blue) {
-    return [UIColor colorWithRed:red / 255 green:green / 255 blue:blue / 255 alpha:1];
-}
-
 /* the ring of the Telegram story cell: an unseen story is a stroke that runs from blue to green, one for close
    friends from lime to green, and a seen one a thin grey line */
 @interface ExteriaStoryRingView : UIControl {
@@ -143,12 +139,12 @@ static UIColor *ExteriaStoryRGB(CGFloat red, CGFloat green, CGFloat blue) {
     if (_classic) {
         face.image = ExteriaClassicGlossButtonImage(ExteriaClassicGlossGreen, NO);
     } else {
-        face.backgroundColor = ExteriaStoryRGB(0x2c, 0x9e, 0xfc);
+        face.backgroundColor = ExteriaColorAccent();
         face.layer.cornerRadius = disc / 2;
         face.layer.borderWidth = 2.5;
         face.layer.borderColor = ExteriaColorScreen().CGColor;
     }
-    UIColor *ink = _classic ? [UIColor whiteColor] : [UIColor colorWithWhite:0.08 alpha:1];
+    UIColor *ink = [UIColor whiteColor];
     CGFloat arm = _classic ? 12 : 11, thick = _classic ? 3 : 2.5;
     for (int i = 0; i < 2; ++i) {
         CALayer *bar = [CALayer layer];

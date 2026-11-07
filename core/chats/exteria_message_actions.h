@@ -9,6 +9,8 @@
 
 /* requests a change of sharing, or answers a request when request_id is positive */
 exteria_status exteria_sharing_request(exteria_arena *arena, const exteria_peer_ref *peer, int enabled, int32_t request_id, exteria_tl_value **out);
+/* the same switch for a group or a channel: enabled stops members from forwarding, copying and saving what the chat holds; only its creator may set it */
+exteria_status exteria_chat_sharing_request(exteria_arena *arena, const exteria_peer_ref *peer, int enabled, exteria_tl_value **out);
 
 #define EXTERIA_SHARING_PERIOD_DEFAULT 86400
 exteria_status exteria_sharing_period_parse(const exteria_tl_value *answer, int32_t *seconds);

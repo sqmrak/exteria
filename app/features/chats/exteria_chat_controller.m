@@ -894,6 +894,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         _input.writable = NO;
         _input.readOnlyNote = NSLocalizedString(@"chat.saved.readonly", nil);
     }
+    [self applySendBanOfDialog:_dialog];
     [root addSubview:_input];
     _context = [[ExteriaComposeContext alloc] init];
     _context.hidden = YES;
@@ -1682,6 +1683,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             if (!canPost) chat->_input.readOnlyNote = NSLocalizedString(@"chat.readonly", nil);
             [chat.view setNeedsLayout];
         }
+        [chat applySendBanOfDialog:channel.dialog];
         [chat loadSendAsOptions];
         if (chat->_dialog.topicId > 0) return;
         if (channel.pinnedMessage > 0 && !chat->_pinnedList) {
@@ -1695,6 +1697,30 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             [chat setPinnedBarHidden:YES];
         }
     }];
+}
+
+/* a group the admins closed to messages, for everyone or for this account, says so where the field would be (the join button of a group not joined yet takes that place first); a ban that ran out is not one, and one that is a year
+   away or more reads as for good, as in the official clients */
+- (void)applySendBanOfDialog:(ExteriaDialog *)dialog {
+    if (dialog.kind != EXTERIA_DIALOG_GROUP || dialog.sendBan == EXTERIA_SEND_OPEN || _pinnedList) return;
+    NSString *note = nil;
+    if (dialog.sendBan == EXTERIA_SEND_BAN_GROUP) {
+        note = NSLocalizedString(@"chat.send.banned.group", nil);
+    } else {
+        NSTimeInterval until = dialog.sendBanUntil, now = [[NSDate date] timeIntervalSince1970];
+        if (until != 0 && until <= now) return;
+        if (until == 0 || until - now > 366 * 24 * 3600) {
+            note = NSLocalizedString(@"chat.send.banned.forever", nil);
+        } else {
+            NSDateFormatter *formatter = [[[NSDateFormatter alloc] init] autorelease];
+            formatter.dateStyle = NSDateFormatterMediumStyle;
+            formatter.timeStyle = NSDateFormatterShortStyle;
+            note = [NSString stringWithFormat:NSLocalizedString(@"chat.send.banned.until", nil), [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:until]]];
+        }
+    }
+    _input.writable = NO;
+    _input.readOnlyNote = note;
+    [self.view setNeedsLayout];
 }
 
 /* the post the comments belong to heads them: the bar names it, so a long thread need not be scrolled back to its start to read it, and a tap goes to it */
@@ -6958,6 +6984,31 @@ static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
 
 - (void)messageCellDidTapSender:(ExteriaMessageCell *)cell {
     [self openSender:cell.item.senderPerson key:cell.item.message.senderKey messageId:cell.item.message.messageId];
+}
+
+/* the line of a service message opens the profile of the person it is about: the one added, removed or invited, and for the rest (a join, a new title, a pin) whoever did it */
+- (void)messageCellDidTapService:(ExteriaMessageCell *)cell {
+    ExteriaMessage *message = cell.item.message;
+    switch ((exteria_service_kind)(message.service - 1)) {
+    case EXTERIA_SERVICE_OTHER:
+    case EXTERIA_SERVICE_CALL:
+    case EXTERIA_SERVICE_HISTORY_CLEAR:
+    case EXTERIA_SERVICE_MIGRATED:
+    case EXTERIA_SERVICE_CUSTOM:
+        return;
+    default:
+        break;
+    }
+    BOOL aboutTarget = message.service == EXTERIA_SERVICE_USER_ADDED + 1 || message.service == EXTERIA_SERVICE_USER_REMOVED + 1 ||
+                       message.service == EXTERIA_SERVICE_VIDEO_CHAT_INVITE + 1;
+    long long key = aboutTarget && message.targetId ? message.targetId : message.senderKey;
+    if (!key) return;
+    ExteriaPerson *person = [_people objectForKey:[NSNumber numberWithLongLong:key]];
+    if (key > 0 && !person) {
+        [_router openProfileOfUser:key inMessage:message.messageId dialog:_dialog];
+        return;
+    }
+    [self openSender:person key:key messageId:message.messageId];
 }
 
 /* the line "forwarded from" opens the profile or the channel of whoever wrote the message, as in exteraGram; one who hid the link to their account cannot be opened,

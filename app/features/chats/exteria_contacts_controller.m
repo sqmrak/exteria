@@ -181,7 +181,10 @@ static UIButton *ExteriaContactsBarButton(ExteriaSymbol symbol, id target, SEL a
 
 - (void)searchTapped {
     [self.table setContentOffset:CGPointZero animated:YES];
-    [_search becomeFirstResponder];
+    if ([_search becomeFirstResponder]) return;
+    /* a refused focus left the button looking dead; the log names what stood in the way */
+    NSLog(@"exteria: the contact search did not take focus: window %@, key window %@, field hidden %d, alpha %.2f, enabled %d",
+          _search.window, [[UIApplication sharedApplication] keyWindow], (int)_search.hidden, _search.alpha, (int)_search.enabled);
 }
 
 - (void)sortTapped {

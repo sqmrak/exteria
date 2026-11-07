@@ -992,6 +992,8 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     _replyTitleLayout = [[ExteriaTextLayout layoutForName:_replyTitle font:ExteriaFontSemibold((CGFloat)ExteriaChatTextSize() - 1) color:_replyColor width:room] retain];
     UIColor *ink = ExteriaColorBubbleText(_message.outgoing);
     _replyTextLayout = [[ExteriaTextLayout layoutForText:_replyText entities:_replyEntities font:ExteriaFontRegular((CGFloat)ExteriaChatTextSize() - 1) color:ink linkColor:ink width:room maxLines:1 flush:0] retain];
+    /* the quote is not tappable, so a covered spoiler in it could never be opened and left a bare plate */
+    _replyTextLayout.spoilersRevealed = YES;
     CGFloat height = 2 * QUOTE_PAD_Y + _replyTitleLayout.size.height + 2 + _replyTextLayout.size.height;
     CGFloat used = MAX(_replyTitleLayout.size.width, _replyTextLayout.size.width) + QUOTE_LEFT + QUOTE_RIGHT;
     _replyFrame = CGRectMake(origin.x, origin.y, MIN(width, MAX(64, used)), height);

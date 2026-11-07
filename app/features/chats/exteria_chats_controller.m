@@ -473,12 +473,40 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [self loadOwnTitle];
 }
 
+/* the archive row has no card to peek into; a press on it offers to read everything in it */
+- (void)askToReadFolder:(ExteriaDialog *)folder {
+    UIView *host = self.view.window ? ExteriaOverlayHost() : nil;
+    if (!host) return;
+    [self closeOpenCell];
+    ExteriaWeakReference *weak = _badgeWeak;
+    int32_t folderId = folder.folderId;
+    [ExteriaSheet presentInView:host title:nil message:nil options:[NSArray arrayWithObject:NSLocalizedString(@"chats.archive.readall", nil)] destructive:nil
+                    cancelTitle:NSLocalizedString(@"notice.cancel", nil) handler:^(NSUInteger index) {
+        ExteriaChatsController *controller = weak.target;
+        if (!controller || index != 0) return;
+        [controller.session markAllReadInFolder:folderId completion:^(NSString *errorName) {
+            ExteriaChatsController *again = weak.target;
+            if (!again) return;
+            if (errorName) {
+                NSLog(@"exteria: reading the archive failed: %@", errorName);
+                [again showFailureText:[errorName isEqualToString:@"TIMEOUT"] ? NSLocalizedString(@"error.offline", nil)
+                                                                              : [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName]];
+            }
+            [again reloadDiscardingRunning];
+        }];
+    }];
+}
+
 - (void)peekChat:(UIGestureRecognizer *)gesture {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     NSIndexPath *path = [self.table indexPathForRowAtPoint:[gesture locationInView:self.table]];
     if (!path || (NSUInteger)path.row >= _shown.count) return;
     ExteriaDialog *dialog = [_shown objectAtIndex:(NSUInteger)path.row];
-    if (dialog.folder || dialog.community) return;
+    if (dialog.folder) {
+        [self askToReadFolder:dialog];
+        return;
+    }
+    if (dialog.community) return;
     UITableViewCell *cell = [self.table cellForRowAtIndexPath:path];
     /* the screen on top, not the window: before ios 8 a view put in the window keeps the turn of the device, and on an ipad held sideways the card and its menu lay on their side */
     UIView *host = self.view.window ? ExteriaOverlayHost() : nil;

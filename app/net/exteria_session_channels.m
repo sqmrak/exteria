@@ -1,6 +1,7 @@
 #import "exteria_session_internal.h"
 
 #include "exteria_channel.h"
+#include "exteria_message_actions.h"
 #include "exteria_profile.h"
 
 #import "exteria_rpc.h"
@@ -434,6 +435,13 @@ static void ExteriaChannelWrite(ExteriaSession *session, exteria_status (^build)
     exteria_peer_ref channel = ExteriaPeerRefOfDialog(dialog);
     ExteriaChannelWrite(self, ^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         return exteria_channel_signatures_request(arena, &channel, enabled ? 1 : 0, request);
+    }, NO, completion);
+}
+
+- (void)setContentProtected:(BOOL)enabled ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    ExteriaChannelWrite(self, ^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_chat_sharing_request(arena, &peer, enabled ? 1 : 0, request);
     }, NO, completion);
 }
 

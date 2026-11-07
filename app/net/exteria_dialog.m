@@ -50,6 +50,8 @@
 @synthesize pinned = _pinned;
 @synthesize muted = _muted;
 @synthesize canPost = _canPost;
+@synthesize sendBan = _sendBan;
+@synthesize sendBanUntil = _sendBanUntil;
 @synthesize noForwards = _noForwards;
 @synthesize outgoing = _outgoing;
 @synthesize forwarded = _forwarded;
@@ -144,6 +146,8 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _pinned = row->pinned;
     _muted = row->muted;
     _canPost = row->can_post;
+    _sendBan = row->send_ban;
+    _sendBanUntil = row->send_ban_until;
     _noForwards = row->noforwards != 0;
     _outgoing = row->outgoing;
     _forwarded = row->forwarded;

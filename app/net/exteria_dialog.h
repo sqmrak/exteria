@@ -19,6 +19,8 @@
     BOOL _pinned;
     BOOL _muted;
     BOOL _canPost;
+    int _sendBan;
+    int32_t _sendBanUntil;
     BOOL _noForwards;
     BOOL _outgoing;
     BOOL _forwarded;
@@ -140,6 +142,9 @@
 @property (nonatomic, readonly) BOOL muted;
 /* a broadcast channel this account may post in; a chat of any other kind is open to writing on its own terms */
 @property (nonatomic, readonly) BOOL canPost;
+/* an exteria_send_ban: why the account may not write in this group, and when a personal ban ends (zero is for good) */
+@property (nonatomic, readonly) int sendBan;
+@property (nonatomic, readonly) int32_t sendBanUntil;
 @property (nonatomic, readonly) BOOL outgoing;
 /* the last message is a forward, and the list puts an arrow before its preview */
 @property (nonatomic, readonly) BOOL forwarded;

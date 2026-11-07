@@ -4,6 +4,7 @@
 
 #import "exteria_admin_log_controller.h"
 #import "exteria_channel_field_controller.h"
+#import "exteria_channel_invites_controller.h"
 #import "exteria_channel_errors.h"
 #import "exteria_channel_members_controller.h"
 #import "exteria_gift_screen.h"
@@ -16,6 +17,7 @@
     ExteriaMediaCache *_media;
     ExteriaWeakReference *_weak;
     BOOL _signaturesBusy;
+    BOOL _protectBusy;
     void (^_changedHandler)(ExteriaFullChannel *channel);
 }
 @end
@@ -86,6 +88,25 @@ static NSString *ExteriaCount(NSInteger count) {
             }]];
         }
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"channel.manage.info", nil) footer:nil rows:rows]];
+    }
+
+    /* the creator and the admins who may invite make links, whether the channel is public or private */
+    if (channel.creator || (rights & EXTERIA_ADMIN_INVITE_USERS)) {
+        [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:
+            [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolLink tone:ExteriaSettingsToneBlueLight title:NSLocalizedString(@"channel.manage.invites", nil) subtitle:nil value:nil tap:^{
+                [(ExteriaChannelManageController *)weak.target openInvites];
+            }]]]];
+    }
+
+    /* only the creator decides whether members may forward, copy and save */
+    if (channel.creator) {
+        ExteriaSettingsRow *protect = [ExteriaSettingsRow switchRowWithSymbol:ExteriaSymbolBlock tone:ExteriaSettingsToneRed title:NSLocalizedString(@"channel.protect", nil) subtitle:nil
+                                                                           on:channel.dialog.noForwards toggle:^(BOOL on) {
+            [(ExteriaChannelManageController *)weak.target setContentProtected:on];
+        }];
+        [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"channel.protect.header", nil)
+                                                               footer:NSLocalizedString(channel.megagroup ? @"channel.protect.info.group" : @"channel.protect.info", nil)
+                                                                 rows:[NSArray arrayWithObject:protect]]];
     }
 
     NSMutableArray *people = [NSMutableArray array];
@@ -209,11 +230,33 @@ static NSString *ExteriaUnlessUnchanged(NSString *errorName) {
     }];
 }
 
+- (void)setContentProtected:(BOOL)enabled {
+    if (_protectBusy) return;
+    _protectBusy = YES;
+    ExteriaWeakReference *weak = _weak;
+    [self retain];
+    [_session setContentProtected:enabled ofDialog:_channel.dialog completion:^(NSString *errorName) {
+        [self autorelease];
+        ExteriaChannelManageController *me = weak.target;
+        if (!me) return;
+        me->_protectBusy = NO;
+        NSString *error = ExteriaUnlessUnchanged(errorName);
+        if (error) ExteriaGiftAlert(nil, ExteriaChannelErrorText(error));
+        /* the switch shows what the server has, whether the change went through or not */
+        [me refresh];
+    }];
+}
+
 #pragma mark lists
 
 - (void)openAdminLog {
     ExteriaAdminLogController *log = [[[ExteriaAdminLogController alloc] initWithSession:_session channel:_channel avatars:_avatars media:_media] autorelease];
     [self.navigationController pushViewController:log animated:YES];
+}
+
+- (void)openInvites {
+    ExteriaChannelInvitesController *invites = [[[ExteriaChannelInvitesController alloc] initWithSession:_session channel:_channel avatars:_avatars media:_media] autorelease];
+    [self.navigationController pushViewController:invites animated:YES];
 }
 
 - (void)openList:(ExteriaChannelList)list {

@@ -48,6 +48,22 @@ exteria_status exteria_sharing_request(exteria_arena *arena, const exteria_peer_
     return status;
 }
 
+exteria_status exteria_chat_sharing_request(exteria_arena *arena, const exteria_peer_ref *peer, int enabled, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *value;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !peer || !out || (peer->kind != 2 && peer->kind != 3) || (enabled != 0 && enabled != 1)) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.toggleNoForwards");
+    value = exteria_tl_new_obj(arena, enabled ? "boolTrue" : "boolFalse");
+    if (!request || !value) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "enabled", value);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
 int exteria_copy_forward_allowed(exteria_preview_kind kind, int has_text, int has_file, int view_once, int64_t size, int32_t duration) {
     if (view_once) return 0;
     switch (kind) {

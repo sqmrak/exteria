@@ -38,6 +38,7 @@
 
 /* a list older than this is fetched again when its screen comes back */
 #define STALE_SECONDS 60.0
+#define CLASSIC_READ_FOLDER_SHEET 7101
 
 
 @interface ExteriaClassicChatsController () <UIActionSheetDelegate> {
@@ -49,6 +50,7 @@
     ExteriaChatListStyle _listStyle;
     ExteriaChatSwipe _swipe;
     int32_t _folderId;
+    int32_t _readingFolderId;
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickers;
@@ -1046,12 +1048,26 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     }
 }
 
+/* the archive row has no card to peek into; a press on it offers to read everything in it */
+- (void)askToReadFolder:(ExteriaDialog *)folder {
+    _readingFolderId = folder.folderId;
+    UIActionSheet *sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:NSLocalizedString(@"notice.cancel", nil)
+                                          destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"chats.archive.readall", nil), nil];
+    sheet.tag = CLASSIC_READ_FOLDER_SHEET;
+    [sheet showFromTabBar:self.tabBarController.tabBar];
+    [sheet release];
+}
+
 - (void)rowPressed:(UIGestureRecognizer *)press {
     if (press.state != UIGestureRecognizerStateBegan || _selection || self.editing) return;
     NSIndexPath *path = [self.tableView indexPathForRowAtPoint:[press locationInView:self.tableView]];
     if (!path || (NSUInteger)path.row >= _shown.count) return;
     ExteriaDialog *dialog = [_shown objectAtIndex:(NSUInteger)path.row];
-    if (dialog.folder || dialog.community) return;
+    if (dialog.folder) {
+        [self askToReadFolder:dialog];
+        return;
+    }
+    if (dialog.community) return;
     UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:path];
     /* the screen on top, not the window: before ios 8 a view put in the window keeps the turn of the device, and on an ipad held sideways the card and its menu lay on their side */
     UIView *host = self.view.window ? ExteriaOverlayHost() : nil;
@@ -1151,6 +1167,17 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
 }
 
 - (void)actionSheet:(UIActionSheet *)sheet clickedButtonAtIndex:(NSInteger)index {
+    if (sheet.tag == CLASSIC_READ_FOLDER_SHEET) {
+        if (index != sheet.firstOtherButtonIndex) return;
+        ExteriaWeakReference *weak = _badgeWeak;
+        [_session markAllReadInFolder:_readingFolderId completion:^(NSString *errorName) {
+            ExteriaClassicChatsController *controller = weak.target;
+            if (!controller) return;
+            if (errorName) NSLog(@"exteria: reading the archive failed: %@", errorName);
+            [controller reload];
+        }];
+        return;
+    }
     if (index != sheet.destructiveButtonIndex) return;
     [self applyAction:ExteriaChatCommandDelete toDialogs:[self selectedDialogs]];
 }

@@ -7,7 +7,9 @@ typedef enum {
     /* the public name of the channel: only what a name can hold goes in, and the server is asked whether it is free while the person types */
     ExteriaChannelFieldUsername,
     /* the title an admin shows next to the name */
-    ExteriaChannelFieldRank
+    ExteriaChannelFieldRank,
+    /* the name an admin gives an invite link */
+    ExteriaChannelFieldInviteTitle
 } ExteriaChannelFieldKind;
 
 /* one text field on a card with a line of explanation under it, and the action that saves it; the screen goes back

@@ -426,11 +426,14 @@ static void page_layer_changed(UIView *layer) {
     if ([layer isKindOfClass:[ExteriaPluginView class]] && ((ExteriaPluginView *)layer).viewId < 0) [layer.superview setNeedsLayout];
 }
 
+/* a view taken off its parent is held by g_views alone, so dropping its key frees it, and reading its subviews after that sent sublayers to a freed layer on ios 6 */
 static void purge(UIView *view) {
+    [view retain];
     if ([view conformsToProtocol:@protocol(ExteriaPluginSurface)]) {
         [g_views removeObjectForKey:[NSNumber numberWithLongLong:((id<ExteriaPluginSurface>)view).viewId]];
     }
     for (UIView *child in view.subviews) purge(child);
+    [view release];
 }
 
 static UIViewAnimationOptions curve_options(NSString *curve) {

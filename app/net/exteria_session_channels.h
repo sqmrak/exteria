@@ -141,5 +141,7 @@ typedef enum {
 /* nil error when the name is free */
 - (void)checkUsername:(NSString *)username ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 - (void)setSignatures:(BOOL)enabled ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
+/* stops members from forwarding, copying and saving what the group or channel holds; only the creator may */
+- (void)setContentProtected:(BOOL)enabled ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 
 @end

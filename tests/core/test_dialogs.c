@@ -331,6 +331,54 @@ static void test_channel_posting_rights(void) {
     CHECK_EQ_INT(rows[1].can_post, 1);
 }
 
+static void test_group_send_ban(void) {
+    exteria_dialog_row rows[1];
+    size_t count;
+    exteria_tl_value *d[1], *m[1], *c[1], *u[1], *everyone = obj("chatBannedRights"), *alone = obj("chatBannedRights"), *admin = obj("chatAdminRights");
+    d[0] = dialog(peer("peerChannel", "channel_id", 14), 1, 0);
+    m[0] = message(peer("peerChannel", "channel_id", 14), 1, 10, "hi");
+    c[0] = obj("channel");
+    set_i64(c[0], "id", 14);
+    set_str(c[0], "title", "Updates");
+    set_flag(c[0], "megagroup");
+    u[0] = user(6, "Bob", NULL);
+#define PARSE_GROUP() CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 1, m, 1, c, 1, u, 1), SELF, 0, rows, 1, &count), EXTERIA_OK)
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban, EXTERIA_SEND_OPEN);
+    /* a bar without the messages bit is about media only and leaves the field open */
+    set_flag(everyone, "send_media");
+    set(c[0], "default_banned_rights", everyone);
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban, EXTERIA_SEND_OPEN);
+    set_flag(everyone, "send_messages");
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban, EXTERIA_SEND_BAN_GROUP);
+    CHECK_EQ_INT(rows[0].send_ban_until, 0);
+    /* an admin or the creator writes through the bar of the group */
+    set(c[0], "admin_rights", admin);
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban, EXTERIA_SEND_OPEN);
+    /* the bar of the account alone carries its end, zero for good */
+    c[0] = obj("channel");
+    set_i64(c[0], "id", 14);
+    set_str(c[0], "title", "Updates");
+    set_flag(c[0], "megagroup");
+    set_flag(alone, "send_messages");
+    set(c[0], "banned_rights", alone);
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban, EXTERIA_SEND_BAN_ACCOUNT);
+    CHECK_EQ_INT(rows[0].send_ban_until, 0);
+    set_i32(alone, "until_date", 1900000000);
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban_until, 1900000000);
+    /* the whole group closed is told before the account's own bar */
+    set(c[0], "default_banned_rights", everyone);
+    PARSE_GROUP();
+    CHECK_EQ_INT(rows[0].send_ban, EXTERIA_SEND_BAN_GROUP);
+    CHECK_EQ_INT(rows[0].send_ban_until, 0);
+#undef PARSE_GROUP
+}
+
 static exteria_tl_value *document_message(exteria_tl_value *p, int32_t id, exteria_tl_value **attrs, uint32_t n) {
     exteria_tl_value *m = message(p, id, 5, ""), *media = obj("messageMediaDocument"), *doc = obj("document");
     set(doc, "attributes", vec_of(attrs, n));
@@ -1282,6 +1330,7 @@ int main(void) {
     test_group_channel_and_sender();
     test_service_member_preview();
     test_channel_posting_rights();
+    test_group_send_ban();
     test_media_kinds();
     test_thumbs();
     test_caption_wins_and_cut();

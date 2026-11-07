@@ -450,7 +450,18 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
         [ExteriaMixedColor(outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn(), ExteriaColorBubbleText(outgoing), 0.25) setFill];
         for (NSValue *box in [_item.textLayout rectsForRange:_pickRange]) UIRectFill(CGRectOffset(box.CGRectValue, _item.textOrigin.x, _item.textOrigin.y));
     }
-    if (_item.textLayout) [_item.textLayout drawAtPoint:_item.textOrigin];
+    if (_item.textLayout) {
+        CGContextSaveGState(context);
+        if (!classic) {
+            /* the plate of a quote runs to the edge of the bubble, and its square corner stuck out past the round corner of the bubble */
+            CGFloat inner = ExteriaBubbleRadius(), join = MIN(JOIN_RADIUS, inner);
+            CGFloat joinTop = _item.joinsPrevious ? join : inner, joinBottom = _item.joinsNext ? join : inner;
+            ExteriaAddCorners(context, self.bounds, outgoing ? inner : joinTop, outgoing ? joinTop : inner, outgoing ? joinBottom : inner, outgoing ? inner : joinBottom);
+            CGContextClip(context);
+        }
+        [_item.textLayout drawAtPoint:_item.textOrigin];
+        CGContextRestoreGState(context);
+    }
     if (_item.textLayout && _pickRange.length) {
         NSArray *boxes = [_item.textLayout rectsForRange:_pickRange];
         if (boxes.count) {
@@ -3030,6 +3041,11 @@ static void ExteriaSwipeTick(void) {
     }
     if (_item.giftCard && CGRectContainsPoint(_item.bubbleFrame, [tap locationInView:self.contentView]) && [_delegate respondsToSelector:@selector(messageCellDidTapGift:)]) {
         [_delegate messageCellDidTapGift:self];
+        return;
+    }
+    if (_item && _item.kind == ExteriaChatItemPill && _item.message.service && CGRectContainsPoint(_item.bubbleFrame, [tap locationInView:self.contentView]) &&
+        [_delegate respondsToSelector:@selector(messageCellDidTapService:)]) {
+        [_delegate messageCellDidTapService:self];
         return;
     }
     if (!_item || _item.kind == ExteriaChatItemPill) return;

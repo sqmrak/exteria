@@ -217,6 +217,22 @@ static void fill_user(exteria_dialog_row *row, const exteria_tl_value *users, co
     read_linked_community(row, user, chats);
 }
 
+/* a group closes its field when everyone is barred from messages or when the account alone is; the creator and admins write through both; the group wide bar
+   is read first, as the official clients do, so a member who is also banned is told the whole group is closed */
+static void read_send_ban(exteria_dialog_row *row, const exteria_tl_value *chat) {
+    const exteria_tl_value *everyone = exteria_tl_get(chat, "default_banned_rights");
+    const exteria_tl_value *alone = exteria_tl_get(chat, "banned_rights");
+    row->send_ban = EXTERIA_SEND_OPEN;
+    row->send_ban_until = 0;
+    if (exteria_tl_has(chat, "creator") || exteria_tl_get(chat, "admin_rights")) return;
+    if (everyone && exteria_tl_has(everyone, "send_messages")) {
+        row->send_ban = EXTERIA_SEND_BAN_GROUP;
+    } else if (alone && exteria_tl_has(alone, "send_messages")) {
+        row->send_ban = EXTERIA_SEND_BAN_ACCOUNT;
+        if (exteria_tl_get_i32(alone, "until_date", &row->send_ban_until) != EXTERIA_OK || row->send_ban_until < 0) row->send_ban_until = 0;
+    }
+}
+
 static void fill_chat(exteria_dialog_row *row, const exteria_tl_value *chats) {
     const exteria_tl_value *chat = find_entity(chats, row->peer_id);
     row->kind = row->peer_kind == 3 ? EXTERIA_DIALOG_CHANNEL : EXTERIA_DIALOG_GROUP;
@@ -229,6 +245,7 @@ static void fill_chat(exteria_dialog_row *row, const exteria_tl_value *chats) {
         const exteria_tl_value *rights = exteria_tl_get(chat, "admin_rights");
         row->can_post = exteria_tl_has(chat, "creator") || (rights && exteria_tl_has(rights, "post_messages")) ? 1 : 0;
     }
+    if (row->kind == EXTERIA_DIALOG_GROUP) read_send_ban(row, chat);
     if (exteria_tl_has(chat, "verified")) row->verified = 1;
     if (row->peer_kind == 3 && exteria_tl_has(chat, "forum")) row->forum = 1;
     if (exteria_tl_is(chat, EXTERIA_TL_ID_community)) {

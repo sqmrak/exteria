@@ -198,6 +198,38 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     dispatch_async(dispatch_get_main_queue(), ^{ copy(); [copy release]; });
 }
 
+/* the next unread chat of the list, from the index on; a chat that is only marked unread has the mark taken off instead of a history read */
+- (void)readDialogs:(NSArray *)dialogs from:(NSUInteger)index completion:(void (^)(NSString *errorName))done {
+    while (index < dialogs.count && !((ExteriaDialog *)[dialogs objectAtIndex:index]).unread) ++index;
+    if (index >= dialogs.count) {
+        done(nil);
+        return;
+    }
+    ExteriaDialog *dialog = [dialogs objectAtIndex:index];
+    [self performAction:dialog.unreadCount > 0 ? ExteriaChatCommandMarkRead : ExteriaChatCommandClearUnreadMark onDialog:dialog completion:^(NSString *errorName) {
+        if (errorName) {
+            done(errorName);
+            return;
+        }
+        [self readDialogs:dialogs from:index + 1 completion:done];
+    }];
+}
+
+- (void)markAllReadInFolder:(int32_t)folderId completion:(void (^)(NSString *))completion {
+    void (^done)(NSString *) = [completion copy];
+    [self loadDialogsInFolder:folderId > 0 ? folderId : 1 completion:^(NSArray *items, NSString *errorName) {
+        if (errorName) {
+            done(errorName);
+            [done release];
+            return;
+        }
+        [self readDialogs:items from:0 completion:^(NSString *readError) {
+            done(readError);
+            [done release];
+        }];
+    }];
+}
+
 #pragma mark chat list actions
 
 #define MUTE_FOREVER 2147483647

@@ -13,6 +13,7 @@
 #define TITLE_LIMIT 128
 #define ABOUT_LIMIT 255
 #define RANK_LIMIT 16
+#define INVITE_TITLE_LIMIT 32
 #define CHECK_DELAY 0.5
 
 @interface ExteriaChannelFieldController () {
@@ -48,6 +49,7 @@
     case ExteriaChannelFieldAbout: self.screenTitle = NSLocalizedString(@"channel.field.about", nil); break;
     case ExteriaChannelFieldUsername: self.screenTitle = NSLocalizedString(@"channel.field.link", nil); break;
     case ExteriaChannelFieldRank: self.screenTitle = NSLocalizedString(@"channel.rights.rank", nil); break;
+    case ExteriaChannelFieldInviteTitle: self.screenTitle = NSLocalizedString(@"invite.field.title", nil); break;
     }
     return self;
 }
@@ -74,6 +76,7 @@
     case ExteriaChannelFieldAbout: return ABOUT_LIMIT;
     case ExteriaChannelFieldUsername: return EXTERIA_CHANNEL_USERNAME_MAX - 1;
     case ExteriaChannelFieldRank: return RANK_LIMIT;
+    case ExteriaChannelFieldInviteTitle: return INVITE_TITLE_LIMIT;
     }
     return 64;
 }
@@ -84,6 +87,7 @@
     case ExteriaChannelFieldAbout: return NSLocalizedString(@"channel.about.hint", nil);
     case ExteriaChannelFieldUsername: return NSLocalizedString(@"channel.username.hint", nil);
     case ExteriaChannelFieldRank: return NSLocalizedString(@"channel.rank.hint", nil);
+    case ExteriaChannelFieldInviteTitle: return NSLocalizedString(@"invite.title.hint", nil);
     }
     return nil;
 }
