@@ -6285,6 +6285,12 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
 
 /* drops the strip; a message that was being edited takes its text out of the field with it */
 - (void)cancelCompose {
+    [self cancelComposeAnimated:YES];
+}
+
+/* a sent message closes the reply bar and adds its row in the same moment: with the bar sliding away the table changes height under the row that is being inserted and
+   scrolled to, and the list went blank for a few frames, so that send closes the bar at once */
+- (void)cancelComposeAnimated:(BOOL)animated {
     BOOL editing = _editingId != 0;
     _replyToId = 0;
     [_replyQuote release]; _replyQuote = nil;
@@ -6305,7 +6311,8 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
         _applyingDraft = NO;
         if (back.replyTo) [self restoreDraftReplyTo:back.replyTo];
     }
-    [self relayoutAnimatedThen:nil];
+    if (animated) [self relayoutAnimatedThen:nil];
+    else [self layoutChat];
     [self draftStateChanged];
 }
 
@@ -7559,7 +7566,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     if (_dialog.kind == EXTERIA_DIALOG_CHANNEL) [message showAsChannelPost];
     if (!message.sendReplyTo) message.sendReplyTo = _replyToId;
     message.sentAfterId = [self newestLoadedId];
-    [self cancelCompose];
+    [self cancelComposeAnimated:NO];
     [_local addObject:message];
     _interacting = NO;
     _stickToBottom = YES;
