@@ -363,30 +363,59 @@
     _item.videoComposition = composition;
     return YES;
 }
-/* the picture settles in its new shape with a spring from the old one */
-- (void)playChange:(CGAffineTransform)from {
-    if (_preview.window) ExteriaAnimateEnter(_preview, from, 0.5, EXTERIA_MOTION_SPRING);
+/* the size of the picture the preview shows: the render size of the composition, or the natural size turned by the track's own transform */
+- (CGSize)pictureSize {
+    AVVideoComposition *composition = _item.videoComposition;
+    if (composition) return composition.renderSize;
+    NSArray *tracks = [_item.asset tracksWithMediaType:AVMediaTypeVideo];
+    if (!tracks.count) return CGSizeZero;
+    AVAssetTrack *track = [tracks objectAtIndex:0];
+    CGSize size = CGSizeApplyAffineTransform(track.naturalSize, track.preferredTransform);
+    return CGSizeMake(fabs(size.width), fabs(size.height));
+}
+/* how much the aspect fit of the preview scales a picture of this size */
+- (CGFloat)fitOfSize:(CGSize)size {
+    if (size.width < 1 || size.height < 1) return 0;
+    return MIN(_preview.bounds.size.width / size.width, _preview.bounds.size.height / size.height);
+}
+/* the player draws the new picture only after a seek, so the old shape is shown again from that moment and the picture settles in the new one with a spring;
+   starting earlier turns the stale frame instead */
+- (void)seekToStartThenChange:(CGAffineTransform)from {
+    _timeline.position = _start;
+    ExteriaWeakReference *weak = _weak;
+    [_player seekToTime:CMTimeMakeWithSeconds(_start * _duration, 600) completionHandler:^(BOOL finished) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ExteriaVideoEditor *editor = weak.target;
+            if (finished && editor && !editor->_closed && editor->_preview.window) ExteriaAnimateEnter(editor->_preview, from, 0.5, EXTERIA_MOTION_SPRING);
+        });
+    }];
 }
 - (void)rotate {
     if (!_item) return;
     NSInteger old = _turns; _turns = (_turns + 1) % 4;
+    CGSize before = [self pictureSize];
     if (![self applyComposition]) { _turns = old; [self showEditError]; return; }
-    [_rotate playQuarterTurn]; [self playChange:CGAffineTransformMakeRotation((CGFloat)(-M_PI_2))];
-    [self seekTo:_start]; _timeline.position = _start; [self updateControls];
+    [_rotate playQuarterTurn];
+    /* a quarter turn swaps the sides, and the aspect fit scales the new shape differently from the old one; the turned preview has to match the old picture's size */
+    CGFloat was = [self fitOfSize:before], now = [self fitOfSize:[self pictureSize]];
+    CGFloat scale = was > 0 && now > 0 ? was / now : 1;
+    [self seekToStartThenChange:CGAffineTransformScale(CGAffineTransformMakeRotation((CGFloat)(-M_PI_2)), scale, scale)];
+    [self updateControls];
 }
 - (void)mirror {
     if (!_item) return;
     _mirrored = !_mirrored;
     if (![self applyComposition]) { _mirrored = !_mirrored; [self showEditError]; return; }
-    [_mirror playFlip]; [self playChange:CGAffineTransformMakeScale(-1, 1)];
-    [self seekTo:_start]; _timeline.position = _start; [self updateControls];
+    [_mirror playFlip];
+    [self seekToStartThenChange:CGAffineTransformMakeScale(-1, 1)];
+    [self updateControls];
 }
 - (void)crop {
     if (!_item) return;
     unsigned old = _aspect; _aspect = (_aspect + 1) % VIDEO_RATIO_COUNT;
     if (![self applyComposition]) { _aspect = old; [self showEditError]; return; }
-    [self playChange:CGAffineTransformMakeScale(0.92, 0.92)];
-    [self seekTo:_start]; _timeline.position = _start; [self updateControls];
+    [self seekToStartThenChange:CGAffineTransformMakeScale(0.92, 0.92)];
+    [self updateControls];
 }
 - (void)cancel { _closed = YES; [self dismissViewControllerAnimated:YES completion:nil]; }
 - (void)done {
