@@ -15,13 +15,14 @@
 #define MINE_MAX 5
 #define NAME_TRIES 3
 
-@interface ExteriaStickerMaker () <UIImagePickerControllerDelegate, UINavigationControllerDelegate> {
+@interface ExteriaStickerMaker () <UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIPopoverControllerDelegate> {
     ExteriaSession *_session;
     UIViewController *_host;
     void (^_done)(NSString *);
     NSString *_path;
     NSString *_emoji;
     UIView *_cover;
+    UIPopoverController *_popover;
 }
 @end
 
@@ -43,6 +44,8 @@
     [_path release];
     [_emoji release];
     [_cover release];
+    _popover.delegate = nil;
+    [_popover release];
     [super dealloc];
 }
 
@@ -111,11 +114,39 @@
     picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
     picker.allowsEditing = !whole;
     picker.delegate = self;
-    [_host presentViewController:picker animated:YES completion:nil];
+    /* the picker of the library throws on an ipad unless it stands in a popover (ios 6 and 7 name it in the exception) */
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        _popover = [[UIPopoverController alloc] initWithContentViewController:picker];
+        _popover.delegate = self;
+        CGRect bounds = _host.view.bounds;
+        [_popover presentPopoverFromRect:CGRectMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds), 1, 1) inView:_host.view permittedArrowDirections:0 animated:YES];
+    } else {
+        [_host presentViewController:picker animated:YES completion:nil];
+    }
+}
+
+- (void)dismissPicker:(UIImagePickerController *)picker {
+    if (_popover) {
+        _popover.delegate = nil;
+        [_popover dismissPopoverAnimated:YES];
+        [_popover release];
+        _popover = nil;
+    } else {
+        [picker dismissViewControllerAnimated:YES completion:nil];
+    }
+}
+
+/* a tap outside the popover is a cancel, and says nothing to the picker */
+- (void)popoverControllerDidDismissPopover:(UIPopoverController *)popover {
+    if (popover != _popover) return;
+    _popover.delegate = nil;
+    [_popover release];
+    _popover = nil;
+    [self finish];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-    [picker dismissViewControllerAnimated:YES completion:nil];
+    [self dismissPicker:picker];
     [self finish];
 }
 
@@ -123,7 +154,7 @@
     UIImage *image = [info objectForKey:UIImagePickerControllerEditedImage];
     if (!image) image = [info objectForKey:UIImagePickerControllerOriginalImage];
     [image retain];
-    [picker dismissViewControllerAnimated:YES completion:nil];
+    [self dismissPicker:picker];
     [self setBusy:YES];
     /* off the main thread: the picture is drawn into a canvas whose long side is 512 and written as a PNG, which keeps the clear parts clear */
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
