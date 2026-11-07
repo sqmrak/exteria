@@ -35,10 +35,15 @@ def find_class(name: str):
         pass
     try:
         guard_java_class = _internal("plugin_loader").guard_java_class
-        if not guard_java_class(name):
-            return None
     except Exception:
-        pass  # сломанная проверка не должна закрывать доступ к Java
+        guard_java_class = None  # the loader is not there yet (the sdk imported on its own): there is no guard to ask
+    if guard_java_class is not None:
+        try:
+            allowed = guard_java_class(name)
+        except Exception:
+            return None  # a guard that fails does not open the class
+        if not allowed:
+            return None
     try:
         from java import jclass
         found = jclass(name)
