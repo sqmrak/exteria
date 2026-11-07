@@ -22,6 +22,7 @@ Field rules of the .elyx metadata block:
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import zipfile
@@ -56,18 +57,31 @@ def _normalize_keys(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _exec_python_mapping(name: str, source: str) -> Dict[str, Any]:
-    """Execute a .py metadata/locale file and collect simple public values."""
-    namespace: Dict[str, Any] = {"__name__": "__elyx_data__", "__file__": name}
+    """Collect the plain top-level assignments of a .py metadata/locale file without running it.
+
+    The file is read before the person has agreed to install the plugin, so nothing in it is executed: a value is taken only when it is a
+    literal (strings, numbers, lists, tuples, dicts), and every other statement is left alone."""
     try:
-        exec(compile(source, name, "exec"), namespace)
-    except Exception as e:
-        raise MetainfoError(f"cannot execute Python file {name}: {type(e).__name__}: {e}")
+        tree = ast.parse(source, name)
+    except (SyntaxError, ValueError, MemoryError, RecursionError) as e:
+        raise MetainfoError(f"cannot parse Python file {name}: {type(e).__name__}: {e}")
     collected: Dict[str, Any] = {}
-    for key, value in namespace.items():
-        if key.startswith("_") or callable(value):
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = [target for target in node.targets if isinstance(target, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value is not None:
+            targets = [node.target]
+        else:
             continue
-        if isinstance(value, (str, int, float, bool, list, tuple, dict)) or value is None:
-            collected[key] = value
+        try:
+            value = ast.literal_eval(node.value)
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+            continue
+        if not (isinstance(value, (str, int, float, bool, list, tuple, dict)) or value is None):
+            continue
+        for target in targets:
+            if not target.id.startswith("_"):
+                collected[target.id] = value
     return collected
 
 
