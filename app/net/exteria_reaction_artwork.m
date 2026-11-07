@@ -69,7 +69,9 @@ static NSMutableDictionary *sArt;
 }
 
 + (UIImageView *)attachStillOfArtwork:(ExteriaReactionArtwork *)artwork toButton:(UIButton *)button side:(CGFloat)side media:(ExteriaMediaCache *)media {
-    if (!artwork.icon.file || !media) return nil;
+    /* the android client rests on the first frame of the select animation: the flat static icon of the server is a plainer picture than the animation that came before it */
+    ExteriaCustomEmojiDocument *resting = artwork.select.file ? artwork.select : artwork.icon;
+    if (!resting.file || !media) return nil;
     UIImageView *still = [[[UIImageView alloc] initWithFrame:CGRectMake(0, 0, side, side)] autorelease];
     still.tag = EXTERIA_REACTION_STILL_TAG;
     still.contentMode = UIViewContentModeScaleAspectFit;
@@ -78,7 +80,7 @@ static NSMutableDictionary *sArt;
     still.center = CGPointMake(button.bounds.size.width / 2, button.bounds.size.height / 2);
     [button addSubview:still];
     /* the same side as the picture of the custom emoji path, so the cache of the images holds one decode for both */
-    [media loadImageForFile:artwork.icon.file maxSide:[ExteriaCustomEmoji pictureSide] completion:^(UIImage *image) {
+    [media loadImageForFile:resting.file maxSide:[ExteriaCustomEmoji pictureSide] completion:^(UIImage *image) {
         if (!image || !still.superview) return;
         still.image = image;
         BOOL animating = NO;
