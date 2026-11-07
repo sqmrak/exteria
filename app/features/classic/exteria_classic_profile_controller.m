@@ -630,8 +630,10 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     _avatar.frame = CGRectMake((width - AVATAR) / 2, 14, AVATAR, AVATAR);
     if (_hero && !_heroMoving) _hero.frame = _heroOpen ? CGRectMake(0, 0, width, [ExteriaProfileHeroView heightForWidth:width screenHeight:self.view.bounds.size.height]) : _avatar.frame;
     _name.frame = CGRectMake(16, 106, MAX(0, width - 32), 24);
-    _detail.frame = CGRectMake(16, 130, MAX(0, width - 32), 18);
-    CGFloat detailWidth = MIN(width - 70, ceil([_detail sizeThatFits:CGSizeMake(width - 70, 20)].width));
+    /* a long number and username fill the whole line, so the badge on its left is given room on both sides to keep the text centred */
+    CGFloat inset = _ratingBadge.hidden ? 16 : 44;
+    _detail.frame = CGRectMake(inset, 130, MAX(0, width - 2 * inset), 18);
+    CGFloat detailWidth = MIN(width - 2 * inset, ceil([_detail sizeThatFits:CGSizeMake(width - 2 * inset, 20)].width));
     _ratingBadge.frame = CGRectMake(floor((width - detailWidth) / 2) - 26, _detail.frame.origin.y, 22, 20);
     [self fitHeader];
 }
