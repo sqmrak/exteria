@@ -233,6 +233,29 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     return dialog;
 }
 
++ (ExteriaDialog *)dialogWithPeerKind:(int32_t)peerKind peerId:(long long)peerId accessHash:(long long)accessHash kind:(exteria_dialog_kind)kind title:(NSString *)title {
+    return [self dialogWithPeerKind:peerKind peerId:peerId accessHash:accessHash kind:kind title:title text:nil date:0 messageId:0];
+}
+
++ (ExteriaDialog *)dialogWithPeerKind:(int32_t)peerKind peerId:(long long)peerId accessHash:(long long)accessHash kind:(exteria_dialog_kind)kind title:(NSString *)title
+                                 text:(NSString *)text date:(int32_t)date messageId:(int32_t)messageId {
+    if (peerId <= 0 || peerKind < 1 || peerKind > 3) return nil;
+    exteria_dialog_row row;
+    memset(&row, 0, sizeof(row));
+    row.peer_kind = peerKind;
+    row.peer_id = peerId;
+    row.peer_hash = accessHash;
+    row.kind = kind;
+    row.date = date;
+    row.top_message = messageId;
+    snprintf(row.title, sizeof(row.title), "%s", title.UTF8String ? title.UTF8String : "");
+    if (text.length) {
+        row.preview = EXTERIA_PREVIEW_TEXT;
+        snprintf(row.text, sizeof(row.text), "%s", text.UTF8String ? text.UTF8String : "");
+    }
+    return [[[ExteriaDialog alloc] initWithRow:&row] autorelease];
+}
+
 + (ExteriaDialog *)savedMessagesWithPerson:(ExteriaPerson *)person {
     exteria_dialog_row row;
     memset(&row, 0, sizeof(row));

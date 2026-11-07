@@ -275,6 +275,7 @@
 "create.failed" = "Could not create: %@";
 "chats.menu" = "Menu";
 "search.global" = "Global search";
+"search.messages" = "Messages";
 "channel.kind.public" = "Public channel";
 "channel.kind.private" = "Private channel";
 "channel.kind.group" = "Group";

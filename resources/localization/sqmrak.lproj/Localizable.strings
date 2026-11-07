@@ -276,6 +276,7 @@
 "create.failed" = "не удалось создать: %@";
 "chats.menu" = "меню";
 "search.global" = "глобальный поиск";
+"search.messages" = "сообщения";
 "channel.kind.public" = "публичный канал";
 "channel.kind.private" = "частный канал";
 "channel.kind.group" = "группа";

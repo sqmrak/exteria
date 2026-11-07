@@ -1,3 +1,4 @@
+#import "exteria_download_log.h"
 #import "exteria_gift_detail_controller.h"
 #import "exteria_emoji_label.h"
 #import "exteria_pinned_line.h"
@@ -5057,6 +5058,11 @@ static void ExteriaRedrawTree(UIView *view) {
     for (UITableViewCell *cell in _table.visibleCells) {
         if ([cell isKindOfClass:[ExteriaMessageCell class]]) [(ExteriaMessageCell *)cell setAnimating:NO];
     }
+}
+
+- (void)messageCell:(ExteriaMessageCell *)cell didDownloadMedia:(ExteriaMessage *)message {
+    (void)cell;
+    ExteriaDownloadLogAdd(_session, _dialog, message);
 }
 
 - (void)messageCell:(ExteriaMessageCell *)cell didToggleQuote:(NSUInteger)quote {

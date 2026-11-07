@@ -191,6 +191,12 @@
 - (void)applyForumSummary:(const exteria_forum_summary *)summary;
 /* the chat with a contact, for a person who has no chat in the list yet; nil when no access hash is known */
 + (ExteriaDialog *)dialogWithPerson:(ExteriaPerson *)person;
+/* a chat known by its address and name alone, as the history of the search keeps one: enough to open it, drawn with initials until the list brings the photo */
++ (ExteriaDialog *)dialogWithPeerKind:(int32_t)peerKind peerId:(long long)peerId accessHash:(long long)accessHash kind:(exteria_dialog_kind)kind title:(NSString *)title;
+/* a row that stands for one message of a chat, as the results of a search and the list of downloads show it: title is the first line, text the line under it, and the chat
+   opens at messageId */
++ (ExteriaDialog *)dialogWithPeerKind:(int32_t)peerKind peerId:(long long)peerId accessHash:(long long)accessHash kind:(exteria_dialog_kind)kind title:(NSString *)title
+                                 text:(NSString *)text date:(int32_t)date messageId:(int32_t)messageId;
 /* the chat with oneself, which the server reaches as the chat with the signed in user */
 + (ExteriaDialog *)savedMessagesWithPerson:(ExteriaPerson *)person;
 /* the favorites of the account with that user id, for a place to send to when only the id is known */

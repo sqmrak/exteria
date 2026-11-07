@@ -2076,6 +2076,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         [cell->_loadedPath release];
         cell->_loadedPath = [path copy];
         [cell mediaArrived];
+        if (cell->_loadAsked && [cell.delegate respondsToSelector:@selector(messageCell:didDownloadMedia:)]) [cell.delegate messageCell:cell didDownloadMedia:cell->_item.message];
     }];
     if (request && token == _loadToken && !_loadedPath && !_loadFailed) _loadRequest = request;
 }

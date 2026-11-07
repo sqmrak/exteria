@@ -9,6 +9,8 @@
 
 #import "exteria_avatar_view.h"
 #import "exteria_bar_button.h"
+#import "exteria_download_log.h"
+#import "exteria_search_history.h"
 #import "exteria_chat_controller.h"
 #import "exteria_community_screen.h"
 #import "exteria_topics_screen.h"
@@ -27,9 +29,7 @@
 #define ROW_HEIGHT 64.0
 #define PEERS_HEIGHT 104.0
 #define SECTION_HEIGHT 34.0
-#define RECENT_MAX 12
 #define SERVER_DELAY 0.4
-static NSString *const ExteriaRecentChatsKey = @"ExteriaRecentChats";
 
 /* the order of the kinds as they stand on the strip */
 typedef enum {
@@ -48,6 +48,11 @@ typedef enum {
 
 /* what stands on the screen: the people and the recent chats, a list of results, a wait, a failure, or the duck */
 typedef enum { ExteriaSearchStateStart, ExteriaSearchStateResults, ExteriaSearchStateLoading, ExteriaSearchStateFailed, ExteriaSearchStateEmpty, ExteriaSearchStateHint } ExteriaSearchState;
+
+/* the lists that are kept on the phone answer at once, with no pause for the server */
+static BOOL ExteriaTabIsInstant(NSInteger tab) {
+    return tab == ExteriaSearchTabChats || tab == ExteriaSearchTabChannels || tab == ExteriaSearchTabApps || tab == ExteriaSearchTabDownloads;
+}
 
 static BOOL ExteriaTabIsLocal(NSInteger tab) {
     return tab == ExteriaSearchTabChats || tab == ExteriaSearchTabChannels || tab == ExteriaSearchTabApps;
@@ -72,7 +77,7 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     UILabel *_date;
     UIView *_line;
 }
-- (void)configureWithDialog:(ExteriaDialog *)dialog showsDate:(BOOL)showsDate avatars:(ExteriaAvatarCache *)avatars;
+- (void)configureWithDialog:(ExteriaDialog *)dialog showsDate:(BOOL)showsDate highlight:(NSString *)highlight avatars:(ExteriaAvatarCache *)avatars;
 @end
 
 @implementation ExteriaSearchCell
@@ -116,7 +121,20 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     [super dealloc];
 }
 
-- (void)configureWithDialog:(ExteriaDialog *)dialog showsDate:(BOOL)showsDate avatars:(ExteriaAvatarCache *)avatars {
+/* the words that were looked for stand out in the line of a found message, as the other clients mark them */
+static NSArray *ExteriaSearchMarks(NSString *text, NSString *words) {
+    if (!words.length || !text.length) return nil;
+    NSMutableArray *marks = [NSMutableArray array];
+    NSRange at = NSMakeRange(0, 0);
+    while (marks.count < 8) {
+        at = [text rangeOfString:words options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch range:NSMakeRange(NSMaxRange(at), text.length - NSMaxRange(at))];
+        if (at.location == NSNotFound) break;
+        [marks addObject:[[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleBold range:at url:nil] autorelease]];
+    }
+    return marks.count ? marks : nil;
+}
+
+- (void)configureWithDialog:(ExteriaDialog *)dialog showsDate:(BOOL)showsDate highlight:(NSString *)highlight avatars:(ExteriaAvatarCache *)avatars {
     _avatar.seed = dialog.avatarSeed;
     _avatar.initials = dialog.initials;
     _avatar.deleted = dialog.deleted;
@@ -130,6 +148,7 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     _title.text = ExteriaNameWithBadges(dialog.title, ExteriaDialogBadgeDocument(dialog), ExteriaDialogIsDeveloper(dialog), &badges);
     _title.entities = badges;
     _subtitle.text = dialog.preview;
+    _subtitle.entities = ExteriaSearchMarks(dialog.preview, highlight);
     _date.text = showsDate ? ExteriaListTimeText(dialog.date) : @"";
     [self setNeedsLayout];
 }
@@ -223,6 +242,9 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     NSArray *_rows;
     /* the public chats the server found for the text, shown under the local results on the chat kinds */
     NSArray *_global;
+    /* the messages the server found in the chats, under the chats on the first kind, as the other clients list them */
+    NSArray *_messages;
+    BOOL _globalDone, _messagesDone, _globalFailed;
     NSArray *_recent;
     ExteriaSearchState _state;
     NSUInteger _generation;
@@ -277,6 +299,7 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     [_query release];
     [_rows release];
     [_global release];
+    [_messages release];
     [_recent release];
     [super dealloc];
 }
@@ -288,115 +311,20 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
 }
 
 - (void)loadRecent {
-    NSArray *stored = [[NSUserDefaults standardUserDefaults] arrayForKey:ExteriaRecentChatsKey];
-    NSMutableArray *found = [NSMutableArray array];
-    for (id key in stored) {
-        if (![key isKindOfClass:[NSString class]]) continue;
-        for (ExteriaDialog *dialog in _dialogs) {
-            if (!dialog.folder && [[self recentKeyOf:dialog] isEqualToString:key]) {
-                [found addObject:dialog];
-                break;
-            }
-        }
-    }
     [_recent release];
-    _recent = [found retain];
+    _recent = [ExteriaSearchHistoryDialogs(_session, _dialogs) retain];
 }
 
 - (void)remember:(ExteriaDialog *)dialog {
-    NSMutableArray *keys = [NSMutableArray arrayWithArray:[[NSUserDefaults standardUserDefaults] arrayForKey:ExteriaRecentChatsKey]];
-    NSString *key = [self recentKeyOf:dialog];
-    [keys removeObject:key];
-    [keys insertObject:key atIndex:0];
-    while (keys.count > RECENT_MAX) [keys removeLastObject];
-    [[NSUserDefaults standardUserDefaults] setObject:keys forKey:ExteriaRecentChatsKey];
+    ExteriaSearchHistoryRemember(_session, dialog, _dialogs);
 }
 
 - (void)clearRecent {
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaRecentChatsKey];
+    ExteriaSearchHistoryClear(_session);
     [self loadRecent];
     [self refreshState];
 }
 
-#pragma mark views
-
-- (void)loadView {
-    UIView *root = [[[UIView alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
-    root.backgroundColor = ExteriaColorScreen();
-    root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    self.view = root;
-
-    _field = [[UITextField alloc] init];
-    _field.backgroundColor = ExteriaColorField();
-    _field.layer.cornerRadius = FIELD_HEIGHT / 2;
-    _field.delegate = self;
-    _field.placeholder = NSLocalizedString(@"chats.search", nil);
-    _field.font = ExteriaFontRegular(16);
-    _field.textColor = ExteriaColorTitle();
-    _field.autocorrectionType = UITextAutocorrectionTypeNo;
-    _field.returnKeyType = UIReturnKeySearch;
-    _field.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
-    _field.clearButtonMode = UITextFieldViewModeWhileEditing;
-    _field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-    UIImageView *glass = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 16, ExteriaColorMuted())] autorelease];
-    glass.contentMode = UIViewContentModeCenter;
-    glass.frame = CGRectMake(0, 0, 38, FIELD_HEIGHT);
-    _field.leftView = glass;
-    _field.leftViewMode = UITextFieldViewModeAlways;
-    [_field addTarget:self action:@selector(textChanged) forControlEvents:UIControlEventEditingChanged];
-    [root addSubview:_field];
-
-    _cancel = [[ExteriaBarButton alloc] init];
-    _cancel.title = NSLocalizedString(@"picker.cancel", nil);
-    [_cancel addTarget:self action:@selector(close) forControlEvents:UIControlEventTouchUpInside];
-    [root addSubview:_cancel];
-
-    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"search.tab.chats", nil), NSLocalizedString(@"search.tab.channels", nil),
-                       NSLocalizedString(@"search.tab.apps", nil), NSLocalizedString(@"search.tab.posts", nil), NSLocalizedString(@"search.tab.media", nil),
-                       NSLocalizedString(@"search.tab.downloads", nil), NSLocalizedString(@"search.tab.links", nil), NSLocalizedString(@"search.tab.files", nil),
-                       NSLocalizedString(@"search.tab.music", nil), NSLocalizedString(@"search.tab.voice", nil), nil];
-    _tabs = [[ExteriaFilterBar alloc] initWithTitles:titles];
-    _tabs.delegate = self;
-    [root addSubview:_tabs];
-
-    _table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-    ExteriaScrollViewOwnsInsets(_table);
-    _table.backgroundColor = [UIColor clearColor];
-    _table.separatorStyle = UITableViewCellSeparatorStyleNone;
-    _table.dataSource = self;
-    _table.delegate = self;
-    _table.rowHeight = ROW_HEIGHT;
-    [root addSubview:_table];
-    _peers = [[ExteriaTopPeersView alloc] initWithFrame:CGRectMake(0, 0, 320, PEERS_HEIGHT)];
-    _peers.target = self;
-
-    _emptyView = [[UIView alloc] init];
-    _emptyView.hidden = YES;
-    [root addSubview:_emptyView];
-    _duck = [[ExteriaLottieView alloc] initWithAnimationNamed:@"search_empty"];
-    [_emptyView addSubview:_duck];
-    _emptyTitle = [[UILabel alloc] init];
-    _emptyTitle.backgroundColor = [UIColor clearColor];
-    _emptyTitle.textColor = ExteriaColorTitle();
-    _emptyTitle.textAlignment = ExteriaTextAlignmentCenter;
-    [_emptyView addSubview:_emptyTitle];
-    _emptyText = [[UILabel alloc] init];
-    _emptyText.backgroundColor = [UIColor clearColor];
-    _emptyText.textColor = ExteriaColorSecondary();
-    _emptyText.textAlignment = ExteriaTextAlignmentCenter;
-    _emptyText.numberOfLines = 0;
-    [_emptyView addSubview:_emptyText];
-    _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
-    _spinner.hidesWhenStopped = YES;
-    [root addSubview:_spinner];
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    [self loadRecent];
-    [self refreshState];
-    [self loadEveryChat];
-}
 
 /* the list the screen was given holds one request of chats, and a chat further down would be found only by the server's own search, which keeps few of them */
 - (void)loadEveryChat {
@@ -485,7 +413,9 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
         ExteriaAnimateEnter(self.view, CGAffineTransformMakeScale(scale, scale), 0, EXTERIA_MOTION_ENTER);
     }
     [self loadRecent];
-    [_table reloadData];
+    /* a file that came while a chat was open is in the list when it is left */
+    if (_tabs.selectedIndex == ExteriaSearchTabDownloads) [self runSearch];
+    else [_table reloadData];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -538,7 +468,7 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runSearch) object:nil];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(runGlobal) object:nil];
     ++_generation;
-    if (ExteriaTabIsLocal(_tabs.selectedIndex) || !_query.length) {
+    if (ExteriaTabIsInstant(_tabs.selectedIndex) || !_query.length) {
         [self runSearch];
         return;
     }
@@ -584,8 +514,13 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     _rows = [[NSArray alloc] init];
     [_global release];
     _global = nil;
+    [_messages release];
+    _messages = nil;
+    _globalDone = _messagesDone = _globalFailed = NO;
     if (tab == ExteriaSearchTabDownloads) {
-        _state = ExteriaSearchStateHint;
+        [_rows release];
+        _rows = [ExteriaDownloadLogDialogs(_session, _query) retain];
+        _state = _rows.count ? ExteriaSearchStateResults : (_query.length ? ExteriaSearchStateEmpty : ExteriaSearchStateHint);
     } else if (ExteriaTabIsLocal(tab)) {
         NSMutableArray *found = [NSMutableArray array];
         for (ExteriaDialog *dialog in _dialogs) {
@@ -625,11 +560,30 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     NSUInteger generation = _generation;
     NSInteger tab = _tabs.selectedIndex;
     ExteriaWeakReference *weak = _weak;
+    _messagesDone = tab != ExteriaSearchTabChats;
     [_session searchPeers:_query completion:^(NSArray *dialogs, NSString *errorName) {
         ExteriaSearchController *search = weak.target;
         if (!search || generation != search->_generation) return;
         [search didFindGlobal:dialogs forTab:tab error:errorName];
     }];
+    /* the first kind also reads the messages of the chats, which is what the other clients list under the chats */
+    if (tab == ExteriaSearchTabChats) {
+        [_session searchGlobal:_query kind:EXTERIA_SEARCH_ALL offsetRate:0 completion:^(NSArray *dialogs, int32_t nextRate, NSString *errorName) {
+            (void)nextRate;
+            ExteriaSearchController *search = weak.target;
+            if (!search || generation != search->_generation) return;
+            [search didFindMessages:dialogs error:errorName];
+        }];
+    }
+}
+
+/* what the screen says once the local rows and the answers of the server so far are in: the rows, a wait for the rest, or nothing found */
+- (void)updateLocalState {
+    BOOL any = _rows.count || _global.count || _messages.count;
+    if (any) _state = ExteriaSearchStateResults;
+    else if (!_globalDone || !_messagesDone) _state = ExteriaSearchStateLoading;
+    else _state = _globalFailed ? ExteriaSearchStateFailed : ExteriaSearchStateEmpty;
+    [self refreshState];
 }
 
 - (void)didFindGlobal:(NSArray *)dialogs forTab:(NSInteger)tab error:(NSString *)errorName {
@@ -643,9 +597,18 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     }
     [_global release];
     _global = fresh.count ? [fresh retain] : nil;
+    _globalDone = YES;
     /* a failed server search with nothing local to show is a failure, not an empty answer */
-    _state = (_rows.count || _global.count) ? ExteriaSearchStateResults : (dialogs ? ExteriaSearchStateEmpty : ExteriaSearchStateFailed);
-    [self refreshState];
+    _globalFailed = !dialogs;
+    [self updateLocalState];
+}
+
+- (void)didFindMessages:(NSArray *)dialogs error:(NSString *)errorName {
+    if (!dialogs) NSLog(@"exteria: message search failed: %@", errorName);
+    [_messages release];
+    _messages = dialogs.count ? [dialogs retain] : nil;
+    _messagesDone = YES;
+    [self updateLocalState];
 }
 
 - (void)didSearch:(NSArray *)dialogs error:(NSString *)errorName {
@@ -730,35 +693,54 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     return fitting;
 }
 
+/* the groups of the list from the top: the rows, then the public chats and the messages when the server found some; 0, 1 and 2 */
+- (NSArray *)sectionKinds {
+    NSMutableArray *kinds = [NSMutableArray arrayWithObject:[NSNumber numberWithInt:0]];
+    if (_state != ExteriaSearchStateResults) return kinds;
+    if (_global.count) [kinds addObject:[NSNumber numberWithInt:1]];
+    if (_messages.count && _tabs.selectedIndex == ExteriaSearchTabChats) [kinds addObject:[NSNumber numberWithInt:2]];
+    return kinds;
+}
+
+- (NSInteger)kindOfSection:(NSInteger)section {
+    NSArray *kinds = [self sectionKinds];
+    return (NSUInteger)section < kinds.count ? [[kinds objectAtIndex:(NSUInteger)section] integerValue] : 0;
+}
+
+- (NSArray *)itemsOfKind:(NSInteger)kind {
+    return kind == 1 ? _global : (kind == 2 ? _messages : [self visibleRows]);
+}
+
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     (void)tableView;
-    return _global.count && _state == ExteriaSearchStateResults ? 2 : 1;
+    return (NSInteger)[[self sectionKinds] count];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     (void)tableView;
-    return section == 1 ? (NSInteger)_global.count : (NSInteger)[[self visibleRows] count];
+    return (NSInteger)[[self itemsOfKind:[self kindOfSection:section]] count];
 }
 
 - (ExteriaDialog *)dialogAtIndexPath:(NSIndexPath *)indexPath {
-    return indexPath.section == 1 ? [_global objectAtIndex:(NSUInteger)indexPath.row] : [[self visibleRows] objectAtIndex:(NSUInteger)indexPath.row];
+    return [[self itemsOfKind:[self kindOfSection:indexPath.section]] objectAtIndex:(NSUInteger)indexPath.row];
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
     (void)tableView;
-    if (section == 1) return SECTION_HEIGHT;
+    if ([self kindOfSection:section] != 0) return SECTION_HEIGHT;
     return _state == ExteriaSearchStateStart && [[self visibleRows] count] ? SECTION_HEIGHT : 0;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    if (section == 1) {
+    NSInteger kind = [self kindOfSection:section];
+    if (kind != 0) {
         UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, SECTION_HEIGHT)] autorelease];
         header.backgroundColor = ExteriaColorField();
         UILabel *title = [[[UILabel alloc] initWithFrame:CGRectMake(14, 0, tableView.bounds.size.width - 28, SECTION_HEIGHT)] autorelease];
         title.backgroundColor = [UIColor clearColor];
         title.font = ExteriaFontSemibold(15);
         title.textColor = ExteriaColorSecondary();
-        title.text = NSLocalizedString(@"search.global", nil);
+        title.text = NSLocalizedString(kind == 2 ? @"search.messages" : @"search.global", nil);
         [header addSubview:title];
         return header;
     }
@@ -786,14 +768,15 @@ static exteria_search_kind ExteriaServerKindOfTab(NSInteger tab) {
     static NSString *identifier = @"result";
     ExteriaSearchCell *cell = (ExteriaSearchCell *)[tableView dequeueReusableCellWithIdentifier:identifier];
     if (!cell) cell = [[[ExteriaSearchCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier] autorelease];
-    BOOL message = !ExteriaTabIsLocal(_tabs.selectedIndex) && _state == ExteriaSearchStateResults;
-    [cell configureWithDialog:[self dialogAtIndexPath:indexPath] showsDate:message avatars:_avatars];
+    BOOL message = ([self kindOfSection:indexPath.section] == 2) || (!ExteriaTabIsLocal(_tabs.selectedIndex) && _state == ExteriaSearchStateResults);
+    [cell configureWithDialog:[self dialogAtIndexPath:indexPath] showsDate:message highlight:message ? _query : nil avatars:_avatars];
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    BOOL local = ExteriaTabIsLocal(_tabs.selectedIndex) || _state == ExteriaSearchStateStart;
+    /* a message found in a chat opens the chat at the message; the chat that was looked for is kept in the history */
+    BOOL local = [self kindOfSection:indexPath.section] != 2 && (ExteriaTabIsLocal(_tabs.selectedIndex) || _state == ExteriaSearchStateStart);
     [self open:[self dialogAtIndexPath:indexPath] remember:local];
 }
 
