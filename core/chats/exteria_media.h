@@ -9,7 +9,7 @@
 #include "exteria_tl.h"
 #include "exteria_geo.h"
 
-#define EXTERIA_MEDIA_NAME_MAX 128
+#define EXTERIA_MEDIA_NAME_MAX 256
 #define EXTERIA_MEDIA_ALT_MAX 32
 #define EXTERIA_MEDIA_MIME_MAX 48
 #define EXTERIA_MEDIA_TAG_MAX 96

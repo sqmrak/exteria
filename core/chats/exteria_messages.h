@@ -399,7 +399,8 @@ typedef enum exteria_upload_kind {
     EXTERIA_UPLOAD_FILE             /* anything else, sent as a document with its name */
 } exteria_upload_kind;
 
-#define EXTERIA_UPLOAD_NAME_MAX 128
+/* the longest name a file system holds, 255 bytes, and the end of the string; the android client sends the name of the file as it is */
+#define EXTERIA_UPLOAD_NAME_MAX 256
 #define EXTERIA_UPLOAD_CAPTION_MAX 4096
 #define EXTERIA_UPLOAD_MUSIC_TEXT_MAX 128
 

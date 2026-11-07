@@ -708,6 +708,16 @@ static void test_media_kinds(void) {
     CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_FILE);
     CHECK(!strcmp(info.name, "Exteria_icon.png"));
     CHECK_EQ_INT(info.size, 40960);
+    {
+        /* a name of the longest size a file system holds comes through whole, extension included */
+        char longest[256];
+        memset(longest, 'n', 251);
+        memcpy(longest + 251, ".pdf", 5);
+        attributes[0] = obj("documentAttributeFilename");
+        set_str(attributes[0], "file_name", longest);
+        exteria_media_classify(media_document(document(10, "application/pdf", attributes, 1)), &info);
+        CHECK(!strcmp(info.name, longest));
+    }
 
     attributes[0] = obj("documentAttributeVideo");
     set_f64(attributes[0], "duration", 12.7);
