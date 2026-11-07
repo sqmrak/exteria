@@ -113,6 +113,20 @@ static void deliver_difference_reads(exteria_client *c, const exteria_tl_value *
     for (i = 0; vec && vec->kind == EXTERIA_TL_V_VEC && i < vec->u.vec.count; ++i) deliver_read_outbox(c, vec->u.vec.items[i]);
 }
 
+static void deliver_new_message(exteria_client *c, const exteria_tl_value *item, const exteria_tl_value *container) {
+    const exteria_tl_value *users = container ? exteria_tl_get(container, "users") : NULL;
+    if (!c->events.new_message) return;
+    if (exteria_tl_is(item, EXTERIA_TL_ID_updateNewMessage) || exteria_tl_is(item, EXTERIA_TL_ID_updateNewChannelMessage)) {
+        c->events.new_message(c->events.ctx, exteria_tl_get(item, "message"), users);
+    } else if (exteria_tl_is(item, EXTERIA_TL_ID_updateShortMessage) || exteria_tl_is(item, EXTERIA_TL_ID_updateShortChatMessage)) {
+        exteria_arena arena;
+        exteria_tl_value *message = NULL;
+        exteria_arena_init(&arena, 65536);
+        if (exteria_updates_short_to_message(&arena, c->updates.account, item, &message) == EXTERIA_OK) c->events.new_message(c->events.ctx, message, NULL);
+        exteria_arena_free(&arena);
+    }
+}
+
 static void deliver_user_status(exteria_client *c, const exteria_tl_value *item) {
     exteria_presence presence;
     int64_t user_id;
@@ -142,6 +156,8 @@ static void dispatch_live_updates(exteria_client *c, const exteria_tl_value *v) 
     if (exteria_tl_is(one, EXTERIA_TL_ID_updatePhoneCallSignalingData)) deliver_signaling(c, one);
     deliver_typing(c, one);
     deliver_read_outbox(c, one);
+    deliver_new_message(c, one, NULL);
+    deliver_new_message(c, v, NULL);
     deliver_user_status(c, one);
     deliver_draft(c, one);
     deliver_group_call(c, one, v);
@@ -151,6 +167,7 @@ static void dispatch_live_updates(exteria_client *c, const exteria_tl_value *v) 
         if (exteria_tl_is(item, EXTERIA_TL_ID_updatePhoneCallSignalingData)) deliver_signaling(c, item);
         deliver_typing(c, item);
         deliver_read_outbox(c, item);
+        deliver_new_message(c, item, v);
         deliver_user_status(c, item);
         deliver_draft(c, item);
         deliver_group_call(c, item, v);

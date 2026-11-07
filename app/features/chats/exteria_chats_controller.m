@@ -108,6 +108,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(localMarksChanged) name:ExteriaLocalMarksDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(newMessageArrived:) name:ExteriaNewMessageDidArriveNotification object:session];
     self.heading = [self titleForMode:ExteriaChatListTitleStored() person:nil];
     _dialogs = [[NSArray alloc] init];
     _folderSnapshots = [[NSMutableDictionary alloc] init];
@@ -145,6 +146,23 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
     uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 750, 100);
     [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
+}
+
+/* the list that the server sends takes a round trip after the pause between reloads, and the banner of the message is up before that: the row shows the message and moves up
+   at once, and the list that follows says the same */
+- (void)newMessageArrived:(NSNotification *)note {
+    if (!self.isViewLoaded) return;
+    NSArray *updated = ExteriaDialogsApplyingNewMessage(_dialogs, note.userInfo);
+    if (!updated) return;
+    [_dialogs release];
+    _dialogs = [updated retain];
+    if (!_folderId && !_folders.selectedFolder.folderId) {
+        [_mainDialogs release];
+        _mainDialogs = [updated retain];
+    }
+    [self refreshCounts];
+    [self applyFilters];
+    [self reloadTable];
 }
 
 - (void)refreshLiveDialogs {
@@ -336,6 +354,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_feedSeen release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaNewMessageDidArriveNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogsChangedNotification object:nil];
     [_badgeWeak clear];
     [_badgeWeak release];

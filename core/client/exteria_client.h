@@ -31,6 +31,9 @@ typedef struct exteria_client_events {
     /* the draft of a chat changed, here or on another client (updateDraftMessage); read it with exteria_draft_update_read, valid only during the callback;
        live only, the account keeps the draft */
     void (*draft)(void *ctx, const exteria_tl_value *update);
+    /* a message that arrived live (updateNewMessage, updateNewChannelMessage, or a short update turned into the message it stands for); users are those of the container
+       it came in, or NULL when it came alone; both are valid only during the callback */
+    void (*new_message)(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users);
     /* folder rules or their order changed on another client; one event per update container */
     void (*folders_changed)(void *ctx);
     /* an updateGroupCall, updateGroupCallParticipants or updateGroupCallConnection, in a push or in the answer to a request of the call; container is the Updates

@@ -238,36 +238,48 @@ static exteria_status update_channel(const exteria_tl_value *v, int64_t *out) {
     return EXTERIA_OK;
 }
 
-static exteria_status short_message(exteria_updates *u, const exteria_tl_value *v) {
-    exteria_arena a;
+exteria_status exteria_updates_short_to_message(exteria_arena *a, int64_t account, const exteria_tl_value *v, exteria_tl_value **out) {
     exteria_tl_value *m, *peer, *from;
     int64_t peer_id, from_id;
     int32_t id, date;
     uint32_t i;
-    int chat = exteria_tl_is(v, EXTERIA_TL_ID_updateShortChatMessage);
+    int chat;
     static const char *const optional[] = {"out", "mentioned", "media_unread", "silent", "fwd_from",
                                            "via_bot_id", "reply_to", "entities", "ttl_period"};
     exteria_status status;
+    if (out) *out = NULL;
+    if (!a || !v || !out) return EXTERIA_E_ARG;
+    chat = exteria_tl_is(v, EXTERIA_TL_ID_updateShortChatMessage);
+    if (!chat && !exteria_tl_is(v, EXTERIA_TL_ID_updateShortMessage)) return EXTERIA_E_ARG;
     if (exteria_tl_get_i64(v, chat ? "chat_id" : "user_id", &peer_id) != EXTERIA_OK || peer_id <= 0 ||
         exteria_tl_get_i32(v, "id", &id) != EXTERIA_OK || id <= 0 ||
         exteria_tl_get_i32(v, "date", &date) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
-    from_id = exteria_tl_has(v, "out") ? u->account : peer_id;
+    from_id = exteria_tl_has(v, "out") ? account : peer_id;
     if (chat && exteria_tl_get_i64(v, "from_id", &from_id) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
-    exteria_arena_init(&a, 65536);
-    m = exteria_tl_new_obj(&a, "message");
-    peer = exteria_tl_new_obj(&a, chat ? "peerChat" : "peerUser");
-    from = exteria_tl_new_obj(&a, "peerUser");
-    status = m && peer && from ? exteria_tl_set_i64(&a, peer, chat ? "chat_id" : "user_id", peer_id) : EXTERIA_E_NOMEM;
-    if (status == EXTERIA_OK) status = exteria_tl_set_i64(&a, from, "user_id", from_id);
+    m = exteria_tl_new_obj(a, "message");
+    peer = exteria_tl_new_obj(a, chat ? "peerChat" : "peerUser");
+    from = exteria_tl_new_obj(a, "peerUser");
+    status = m && peer && from ? exteria_tl_set_i64(a, peer, chat ? "chat_id" : "user_id", peer_id) : EXTERIA_E_NOMEM;
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(a, from, "user_id", from_id);
     if (status == EXTERIA_OK) status = exteria_tl_set(m, "peer_id", peer);
     if (status == EXTERIA_OK) status = exteria_tl_set(m, "from_id", from);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(&a, m, "id", id);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(&a, m, "date", date);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(a, m, "id", id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(a, m, "date", date);
     if (status == EXTERIA_OK) status = exteria_tl_set(m, "message", (exteria_tl_value *)exteria_tl_get(v, "message"));
     for (i = 0; status == EXTERIA_OK && i < sizeof(optional) / sizeof(optional[0]); ++i) {
         const exteria_tl_value *value = exteria_tl_get(v, optional[i]);
         if (value) status = exteria_tl_set(m, optional[i], (exteria_tl_value *)value);
     }
+    if (status == EXTERIA_OK) *out = m;
+    return status;
+}
+
+static exteria_status short_message(exteria_updates *u, const exteria_tl_value *v) {
+    exteria_arena a;
+    exteria_tl_value *m = NULL;
+    exteria_status status;
+    exteria_arena_init(&a, 65536);
+    status = exteria_updates_short_to_message(&a, u->account, v, &m);
     if (status == EXTERIA_OK) status = exteria_updates_cache_message(u, m);
     exteria_arena_free(&a);
     return status;

@@ -191,6 +191,9 @@
 @property (nonatomic, readonly, copy) NSArray *communityChats;
 /* takes what the topics of a forum say of it; a call on a chat that is not a forum does nothing */
 - (void)applyForumSummary:(const exteria_forum_summary *)summary;
+/* the row of this chat takes the message that just arrived: patch is the last-message part of a row made by ExteriaClientNewMessage for the same peer. NO when the message is
+   not newer than the one the row shows, or the row is one that a message does not change (the archive, a community, a forum with its topics, the favorites) */
+- (BOOL)takeNewMessageFrom:(ExteriaDialog *)patch;
 /* the chat with a contact, for a person who has no chat in the list yet; nil when no access hash is known */
 + (ExteriaDialog *)dialogWithPerson:(ExteriaPerson *)person;
 /* a chat known by its address and name alone, as the history of the search keeps one: enough to open it, drawn with initials until the list brings the photo */
@@ -220,3 +223,7 @@ NSArray *ExteriaDialogsFoldingCommunities(NSArray *dialogs);
 
 /* replaces only the archive shortcut, keeping the current order and every chat model */
 NSArray *ExteriaDialogsReplacingArchive(NSArray *dialogs, ExteriaDialog *summary);
+
+/* the dialogs with the chat of a live message moved up to where its time puts it and its row changed to show the message; nil when the list holds no such chat or the message is
+   not news to it. userInfo is that of ExteriaNewMessageDidArriveNotification */
+NSArray *ExteriaDialogsApplyingNewMessage(NSArray *dialogs, NSDictionary *userInfo);

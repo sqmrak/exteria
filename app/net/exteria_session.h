@@ -118,6 +118,9 @@ extern NSString *const ExteriaSessionConnectionDidChangeNotification;
 extern NSString *const ExteriaSessionDialogsUpdatedNotification;
 /* the other side read more of our messages in a chat; userInfo has kind, peer and maxId */
 extern NSString *const ExteriaReadOutboxDidChangeNotification;
+/* posted on the main thread when a message arrives live: the last-message part of its chat row twice over under the keys "user" (a private chat names nobody) and "group" (the
+   sender is named), both ExteriaDialog; ExteriaDialogsApplyingNewMessage puts the right one into a list */
+extern NSString *const ExteriaNewMessageDidArriveNotification;
 /* a person came online or left: userInfo has "user" (NSNumber long long), "presence" (NSNumber int) and "seen" (NSNumber int) */
 extern NSString *const ExteriaUserStatusDidChangeNotification;
 /* the parts of a file sent in a message that the server has taken, on the main thread; userInfo has "randomId" (the NSNumber of the pending message)

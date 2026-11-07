@@ -1430,6 +1430,26 @@ static void ExteriaClientFoldersChanged(void *ctx) {
     }];
 }
 
+NSString *const ExteriaNewMessageDidArriveNotification = @"ExteriaNewMessageDidArrive";
+
+static void ExteriaClientNewMessage(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users) {
+    ExteriaSession *session = (ExteriaSession *)ctx;
+    exteria_dialog_row row;
+    if (exteria_dialog_message_row(message, users, session->_account, EXTERIA_DIALOG_USER, &row) != EXTERIA_OK) return;
+    ExteriaDialog *asUser = [[ExteriaDialog alloc] initWithRow:&row];
+    if (exteria_dialog_message_row(message, users, session->_account, EXTERIA_DIALOG_GROUP, &row) != EXTERIA_OK) {
+        [asUser release];
+        return;
+    }
+    ExteriaDialog *asGroup = [[ExteriaDialog alloc] initWithRow:&row];
+    [session deliverMain:^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaNewMessageDidArriveNotification object:session
+            userInfo:[NSDictionary dictionaryWithObjectsAndKeys:asUser, @"user", asGroup, @"group", nil]];
+        [asUser release];
+        [asGroup release];
+    }];
+}
+
 static void ExteriaClientReadOutbox(void *ctx, int32_t kind, int64_t peer, int32_t maxId) {
     ExteriaSession *session = (ExteriaSession *)ctx;
     [session deliverMain:^{ [session noteReadOutbox:maxId ofKind:kind peer:peer]; }];
@@ -1603,6 +1623,7 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
     events.group_call = ExteriaClientGroupCall;
     events.typing = ExteriaClientTyping;
     events.read_outbox = ExteriaClientReadOutbox;
+    events.new_message = ExteriaClientNewMessage;
     events.user_status = ExteriaClientUserStatus;
     events.draft = ExteriaClientDraft;
     events.folders_changed = ExteriaClientFoldersChanged;

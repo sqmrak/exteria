@@ -86,6 +86,46 @@ static exteria_tl_value *answer(const char *ctor, exteria_tl_value **dialogs, ui
     return a;
 }
 
+static void test_live_message_row(void) {
+    exteria_dialog_row row;
+    exteria_tl_value *u[1], *m, *noid;
+    u[0] = user(6, "Bob", NULL);
+    m = message(peer("peerChat", "chat_id", 11), 7, 100, "hello");
+    set(m, "from_id", peer("peerUser", "user_id", 6));
+    /* a group names the sender and carries the id, date and text of the message and nothing of the chat itself */
+    CHECK_EQ_INT(exteria_dialog_message_row(m, vec_of(u, 1), SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.peer_kind, 2);
+    CHECK_EQ_INT(row.peer_id, 11);
+    CHECK_EQ_INT(row.top_message, 7);
+    CHECK_EQ_INT(row.date, 100);
+    CHECK_EQ_INT(row.outgoing, 0);
+    CHECK_EQ_INT(row.unread_count, 0);
+    CHECK(strcmp(row.text, "hello") == 0);
+    CHECK(strcmp(row.sender, "Bob") == 0);
+    /* a private chat names nobody */
+    CHECK_EQ_INT(exteria_dialog_message_row(m, vec_of(u, 1), SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_OK);
+    CHECK(row.sender[0] == 0);
+    /* a message that came alone has no users to name the sender from, and still makes a row */
+    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
+    CHECK(row.sender[0] == 0);
+    CHECK(strcmp(row.text, "hello") == 0);
+    /* our own message is outgoing */
+    m = message(peer("peerUser", "user_id", 6), 8, 101, "mine");
+    set_flag(m, "out");
+    set(m, "from_id", peer("peerUser", "user_id", SELF));
+    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.outgoing, 1);
+    CHECK_EQ_INT(row.sender_is_self, 1);
+    CHECK_EQ_INT(row.peer_kind, 1);
+    /* an empty message, a missing id or peer, and a null row are refused */
+    noid = obj("message");
+    set(noid, "peer_id", peer("peerUser", "user_id", 6));
+    CHECK_EQ_INT(exteria_dialog_message_row(noid, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dialog_message_row(obj("messageEmpty"), NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dialog_message_row(NULL, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, SELF, EXTERIA_DIALOG_USER, NULL), EXTERIA_E_ARG);
+}
+
 static exteria_tl_value *custom_emoji(int32_t offset, int32_t length, int64_t document) {
     exteria_tl_value *e = obj("messageEntityCustomEmoji");
     set_i32(e, "offset", offset);
@@ -1346,6 +1386,7 @@ int main(void) {
     test_peer_dialogs_request();
     test_saved_dialogs();
     test_linked_community();
+    test_live_message_row();
     exteria_arena_free(&arena);
     return test_finish("test_dialogs");
 }

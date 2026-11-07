@@ -339,19 +339,7 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _reactions = summary->reactions;
 }
 
-- (void)applyCommunityChats:(NSArray *)chats {
-    if (!_community) return;
-    [_communityChats release];
-    _communityChats = chats.count ? [chats copy] : nil;
-    [_forumTopicTitle release];
-    [_forumSecondTitle release];
-    _forumTopicTitle = nil;
-    _forumSecondTitle = nil;
-    if (!_communityChats) return;
-    ExteriaDialog *newest = [_communityChats objectAtIndex:0];
-    _forumTopicTitle = [newest.title copy];
-    if (_communityChats.count > 1) _forumSecondTitle = [[[_communityChats objectAtIndex:1] title] copy];
-    /* the line of the row is the newest message of the chats, with the time it came */
+- (void)adoptLastMessageOf:(ExteriaDialog *)newest {
     _date = newest.date;
     _topMessage = newest.topMessage;
     _outgoing = newest.outgoing;
@@ -369,6 +357,31 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     _previewEntities = [newest.previewEntities copy];
     [_previewFile release];
     _previewFile = [newest.previewFile retain];
+}
+
+- (BOOL)takeNewMessageFrom:(ExteriaDialog *)patch {
+    if (_folder || _community || _forum || _saved || _topicId) return NO;
+    if (patch.peerKind != _peerKind || patch.peerId != _peerId || patch.topMessage <= _topMessage) return NO;
+    [self adoptLastMessageOf:patch];
+    /* a message of ours is read by its author, and the count is the server's to say again when the list is asked for */
+    if (!patch.outgoing) ++_unreadCount;
+    return YES;
+}
+
+- (void)applyCommunityChats:(NSArray *)chats {
+    if (!_community) return;
+    [_communityChats release];
+    _communityChats = chats.count ? [chats copy] : nil;
+    [_forumTopicTitle release];
+    [_forumSecondTitle release];
+    _forumTopicTitle = nil;
+    _forumSecondTitle = nil;
+    if (!_communityChats) return;
+    ExteriaDialog *newest = [_communityChats objectAtIndex:0];
+    _forumTopicTitle = [newest.title copy];
+    if (_communityChats.count > 1) _forumSecondTitle = [[[_communityChats objectAtIndex:1] title] copy];
+    /* the line of the row is the newest message of the chats, with the time it came */
+    [self adoptLastMessageOf:newest];
     /* a muted chat counts in grey and does not make the row loud, so the count is of the chats that are not muted, and a row of muted chats only counts them all in grey */
     NSInteger loud = 0, all = 0, mentions = 0, reactions = 0;
     for (ExteriaDialog *chat in _communityChats) {
@@ -419,6 +432,28 @@ NSArray *ExteriaDialogsReplacingArchive(NSArray *dialogs, ExteriaDialog *summary
         ExteriaDialog *dialog = [updated objectAtIndex:i];
         if (dialog.folder && dialog.folderId == summary.folderId) [updated replaceObjectAtIndex:i withObject:summary];
     }
+    return updated;
+}
+
+NSArray *ExteriaDialogsApplyingNewMessage(NSArray *dialogs, NSDictionary *userInfo) {
+    ExteriaDialog *asUser = [userInfo objectForKey:@"user"], *asGroup = [userInfo objectForKey:@"group"];
+    if (![asUser isKindOfClass:[ExteriaDialog class]] || ![asGroup isKindOfClass:[ExteriaDialog class]]) return nil;
+    NSUInteger at = NSNotFound;
+    for (NSUInteger i = 0; i < dialogs.count; ++i) {
+        ExteriaDialog *dialog = [dialogs objectAtIndex:i];
+        if (!dialog.folder && !dialog.community && dialog.peerKind == asUser.peerKind && dialog.peerId == asUser.peerId) { at = i; break; }
+    }
+    if (at == NSNotFound) return nil;
+    ExteriaDialog *dialog = [[[dialogs objectAtIndex:at] retain] autorelease];
+    BOOL privateChat = dialog.kind == EXTERIA_DIALOG_USER || dialog.kind == EXTERIA_DIALOG_BOT;
+    if (![dialog takeNewMessageFrom:privateChat ? asUser : asGroup]) return nil;
+    NSMutableArray *updated = [NSMutableArray arrayWithArray:dialogs];
+    if (dialog.pinned) return updated;
+    /* the pinned chats and the archive entry stay above, and the chat takes the first place below them */
+    [updated removeObjectAtIndex:at];
+    NSUInteger place = 0;
+    while (place < updated.count && ([[updated objectAtIndex:place] pinned] || [[updated objectAtIndex:place] folder])) ++place;
+    [updated insertObject:dialog atIndex:place];
     return updated;
 }
 

@@ -299,6 +299,7 @@
                                                  name:ExteriaSessionConnectionDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogsChanged) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:_session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(newMessageArrived:) name:ExteriaNewMessageDidArriveNotification object:_session];
     [self refreshConnectionTitle];
     UILongPressGestureRecognizer *press = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(rowPressed:)] autorelease];
     [table addGestureRecognizer:press];
@@ -325,6 +326,19 @@
     uint64_t now = exteria_system_clock.monotonic_ms(exteria_system_clock.ctx);
     uint64_t delay = exteria_list_refresh_delay(now, _lastLiveRefreshMs, 750, 100);
     [self performSelector:@selector(refreshLiveDialogs) withObject:nil afterDelay:(NSTimeInterval)delay / 1000.0];
+}
+
+/* the row shows a message that arrived live and moves up at once; the list the server sends a moment later says the same */
+- (void)newMessageArrived:(NSNotification *)note {
+    if (!self.isViewLoaded) return;
+    NSArray *updated = ExteriaDialogsApplyingNewMessage(_dialogs, note.userInfo);
+    if (!updated) return;
+    [_dialogs release];
+    _dialogs = [updated retain];
+    [self applyFilters];
+    [self reportUnread];
+    [self reloadList:NO];
+    [self refreshStatus];
 }
 
 - (void)refreshLiveDialogs {

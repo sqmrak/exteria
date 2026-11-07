@@ -128,6 +128,11 @@ typedef struct exteria_dialog_row {
     exteria_dialog_emoji emoji[EXTERIA_DIALOG_EMOJI_MAX];
 } exteria_dialog_row;
 
+/* the last-message part of a row (top_message, date, outgoing, preview, text, sender) made from one live message, for a chat the account already lists; the rest of the row is zero.
+   kind says whether the sender is named, as it is in a group and not in a private chat; EXTERIA_E_MALFORMED for anything that is not a message with an id and a peer */
+exteria_status exteria_dialog_message_row(const exteria_tl_value *message, const exteria_tl_value *users, int64_t self_id,
+                                          exteria_dialog_kind kind, exteria_dialog_row *row);
+
 /* fills the title, photo, hash and kind of a row whose peer_kind and peer_id are set, from the users and chats of an answer;
    a peer the answer does not carry is left with an empty title (a user is then marked deleted) */
 void exteria_dialog_peer_read(exteria_dialog_row *row, const exteria_tl_value *users, const exteria_tl_value *chats, int64_t self_id);

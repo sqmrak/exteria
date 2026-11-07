@@ -136,6 +136,8 @@ static const exteria_tl_value *find_saved_message(const exteria_tl_value *messag
 
 static const exteria_tl_value *find_entity(const exteria_tl_value *list, int64_t id) {
     uint32_t i;
+    /* a live update has no users of its own when it is not in a container */
+    if (!list || list->kind != EXTERIA_TL_V_VEC) return NULL;
     for (i = 0; i < list->u.vec.count; ++i) {
         const exteria_tl_value *e = list->u.vec.items[i];
         int64_t entity_id;
@@ -408,6 +410,23 @@ exteria_status exteria_search_parse(const exteria_tl_value *answer, int64_t self
     }
     if (exteria_tl_get_i32(answer, "next_rate", &rate) == EXTERIA_OK && next_rate) *next_rate = rate;
     *count = n;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_dialog_message_row(const exteria_tl_value *message, const exteria_tl_value *users, int64_t self_id,
+                                          exteria_dialog_kind kind, exteria_dialog_row *row) {
+    exteria_peer peer;
+    int32_t id = 0;
+    if (!row) return EXTERIA_E_ARG;
+    memset(row, 0, sizeof(*row));
+    if (!message || (!exteria_tl_is(message, EXTERIA_TL_ID_message) && !exteria_tl_is(message, EXTERIA_TL_ID_messageService))) return EXTERIA_E_MALFORMED;
+    if (exteria_tl_get_i32(message, "id", &id) != EXTERIA_OK || id <= 0 ||
+        exteria_peer_from_tl(exteria_tl_get(message, "peer_id"), &peer) != EXTERIA_OK || peer.id <= 0) return EXTERIA_E_MALFORMED;
+    row->peer_kind = peer.kind;
+    row->peer_id = peer.id;
+    row->kind = kind;
+    row->top_message = id;
+    fill_message(row, message, users, self_id);
     return EXTERIA_OK;
 }
 

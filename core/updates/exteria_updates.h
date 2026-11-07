@@ -37,6 +37,9 @@ exteria_status exteria_updates_request(exteria_updates *u, int64_t channel_id,
                                       const exteria_tl_value *input_channel, exteria_arena *arena,
                                       exteria_tl_value **out);
 exteria_status exteria_updates_cache_message(exteria_updates *u, const exteria_tl_value *message);
+
+/* the message an updateShortMessage or updateShortChatMessage stands for, built in the arena; account is the id that stands as the sender of an outgoing one */
+exteria_status exteria_updates_short_to_message(exteria_arena *arena, int64_t account, const exteria_tl_value *update, exteria_tl_value **out);
 /* whether the container only carries presence, typing, draft and outbox-read updates, which cannot add a message
    or change an unread count */
 int exteria_updates_quiet(const exteria_tl_value *updates);
