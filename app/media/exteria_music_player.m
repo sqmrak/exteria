@@ -905,12 +905,15 @@ static BOOL ExteriaIsFlac(NSString *path) {
 
 - (void)seekToFraction:(float)fraction {
     NSTimeInterval length = self.duration;
-    if (!_player || length <= 0) return;
+    /* an item that is not ready ignores a seek on ios 5 to 9, and the slider would sit at a place the song never went to */
+    if (!_player || length <= 0 || _item.status != AVPlayerItemStatusReadyToPlay) return;
     fraction = fraction < 0 ? 0 : (fraction > 1 ? 1 : fraction);
     NSUInteger generation = ++_seekGeneration;
     _seeking = YES;
     _seekTarget = length * fraction;
-    [_player seekToTime:CMTimeMakeWithSeconds(_seekTarget, 600) completionHandler:^(BOOL finished) {
+    /* an mp3 without a seek table lands on the start of the file when the player may pick any nearby frame, which made every jump forward restart the song; exact
+       seeking decodes up to the target */
+    [_player seekToTime:CMTimeMakeWithSeconds(_seekTarget, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
         (void)finished;
         dispatch_async(dispatch_get_main_queue(), ^{
             if (generation != _seekGeneration) return;
