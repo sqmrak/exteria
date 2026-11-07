@@ -171,6 +171,14 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     return writable;
 }
 
++ (BOOL)openDownloadOfIpaURL:(NSString *)ipaURL {
+    NSURL *url = ipaURL.length ? [NSURL URLWithString:ipaURL] : nil;
+    if (!url) url = [NSURL URLWithString:@"https://github.com/sqmrak/exteria/releases/latest"];
+    BOOL opened = [[UIApplication sharedApplication] openURL:url];
+    if (!opened) NSLog(@"exteria: the system did not take the release download link");
+    return opened;
+}
+
 - (id)initWithIpaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size {
     self = [super init];
     if (!self) return nil;

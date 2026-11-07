@@ -18,6 +18,9 @@ typedef enum {
 + (NSData *)trustedRoots;
 /* in-place updates require a writable jailbreak installation and uicache */
 + (BOOL)canInstallInPlace;
+/* hands the system the download of a release when the app cannot install it itself: the direct url of the ipa, which is one redirect to a file,
+   and only without one the page of the latest release, which old browsers cannot draw. NO when the system took neither */
++ (BOOL)openDownloadOfIpaURL:(NSString *)ipaURL;
 
 - (id)initWithIpaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size;
 

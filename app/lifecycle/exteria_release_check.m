@@ -233,8 +233,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     });
 }
 - (void)openRelease {
-    NSURL *url = [NSURL URLWithString:@"https://github.com/sqmrak/exteria/releases/latest"];
-    if (![[UIApplication sharedApplication] openURL:url]) NSLog(@"exteria: cannot open the releases page");
+    [ExteriaUpdater openDownloadOfIpaURL:_ipaURL];
     [self close];
 }
 - (void)primaryTapped {

@@ -120,7 +120,7 @@
 "chats.unarchive.action" = "Unarchive";
 "release.title" = "Oh, %@ is out :P";
 "release.empty" = "No release notes yet.";
-"release.open" = "Open release";
+"release.open" = "Download";
 "release.later" = "Later";
 "release.update" = "Update";
 "release.cancel" = "Cancel";
@@ -132,7 +132,7 @@
 "release.installing" = "Installing...";
 "release.updated" = "%@ is installed";
 "release.restart.note" = "Restart the app to run the new version.";
-"release.readonly" = "Open the GitHub release to download and install the IPA. In-place updates require a writable jailbreak installation.";
+"release.readonly" = "Download the IPA and install it yourself. In-place updates require a writable jailbreak installation.";
 "release.noasset" = "This release has no file the app can install by itself.";
 "release.fail.title" = "The update did not finish";
 "release.fail.network" = "The download failed. Check the connection and try again.";
