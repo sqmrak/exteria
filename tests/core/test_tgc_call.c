@@ -344,6 +344,11 @@ static void audio_both_ways(void) {
     CHECK(strstr(w->trace[0], "signal out InitialSetup") != NULL);
     CHECK(strstr(w->trace[0], "signal in InitialSetup") != NULL);
     CHECK(strstr(w->trace[0], "ice selected pair") != NULL);
+    /* the keepalive of the selected pair runs every two seconds and must not repeat itself in the report */
+    {
+        const char *first = strstr(w->trace[0], "ice selected pair");
+        CHECK(first && strstr(first + 1, "ice selected pair") == NULL);
+    }
     CHECK(strstr(w->trace[0], "dtls starts as client") != NULL);
     CHECK(strstr(w->trace[1], "dtls starts as server") != NULL);
     CHECK(strstr(w->trace[0], "dtls connected") != NULL);

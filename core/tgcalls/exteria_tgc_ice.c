@@ -360,7 +360,8 @@ static void send_check(exteria_tgc_ice *ice, exteria_tgc_ice_pair *p, int nomina
     p->triggered = 0;
     p->last_tx_ms = now_ms;
     ++p->tries;
-    if (p->tries == 1 || p->tries == 4) {
+    /* the keepalive of the selected pair repeats every two seconds and would push the handshake out of the report */
+    if ((p->tries == 1 || p->tries == 4) && !(p->nominated && p->valid)) {
         char text[80];
         describe(&s, text, sizeof(text));
         trace(ice, "ice check %u to %s%s", (unsigned)p->tries, text, nominate ? " (nominating)" : "");
@@ -370,11 +371,12 @@ static void send_check(exteria_tgc_ice *ice, exteria_tgc_ice_pair *p, int nomina
 
 static void select_pair(exteria_tgc_ice *ice, exteria_tgc_ice_pair *p, uint64_t now_ms) {
     int i;
+    int changed = ice->selected != (int)(p - ice->pairs);
     for (i = 0; i < EXTERIA_TGC_ICE_MAX_PAIRS; ++i) ice->pairs[i].nominated = 0;
     p->nominated = 1;
     p->last_rx_ms = now_ms;
     ice->selected = (int)(p - ice->pairs);
-    {
+    if (changed) {
         path s = path_of(p);
         char text[80];
         describe(&s, text, sizeof(text));
