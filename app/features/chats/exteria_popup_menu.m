@@ -94,6 +94,13 @@
         UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
         row.frame = CGRectMake(0, _rowHeight * (CGFloat)i, CARD_WIDTH, _rowHeight);
         row.tag = (NSInteger)i;
+        /* the card cannot clip its rows because of its shadow, so the pressed fill of the first and last row is cut to the card's corners itself */
+        UIRectCorner corners = (i == 0 ? (UIRectCornerTopLeft | UIRectCornerTopRight) : 0) | (i + 1 == _titles.count ? (UIRectCornerBottomLeft | UIRectCornerBottomRight) : 0);
+        if (corners) {
+            CAShapeLayer *mask = [CAShapeLayer layer];
+            mask.path = [UIBezierPath bezierPathWithRoundedRect:row.bounds byRoundingCorners:corners cornerRadii:CGSizeMake(radius, radius)].CGPath;
+            row.layer.mask = mask;
+        }
         [row addTarget:self action:@selector(picked:) forControlEvents:UIControlEventTouchUpInside];
         [row addTarget:self action:@selector(rowDown:) forControlEvents:UIControlEventTouchDown];
         [row addTarget:self action:@selector(rowUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
