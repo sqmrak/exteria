@@ -227,6 +227,12 @@ def service(name, payload):
     if name == "settings.set":
         fake.settings[(data["plugin"], data["key"])] = data["value"]
         return "{}"
+    if name == "settings.replace":
+        for key in [key for key in fake.settings if key[0] == data["plugin"]]:
+            del fake.settings[key]
+        for key, value in json.loads(data["value"]).items():
+            fake.settings[(data["plugin"], key)] = json.dumps(value)
+        return "{}"
     if name == "settings.export":
         return json.dumps({"value": json.dumps({k[1]: json.loads(v) for k, v in fake.settings.items() if k[0] == data["plugin"]})})
     if name == "menu.add":

@@ -92,10 +92,8 @@ class SettingsController:
         """Remove all saved values for this plugin id (not the plugin itself)."""
         if PythonBridge is not None:
             try:
-                # The bridge exposes no bulk remove; null out every known key,
-                # then ask the host to rebuild an open settings screen once.
-                for key in self.get_settings():
-                    PythonBridge.setSetting(self._plugin_id, key, "null", False)
+                # the host replaces the whole object, so the keys are gone and not stored as null
+                PythonBridge.replaceSettings(self._plugin_id, "{}")
                 PythonBridge.reloadSettingsScreen(self._plugin_id)
             except Exception:
                 pass
