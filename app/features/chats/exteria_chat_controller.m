@@ -407,6 +407,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     UIButton *_reactionJump;
     UILabel *_reactionBadge;
     NSMutableArray *_unreadReactionIds;
+    /* a pending message left the list because its copy from the server is in it, which the next change of rows must not play as a deletion */
+    BOOL _localReplaced;
     NSUInteger _ghostReactionIndex;
     ExteriaNextChatHint *_nextHint;
     ExteriaDialog *_nextDialog;
@@ -3788,6 +3790,7 @@ static NSString *const ExteriaListenedKey = @"exteria.voice.listened";
         if (server) {
             [self keepUploadedMediaOf:local server:server];
             [_local removeObject:local];
+            _localReplaced = YES;
         }
     }
 }
@@ -4444,6 +4447,8 @@ static void ExteriaRedrawTree(UIView *view) {
     NSArray *oldItems = [_items retain];
     NSUInteger oldCount = oldItems.count;
     NSUInteger newCount = items.count;
+    BOOL replacedLocal = _localReplaced;
+    _localReplaced = NO;
 
     ExteriaChatItem *anchor = nil;
     NSArray *visible = [_table indexPathsForVisibleRows];
@@ -4510,7 +4515,8 @@ static void ExteriaRedrawTree(UIView *view) {
             NSMutableArray *paths = [NSMutableArray array];
             for (NSUInteger i = 0; i < (removed ? removed : inserted); ++i)
                 [paths addObject:[NSIndexPath indexPathForRow:(NSInteger)(prefix + i) inSection:0]];
-            BOOL animate = oldCount > 0 && [self rowChangesMayAnimate];
+            /* the row of a message that was on its way goes silently, since its copy from the server stands in the list already; fading or dusting it reads as a deletion */
+            BOOL animate = oldCount > 0 && !(removed && replacedLocal) && [self rowChangesMayAnimate];
             if (removed) {
                 /* fading rows below an anchor would slide while the offset jumps */
                 BOOL dust = animate && removed <= DUST_ROWS_MAX && ExteriaLiteEnabled(EXTERIA_LITE_CHAT_THANOS);
@@ -7721,6 +7727,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         if (server) {
             [self keepUploadedMediaOf:message server:server];
             [_local removeObject:message];
+            _localReplaced = YES;
         }
     }
     [self rebuildItems];
