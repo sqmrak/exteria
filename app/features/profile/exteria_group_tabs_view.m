@@ -12,6 +12,7 @@
 #import "exteria_music_player.h"
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
+#import "exteria_forward.h"
 #import "exteria_session_actions.h"
 #import "exteria_session_channels.h"
 
@@ -525,7 +526,18 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = [responder nextResponder];
     UIViewController *host = (UIViewController *)responder;
     if (!host.navigationController) { NSLog(@"exteria: no navigation controller for forwarding shared messages"); return; }
-    NSArray *ids = [[_selected allObjects] sortedArrayUsingSelector:@selector(compare:)];
+    /* the rows of the tabs that hold messages, in the order the server numbers them */
+    NSMutableArray *messages = [NSMutableArray arrayWithCapacity:_selected.count];
+    for (int tab = 0; tab < ExteriaGroupTabCount; ++tab) {
+        if (tab == ExteriaGroupTabMembers) continue;
+        for (ExteriaMessage *message in _items[tab]) {
+            if ([_selected containsObject:[NSNumber numberWithInt:message.messageId]]) [messages addObject:message];
+        }
+    }
+    if (!messages.count) return;
+    [messages sortUsingComparator:^NSComparisonResult(ExteriaMessage *a, ExteriaMessage *b) {
+        return a.messageId < b.messageId ? NSOrderedAscending : (a.messageId > b.messageId ? NSOrderedDescending : NSOrderedSame);
+    }];
     ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
     picker.screenTitle = NSLocalizedString(@"chat.msg.forward.to", nil);
     picker.forwarding = YES;
@@ -536,18 +548,18 @@ static NSString *ExteriaGroupDateText(int32_t date) {
         ExteriaDialog *target = [dialogs lastObject];
         if (!view || !target || view->_forwarding) return;
         view->_forwarding = YES;
-        [view->_session forwardMessageIds:ids fromDialog:view->_dialog toDialog:target hideAuthor:NO completion:^(NSString *errorName) {
+        ExteriaForwardMessages(view->_session, view->_media, view->_dialog, view->_dialog.noForwards, messages, target, NO, ^(NSString *errorText) {
             ExteriaGroupTabsView *owner = weak.target;
             if (owner) owner->_forwarding = NO;
-            if (errorName) {
-                NSLog(@"exteria: forwarding shared messages failed: %@", errorName);
-                ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+            if (errorText) {
+                NSLog(@"exteria: forwarding shared messages failed: %@", errorText);
+                ExteriaGiftAlert(nil, errorText);
                 return;
             }
             [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
             if (owner) [owner cancelSelection];
             ExteriaGiftAlert(nil, NSLocalizedString(@"chat.msg.forwarded", nil));
-        }];
+        });
     };
     [host.navigationController pushViewController:picker animated:YES];
 }
