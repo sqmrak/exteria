@@ -150,11 +150,13 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     return roots;
 }
 
-/* a signed user app must not be replaced with the jailbreak release executable */
+/* a user app installed with an apple signature has no entitlement to write its own bundle, so the probe below fails and it is left alone; an ldid
+   install of the jailbreak ipa (appsync, 3utools on a jailbroken phone) keeps the entitlement and passes */
 + (BOOL)canInstallInPlace {
     NSString *bundle = [[[NSBundle mainBundle] bundlePath] stringByResolvingSymlinksInPath];
     if (![bundle hasPrefix:@"/Applications/"] && ![bundle hasPrefix:@"/var/jb/Applications/"] &&
-        ![bundle hasPrefix:@"/private/var/jb/Applications/"]) return NO;
+        ![bundle hasPrefix:@"/private/var/jb/Applications/"] && ![bundle hasPrefix:@"/private/var/containers/Bundle/Application/"] &&
+        ![bundle hasPrefix:@"/var/containers/Bundle/Application/"]) return NO;
     if (access("/usr/bin/uicache", X_OK) != 0 && access("/var/jb/usr/bin/uicache", X_OK) != 0) return NO;
     NSString *template = [bundle stringByAppendingPathComponent:@".exteria-update-probe-XXXXXX"];
     char *path = strdup([template fileSystemRepresentation]);

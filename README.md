@@ -114,7 +114,7 @@ before `uicache`, then respring. it adds the `SBInternalAppTag` to the bundle's 
 
 on start the app asks `api.github.com` for the latest release and shows a notice when its tag is newer. a release needs `Exteria-v<version>.ipa` and `Exteria-v<version>.ipa.sha256`, the tag is `v<version>`.
 
-- the update replaces the files of the running bundle on a writable jailbreak install in `/Applications` or `/var/jb/Applications`; other installs open the release page
+- the update replaces the files of the running bundle on a writable jailbreak install in `/Applications`, `/var/jb/Applications` or the user app folder `/var/containers/Bundle/Application` (an ipa installed with ldid keeps the entitlement that allows the write; an apple-signed install does not, and its write probe fails); other installs open the release page
 - the ipa must match its digest, or nothing is installed
 - limits: 128 MiB, 4096 entries, four https redirects to github hosts
 

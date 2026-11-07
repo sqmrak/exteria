@@ -8,5 +8,9 @@
 	<array>
 		<string>group.com.sqmrak.exteria</string>
 	</array>
+	<key>com.apple.security.exception.files.absolute-path.read-write</key>
+	<array>
+		<string>/private/var/containers/Bundle/Application/</string>
+	</array>
 </dict>
 </plist>

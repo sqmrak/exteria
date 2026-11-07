@@ -193,8 +193,8 @@ $(EXTERIA_IOS_BUILD)/app-signed.stamp: $(APP)/$(APP_NAME)
 	@sh scripts/keep_symbols.sh $(APP)/$(APP_NAME)
 	@# the copy kept above has every symbol and names a crash log's frames; the shipped binary keeps only what it exports. the signature is made last, since stripping breaks it
 	"$(EXTERIA_TC)/strip" -x -S $(APP)/$(APP_NAME)
-	@# both carry the app group, which is how the extension hands what was shared to the app
-	"$(EXTERIA_LDID)" -Spackaging/entitlements.plist $(APP)/$(SHARE_APPEX)/$(SHARE_NAME)
+	@# both carry the app group, which is how the extension hands what was shared to the app; only the app may write the bundle folders of user apps, for the in-app update
+	"$(EXTERIA_LDID)" -Spackaging/entitlements-share.plist $(APP)/$(SHARE_APPEX)/$(SHARE_NAME)
 	"$(EXTERIA_LDID)" -Spackaging/entitlements.plist $(APP)/$(APP_NAME)
 	@touch $@
 
