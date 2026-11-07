@@ -1,5 +1,6 @@
 #import "exteria_symbol.h"
 #import "exteria_platform.h"
+#import "exteria_symbol_paths.h"
 
 /* the bundled mask of a symbol, resources/icons/symbol_*, cut drawables by tools/make_assets.py */
 static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
@@ -10,14 +11,10 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolBookmark: return @"symbol_bookmark";
     case ExteriaSymbolPin: return @"symbol_pin";
     case ExteriaSymbolBellSlash: return @"symbol_bellslash";
-    case ExteriaSymbolChats: return @"symbol_chats";
-    case ExteriaSymbolPerson: return @"symbol_person";
-    case ExteriaSymbolGear: return @"symbol_gear";
     case ExteriaSymbolArchive: return @"symbol_archive";
     case ExteriaSymbolChevronRight: return @"symbol_chevronright";
     case ExteriaSymbolCheck: return @"symbol_check";
     case ExteriaSymbolCheckDouble: return @"symbol_checkdouble";
-    case ExteriaSymbolSmiley: return @"symbol_smiley";
     case ExteriaSymbolKeyboard: return @"symbol_keyboard";
     case ExteriaSymbolSendArrow: return @"symbol_sendarrow";
     case ExteriaSymbolClock: return @"symbol_clock";
@@ -47,7 +44,6 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolTrashCan: return @"symbol_trashcan";
     case ExteriaSymbolTrashLid: return @"symbol_trashlid";
     case ExteriaSymbolTrash: return @"symbol_trashcan";
-    case ExteriaSymbolPhone: return @"symbol_phone";
     case ExteriaSymbolAt: return @"symbol_at";
     case ExteriaSymbolCake: return @"symbol_cake";
     case ExteriaSymbolLogout: return @"symbol_logout";
@@ -150,6 +146,11 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolPipette: return nil;
     case ExteriaSymbolUndo: return nil;
     case ExteriaSymbolCross: return nil;
+    case ExteriaSymbolChats: return nil;
+    case ExteriaSymbolPerson: return nil;
+    case ExteriaSymbolGear: return nil;
+    case ExteriaSymbolSmiley: return nil;
+    case ExteriaSymbolPhone: return nil;
     }
     return nil;
 }
@@ -310,6 +311,11 @@ static UIImage *ExteriaRenderSymbolImage(ExteriaSymbol symbol, CGFloat pointSize
     if (symbol == ExteriaSymbolBlur) return ExteriaBlurImage(pointSize, color);
     if (symbol == ExteriaSymbolPipette) return ExteriaVectorImage(pointSize, color, "M11.793,7.207L11.293,6.707C10.902,6.317 10.902,5.683 11.293,5.293C11.683,4.902 12.317,4.902 12.707,5.293L13.707,6.293L16.439,3.561C17.025,2.975 17.975,2.975 18.561,3.561L20.439,5.439C21.025,6.025 21.025,6.975 20.439,7.561L17.707,10.293L18.707,11.293C19.098,11.683 19.098,12.317 18.707,12.707C18.317,13.098 17.683,13.098 17.293,12.707L16.793,12.207L8.879,20.121C8.316,20.684 7.553,21 6.757,21H4C3.448,21 3,20.552 3,20V17.243C3,16.447 3.316,15.684 3.879,15.121L5.06,16.302C4.81,16.552 4.67,16.89 4.67,17.243V19.33H6.757C7.11,19.33 7.448,19.19 7.698,18.941L15.612,11.026L12.974,8.388L5.06,16.302L3.879,15.121L11.793,7.207Z", 24, 0);
     if (symbol == ExteriaSymbolUndo) return ExteriaVectorImage(pointSize, color, "M34 58.5H41.5C50.6127 58.5 58 51.1127 58 42C58 32.8873 50.6127 25.5 41.5 25.5H16M29.5 39L16 25.5L29.5 12", 72, 5);
+    if (symbol == ExteriaSymbolChats) return ExteriaVectorImage(pointSize, color, ExteriaPathChats, EXTERIA_PATH_CHATS_GRID, 0);
+    if (symbol == ExteriaSymbolPerson) return ExteriaVectorImage(pointSize, color, ExteriaPathPerson, EXTERIA_PATH_PERSON_GRID, 0);
+    if (symbol == ExteriaSymbolGear) return ExteriaVectorImage(pointSize, color, ExteriaPathGear, EXTERIA_PATH_GEAR_GRID, 0);
+    if (symbol == ExteriaSymbolSmiley) return ExteriaVectorImage(pointSize, color, ExteriaPathSmiley, EXTERIA_PATH_SMILEY_GRID, 0);
+    if (symbol == ExteriaSymbolPhone) return ExteriaVectorImage(pointSize, color, ExteriaPathPhone, EXTERIA_PATH_PHONE_GRID, 0);
     if (symbol == ExteriaSymbolCross) return ExteriaVectorImage(pointSize, color, "M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12Z", 24, 0);
     NSString *name = ExteriaSymbolMaskName(symbol);
     UIImage *mask = name ? [UIImage imageNamed:name] : nil;
