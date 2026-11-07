@@ -28,3 +28,12 @@ local change for the ios 12 sandbox:
 
 local change found on a phone:
 - extera_utils/plugin_loader.py: _sandboxed_open reads <plugins>/<id>.py from <plugins>/<id>.plugin when only the second exists. zwylib builds that name for every plugin (PluginUtils.get_plugin_path) and logged a FileNotFoundError traceback for each one
+
+local changes from the reverse report of 2.2.0 (tests/python/test_sdk_fixes.py):
+- android_utils.py: _plugin_mark only guards its preparation. an error raised by the callback inside the with passed into the except and the generator yielded a second time, which turned every failed callback into "generator didn't stop after throw()"
+- extera_utils/plugin_loader.py: _unload_record also clears change_callbacks
+- hook_utils.py: find_class fails closed. a guard_java_class that raises refuses the class; a loader that is not importable yet (the sdk used on its own) still means no guard
+- client_utils.py: AccountClient.run_on_queue posts under hook_scope(self.account), so the work runs for the account of the client and not the one that happens to be current
+- elyx_runtime/settings.py: clear_settings replaces the stored object with {} through the bridge; it used to write null into every key, which stayed listed
+- elyx_runtime/metadata.py: a .py metainfo or locale file is parsed with ast and only literal top-level assignments are taken; nothing in it runs, since it is read before the person agreed to install. a value that is computed (1 + 2, a call) is skipped
+- elyx_runtime/assets.py, elyx_runtime/loader.py: a "." or ".." segment in an asset name, in `main` or in a directory the refmap declares is refused, so an archive names nothing outside its own folder
