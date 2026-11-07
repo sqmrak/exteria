@@ -67,6 +67,11 @@
     _presence = presence;
     _seen = seen;
 }
+
+- (void)clearReactions {
+    _reactions = 0;
+}
+
 @synthesize unreadCount = _unreadCount;
 @synthesize mentions = _mentions;
 @synthesize reactions = _reactions;

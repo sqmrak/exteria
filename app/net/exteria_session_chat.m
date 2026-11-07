@@ -1025,11 +1025,12 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
     }];
 }
 
-- (void)markReactionsReadOfDialog:(ExteriaDialog *)dialog {
-    if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return;
+- (BOOL)markReactionsReadOfDialog:(ExteriaDialog *)dialog explicit:(BOOL)explicit {
+    exteria_read_action action = explicit ? EXTERIA_READ_EXPLICIT : EXTERIA_READ_AUTOMATIC;
+    if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), action)) return NO;
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return EXTERIA_E_RETRY;
+        if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), action)) return EXTERIA_E_RETRY;
         return exteria_read_reactions_request(arena, &peer, request);
     } handler:^(const exteria_mt_rpc_result *result) {
         if (result->status == EXTERIA_OK) return;
@@ -1038,6 +1039,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
         [self noteRpcError:error];
         NSLog(@"exteria: marking reactions of chat %lld seen failed: %@", peer.id, error);
     }];
+    return YES;
 }
 
 - (void)searchMessagesOfDialog:(ExteriaDialog *)dialog query:(NSString *)query completion:(ExteriaHistoryCompletion)completion {

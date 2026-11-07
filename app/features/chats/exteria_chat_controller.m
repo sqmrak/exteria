@@ -3793,6 +3793,7 @@ static NSString *const ExteriaListenedKey = @"exteria.voice.listened";
 - (void)markReadIfNeeded {
     if (!_visible || !_loadedFirst || _opening || _loadingWindow || _scrollTarget > 0 || _jumpLink || _pinnedList || ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) return;
     [self scheduleVisibleMentionsRead];
+    [self scheduleVisibleReactionsRead];
     int32_t newest = 0;
     for (NSIndexPath *path in [_table indexPathsForVisibleRows]) {
         if ((NSUInteger)path.row >= _items.count) continue;
@@ -4942,9 +4943,43 @@ static void ExteriaRedrawTree(UIView *view) {
     }
     int32_t messageId = [[_unreadReactionIds lastObject] intValue];
     [_unreadReactionIds removeLastObject];
-    if (!_unreadReactionIds.count) [_session markReactionsReadOfDialog:_dialog];
+    if (!_unreadReactionIds.count) [self sendReactionsRead:NO];
     [self refreshReactionJump];
     [self jumpToMessageId:messageId];
+}
+
+/* the server counts the reactions of the chat as seen and says nothing back, so the row of the list is cleared here */
+- (void)sendReactionsRead:(BOOL)explicit {
+    if (![_session markReactionsReadOfDialog:_dialog explicit:explicit]) return;
+    [_dialog clearReactions];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+}
+
+/* a message with an unseen reaction that comes onto the screen counts as read, as in the android client; the last one tells the server */
+- (void)scheduleVisibleReactionsRead {
+    if (!_unreadReactionIds.count) return;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markVisibleReactionsRead) object:nil];
+    [self performSelector:@selector(markVisibleReactionsRead) withObject:nil afterDelay:0];
+}
+
+- (void)markVisibleReactionsRead {
+    if (!_visible || _pinnedList || !_unreadReactionIds.count || ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead) || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+    BOOL seen = NO;
+    for (NSIndexPath *path in [_table indexPathsForVisibleRows]) {
+        if ((NSUInteger)path.row >= _items.count) continue;
+        ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)path.row];
+        NSMutableArray *messages = [NSMutableArray arrayWithObject:item.message];
+        [messages addObjectsFromArray:item.albumMessages];
+        for (ExteriaMessage *message in messages) {
+            NSUInteger at = [_unreadReactionIds indexOfObject:[NSNumber numberWithInt:message.messageId]];
+            if (at == NSNotFound) continue;
+            [_unreadReactionIds removeObjectAtIndex:at];
+            seen = YES;
+        }
+    }
+    if (!seen) return;
+    if (!_unreadReactionIds.count) [self sendReactionsRead:NO];
+    [self refreshReactionJump];
 }
 
 - (void)toEndTapped {

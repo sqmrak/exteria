@@ -166,6 +166,8 @@
 @property (nonatomic, readonly) NSInteger mentions;
 /* messages of the person that got a reaction they have not seen yet */
 @property (nonatomic, readonly) NSInteger reactions;
+/* the server sends no update when reactions are marked seen, so the row forgets them as soon as the request goes out */
+- (void)clearReactions;
 @property (nonatomic, readonly) NSInteger participantsCount;
 @property (nonatomic, readonly, copy) NSString *title;
 /* the last message ready to show, with a "You:" or sender prefix where that helps */
