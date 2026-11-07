@@ -220,7 +220,9 @@
     _more.frame = CGRectMake(bounds.size.width - insets.right - BUTTON_SIZE - 4, top + 6, BUTTON_SIZE, BUTTON_SIZE);
     CGFloat textLeft = CGRectGetMaxX(_back.frame) + 8;
     CGFloat textWidth = MAX(0, CGRectGetMinX(_more.frame) - textLeft - 4);
-    _titleLabel.frame = CGRectMake(textLeft, top + 6, textWidth, 24);
+    /* without a date the name stands alone, so it is centred on the arrow instead of sitting on the top line */
+    CGFloat titleTop = _dateLabel.text.length ? top + 6 : top + 6 + (BUTTON_SIZE - 24) / 2;
+    _titleLabel.frame = CGRectMake(textLeft, titleTop, textWidth, 24);
     _dateLabel.frame = CGRectMake(textLeft, top + 30, textWidth, 20);
     _counter.frame = CGRectMake(insets.left, top + 6 + BUTTON_SIZE + 18, bounds.size.width - insets.left - insets.right, 24);
     CGFloat stripTop = bounds.size.height - insets.bottom - STRIP_HEIGHT - 12;
@@ -290,11 +292,12 @@
 
 - (void)updateDate {
     int32_t date = _index < (NSInteger)_photos.count ? [(ExteriaMedia *)[_photos objectAtIndex:(NSUInteger)_index] date] : 0;
-    if (date <= 0) { _dateLabel.text = @""; return; }
+    if (date <= 0) { _dateLabel.text = @""; [self.view setNeedsLayout]; return; }
     NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
     format.dateStyle = NSDateFormatterMediumStyle;
     format.timeStyle = NSDateFormatterShortStyle;
     _dateLabel.text = [format stringFromDate:[NSDate dateWithTimeIntervalSince1970:date]];
+    [self.view setNeedsLayout];
 }
 
 /* the small pictures along the foot: the shown one is larger, a tap goes to the photo; they come from the same files as the pages, decoded small */
