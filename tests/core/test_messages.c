@@ -1208,6 +1208,11 @@ static void test_topic_of_message(void) {
     CHECK_EQ_INT(exteria_message_read(topic_message(11, 1, 7, 7), &row), EXTERIA_OK);
     CHECK_EQ_INT(row.topic_id, 7);
     CHECK_EQ_INT(row.reply_to, 0);
+    /* a comment under a channel post names the post as both its target and the top of its thread, and quotes nothing */
+    CHECK_EQ_INT(exteria_message_read(topic_message(14, 0, 7, 7), &row), EXTERIA_OK);
+    CHECK_EQ_INT(row.reply_to, 0);
+    CHECK_EQ_INT(row.thread_id, 7);
+    CHECK_EQ_INT(row.topic_id, 1);
     /* a real reply inside a topic keeps its target */
     CHECK_EQ_INT(exteria_message_read(topic_message(12, 1, 10, 7), &row), EXTERIA_OK);
     CHECK_EQ_INT(row.topic_id, 7);

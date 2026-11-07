@@ -681,6 +681,12 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
         if (top > 0) out->topic_id = top;
         if (out->reply_to == out->topic_id) out->reply_to = 0;
     }
+    if (header && !exteria_tl_has(header, "forum_topic") && !exteria_tl_get(header, "reply_to_peer_id")) {
+        /* a comment in the chat of a channel answers the post it hangs under, which the server writes as both the target and the top of the thread; every row of the
+           chat quoting the same post says nothing the thread does not, so the quote is left out, as it is for the root of a topic */
+        int32_t top = 0;
+        if (exteria_tl_get_i32(header, "reply_to_top_id", &top) == EXTERIA_OK && top > 0 && top == out->reply_to) out->reply_to = 0;
+    }
     out->media.kind = EXTERIA_PREVIEW_TEXT;
     if (service) {
         read_service(exteria_tl_get(m, "action"), out);
