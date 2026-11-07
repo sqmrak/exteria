@@ -106,6 +106,8 @@ def load(path, plugin_id):
 @_flushed
 def unload(plugin_id):
     _controller().setPluginEnabled(plugin_id, False)
+    from app.exteraless.plugins import forget_plugin
+    forget_plugin(plugin_id)
     if not plugin_loader.plugins:
         # a plugin that crashed in its unload hook leaves its views on the overlay
         from android.app import activity

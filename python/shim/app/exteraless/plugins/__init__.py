@@ -30,6 +30,14 @@ def _value(name, **payload):
 
 
 _menu_callbacks = {}
+
+
+def forget_plugin(plugin_id):
+    """the menu items of a plugin that is switched off: their callbacks would keep its objects alive and could still be called"""
+    for key in [key for key in _menu_callbacks if key[0] == plugin_id]:
+        del _menu_callbacks[key]
+
+
 _tokens = {}
 _token_lock = threading.Lock()
 _next_token = [1]

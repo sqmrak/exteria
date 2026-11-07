@@ -2270,6 +2270,7 @@ def _unload_record(plugin_id: str, quiet: bool):
         except Exception:
             pass
         record.click_callbacks.clear()
+        record.change_callbacks.clear()
         record.custom_views.clear()
 
 
