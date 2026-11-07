@@ -208,6 +208,7 @@ typedef enum {
     long long _randomId;
     BOOL _outgoing;
     BOOL _noForwards;
+    BOOL _invertMedia;
     BOOL _unreadMention;
     BOOL _mediaUnread;
     NSDate *_listenedDate;
@@ -275,6 +276,8 @@ typedef enum {
 @property (nonatomic, assign) int32_t messageId;
 @property (nonatomic, readonly) int32_t date;
 @property (nonatomic, readonly) BOOL noForwards;
+/* the words stand above the picture, as the sender chose; the server's invert_media flag */
+@property (nonatomic, readonly) BOOL invertMedia;
 @property (nonatomic, readonly) int32_t replyTo;
 /* the story this message answers, zero for none */
 @property (nonatomic, readonly) int32_t replyStory;

@@ -200,6 +200,11 @@ static void test_text_message(void) {
     set_flag(m, "noforwards");
     CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
     CHECK_EQ_INT(row->noforwards, 1);
+    /* the words above the picture are the sender's choice, and a message without the flag keeps them below */
+    CHECK_EQ_INT(row->invert_media, 0);
+    set_flag(m, "invert_media");
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->invert_media, 1);
     CHECK_EQ_INT(row->unread_mention, 0);
     set_flag(m, "mentioned");
     CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);

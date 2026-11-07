@@ -130,6 +130,7 @@
 @synthesize joinsNext = _joinsNext;
 @synthesize read = _read;
 @synthesize textLayout = _textLayout;
+@synthesize captionAbove = _captionAbove;
 @synthesize pillLayout = _pillLayout;
 @synthesize pillShift = _pillShift;
 @synthesize senderLayout = _senderLayout;
@@ -1131,10 +1132,16 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
         y += _replyFrame.size.height + 5;
     }
     CGFloat pictureTop = 0;
+    _captionAbove = picture && hasText && _message.invertMedia;
+    if (_captionAbove) {
+        _textOrigin = CGPointMake(PAD_X, y);
+        contentWidth = MAX(contentWidth, _textLayout.size.width);
+        y += _textLayout.size.height + 4;
+    }
     if (picture) {
         /* a picture runs edge to edge, so the lines above it need the text padding and it needs none */
         pictureTop = y == PAD_TOP ? PICTURE_INSET : y;
-        y = pictureTop + pictureSize.height + (hasText ? 5 : PICTURE_INSET);
+        y = pictureTop + pictureSize.height + (hasText && !_captionAbove ? 5 : PICTURE_INSET);
         contentWidth = MAX(contentWidth, pictureSize.width + 2 * PICTURE_INSET - 2 * PAD_X);
     } else if (file) {
         UIColor *fileTitleColor = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.fileTitle" : "chat.message.incoming.fileTitle") ?: textColor;
@@ -1164,7 +1171,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
         contentWidth = MAX(contentWidth, _fileFrame.size.width);
         y += FILE_HEIGHT + 4;
     }
-    BOOL timeOverPicture = picture && !hasText;
+    BOOL timeOverPicture = picture && (!hasText || _captionAbove);
     /* the chips of the reactions stand in the bubble, between the words and the time; a picture with the time over it has no such row, and keeps them under it */
     BOOL chipsInside = [self shownReactions].count && !timeOverPicture;
     _reactionsInside = chipsInside;
@@ -1179,7 +1186,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
             y += META_HEIGHT;
         }
     }
-    if (hasText) {
+    if (hasText && !_captionAbove) {
         _textOrigin = CGPointMake(PAD_X, y);
         contentWidth = MAX(contentWidth, _textLayout.size.width);
         y += _textLayout.size.height;

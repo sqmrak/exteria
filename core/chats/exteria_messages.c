@@ -645,6 +645,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     out->reactions_possible = !service || exteria_tl_has(m, "reactions_are_possible");
     out->out = exteria_tl_has(m, "out") ? 1 : 0;
     out->noforwards = exteria_tl_has(m, "noforwards") ? 1 : 0;
+    out->invert_media = exteria_tl_has(m, "invert_media") ? 1 : 0;
     out->unread_mention = exteria_tl_has(m, "mentioned") && exteria_tl_has(m, "media_unread") ? 1 : 0;
     out->media_unread = exteria_tl_has(m, "media_unread") ? 1 : 0;
     out->post = exteria_tl_has(m, "post") ? 1 : 0;

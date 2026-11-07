@@ -145,6 +145,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     CGPoint _forwardOrigin;
     CGPoint _viaOrigin;
     CGPoint _textOrigin;
+    BOOL _captionAbove;
     CGPoint _timeOrigin;
     CGSize _timeSize;
 }
@@ -293,6 +294,8 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly) CGPoint forwardOrigin;
 @property (nonatomic, readonly) CGPoint viaOrigin;
 @property (nonatomic, readonly) CGPoint textOrigin;
+/* the words stand above the picture (the sender's choice), so the time sits over the picture and the picture's top corners meet the words, not the bubble's edge */
+@property (nonatomic, readonly) BOOL captionAbove;
 @property (nonatomic, readonly) CGPoint timeOrigin;
 
 /* the item was built from what the message holds now, so it can be drawn again instead of building a new one */

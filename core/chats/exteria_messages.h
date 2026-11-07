@@ -150,6 +150,7 @@ typedef struct exteria_message_row {
     int64_t target_id;          /* the user a service message is about */
     uint8_t out;
     uint8_t noforwards;
+    uint8_t invert_media;       /* the sender asked for the words above the picture or the file instead of under it */
     uint8_t unread_mention;
     uint8_t media_unread;       /* a voice note or a round video that nobody has played yet: the person for an incoming one, the other side for one of ours */
     uint8_t post;

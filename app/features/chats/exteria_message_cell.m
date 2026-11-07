@@ -475,7 +475,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
             CGContextFillEllipseInRect(context, CGRectMake(right - 4.5, bottom - 1, 9, 9));
         }
     }
-    BOOL overPicture = _item.content == ExteriaChatItemContentPicture && !_item.textLayout;
+    BOOL overPicture = _item.content == ExteriaChatItemContentPicture && (!_item.textLayout || _item.captionAbove);
     /* the time of a call is in its second line */
     if (!overPicture && !_item.call) [self drawMetaAt:_item.timeOrigin color:ExteriaColorBubbleMeta(outgoing) context:context];
     if (_item.commentsText.length) [self drawCommentsRow:context];
@@ -1758,7 +1758,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     }
     if (item.kind == ExteriaChatItemPill) return;
     ExteriaMedia *content = item.message.media;
-    BOOL pictureOnly = (item.content == ExteriaChatItemContentPicture && !item.textLayout) || item.bare;
+    BOOL pictureOnly = (item.content == ExteriaChatItemContentPicture && (!item.textLayout || item.captionAbove)) || item.bare;
     if (item.kind == ExteriaChatItemEmoji) {
         _picture.hidden = _lottie.layer.contents != nil;
         _picture.contentMode = UIViewContentModeScaleAspectFit;
@@ -1810,7 +1810,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _picture.frame = CGRectOffset(item.pictureFrame, bubble.origin.x, bubble.origin.y);
         /* the picture runs to the edge of the bubble, so its outer corners are the bubble's; where a caption, a reply or a name meets it the corner is small, as in the other clients */
         CGFloat bubbleRadius = ExteriaBubbleRadius(), nearRadius = MIN(4, bubbleRadius);
-        BOOL captionBelow = item.textLayout.length > 0, lineAbove = item.pictureFrame.origin.y > 0.5;
+        BOOL captionBelow = item.textLayout.length > 0 && !item.captionAbove, lineAbove = item.pictureFrame.origin.y > 0.5;
         if (captionBelow || lineAbove) {
             _picture.layer.cornerRadius = 0;
             ExteriaMaskCorners(_picture, _picture.frame.size, lineAbove ? nearRadius : bubbleRadius, lineAbove ? nearRadius : bubbleRadius,
@@ -1894,7 +1894,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         collageTop = MIN(collageTop, box.origin.y);
         collageBottom = MAX(collageBottom, CGRectGetMaxY(box));
     }
-    BOOL captioned = item.textLayout.length > 0;
+    BOOL captioned = item.textLayout.length > 0 && !item.captionAbove;
     for (NSUInteger i = 0; i < shown; ++i) {
         while (_albumViews.count <= i) {
             UIImageView *view = [[[UIImageView alloc] init] autorelease];
