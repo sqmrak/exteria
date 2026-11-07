@@ -203,6 +203,8 @@ class PluginServices:
 
     hookAllConstructors = _unsupported
     registerIntentHandler = unregisterIntentHandler = _unsupported
+    # the app has no way to hand a file that was opened in it to a plugin, so FilesController.register says so and not AttributeError
+    registerFileHandler = unregisterFileHandler = _unsupported
 
     @staticmethod
     def hookMethod(plugin_id, member, handler, priority, filters_json):
