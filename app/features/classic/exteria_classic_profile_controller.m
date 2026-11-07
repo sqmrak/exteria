@@ -373,6 +373,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     hero.status.text = _detail.text;
     /* the classic profile has no cards on the lower edge of the photo, so the words stand on it instead of high above it */
     hero.bottomRoom = 18;
+    hero.publicPhoto = _full.publicPhoto;
     [hero setRatingLevel:_ratingBadge.hidden ? 0 : _ratingBadge.level target:self action:@selector(openRating)];
     _heroCircle = _avatar.frame;
     hero.frame = _heroCircle;
@@ -695,6 +696,12 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
     }];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    /* the public photo is set and removed on the privacy page, so the full profile is asked again to show it without a reopen */
+    [self loadFull];
+}
+
 /* the bio, the birthday and the personal channel come with the full profile */
 - (void)loadFull {
     if (!_person) return;
@@ -707,6 +714,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         }
         [_full release];
         _full = [user retain];
+        _hero.publicPhoto = user.publicPhoto;
         _ratingBadge.hidden = !user.hasRating;
         _ratingBadge.level = user.rating.level;
         _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)user.rating.level];

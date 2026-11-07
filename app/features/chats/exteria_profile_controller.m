@@ -504,6 +504,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [self refreshOwnStatus];
     /* a story seen or a gift hidden while away shows on coming back */
     if (_person) [self refreshCurrentFeed];
+    /* the public photo is set and removed on the privacy page, so the full profile is asked again to show it without a reopen */
+    [self loadFull];
 }
 
 - (void)refreshOwnStatus {
