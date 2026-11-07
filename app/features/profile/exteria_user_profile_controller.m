@@ -1028,6 +1028,8 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
    scrolls with the rest of the screen */
 - (void)openHero {
     if (_hero || _heroMoving) return;
+    /* with no photo there is nothing to open wide, and the viewer would be a black screen */
+    if (!_dialog.photo) return;
     ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
     hero.name.text = _name.text;
     hero.name.entities = _name.entities;

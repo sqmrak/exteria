@@ -363,6 +363,8 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
 /* the photo opened wide in the header of the list: the circle grows to the width of the screen and the rows move down, so it scrolls with the list */
 - (void)openAvatars {
     if (_hero || !_person || _heroMoving) return;
+    /* with no photo there is nothing to open wide, and the viewer would be a black screen */
+    if (!_person.photo && !_full.publicPhoto) return;
     UITableView *table = self.tableView;
     UIView *header = table.tableHeaderView;
     ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];

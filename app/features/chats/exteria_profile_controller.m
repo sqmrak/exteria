@@ -201,6 +201,8 @@
    the rest of the screen */
 - (void)openHero {
     if (_hero || !_person || _heroMoving) return;
+    /* with no photo there is nothing to open wide, and the viewer would be a black screen */
+    if (!_person.photo && !_full.publicPhoto) return;
     ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];
     hero.name.text = _name.text;
     hero.name.entities = _name.entities;
