@@ -4440,9 +4440,14 @@ static void ExteriaRedrawTree(UIView *view) {
 
 /* swaps the rows in; a change that only adds or only removes rows keeps the others and reloads those whose content
    differs */
+#define BOTTOM_FOLLOW_DISTANCE 80.0
+
 - (void)applyItems:(NSArray *)items {
     BOOL moving = _interacting || _table.dragging || _table.decelerating;
-    BOOL follows = _stickToBottom && !moving;
+    /* the flag follows only a finger, so a list that was left at its end by a keyboard, a reply or a jump kept the flag off and stood still under the new message; the offset
+       says where the list is, and a list within the distance of the finger rule is at its end */
+    BOOL atEnd = !_window && [self scrollLimitMax] - _table.contentOffset.y <= BOTTOM_FOLLOW_DISTANCE;
+    BOOL follows = (_stickToBottom || atEnd) && !moving;
     _updatingItems = YES;
     NSArray *oldItems = [_items retain];
     NSUInteger oldCount = oldItems.count;
