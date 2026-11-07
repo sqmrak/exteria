@@ -321,14 +321,13 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     return card;
 }
 
-/* the reactions of the pill pop in one after another with the animation the server keeps for each, as they do in the pill of exteraless; the still icon stays under it until its
+/* the reactions of the pill pop in together with the animation the server keeps for each; the still icon stays under it until its
    first frame is drawn and comes back when it has played, and the lottie view leaves as soon as it is done, since a parsed animation costs a few megabytes */
-#define APPEAR_STAGGER 0.035
 #define APPEAR_SIDE 30.0
 /* a reaction under a finger grows by this much */
 #define PRESS_SCALE 1.22
 
-- (void)playAppearOfReaction:(ExteriaReaction *)reaction inButton:(UIButton *)button label:(UIView *)label order:(NSUInteger)order {
+- (void)playAppearOfReaction:(ExteriaReaction *)reaction inButton:(UIButton *)button label:(UIView *)label {
     if (reaction.row.kind != EXTERIA_REACTION_EMOJI || !_media || ExteriaReduceMotionEnabled()) return;
     ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:reaction.emoji];
     if (!artwork) return;
@@ -345,9 +344,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         __block ExteriaLottieView *playing = view;
         view.firstFrameHandler = ^{ playing.hidden = NO; label.hidden = YES; [button viewWithTag:EXTERIA_REACTION_STILL_TAG].hidden = YES; };
         view.finishHandler = ^{ [playing removeFromSuperview]; [ExteriaReactionArtwork showRestingViewInButton:button]; };
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((double)order * APPEAR_STAGGER * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            if (view.superview) [view playOnce];
-        });
+        [view playOnce];
     }];
 }
 
@@ -392,7 +389,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         label.tag = EXTERIA_REACTION_LABEL_TAG;
         [button addSubview:label];
         [pill addSubview:button];
-        [self playAppearOfReaction:reaction inButton:button label:label order:i];
+        [self playAppearOfReaction:reaction inButton:button label:label];
     }
     UIButton *more = [UIButton buttonWithType:UIButtonTypeCustom];
     more.frame = CGRectMake(width - PILL_PAD - arrow, (PILL_HEIGHT - arrow) / 2, arrow, arrow);

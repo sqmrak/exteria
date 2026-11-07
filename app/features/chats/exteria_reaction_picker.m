@@ -269,11 +269,9 @@
     return button;
 }
 
-/* every reaction of the card pops up with the animation the server keeps for it, as the cell comes into view. A parsed animation costs a few megabytes, so only a few are
-   parsed at a time, the rest wait in a queue, and each lottie view leaves as soon as it has played */
-#define APPEAR_ACTIVE_MAX 8
-#define APPEAR_STAGGER 0.03
-#define APPEAR_STAGGER_MAX 8
+/* every reaction of the card pops up with the animation the server keeps for it, as the cell comes into view, all of the visible ones together. A parsed animation costs a few
+   megabytes, so the cells of one screen of the card are the most that are parsed at a time, a card taller than that queues the rest, and each lottie view leaves as soon as it has played */
+#define APPEAR_ACTIVE_MAX 48
 
 - (BOOL)cellIsVisible:(UIView *)button {
     CGRect shown = CGRectMake(0, _scroll.contentOffset.y, _scroll.bounds.size.width, _scroll.bounds.size.height);
@@ -298,7 +296,6 @@
 }
 
 - (void)pumpAppears {
-    NSUInteger started = 0;
     while (!_closing && _appearActive < APPEAR_ACTIVE_MAX && _appearQueue.count) {
         NSNumber *key = [[[_appearQueue objectAtIndex:0] retain] autorelease];
         [_appearQueue removeObjectAtIndex:0];
@@ -308,11 +305,11 @@
             continue;
         }
         ++_appearActive;
-        [self playAppearOfButton:button reaction:[_reactions objectAtIndex:key.unsignedIntegerValue] order:MIN(started++, (NSUInteger)APPEAR_STAGGER_MAX)];
+        [self playAppearOfButton:button reaction:[_reactions objectAtIndex:key.unsignedIntegerValue]];
     }
 }
 
-- (void)playAppearOfButton:(UIButton *)button reaction:(ExteriaReaction *)reaction order:(NSUInteger)order {
+- (void)playAppearOfButton:(UIButton *)button reaction:(ExteriaReaction *)reaction {
     ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:reaction.emoji];
     ExteriaWeakReference *weak = _weak;
     /* the slot of the queue is given back once, whichever way the pop ends */
@@ -341,10 +338,7 @@
             [ExteriaReactionArtwork showRestingViewInButton:button];
             giveBack();
         };
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((double)order * APPEAR_STAGGER * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            if (view.superview) [view playOnce];
-            else giveBack();
-        });
+        [view playOnce];
     }];
 }
 
