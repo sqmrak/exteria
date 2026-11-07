@@ -106,6 +106,13 @@ static void deliver_read_outbox(exteria_client *c, const exteria_tl_value *item)
     if (max_id > 0 && peer.id > 0) c->events.read_outbox(c->events.ctx, peer.kind, peer.id, max_id);
 }
 
+/* a read receipt that came while the socket was down arrives in the other_updates of the difference, not as a live update */
+static void deliver_difference_reads(exteria_client *c, const exteria_tl_value *difference) {
+    const exteria_tl_value *vec = exteria_tl_get(difference, "other_updates");
+    uint32_t i;
+    for (i = 0; vec && vec->kind == EXTERIA_TL_V_VEC && i < vec->u.vec.count; ++i) deliver_read_outbox(c, vec->u.vec.items[i]);
+}
+
 static void deliver_user_status(exteria_client *c, const exteria_tl_value *item) {
     exteria_presence presence;
     int64_t user_id;
@@ -189,6 +196,7 @@ static void rpc_result(void *ctx, uint64_t id, const exteria_mt_rpc_result *r) {
                 report(c, exteria_updates_need(&c->updates, 0), "updates recovery");
             }
             notify_changed(c);
+            if (c->sync_method != EXTERIA_TL_ID_updates_getState) deliver_difference_reads(c, r->value);
             if (c->updates.needs_history && c->events.recover_history) c->events.recover_history(c->events.ctx, c->sync_channel);
         }
     } else if (id == c->outbox_id) {
