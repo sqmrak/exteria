@@ -620,7 +620,12 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
 
 - (void)closeSwipeAnimated:(BOOL)animated {
     if (_offset <= 0) return;
-    [self moveSwipeTo:0 animated:animated completion:^{ [self releaseActionIcon]; }];
+    /* the settle can end after the next drag began (the animation of an ipad is cut short by the first move of the new drag), and the icon of that drag would go with it;
+       only a row that is closed and not being dragged lets it go */
+    [self moveSwipeTo:0 animated:animated completion:^{
+        BOOL dragging = _pan.state == UIGestureRecognizerStateBegan || _pan.state == UIGestureRecognizerStateChanged;
+        if (_offset <= 0 && !dragging) [self releaseActionIcon];
+    }];
 }
 
 - (void)commitSwipe {
@@ -661,6 +666,7 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
         break;
     case UIGestureRecognizerStateChanged: {
         _offset = MIN(width, MAX(0, _dragStart - [pan translationInView:self].x));
+        [self prepareActionIcon];
         [self layoutSwipe];
         if (!_played && _offset >= ACTION_WIDTH * 0.9) {
             _played = YES;
