@@ -22,6 +22,7 @@
     UIColor *_nameColor;
 }
 - (void)setNameColor:(UIColor *)color;
+- (void)setDropsUndrawable:(BOOL)drops;
 - (void)refreshNamePreview;
 @end
 
@@ -49,6 +50,11 @@
         _nameColor = [color retain];
     }
     [self refreshNamePreview];
+}
+
+/* a name drops glyphs the fonts lack, a bio keeps them as the profile screen shows it */
+- (void)setDropsUndrawable:(BOOL)drops {
+    _namePreview.dropsUndrawable = drops;
 }
 
 - (void)setText:(NSString *)text {
@@ -184,12 +190,15 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     return label;
 }
 
-- (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text capitalized:(BOOL)capitalized name:(BOOL)name {
-    UITextField *field = name ? [[ExteriaProfileNameField alloc] initWithFrame:CGRectZero] : [[UITextField alloc] init];
+- (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text capitalized:(BOOL)capitalized name:(BOOL)name styled:(BOOL)styled {
+    UITextField *field = styled ? [[ExteriaProfileNameField alloc] initWithFrame:CGRectZero] : [[UITextField alloc] init];
     field.delegate = self;
     field.font = ExteriaFontRegular(17);
     field.textColor = ExteriaColorTitle();
-    if (name) [(ExteriaProfileNameField *)field setNameColor:ExteriaColorTitle()];
+    if (styled) {
+        [(ExteriaProfileNameField *)field setDropsUndrawable:name];
+        [(ExteriaProfileNameField *)field setNameColor:ExteriaColorTitle()];
+    }
     field.placeholder = placeholder;
     field.text = text;
     field.clearButtonMode = UITextFieldViewModeWhileEditing;
@@ -248,16 +257,16 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     _nameCaption = ExteriaEditLabel(ExteriaColorAccent(), 14, YES);
     _nameCaption.text = NSLocalizedString(@"profile.edit.yourname", nil);
     [_nameCard addSubview:_nameCaption];
-    _first = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.first", nil) text:first capitalized:YES name:YES];
+    _first = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.first", nil) text:first capitalized:YES name:YES styled:YES];
     [_nameCard addSubview:_first];
-    _last = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.last", nil) text:last capitalized:YES name:YES];
+    _last = [self fieldWithPlaceholder:NSLocalizedString(@"profile.edit.last", nil) text:last capitalized:YES name:YES styled:YES];
     [_nameCard addSubview:_last];
     _nameLine = ExteriaLine();
     [_nameCard addSubview:_nameLine];
 
     _aboutCard = ExteriaCard();
     [_scroll addSubview:_aboutCard];
-    _about = [self fieldWithPlaceholder:NSLocalizedString(@"profile.about", nil) text:_full.about capitalized:YES name:NO];
+    _about = [self fieldWithPlaceholder:NSLocalizedString(@"profile.about", nil) text:_full.about capitalized:YES name:NO styled:YES];
     [_aboutCard addSubview:_about];
     _counter = ExteriaEditLabel(ExteriaColorSecondary(), 15, NO);
     _counter.textAlignment = ExteriaTextAlignmentRight;
@@ -279,7 +288,7 @@ static UILabel *ExteriaEditLabel(UIColor *color, CGFloat size, BOOL bold) {
     _usernameRow = [[self rowWithIcon:ExteriaRowIcon(ExteriaSymbolAt, [UIColor colorWithRed:0.96 green:0.62 blue:0.18 alpha:1])
                                 title:@"" subtitle:NSLocalizedString(@"profile.username", nil)] retain];
     [[_usernameRow viewWithTag:1] setHidden:YES];
-    _username = [self fieldWithPlaceholder:NSLocalizedString(@"profile.username", nil) text:_person.username ? _person.username : @"" capitalized:NO name:NO];
+    _username = [self fieldWithPlaceholder:NSLocalizedString(@"profile.username", nil) text:_person.username ? _person.username : @"" capitalized:NO name:NO styled:NO];
     [_usernameRow addSubview:_username];
     [_infoCard addSubview:_usernameRow];
     _birthdayRow = [[self rowWithIcon:ExteriaRowIcon(ExteriaSymbolCake, [UIColor colorWithRed:0.24 green:0.58 blue:0.95 alpha:1])
