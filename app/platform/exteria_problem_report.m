@@ -180,14 +180,6 @@ void ExteriaProblemReportsStart(ExteriaSession *session) {
     }
 }
 
-void ExteriaProblemReportCallFailure(ExteriaSession *session) {
-    NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-    NSData *data = documents ? [NSData dataWithContentsOfFile:[documents stringByAppendingPathComponent:@"exteria-call-trace.log"]] : nil;
-    NSString *trace = data.length && data.length < 512 * 1024 ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : nil;
-    if (trace.length > 2800) trace = [trace substringFromIndex:trace.length - 2800];
-    ExteriaSendReport(session, [NSString stringWithFormat:@"a call did not connect, trace:\n%@", trace.length ? trace : @"(no trace)"], nil);
-}
-
 BOOL ExteriaProblemReportIsDeveloper(ExteriaSession *session) {
     return [[[session ownPerson].username lowercaseString] isEqualToString:REPORT_USERNAME];
 }

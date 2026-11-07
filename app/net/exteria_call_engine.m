@@ -683,8 +683,6 @@ static void ExteriaCallMediaBars(void *context, int bars) {
             break;
         case EXTERIA_TGC_CALL_FAILED:
             NSLog(@"exteria: the tgcalls call failed (%@)", [runtime diagnostics]);
-            ExteriaSession *reporting = _session;
-            dispatch_async(dispatch_get_main_queue(), ^{ ExteriaProblemReportCallFailure(reporting); });
             [self finishWithReason:EXTERIA_CALL_REASON_DISCONNECT end:ExteriaCallEndFailed sendDiscard:YES];
             break;
         default:
