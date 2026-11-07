@@ -90,18 +90,18 @@ def _plugin_mark(fn):
     Java-гейт (PluginSinkGate) не знает, чей код побежит, и пропускает
     обращения плагина к сети и рефлексии из UI-колбэков.
     """
+    # only the preparation may fail quietly: an error raised by the callback inside the with passes through, since a generator that
+    # swallowed it and yielded again turned every failed callback into "generator didn't stop after throw()"
+    stack = contextlib.ExitStack()
     try:
         plugin_loader = _internal("plugin_loader")
         owner = plugin_loader.owner_of_function(fn)
-        if owner is None:
-            yield
-            return
-        with plugin_loader.java_runtime_mark(owner):
-            yield
-        return
+        if owner is not None:
+            stack.enter_context(plugin_loader.java_runtime_mark(owner))
     except Exception:
         pass
-    yield
+    with stack:
+        yield
 
 
 def safe_call(fn, *args, **kwargs):
