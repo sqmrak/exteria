@@ -7,7 +7,6 @@
 #import "exteria_custom_emoji_picker.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
-#import "exteria_lottie_view.h"
 #import "exteria_reaction_artwork.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
@@ -20,10 +19,10 @@
 #define CELL_TARGET 44.0
 #define CELL_MIN_COLUMNS 5
 #define SIDE_PAD 6.0
-/* the side of the pop and of the still picture that follows it, one size so the cell does not change when the animation ends */
+/* the side of the still picture of a reaction */
 #define APPEAR_SIDE 31.0
 
-@interface ExteriaReactionPicker () <ExteriaCustomEmojiPickerDelegate, UIScrollViewDelegate> {
+@interface ExteriaReactionPicker () <ExteriaCustomEmojiPickerDelegate> {
     UIControl *_dim;
     UIView *_card;
     UILabel *_status;
@@ -41,10 +40,6 @@
     BOOL _below;
     ExteriaWeakReference *_weak;
     BOOL _closing;
-    /* the cells that have played their pop (or wait to), and how many animations are parsed at the moment */
-    NSMutableSet *_appeared;
-    NSMutableArray *_appearQueue;
-    NSUInteger _appearActive;
 }
 @end
 
@@ -92,7 +87,6 @@
     [_card addSubview:_retry];
     _scroll = [[UIScrollView alloc] init];
     _scroll.showsVerticalScrollIndicator = NO;
-    _scroll.delegate = self;
     _scroll.layer.cornerRadius = _card.layer.cornerRadius;
     _scroll.clipsToBounds = YES;
     [_card addSubview:_scroll];
@@ -114,9 +108,6 @@
     [_media release];
     [_reactions release];
     [_buttons release];
-    [_appeared release];
-    [_appearQueue release];
-    _scroll.delegate = nil;
     [_pickHandler release];
     [_customPickHandler release];
     [_cancelHandler release];
@@ -263,88 +254,10 @@
     label.frame = button.bounds;
     label.tag = EXTERIA_REACTION_LABEL_TAG;
     [button addSubview:label];
-    /* the pop plays when the cell is on screen, see playVisibleAppears; the still picture of the server stands in the place of the label from the start */
+    /* the big card does not animate: the still picture, the first frame of the select animation that the pop of the pill ends on, stands in the place of the label from the start */
     ExteriaReactionArtwork *artwork = reaction.row.kind == EXTERIA_REACTION_EMOJI ? [ExteriaReactionArtwork artForEmoji:reaction.emoji] : nil;
     if (artwork) [ExteriaReactionArtwork attachStillOfArtwork:artwork toButton:button side:APPEAR_SIDE media:_media];
     return button;
-}
-
-/* every reaction of the card pops up with the animation the server keeps for it, as the cell comes into view, all of the visible ones together. A parsed animation costs a few
-   megabytes, so the cells of one screen of the card are the most that are parsed at a time, a card taller than that queues the rest, and each lottie view leaves as soon as it has played */
-#define APPEAR_ACTIVE_MAX 48
-
-- (BOOL)cellIsVisible:(UIView *)button {
-    CGRect shown = CGRectMake(0, _scroll.contentOffset.y, _scroll.bounds.size.width, _scroll.bounds.size.height);
-    return CGRectIntersectsRect(shown, button.frame);
-}
-
-/* queues the cells that came into view and have not played yet; a cell that scrolls away before its turn is forgotten, so it plays when it is back */
-- (void)playVisibleAppears {
-    if (_closing || !_media || _scroll.hidden || ExteriaReduceMotionEnabled()) return;
-    if (!_appeared) _appeared = [[NSMutableSet alloc] init];
-    if (!_appearQueue) _appearQueue = [[NSMutableArray alloc] init];
-    for (NSUInteger i = 0; i < _buttons.count; ++i) {
-        NSNumber *key = [NSNumber numberWithUnsignedInteger:i];
-        UIView *button = [_buttons objectAtIndex:i];
-        if ([_appeared containsObject:key] || !button.bounds.size.width || ![self cellIsVisible:button]) continue;
-        ExteriaReaction *reaction = [_reactions objectAtIndex:i];
-        if (reaction.row.kind != EXTERIA_REACTION_EMOJI || ![ExteriaReactionArtwork artForEmoji:reaction.emoji]) continue;
-        [_appeared addObject:key];
-        [_appearQueue addObject:key];
-    }
-    [self pumpAppears];
-}
-
-- (void)pumpAppears {
-    while (!_closing && _appearActive < APPEAR_ACTIVE_MAX && _appearQueue.count) {
-        NSNumber *key = [[[_appearQueue objectAtIndex:0] retain] autorelease];
-        [_appearQueue removeObjectAtIndex:0];
-        UIButton *button = (UIButton *)[_buttons objectAtIndex:key.unsignedIntegerValue];
-        if (![self cellIsVisible:button]) {
-            [_appeared removeObject:key];
-            continue;
-        }
-        ++_appearActive;
-        [self playAppearOfButton:button reaction:[_reactions objectAtIndex:key.unsignedIntegerValue]];
-    }
-}
-
-- (void)playAppearOfButton:(UIButton *)button reaction:(ExteriaReaction *)reaction {
-    ExteriaReactionArtwork *artwork = [ExteriaReactionArtwork artForEmoji:reaction.emoji];
-    ExteriaWeakReference *weak = _weak;
-    /* the slot of the queue is given back once, whichever way the pop ends */
-    __block BOOL released = NO;
-    void (^giveBack)(void) = ^{
-        if (released) return;
-        released = YES;
-        ExteriaReactionPicker *picker = weak.target;
-        if (!picker) return;
-        if (picker->_appearActive) --picker->_appearActive;
-        [picker pumpAppears];
-    };
-    [ExteriaReactionArtwork animationViewForDocument:artwork.appear media:_media completion:^(ExteriaLottieView *view) {
-        ExteriaReactionPicker *picker = weak.target;
-        if (!view || !picker || picker->_closing || !button.superview) { giveBack(); return; }
-        view.userInteractionEnabled = NO;
-        view.frame = CGRectMake(floor((button.bounds.size.width - APPEAR_SIDE) / 2), floor((button.bounds.size.height - APPEAR_SIDE) / 2), APPEAR_SIDE, APPEAR_SIDE);
-        view.hidden = YES;
-        [button addSubview:view];
-        __block ExteriaLottieView *playing = view;
-        UIView *label = [button viewWithTag:EXTERIA_REACTION_LABEL_TAG];
-        /* the resting picture gives way on the first frame, so the cell never shows both */
-        view.firstFrameHandler = ^{ playing.hidden = NO; label.hidden = YES; [button viewWithTag:EXTERIA_REACTION_STILL_TAG].hidden = YES; };
-        view.finishHandler = ^{
-            [playing removeFromSuperview];
-            [ExteriaReactionArtwork showRestingViewInButton:button];
-            giveBack();
-        };
-        [view playOnce];
-    }];
-}
-
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    (void)scrollView;
-    [self playVisibleAppears];
 }
 
 - (void)cellDown:(UIButton *)button {
@@ -370,8 +283,6 @@
     for (UIView *button in _buttons) [button removeFromSuperview];
     [_buttons release];
     _buttons = nil;
-    [_appeared removeAllObjects];
-    [_appearQueue removeAllObjects];
     [_reactions release];
     _reactions = [reactions copy];
     NSMutableArray *buttons = [NSMutableArray arrayWithCapacity:reactions.count];
@@ -445,7 +356,6 @@
         UIView *still = [button viewWithTag:EXTERIA_REACTION_STILL_TAG];
         still.center = CGPointMake(button.bounds.size.width / 2, button.bounds.size.height / 2);
     }
-    [self playVisibleAppears];
     _status.frame = CGRectMake(16, strip, width - 32, bodyHeight - (_retry.hidden ? 0 : 40));
     _retry.frame = CGRectMake(16, height - 40, width - 32, 40);
 }
