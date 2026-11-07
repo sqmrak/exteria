@@ -371,6 +371,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _raiseWatching;
     BOOL _raiseRecording;
     UIView *_roundPreview;
+    /* the side of the circle that is on screen: the usual one, or less where the keyboard leaves no room above the input bar */
+    CGFloat _roundSide;
     UIButton *_roundTorch;
     BOOL _roundTorchBusy;
     UILabel *_roundZoomLabel;
@@ -7102,6 +7104,10 @@ static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
 /* the round video is limited to a minute, as the other clients limit it */
 #define ROUND_SECONDS_MAX 60.0
 #define ROUND_PREVIEW_SIDE 240.0
+/* the room the circle keeps above and under itself, and the least it is drawn at before the keyboard has to give way */
+#define ROUND_PREVIEW_TOP 60.0
+#define ROUND_PREVIEW_GAP 8.0
+#define ROUND_PREVIEW_MIN 96.0
 
 static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(22, 22), NO, 0);
@@ -7206,11 +7212,13 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 - (void)showRoundPreview {
     [self showRoundShade];
     CGSize size = self.view.bounds.size;
-    CGRect frame = CGRectMake((size.width - ROUND_PREVIEW_SIDE) / 2, MAX(60, (_input.frame.origin.y - ROUND_PREVIEW_SIDE) / 2),
-                              ROUND_PREVIEW_SIDE, ROUND_PREVIEW_SIDE);
+    /* the keyboard is another window and stays over the chat, so a circle that reaches down to it is half hidden: with the keyboard up the picture takes the room
+       between the top of the screen and the input bar, which stands right over the keys */
+    _roundSide = MIN(ROUND_PREVIEW_SIDE, MAX(ROUND_PREVIEW_MIN, _input.frame.origin.y - ROUND_PREVIEW_GAP - ROUND_PREVIEW_TOP));
+    CGRect frame = CGRectMake((size.width - _roundSide) / 2, MAX(ROUND_PREVIEW_TOP, (_input.frame.origin.y - _roundSide) / 2), _roundSide, _roundSide);
     _roundPreview = [[UIView alloc] initWithFrame:frame];
     UIView *disc = [[[UIView alloc] initWithFrame:_roundPreview.bounds] autorelease];
-    disc.layer.cornerRadius = ROUND_PREVIEW_SIDE / 2;
+    disc.layer.cornerRadius = _roundSide / 2;
     disc.layer.masksToBounds = YES;
     disc.layer.borderWidth = 3;
     disc.layer.borderColor = ExteriaColorAccent().CGColor;
@@ -7222,13 +7230,13 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     UIImageView *flip = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolCameraFlip, 22, [UIColor whiteColor])] autorelease];
     flip.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45];
     flip.contentMode = UIViewContentModeCenter;
-    flip.frame = CGRectMake(ROUND_PREVIEW_SIDE * 0.7, ROUND_PREVIEW_SIDE * 0.7, 36, 36);
+    flip.frame = CGRectMake(_roundSide * 0.7, _roundSide * 0.7, 36, 36);
     flip.layer.cornerRadius = 18;
     [_roundPreview addSubview:flip];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(flipRoundCamera)] autorelease];
     [disc addGestureRecognizer:tap];
     _roundTorch = [UIButton buttonWithType:UIButtonTypeCustom];
-    _roundTorch.frame = CGRectMake(ROUND_PREVIEW_SIDE * 0.7, ROUND_PREVIEW_SIDE * 0.14, 40, 40);
+    _roundTorch.frame = CGRectMake(_roundSide * 0.7, _roundSide * 0.14, 40, 40);
     _roundTorch.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45];
     _roundTorch.layer.cornerRadius = 20;
     _roundTorch.accessibilityLabel = NSLocalizedString(@"chat.round.torch", nil);
@@ -7336,7 +7344,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         _roundZoomLabel.textAlignment = ExteriaTextAlignmentCenter;
         _roundZoomLabel.layer.cornerRadius = 11;
         _roundZoomLabel.layer.masksToBounds = YES;
-        _roundZoomLabel.frame = CGRectMake((ROUND_PREVIEW_SIDE - 52) / 2, 14, 52, 22);
+        _roundZoomLabel.frame = CGRectMake((_roundSide - 52) / 2, 14, 52, 22);
         [_roundPreview addSubview:_roundZoomLabel];
     }
     _roundZoomLabel.text = [NSString stringWithFormat:@"%.1f\u00d7", shown];
