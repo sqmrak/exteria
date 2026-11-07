@@ -239,7 +239,15 @@ static char ExteriaPlayerStatusContext;
 }
 
 - (BOOL)prefersStatusBarHidden { return YES; }
-- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation { return YES; }
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)orientation { return ExteriaAllowsOrientation(orientation); }
+- (BOOL)shouldAutorotate { return YES; }
+
+/* without a mask of its own the pager answers with the default of the system, and the keyboard of an ipad came up in the landscape layout under a portrait screen, wider than the
+   display; the mask is the one the lists give. the armv7 sdk declares this as NSUInteger and the arm64 sdk as the mask enum */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmismatched-return-types"
+- (NSUInteger)supportedInterfaceOrientations { return ExteriaOrientationMask(); }
+#pragma clang diagnostic pop
 
 #pragma mark content
 
