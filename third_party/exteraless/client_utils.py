@@ -826,7 +826,9 @@ class AccountClient:
 
     def run_on_queue(self, fn, queue: str = PLUGINS_QUEUE, delay: int = 0,
                      delay_ms: int = None):
-        return run_on_queue(fn, queue=queue, delay=delay, delay_ms=delay_ms)
+        # the queue takes the account that is current when the work is posted, which is the pinned one of this client
+        with hook_scope(self.account):
+            return run_on_queue(fn, queue=queue, delay=delay, delay_ms=delay_ms)
 
     # -- sending --
 
