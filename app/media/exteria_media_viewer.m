@@ -388,11 +388,18 @@ static char ExteriaMediaPlayerStatusContext;
     CGFloat header = top + (self.isSending ? 56 : 96);
     _top.frame = CGRectMake(0, 0, width, header);
     _close.frame = CGRectMake(left, top + 4, 48, 48);
-    _title.frame = CGRectMake(left + 56, top + (self.isSending ? 17 : 6), MAX(0, inner - 188), 24);
-    _date.frame = CGRectMake(left + 56, top + 30, MAX(0, inner - 188), 20);
-    _headerEdit.frame = CGRectMake(width - right - 132, top + 4, 44, 48);
-    _forward.frame = CGRectMake(width - right - 88, top + 4, 44, 48);
-    _more.frame = CGRectMake(width - right - 44, top + 4, 44, 48);
+    /* the buttons that are shown stand from the right edge, and the title runs up to the first of them; a hidden button used to keep its place, which left the shown ones
+       floating in from the edge of an ipad */
+    CGFloat edge = width - right;
+    UIView *rightButtons[] = {_more, _forward, _headerEdit};
+    for (NSUInteger i = 0; i < sizeof(rightButtons) / sizeof(rightButtons[0]); ++i) {
+        if (rightButtons[i].hidden) continue;
+        edge -= 44;
+        rightButtons[i].frame = CGRectMake(edge, top + 4, 44, 48);
+    }
+    CGFloat titleWidth = MAX(0, edge - 8 - (left + 56));
+    _title.frame = CGRectMake(left + 56, top + (self.isSending ? 17 : 6), titleWidth, 24);
+    _date.frame = CGRectMake(left + 56, top + 30, titleWidth, 20);
     _count.frame = CGRectMake(left + 48, top + 56, MAX(0, inner - 96), 40);
     CGFloat controls = self.isVideo ? 76 : 0;
     CGFloat caption = self.isSending ? 50 : (_caption.text.length ? 66 : 0);
