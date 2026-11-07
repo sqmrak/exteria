@@ -1,6 +1,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "exteria_passcode_entry_view.h"
 
+#import "exteria_platform.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 
@@ -9,6 +10,13 @@
 #define KEY_SIDE_MAX 76.0
 #define KEY_GAP 14.0
 #define FIELD_HEIGHT 46.0
+#define PASS_DOT_SIDE 12.0
+#define PASS_DOT_GAP 9.0
+#define PASS_PAD 20.0
+
+NSString *ExteriaPasscodeText(NSString *key, exteria_passcode_type type) {
+    return NSLocalizedString(type == EXTERIA_PASSCODE_PASSWORD ? [key stringByAppendingString:@".password"] : key, nil);
+}
 
 @interface ExteriaPasscodeEntryView () <UITextFieldDelegate> {
     UILabel *_titleLabel;
@@ -18,6 +26,12 @@
     UIButton *_delete;
     UIButton *_biometricButton;
     UITextField *_field;
+    /* the plate a password is typed on: the field over it takes the keys and stays unseen, and the dots on the plate are what shows */
+    UIView *_plate;
+    UIView *_passDots;
+    NSMutableArray *_passDotViews;
+    NSUInteger _shownFilled;
+    BOOL _accented;
     NSMutableString *_typed;
     exteria_passcode_type _type;
     BOOL _inputEnabled;
@@ -33,6 +47,7 @@
 @synthesize biometricFingerprint = _biometricFingerprint;
 @synthesize topInset = _topInset;
 @synthesize inputEnabled = _inputEnabled;
+@synthesize accented = _accented;
 
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -91,12 +106,18 @@
     [_biometricButton addTarget:self action:@selector(biometricPressed) forControlEvents:UIControlEventTouchUpInside];
     _biometricButton.hidden = YES;
     [self addSubview:_biometricButton];
+    _plate = [[UIView alloc] init];
+    _plate.layer.cornerRadius = FIELD_HEIGHT / 2;
+    _plate.userInteractionEnabled = NO;
+    [self addSubview:_plate];
+    _passDots = [[UIView alloc] init];
+    _passDots.userInteractionEnabled = NO;
+    [_plate addSubview:_passDots];
+    _passDotViews = [[NSMutableArray alloc] init];
     _field = [[UITextField alloc] init];
-    _field.backgroundColor = ExteriaColorField();
-    _field.layer.cornerRadius = 10;
-    _field.textColor = ExteriaColorTitle();
+    /* nearly clear and not hidden: a hidden field cannot hold the keyboard, and a field with no alpha takes no touch */
+    _field.alpha = 0.02;
     _field.font = ExteriaFontRegular(18);
-    _field.textAlignment = ExteriaTextAlignmentCenter;
     _field.secureTextEntry = YES;
     _field.autocorrectionType = UITextAutocorrectionTypeNo;
     _field.autocapitalizationType = UITextAutocapitalizationTypeNone;
@@ -105,8 +126,10 @@
     _field.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     _field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
     _field.delegate = self;
+    [_field addTarget:self action:@selector(fieldChanged) forControlEvents:UIControlEventEditingChanged];
     [self addSubview:_field];
     [self applyType];
+    [self applyPalette];
     [self refreshDots];
     return self;
 }
@@ -124,6 +147,9 @@
     [_biometricButton release];
     [_biometric release];
     [_field release];
+    [_plate release];
+    [_passDots release];
+    [_passDotViews release];
     [_typed release];
     [_submit release];
     [super dealloc];
@@ -147,7 +173,48 @@
     for (UIView *key in _keys) key.hidden = !pin;
     _delete.hidden = !pin;
     _field.hidden = pin;
+    _plate.hidden = pin;
     if (pin) [_field resignFirstResponder];
+}
+
+#pragma mark palette
+
+- (UIColor *)ink {
+    return _accented ? [UIColor whiteColor] : ExteriaColorTitle();
+}
+
+- (UIColor *)softInk {
+    return _accented ? [UIColor colorWithWhite:1 alpha:0.74] : ExteriaColorSecondary();
+}
+
+- (UIColor *)plateColor {
+    return _accented ? [UIColor colorWithWhite:1 alpha:0.16] : ExteriaColorField();
+}
+
+- (UIColor *)plateDownColor {
+    return _accented ? [UIColor colorWithWhite:1 alpha:0.34] : ExteriaColorAccent();
+}
+
+- (void)setAccented:(BOOL)accented {
+    if (accented == _accented) return;
+    _accented = accented;
+    [self applyPalette];
+}
+
+- (void)applyPalette {
+    _titleLabel.textColor = [self ink];
+    _messageLabel.textColor = [self softInk];
+    for (UIButton *key in _keys) {
+        [key setTitleColor:[self ink] forState:UIControlStateNormal];
+        key.backgroundColor = [self plateColor];
+    }
+    [_delete setImage:ExteriaSymbolImage(ExteriaSymbolBackspace, 26, [self ink]) forState:UIControlStateNormal];
+    [_biometricButton setTitleColor:[self ink] forState:UIControlStateNormal];
+    if (_biometricFingerprint) [_biometricButton setImage:ExteriaSymbolImage(ExteriaSymbolFingerprint, 34, [self ink]) forState:UIControlStateNormal];
+    _plate.backgroundColor = [self plateColor];
+    _field.keyboardAppearance = _accented || ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
+    [self refreshDots];
+    for (UIView *dot in _passDotViews) dot.backgroundColor = [self ink];
 }
 
 - (NSString *)title {
@@ -172,7 +239,7 @@
 
 - (void)setBiometricTitle:(NSString *)title {
     [_biometricButton setTitle:_biometricFingerprint ? nil : title forState:UIControlStateNormal];
-    [_biometricButton setImage:_biometricFingerprint ? ExteriaSymbolImage(ExteriaSymbolFingerprint, 34, ExteriaColorAccent()) : nil forState:UIControlStateNormal];
+    [_biometricButton setImage:_biometricFingerprint ? ExteriaSymbolImage(ExteriaSymbolFingerprint, 34, [self ink]) : nil forState:UIControlStateNormal];
     _biometricButton.accessibilityLabel = title;
     _biometricButton.hidden = title.length == 0;
 }
@@ -196,6 +263,7 @@
     [_typed setString:@""];
     _field.text = @"";
     [self refreshDots];
+    [self refreshPasswordDotsAnimated:NO];
 }
 
 - (void)focus {
@@ -208,7 +276,7 @@
                     [NSNumber numberWithFloat:-9], [NSNumber numberWithFloat:6], [NSNumber numberWithFloat:0], nil];
     shake.duration = 0.35;
     for (UIView *dot in _dots) [dot.layer addAnimation:shake forKey:@"shake"];
-    [_field.layer addAnimation:shake forKey:@"shake"];
+    [_plate.layer addAnimation:shake forKey:@"shake"];
     [self reset];
 }
 
@@ -252,21 +320,123 @@
     if (!_inputEnabled) self.inputEnabled = YES;
 }
 
+/* a dot that fills pops past its size and settles, and one that empties dips and drains, which is how the lock screen of a Pixel answers a key */
+- (void)animateDot:(UIView *)dot filling:(BOOL)filling color:(UIColor *)color {
+    CAKeyframeAnimation *scale = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+    scale.values = filling ? [NSArray arrayWithObjects:[NSNumber numberWithFloat:0.55f], [NSNumber numberWithFloat:1.3f], [NSNumber numberWithFloat:1], nil]
+                           : [NSArray arrayWithObjects:[NSNumber numberWithFloat:1], [NSNumber numberWithFloat:0.72f], [NSNumber numberWithFloat:1], nil];
+    scale.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.55f], [NSNumber numberWithFloat:1], nil];
+    scale.timingFunctions = [NSArray arrayWithObjects:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut],
+                             [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut], nil];
+    scale.duration = filling ? 0.26 : 0.18;
+    [dot.layer addAnimation:scale forKey:@"pop"];
+    CABasicAnimation *fill = [CABasicAnimation animationWithKeyPath:@"backgroundColor"];
+    fill.fromValue = (id)(filling ? [UIColor clearColor] : color).CGColor;
+    fill.toValue = (id)(filling ? color : [UIColor clearColor]).CGColor;
+    fill.duration = filling ? 0.14 : 0.18;
+    [dot.layer addAnimation:fill forKey:@"fill"];
+}
+
 - (void)refreshDots {
-    UIColor *color = ExteriaColorTitle();
+    UIColor *color = [self ink];
+    BOOL animate = self.window && !ExteriaReduceMotionEnabled();
     for (NSUInteger i = 0; i < _dots.count; ++i) {
         UIView *dot = [_dots objectAtIndex:i];
+        BOOL filled = i < _typed.length, was = i < _shownFilled;
         dot.layer.borderColor = color.CGColor;
-        dot.backgroundColor = i < _typed.length ? color : [UIColor clearColor];
+        dot.backgroundColor = filled ? color : [UIColor clearColor];
+        if (animate && filled != was) [self animateDot:dot filling:filled color:color];
+    }
+    _shownFilled = MIN(_typed.length, _dots.count);
+}
+
+#pragma mark password dots
+
+- (void)fieldChanged {
+    [self refreshPasswordDotsAnimated:YES];
+}
+
+/* the size and the step of the dots for this many of them on the plate: they close up when a long password would run off it */
+static void ExteriaPassDotMetrics(NSUInteger count, CGFloat room, CGFloat *side, CGFloat *step) {
+    *side = PASS_DOT_SIDE;
+    *step = PASS_DOT_SIDE + PASS_DOT_GAP;
+    if (count < 2 || (count - 1) * *step + *side <= room) return;
+    *step = (room - *side) / (CGFloat)(count - 1);
+    if (*step < *side + 1.5) {
+        *side = MAX(3, *step - 1.5);
+        *step = (room - *side) / (CGFloat)(count - 1);
+    }
+}
+
+- (CGRect)frameOfPassDot:(NSUInteger)index of:(NSUInteger)count {
+    CGFloat room = MAX(40, _passDots.bounds.size.width - 2 * PASS_PAD), side, step;
+    ExteriaPassDotMetrics(count, room, &side, &step);
+    CGFloat total = count ? (count - 1) * step + side : 0;
+    CGFloat left = (_passDots.bounds.size.width - total) / 2;
+    return CGRectMake(left + index * step, (_passDots.bounds.size.height - side) / 2, side, side);
+}
+
+- (void)refreshPasswordDotsAnimated:(BOOL)animated {
+    NSUInteger count = _field.text.length;
+    BOOL motion = animated && self.window && !ExteriaReduceMotionEnabled();
+    NSUInteger had = _passDotViews.count;
+    UIColor *ink = [self ink];
+    while (_passDotViews.count > count) {
+        UIView *gone = [_passDotViews lastObject];
+        [_passDotViews removeLastObject];
+        if (!motion) {
+            [gone removeFromSuperview];
+            continue;
+        }
+        [UIView animateWithDuration:0.16 animations:^{
+            gone.transform = CGAffineTransformMakeScale(0.2f, 0.2f);
+            gone.alpha = 0;
+        } completion:^(BOOL finished) {
+            (void)finished;
+            [gone removeFromSuperview];
+        }];
+    }
+    while (_passDotViews.count < count) {
+        UIView *dot = [[[UIView alloc] init] autorelease];
+        dot.backgroundColor = ink;
+        [_passDots addSubview:dot];
+        [_passDotViews addObject:dot];
+    }
+    for (NSUInteger i = 0; i < _passDotViews.count; ++i) {
+        UIView *dot = [_passDotViews objectAtIndex:i];
+        CGRect frame = [self frameOfPassDot:i of:count];
+        dot.layer.cornerRadius = frame.size.width / 2;
+        if (i >= had) {
+            dot.frame = frame;
+            if (motion) {
+                CAKeyframeAnimation *pop = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+                pop.values = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0.2f], [NSNumber numberWithFloat:1.35f], [NSNumber numberWithFloat:1], nil];
+                pop.keyTimes = [NSArray arrayWithObjects:[NSNumber numberWithFloat:0], [NSNumber numberWithFloat:0.55f], [NSNumber numberWithFloat:1], nil];
+                pop.timingFunctions = [NSArray arrayWithObjects:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut],
+                                       [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut], nil];
+                pop.duration = 0.28;
+                [dot.layer addAnimation:pop forKey:@"pop"];
+                CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+                fade.fromValue = [NSNumber numberWithFloat:0];
+                fade.toValue = [NSNumber numberWithFloat:1];
+                fade.duration = 0.12;
+                [dot.layer addAnimation:fade forKey:@"fade"];
+            }
+        } else if (motion) {
+            [UIView animateWithDuration:0.16 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
+                             animations:^{ dot.frame = frame; } completion:nil];
+        } else {
+            dot.frame = frame;
+        }
     }
 }
 
 - (void)keyDown:(UIButton *)key {
-    key.backgroundColor = ExteriaColorAccent();
+    key.backgroundColor = [self plateDownColor];
 }
 
 - (void)keyUp:(UIButton *)key {
-    key.backgroundColor = ExteriaColorField();
+    key.backgroundColor = [self plateColor];
 }
 
 - (void)digitPressed:(UIButton *)key {
@@ -329,7 +499,10 @@
     CGFloat below = top + 78;
     if (!pin) {
         CGFloat fieldWidth = MIN(width - 48, 320);
-        _field.frame = CGRectMake((width - fieldWidth) / 2, below + 8, fieldWidth, FIELD_HEIGHT);
+        _plate.frame = CGRectMake((width - fieldWidth) / 2, below + 8, fieldWidth, FIELD_HEIGHT);
+        _field.frame = _plate.frame;
+        _passDots.frame = _plate.bounds;
+        [self refreshPasswordDotsAnimated:NO];
         _biometricButton.frame = CGRectMake((width - fieldWidth) / 2, below + 8 + FIELD_HEIGHT + 12, fieldWidth, 40);
         return;
     }

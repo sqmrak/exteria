@@ -95,10 +95,10 @@
     _options.hidden = _first != nil;
     [_options setTitle:NSLocalizedString(_chosen == EXTERIA_PASSCODE_PIN ? @"passcode.to.password" : @"passcode.to.pin", nil) forState:UIControlStateNormal];
     if (_mode == ExteriaPasscodeFlowVerify) {
-        _entry.title = NSLocalizedString(@"passcode.enter", nil);
+        _entry.title = ExteriaPasscodeText(@"passcode.enter", _chosen);
         return;
     }
-    _entry.title = NSLocalizedString(_first ? @"passcode.confirm" : @"passcode.new", nil);
+    _entry.title = ExteriaPasscodeText(_first ? @"passcode.confirm" : @"passcode.new", _chosen);
     if (!_first) _entry.message = NSLocalizedString(_chosen == EXTERIA_PASSCODE_PIN ? @"passcode.new.pin.info" : @"passcode.new.password.info", nil);
 }
 
@@ -132,14 +132,14 @@
             return;
         }
         [_entry rejectCode];
-        _entry.message = result == ExteriaPasscodeResultWrong ? NSLocalizedString(@"passcode.wrong", nil) : nil;
+        _entry.message = result == ExteriaPasscodeResultWrong ? ExteriaPasscodeText(@"passcode.wrong", _chosen) : nil;
         [_entry holdForSeconds:wait];
         return;
     }
     NSData *bytes = [code dataUsingEncoding:NSUTF8StringEncoding];
     if (!bytes || !exteria_passcode_valid(_chosen, bytes.bytes, bytes.length)) {
         [_entry rejectCode];
-        _entry.message = NSLocalizedString(@"passcode.invalid", nil);
+        _entry.message = ExteriaPasscodeText(@"passcode.invalid", _chosen);
         return;
     }
     if (!_first) {
@@ -155,7 +155,7 @@
         _first = nil;
         [self showStep];
         [_entry rejectCode];
-        _entry.message = NSLocalizedString(@"passcode.mismatch", nil);
+        _entry.message = ExteriaPasscodeText(@"passcode.mismatch", _chosen);
         return;
     }
     if (!ExteriaPasscodeSet(_chosen, code)) {
@@ -163,7 +163,7 @@
         _first = nil;
         [self showStep];
         [_entry rejectCode];
-        _entry.message = NSLocalizedString(@"passcode.failed", nil);
+        _entry.message = ExteriaPasscodeText(@"passcode.failed", _chosen);
         return;
     }
     [self finish:YES];

@@ -47,12 +47,18 @@
     [super dealloc];
 }
 
+/* the lock stands on the accent of the theme, a little darker so the white ink of the pad reads on a light accent too */
+static UIColor *ExteriaLockColor(void) {
+    return ExteriaMixedColor(ExteriaColorAccent(), [UIColor blackColor], 0.22);
+}
+
 - (void)loadView {
     UIView *root = [[[UIView alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
-    root.backgroundColor = ExteriaColorScreen();
+    root.backgroundColor = ExteriaLockColor();
     self.view = root;
     _entry = [[ExteriaPasscodeEntryView alloc] initWithFrame:root.bounds];
     _entry.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    _entry.accented = YES;
     _entry.hidden = YES;
     ExteriaPasscodeLockController *lock = self;
     _entry.submit = ^(NSString *code) { [lock codeEntered:code]; };
@@ -75,7 +81,7 @@
     _biometricOffered = NO;
     [self applyBiometricButton];
     _entry.type = ExteriaPasscodeType();
-    _entry.title = NSLocalizedString(@"passcode.enter", nil);
+    _entry.title = ExteriaPasscodeText(@"passcode.enter", _entry.type);
     _entry.message = nil;
     [_entry reset];
     [_entry holdForSeconds:ExteriaPasscodeWaitRemaining()];
@@ -127,7 +133,7 @@
         return;
     }
     [_entry rejectCode];
-    _entry.message = result == ExteriaPasscodeResultWrong ? NSLocalizedString(@"passcode.wrong", nil) : nil;
+    _entry.message = result == ExteriaPasscodeResultWrong ? ExteriaPasscodeText(@"passcode.wrong", _entry.type) : nil;
     [_entry holdForSeconds:wait];
 }
 
@@ -173,12 +179,16 @@ typedef enum { ExteriaLockStateOpen, ExteriaLockStateCover, ExteriaLockStateAski
     if (_window) return;
     /* the keyboard of the app stands above every window, so what is being typed is let go before the lock rises */
     for (UIWindow *window in [[UIApplication sharedApplication] windows]) [window endEditing:YES];
-    _appWindow = [[UIApplication sharedApplication] keyWindow];
+    /* the window of the app, not whichever one is key now: an alert, the keyboard's window or the lock's own earlier window can be key at this moment, and handing
+       key back to it (or to a window that is gone) left the app window without it, where a text field takes a tap and never shows its keyboard */
+    id<UIApplicationDelegate> delegate = [[UIApplication sharedApplication] delegate];
+    UIWindow *main = [delegate respondsToSelector:@selector(window)] ? [delegate window] : nil;
+    _appWindow = main ? main : [[UIApplication sharedApplication] keyWindow];
     ExteriaPasscodeLock *me = self;
     _controller = [[ExteriaPasscodeLockController alloc] initWithUnlocked:^{ [me open]; }];
     _window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     _window.windowLevel = UIWindowLevelAlert + 100;
-    _window.backgroundColor = ExteriaColorScreen();
+    _window.backgroundColor = ExteriaLockColor();
     _window.rootViewController = _controller;
     [_window makeKeyAndVisible];
 }

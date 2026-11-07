@@ -23,6 +23,9 @@
 @property (nonatomic, assign) BOOL biometricFingerprint;
 @property (nonatomic, copy) void (^biometric)(void);
 
+/* the lock screen sits on the accent of the theme: white ink and translucent white keys in place of the card colors */
+@property (nonatomic, assign) BOOL accented;
+
 /* drops what was typed */
 - (void)reset;
 /* the dots shake sideways, and what was typed is dropped */
@@ -33,3 +36,6 @@
 - (void)holdForSeconds:(NSUInteger)seconds;
 
 @end
+
+/* the line of the passcode screens for this key (passcode.enter and the like), in the words of the kind: a password is not called a code */
+NSString *ExteriaPasscodeText(NSString *key, exteria_passcode_type type);
