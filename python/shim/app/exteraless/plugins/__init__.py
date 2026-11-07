@@ -5,6 +5,7 @@ docs/plugins.md. a request the app refuses comes back as PermissionError, Lookup
 NotImplementedError, see core/pyhost"""
 
 import json
+import sys
 import threading
 
 import _exteria
@@ -148,8 +149,14 @@ def run_token(token):
     """called by the app on the main thread for a callable queued with runOnUiThread"""
     with _token_lock:
         fn = _tokens.pop(int(token), None)
-    if fn is not None:
+    if fn is None:
+        return
+    # a call queued by a plugin that fails must not unwind into the app's main queue
+    try:
         fn()
+    except Exception:
+        import traceback
+        print("[exteria] a function queued with runOnUiThread failed\n" + traceback.format_exc(), file=sys.stderr)
 
 
 class _Runnable:
