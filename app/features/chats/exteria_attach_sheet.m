@@ -669,6 +669,12 @@ static NSString *ExteriaAttachClockText(NSTimeInterval length) {
 #pragma mark showing
 
 - (void)showInView:(UIView *)host {
+    /* on a tablet the sheet stands over the whole screen, in the middle of it, as the player of the music does, and not in the middle of the one pane of the chat it was opened
+       from, where it fell off to the side of the screen */
+    if (ExteriaIsPad()) {
+        UIView *overlay = ExteriaOverlayHost();
+        if (overlay) host = overlay;
+    }
     self.frame = host.bounds;
     [host addSubview:self]; [self layoutIfNeeded];
     _dim.alpha = 0;
