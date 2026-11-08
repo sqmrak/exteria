@@ -236,7 +236,7 @@ typedef enum { ExteriaLockStateOpen, ExteriaLockStateCover, ExteriaLockStateAski
         }
         return;
     }
-    /* a return with no leave noted was a call or the notification center over the app, which need no code */
+    /* the cover rises only after a move to the background, which notes the leave first; a call or the notification center never raises it */
     BOOL left = _leftAt > 0;
     BOOL lock = left && exteria_passcode_should_lock(ExteriaPasscodeAutoLock(), (int64_t)_leftAt, (int64_t)[[NSDate date] timeIntervalSince1970]);
     _leftAt = 0;

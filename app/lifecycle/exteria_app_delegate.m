@@ -266,10 +266,12 @@ static NSString *ExteriaSupportDirectory(void) {
 - (void)applicationWillResignActive:(UIApplication *)application {
     (void)application;
     ExteriaPluginsEvent("pause");
-    [_passcodeLock cover];
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
+    /* ios 6 resigns active for the notification center and the multitasking bar without going to the background, and a cover raised then hid both; the
+       snapshot of the switcher is taken after this method returns, so the cover is raised here */
+    [_passcodeLock cover];
     [_passcodeLock noteLeave];
     /* what was counted since the last tick is kept before the system may end the app */
     ExteriaTrafficFlush();
