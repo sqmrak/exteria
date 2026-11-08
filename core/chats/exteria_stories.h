@@ -136,5 +136,9 @@ exteria_status exteria_story_pin_request(exteria_arena *arena, const exteria_pee
 /* messages.sendMessage as a reply to a story of the chat's user */
 exteria_status exteria_story_reply_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t story_id, const char *text,
                                            int64_t random_id, exteria_tl_value **out);
+/* messages.sendMedia of an inputMediaStory: the story of owner sent into the chat target, as a message that opens the story. owner may be the account itself;
+   a target that is a basic group or user needs no more than its id, a topic of a forum is answered the way a text is */
+exteria_status exteria_story_forward_request(exteria_arena *arena, const exteria_peer_ref *target, const exteria_peer_ref *owner, int32_t story_id,
+                                             int64_t random_id, exteria_tl_value **out);
 
 #endif

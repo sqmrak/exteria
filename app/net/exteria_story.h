@@ -40,6 +40,8 @@
 @property (nonatomic, readonly) BOOL outgoing;
 @property (nonatomic, readonly) BOOL pinned;
 @property (nonatomic, readonly) BOOL closeFriends;
+/* the poster closed it to forwarding, so it can neither be sent on nor saved */
+@property (nonatomic, readonly) BOOL noForwards;
 /* who sees it; a story shown to a chosen list reads as its nearest audience and is kept as it is unless the person picks another */
 @property (nonatomic, readonly) exteria_story_privacy privacy;
 @property (nonatomic, readonly) BOOL selectedAudience;
@@ -101,6 +103,9 @@ typedef void (^ExteriaStoriesCompletion)(ExteriaStoryPeer *peer, NSArray *storie
 /* the text goes to the poster's chat as a reply to the story; randomId must differ for every message */
 - (void)replyToStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog text:(NSString *)text randomId:(long long)randomId
           completion:(void (^)(NSString *errorName))completion;
+/* sends the story of owner into the chat target as a message that opens it; the completion is the one of a send, with the id of the new message */
+- (void)forwardStory:(int32_t)storyId ofDialog:(ExteriaDialog *)owner toDialog:(ExteriaDialog *)target randomId:(long long)randomId
+          completion:(ExteriaSendCompletion)completion;
 
 /* our own pinned stories, newest first, and one page of our archive of expired ones before beforeId (zero for the newest);
    ExteriaStory items, empty on the last page */

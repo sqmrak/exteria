@@ -3,6 +3,7 @@
 #import "exteria_caption_view.h"
 #import "exteria_story_viewers_controller.h"
 #import "exteria_people_select_controller.h"
+#import "exteria_dialog_picker_controller.h"
 #import "exteria_string_drawing.h"
 
 #import <AVFoundation/AVFoundation.h>
@@ -15,6 +16,7 @@
 #import "exteria_platform.h"
 #import "exteria_music_player.h"
 #import "exteria_premium_gate_view.h"
+#import "exteria_session_channels.h"
 #import "exteria_session_profile.h"
 #import "exteria_alert.h"
 #import "exteria_popup_menu.h"
@@ -34,6 +36,7 @@
 #define CHIP_HEIGHT 30.0
 #define SIDE_BUTTON 44.0
 #define STORY_HEART_SIDE 26.0
+#define STORY_SHARE_SIDE 24.0
 #define TURN_SECONDS 0.2
 #define TURN_ANGLE (M_PI / 2.2)
 #define TURN_DEPTH 900.0
@@ -136,6 +139,8 @@
     UIView *_replyPill;
     ExteriaCaptionView *_reply;
     UIButton *_heart;
+    /* sends the story on into a chat; at the left of the heart, or alone at the right end of the bar over a story of ours */
+    UIButton *_share;
     UILabel *_views;
     UILabel *_toast;
     NSTimer *_timer;
@@ -237,6 +242,7 @@
     [_reply release];
     [_replyPill release];
     [_heart release];
+    [_share release];
     [_views release];
     [_toast release];
     [_tickTarget release];
@@ -436,6 +442,16 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     /* the heart is a button of its own at the right of the pill */
     _heart.contentMode = UIViewContentModeCenter;
     [_bottom addSubview:_heart];
+    _share = [(_classic ? ExteriaStoryClassicButton(nil) : [UIButton buttonWithType:UIButtonTypeCustom]) retain];
+    [_share addTarget:self action:@selector(shareTapped) forControlEvents:UIControlEventTouchUpInside];
+    _share.accessibilityLabel = NSLocalizedString(@"story.share", nil);
+    _share.contentMode = UIViewContentModeCenter;
+    if (_classic) {
+        [_share setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, NO) forState:UIControlStateNormal];
+        [_share setBackgroundImage:ExteriaClassicGlossButtonImage(ExteriaClassicGlossSlate, YES) forState:UIControlStateHighlighted];
+    }
+    [_share setImage:ExteriaSymbolImage(ExteriaSymbolForward, _classic ? 18 : STORY_SHARE_SIDE, [UIColor whiteColor]) forState:UIControlStateNormal];
+    [_bottom addSubview:_share];
     _views = [ExteriaStoryLabel(14, NO) retain];
     /* the count of views opens the list of the people who looked */
     _views.userInteractionEnabled = YES;
@@ -558,15 +574,21 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _views.hidden = !own;
     /* the pill and the heart beside it: the heart is a button of its own at the right end of the bar */
     if (_classic) {
-        _replyPill.frame = CGRectMake(8, 7, width - 8 - 52 - 8, CLASSIC_BUTTON_HEIGHT);
+        CGFloat heartX = width - 8 - 44;
+        CGFloat shareX = own ? heartX : heartX - 4 - 44;
+        _replyPill.frame = CGRectMake(8, 7, shareX - 8 - 8, CLASSIC_BUTTON_HEIGHT);
         _locked.frame = _replyPill.frame;
-        _heart.frame = CGRectMake(width - 8 - 44, 7, 44, CLASSIC_BUTTON_HEIGHT);
-        _views.frame = CGRectMake(16, 11, width - 32, 22);
+        _heart.frame = CGRectMake(heartX, 7, 44, CLASSIC_BUTTON_HEIGHT);
+        _share.frame = CGRectMake(shareX, 7, 44, CLASSIC_BUTTON_HEIGHT);
+        _views.frame = CGRectMake(16, 11, shareX - 16 - 8, 22);
     } else {
-        _replyPill.frame = CGRectMake(12, 9, width - 12 - SIDE_BUTTON - 12, 36);
+        CGFloat heartX = width - 8 - SIDE_BUTTON;
+        CGFloat shareX = own ? heartX : heartX - SIDE_BUTTON;
+        _replyPill.frame = CGRectMake(12, 9, shareX - 12 - 4, 36);
         _locked.frame = _replyPill.frame;
-        _heart.frame = CGRectMake(width - 8 - SIDE_BUTTON, 5, SIDE_BUTTON, 44);
-        _views.frame = CGRectMake(16, 16, width - 32, 22);
+        _heart.frame = CGRectMake(heartX, 5, SIDE_BUTTON, 44);
+        _share.frame = CGRectMake(shareX, 5, SIDE_BUTTON, 44);
+        _views.frame = CGRectMake(16, 16, shareX - 16 - 8, 22);
     }
     /* the words start REPLY_INSET from the left edge of the pill (the view keeps 8 points of its own) and stand on its vertical middle */
     CGFloat replyHeight = ceil(_reply.font.lineHeight) + 8;
@@ -1463,6 +1485,45 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
     ExteriaStoryViewersController *page = [[[ExteriaStoryViewersController alloc] initWithSession:_session dialog:peer.owner storyId:story.storyId views:story.views] autorelease];
     [self pause];
     [self presentViewController:[page presentableNavigation] animated:YES completion:nil];
+}
+
+/* sends the story on into a chat the person picks; a story its poster closed to forwarding is not offered */
+- (void)shareTapped {
+    ExteriaStory *story = _current;
+    ExteriaStoryPeer *peer = [self peer];
+    if (!story || !peer || _editing) return;
+    if (story.noForwards) { [self toast:NSLocalizedString(@"story.share.forbidden", nil)]; return; }
+    int32_t storyId = story.storyId;
+    ExteriaDialog *owner = peer.owner;
+    ExteriaDialogPickerController *picker = [[[ExteriaDialogPickerController alloc] initWithSession:_session avatars:_avatars media:_media] autorelease];
+    picker.screenTitle = NSLocalizedString(@"story.share.to", nil);
+    picker.forwarding = YES;
+    picker.filter = ^BOOL(ExteriaDialog *dialog) {
+        return !dialog.folder && !dialog.community && (dialog.kind != EXTERIA_DIALOG_CHANNEL || dialog.canPost);
+    };
+    ExteriaWeakReference *weak = _weak;
+    [self pause];
+    picker.cancelHandler = ^{
+        ExteriaStoryViewerController *me = weak.target;
+        if (me && !me->_closed) [me resume];
+    };
+    picker.pickHandler = ^(NSArray *dialogs) {
+        ExteriaStoryViewerController *me = weak.target;
+        ExteriaDialog *target = [dialogs lastObject];
+        if (!me || !target) return;
+        long long randomId;
+        do { randomId = (long long)(((uint64_t)arc4random() << 32 | arc4random()) & 0x7fffffffffffffffULL); } while (randomId == 0);
+        [me->_session forwardStory:storyId ofDialog:owner toDialog:target randomId:randomId completion:^(int32_t messageId, NSString *errorName) {
+            (void)messageId;
+            ExteriaStoryViewerController *again = weak.target;
+            if (errorName) NSLog(@"exteria: story %d of %lld was not sent to chat %lld: %@", (int)storyId, owner.peerId, target.peerId, errorName);
+            else [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+            if (!again || again->_closed) return;
+            [again resume];
+            [again toast:NSLocalizedString(errorName ? @"story.share.failed" : @"story.share.sent", nil)];
+        }];
+    };
+    [self presentViewController:[picker presentableNavigation] animated:YES completion:nil];
 }
 
 - (void)heartTapped {

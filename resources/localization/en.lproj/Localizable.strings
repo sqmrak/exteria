@@ -335,6 +335,12 @@
 "story.react.failed" = "The reaction was not sent";
 "story.reply.sent" = "Reply sent";
 "story.reply.failed" = "The reply was not sent";
+"story.share" = "Send to a chat";
+"story.share.to" = "Send story to";
+"story.share.sent" = "Story sent";
+"story.share.failed" = "The story was not sent";
+"story.share.forbidden" = "The poster closed this story to forwarding";
+"preview.story" = "Story";
 "chat.premium.text" = "You can write to %@ only with Premium.";
 "chat.premium.button" = "Get Premium";
 "chat.premium.note" = "Only Premium users can write to %@.";

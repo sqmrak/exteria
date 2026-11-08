@@ -146,7 +146,30 @@
 
 - (void)viewDidDisappear:(BOOL)animated {
     [super viewDidDisappear:animated];
-    if ([self isMovingFromParentViewController]) [self resolveCancelled];
+    /* a picker presented in a navigation of its own is dismissed with that navigation, which does not move the picker out of its parent */
+    if ([self isMovingFromParentViewController] || [self.navigationController isBeingDismissed]) [self resolveCancelled];
+}
+
+/* a screen that has no navigation stack to push on, such as the story viewer, presents the picker as the first page of a navigation of its own, and the picker
+   then leaves by dismissing it */
+- (void)leave {
+    if (self.navigationController.viewControllers.count > 1) [self.navigationController popViewControllerAnimated:YES];
+    else [self.navigationController dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)goBack {
+    if (self.searching) { [super goBack]; return; }
+    [self leave];
+}
+
+- (UINavigationController *)presentableNavigation {
+    UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:self] autorelease];
+    navigation.navigationBarHidden = !ExteriaThemeIsClassic();
+    if (ExteriaThemeIsClassic()) {
+        self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"story.close", nil)
+            style:UIBarButtonItemStyleDone target:self action:@selector(goBack)] autorelease];
+    }
+    return navigation;
 }
 
 - (NSString *)screenTitle {
@@ -318,7 +341,7 @@
     _resolved = YES;
     void (^handler)(NSArray *) = [_pickHandler retain];
     NSArray *chosen = [[_picked copy] autorelease];
-    [self.navigationController popViewControllerAnimated:YES];
+    [self leave];
     if (handler) handler(chosen);
     [handler release];
 }
@@ -334,7 +357,7 @@
     if (self.limit <= 1) {
         _resolved = YES;
         void (^handler)(NSArray *) = [_pickHandler retain];
-        [self.navigationController popViewControllerAnimated:YES];
+        [self leave];
         if (handler) handler([NSArray arrayWithObject:dialog]);
         [handler release];
         return;

@@ -335,6 +335,12 @@
 "story.react.failed" = "Реакция не отправлена";
 "story.reply.sent" = "Ответ отправлен";
 "story.reply.failed" = "Ответ не отправлен";
+"story.share" = "Отправить в чат";
+"story.share.to" = "Отправить историю в";
+"story.share.sent" = "История отправлена";
+"story.share.failed" = "История не отправлена";
+"story.share.forbidden" = "Автор запретил пересылку этой истории";
+"preview.story" = "История";
 "chat.premium.text" = "Написать %@ можно только с Premium.";
 "chat.premium.button" = "Оформить Premium";
 "chat.premium.note" = "Только Premium-пользователи могут писать %@.";

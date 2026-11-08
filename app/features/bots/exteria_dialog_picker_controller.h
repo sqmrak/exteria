@@ -21,5 +21,7 @@
 @property (nonatomic, copy) void (^pickHandler)(NSArray *dialogs);
 /* once, when the picker leaves the screen without a pick (back, or the controller dropped from the stack), never after pickHandler */
 @property (nonatomic, copy) void (^cancelHandler)(void);
+/* the picker as the first page of a navigation of its own, for a screen that is not in a navigation stack; picking or going back dismisses it */
+- (UINavigationController *)presentableNavigation;
 
 @end

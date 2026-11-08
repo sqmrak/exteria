@@ -333,6 +333,29 @@ exteria_status exteria_story_reply_request(exteria_arena *arena, const exteria_p
     return status;
 }
 
+exteria_status exteria_story_forward_request(exteria_arena *arena, const exteria_peer_ref *target, const exteria_peer_ref *owner, int32_t story_id,
+                                             int64_t random_id, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *media, *story_peer;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !target || !owner || !out || story_id <= 0 || random_id == 0) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, target, &input);
+    if (status == EXTERIA_OK) status = exteria_input_peer(arena, owner, &story_peer);
+    if (status != EXTERIA_OK) return status;
+    media = exteria_tl_new_obj(arena, "inputMediaStory");
+    request = exteria_tl_new_obj(arena, "messages.sendMedia");
+    if (!media || !request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(media, "peer", story_peer);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, media, "id", story_id);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_set_topic_reply(arena, request, target);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "media", media);
+    if (status == EXTERIA_OK) status = exteria_tl_set_str(arena, request, "message", "");
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "random_id", random_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
 exteria_status exteria_story_send_photo_request(exteria_arena *arena, exteria_tl_value *file, int64_t random_id, exteria_tl_value **out) {
     exteria_tl_value *request, *peer, *media, *rules, *rule;
     exteria_status status;

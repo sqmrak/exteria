@@ -369,6 +369,33 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "reply_to")), EXTERIA_TL_ID_inputReplyToStory);
     roundtrip(request, EXTERIA_TL_ID_messages_sendMessage);
 
+    /* a story goes out as inputMediaStory naming the poster, to a user, a channel or the account itself, and into the topic a forum target names */
+    for (i = 0; i < 3; ++i) {
+        exteria_peer_ref target = {1, 77, 5, 0, 0};
+        const exteria_tl_value *media;
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &target, &peers[i], 8, 11, &request), EXTERIA_OK);
+        media = exteria_tl_get(request, "media");
+        CHECK_EQ_INT(exteria_tl_id(media), EXTERIA_TL_ID_inputMediaStory);
+        CHECK(exteria_tl_get(media, "peer") != NULL);
+        CHECK_EQ_INT(exteria_tl_has(request, "reply_to"), 0);
+        roundtrip(request, EXTERIA_TL_ID_messages_sendMedia);
+    }
+    {
+        exteria_peer_ref topic = {3, 90, 6, 0, 4};
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &topic, &peers[0], 8, 11, &request), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "reply_to")), EXTERIA_TL_ID_inputReplyToMessage);
+        roundtrip(request, EXTERIA_TL_ID_messages_sendMedia);
+    }
+    {
+        exteria_peer_ref target = {1, 77, 5, 0, 0};
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &target, &peers[0], 0, 11, &request), EXTERIA_E_ARG);
+        CHECK(request == NULL);
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &target, &peers[0], 8, 0, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &bad, &peers[0], 8, 11, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &target, &bad, 8, 11, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_story_forward_request(&arena, &target, &peers[0], 8, 11, NULL), EXTERIA_E_ARG);
+    }
+
     CHECK_EQ_INT(exteria_story_peer_request(&arena, &bad, &request), EXTERIA_E_ARG);
     CHECK(request == NULL);
     CHECK_EQ_INT(exteria_story_ids_request(&arena, &peers[0], NULL, 0, &request), EXTERIA_E_ARG);

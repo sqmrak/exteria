@@ -85,6 +85,7 @@ static uint16_t ExteriaFillStoryUsers(NSArray *people, exteria_story_user *users
 - (BOOL)outgoing { return _row.out; }
 - (BOOL)pinned { return _row.pinned; }
 - (BOOL)closeFriends { return _row.close_friends; }
+- (BOOL)noForwards { return _row.noforwards != 0; }
 - (exteria_story_privacy)privacy { return exteria_story_row_privacy(&_row); }
 - (BOOL)selectedAudience { return _row.selected != 0; }
 

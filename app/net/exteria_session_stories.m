@@ -222,6 +222,19 @@
     [body release];
 }
 
+- (void)forwardStory:(int32_t)storyId ofDialog:(ExteriaDialog *)owner toDialog:(ExteriaDialog *)target randomId:(long long)randomId
+          completion:(ExteriaSendCompletion)completion {
+    ExteriaSendCompletion done = [completion copy];
+    exteria_peer_ref from = ExteriaPeerRefOfDialog(owner);
+    exteria_peer_ref to = ExteriaPeerRefOfDialog(target);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        exteria_status status = exteria_story_forward_request(arena, &to, &from, storyId, randomId, request);
+        return status == EXTERIA_OK ? ExteriaApplySendAs(self, &to, arena, *request) : status;
+    } handler:^(const exteria_mt_rpc_result *result) {
+        [self finishSend:result randomId:randomId completion:done];
+    }];
+}
+
 /* worker only: the stories of a stories.stories answer, as a delivered list */
 - (void)deliverStoriesResult:(const exteria_mt_rpc_result *)result completion:(ExteriaListCompletion)done {
     NSMutableArray *stories = nil;
