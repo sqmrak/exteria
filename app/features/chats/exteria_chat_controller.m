@@ -3468,6 +3468,15 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [self showStatus:nil retry:NO];
 }
 
+/* whether the id is that of a post at the head of the thread of comments this chat shows */
+- (BOOL)isDiscussionRootId:(int32_t)messageId {
+    if (!_dialog.discussion || messageId <= 0) return NO;
+    for (ExteriaMessage *root in _dialog.discussionMessages) {
+        if (root.messageId == messageId) return YES;
+    }
+    return NO;
+}
+
 - (void)mergeDiscussionMessagesAtHistoryEnd {
     if (_canLoadMore || !_dialog.discussionMessages.count) return;
     [_people addEntriesFromDictionary:_dialog.discussionPeople];
@@ -4341,6 +4350,9 @@ static void ExteriaRedrawTree(UIView *view) {
         ExteriaChatItem *item = [_itemCache objectForKey:key];
         NSString *role = [_senderRoles objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
         int32_t replyId = message.replyTo ? message.replyTo : message.sendReplyTo;
+        /* every comment under a post answers that post, which the head of the thread shows already; a quote of it on each comment says nothing, as the root of a topic is not
+           quoted either. an answer to another comment keeps its quote */
+        if (_dialog.discussion && replyId > 0 && (replyId == message.threadId || [self isDiscussionRootId:replyId])) replyId = 0;
         BOOL localReply = replyId > 0 && [self replyIsInThisChat:message];
         ExteriaDialog *replySource = replyId > 0 ? [self replySourceOfMessage:message] : nil;
         ExteriaMessage *original = replyId > 0 && localReply ? [self messageWithId:replyId] : nil;
@@ -4388,6 +4400,9 @@ static void ExteriaRedrawTree(UIView *view) {
                 [item dropForwardText];
                 if (message.forwardOriginId && message.forwardOriginMessage > 0) [item showOpenChatRow];
             }
+            /* the post at the head of the comments is the copy the group made of the post of its channel, and the line that names the channel says what the thread is about
+               already */
+            if ([self isDiscussionRootId:message.messageId]) [item dropForwardText];
             [item setReplyTitle:replyTitle text:replyText color:replyColor];
             item.replyEntities = replyEntities;
             /* the list of a search shows its words on a plate in every message it found */
