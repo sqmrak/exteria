@@ -13,6 +13,9 @@
 #import "exteria_force_touch.h"
 #import "exteria_music_player.h"
 #import "exteria_round_playback.h"
+
+/* the swell of a playing video message and its settling back, shared by the circle, its ring and the buttons on it so they move as one */
+#define ROUND_SWELL_SECONDS 0.32
 #import "exteria_image_decoder.h"
 #import "exteria_lottie_view.h"
 #import "exteria_gift_card.h"
@@ -2286,7 +2289,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     if (!_roundView) return;
     ExteriaRoundPlayback *playback = [ExteriaRoundPlayback sharedPlayback];
     if (![playback isActiveKey:[self roundKey]]) {
-        [self detachRound];
+        [self settleRoundThenDetach];
         return;
     }
     [_play setIcon:playback.playing ? ExteriaMediaIconNone : ExteriaMediaIconPlay animated:YES];
@@ -2378,11 +2381,15 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     if (!CGRectIsEmpty(_item.reactionFrame))
         below = MIN(below, CGRectGetMinY(_item.reactionFrame) - CGRectGetMaxY(_picture.frame) - 4);
     CGFloat grow = 1, shift = 0, dy = 0;
-    if (side >= 1 && width >= side && above >= 0 && below >= 0 && !ExteriaReduceMotionEnabled())
+    if (side >= 1 && width >= side && above >= 0 && below >= 0 && !ExteriaReduceMotionEnabled()) {
         grow = MAX(1, MIN(1.5, MIN((width - 2 * margin) / side, 1 + (above + below) / side)));
+        /* the rows on a tablet are airy but the circle is big, so the room of its own row gave a swell too small to notice. the circle is drawn over its neighbours while it
+           plays, so a tablet lets it swell a fifth past that room */
+        if (ExteriaIsPad()) grow = MAX(grow, MIN(1.2, (width - 2 * margin) / side));
+    }
     /* the swell reaches up and down in the proportion of the room on each side, so the center moves by half of the difference */
     if (grow >= 1.05) {
-        CGFloat extra = side * (grow - 1), up = extra * above / (above + below);
+        CGFloat extra = side * (grow - 1), up = above + below > 0 ? extra * above / (above + below) : extra / 2;
         dy = extra / 2 - up;
         CGFloat half = side * grow / 2, middle = CGRectGetMidX(_picture.frame);
         if (middle - half < margin) shift = margin - (middle - half);
@@ -2403,9 +2410,15 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _roundRing.bounds = bounds;
     _roundRing.position = center;
     _roundRing.path = [UIBezierPath bezierPathWithOvalInRect:CGRectInset(bounds, 1.5, 1.5)].CGPath;
+    [CATransaction commit];
     CATransform3D ring = CATransform3DMakeTranslation(shift, dy, 0);
     ring = CATransform3DScale(ring, grow, grow, 1);
     ring = CATransform3DRotate(ring, (CGFloat)(-M_PI / 2), 0, 0, 1);
+    /* the ring is a layer of its own, so it takes the same time and curve as the circle it rims, and not the jump that left the video swelling inside a ring already grown */
+    [CATransaction begin];
+    [CATransaction setDisableActions:!animated];
+    [CATransaction setAnimationDuration:ROUND_SWELL_SECONDS];
+    [CATransaction setAnimationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut]];
     _roundRing.transform = ring;
     [CATransaction commit];
     CGAffineTransform view = CGAffineTransformScale(CGAffineTransformMakeTranslation(shift, dy), grow, grow);
@@ -2416,8 +2429,32 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         _roundSpeed.transform = speed;
         _play.transform = button;
     };
-    if (animated) [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:change completion:nil];
+    if (animated) [UIView animateWithDuration:ROUND_SWELL_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:change completion:nil];
     else change();
+}
+
+/* a circle that stops settles back to its size before it goes, as it swelled; a row that is reused or leaves the screen drops it at once */
+- (void)settleRoundThenDetach {
+    ExteriaRoundVideoView *view = _roundView;
+    if (!view || !self.window || ExteriaReduceMotionEnabled()) {
+        [self detachRound];
+        return;
+    }
+    [_roundTimer invalidate];
+    _roundTimer = nil;
+    [CATransaction begin];
+    [CATransaction setAnimationDuration:ROUND_SWELL_SECONDS];
+    [CATransaction setAnimationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut]];
+    _roundRing.transform = CATransform3DMakeRotation((CGFloat)(-M_PI / 2), 0, 0, 1);
+    [CATransaction commit];
+    [UIView animateWithDuration:ROUND_SWELL_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+        view.transform = CGAffineTransformIdentity;
+        _roundSpeed.transform = CGAffineTransformIdentity;
+        _play.transform = CGAffineTransformIdentity;
+    } completion:^(BOOL finished) {
+        (void)finished;
+        if (_roundView == view) [self detachRound];
+    }];
 }
 
 - (void)roundTick:(NSTimer *)timer {
