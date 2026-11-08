@@ -76,7 +76,8 @@
     _name.textColor = ExteriaColorTitle();
     _name.textAlignment = ExteriaTextAlignmentCenter;
     _name.dropsUndrawable = YES;
-    _name.numberOfLines = 0;
+    /* a long name takes two lines and ends in an ellipsis: with no limit it ran down the page over the rows under it */
+    _name.numberOfLines = 2;
     [self addSubview:_name];
     UITapGestureRecognizer *hammerTap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(nameTapped:)] autorelease];
     hammerTap.delegate = self;
