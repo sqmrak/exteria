@@ -65,9 +65,13 @@
 - (void)pulled:(UIPanGestureRecognizer *)pan {
     UIView *card = pan.view;
     CGFloat distance = MAX(0, [pan translationInView:card.superview].y);
-    if (pan.state == UIGestureRecognizerStateChanged) {
-        if (_scroll && _scroll.contentOffset.y < -_scroll.contentInset.top)
-            _scroll.contentOffset = CGPointMake(_scroll.contentOffset.x, -_scroll.contentInset.top);
+    if (pan.state == UIGestureRecognizerStateBegan) {
+        /* the list at its top rubber-bands under the same finger as the card is pulled, and the two recognizers run in no fixed order, so a per-frame offset reset
+           left the rows twitching; turning its recognizer off and on cancels the touch for the list and leaves the card alone with the finger */
+        UIPanGestureRecognizer *listPan = _scroll.panGestureRecognizer;
+        listPan.enabled = NO;
+        listPan.enabled = YES;
+    } else if (pan.state == UIGestureRecognizerStateChanged) {
         card.transform = CGAffineTransformMakeTranslation(0, distance);
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
         if (pan.state == UIGestureRecognizerStateEnded && (distance > 80 || [pan velocityInView:card.superview].y > 900)) {
