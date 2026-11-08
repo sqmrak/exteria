@@ -180,6 +180,9 @@ static void ExteriaLockColors(UIColor **top, UIColor **bottom) {
 
 @end
 
+/* how long the lock takes to dissolve once the code is right */
+#define UNLOCK_SECONDS 0.42
+
 typedef enum { ExteriaLockStateOpen, ExteriaLockStateCover, ExteriaLockStateAsking } ExteriaLockState;
 
 @interface ExteriaPasscodeLock () {
@@ -220,19 +223,38 @@ typedef enum { ExteriaLockStateOpen, ExteriaLockStateCover, ExteriaLockStateAski
     [_window makeKeyAndVisible];
 }
 
+/* a right code lets the lock dissolve into the app: the pad stays while it fades and swells a little, as if the app came up through it, and a lock that vanished at once
+   showed as a cut. the window that fades is no longer the lock's own, so a cover can rise again at once if the app leaves meanwhile */
 - (void)open {
     _state = ExteriaLockStateOpen;
     _leftAt = 0;
-    [_controller setAsking:NO];
-    _window.hidden = YES;
-    _window.rootViewController = nil;
-    /* the code that opened the lock is still running on the pad of this controller, so the last release waits for the end of the run loop pass */
-    [_window autorelease];
+    UIWindow *window = _window, *appWindow = _appWindow;
+    ExteriaPasscodeLockController *controller = _controller;
     _window = nil;
-    [_controller autorelease];
     _controller = nil;
-    [_appWindow makeKeyWindow];
     _appWindow = nil;
+    [appWindow makeKeyWindow];
+    /* the code that opened the lock is still running on the pad of this controller, so the last release waits for the end of the animation, or of the run loop pass */
+    void (^finish)(void) = ^{
+        [controller setAsking:NO];
+        window.hidden = YES;
+        window.rootViewController = nil;
+        [window release];
+        [controller release];
+    };
+    if (ExteriaReduceMotionEnabled() || ![UIView areAnimationsEnabled]) {
+        finish();
+        return;
+    }
+    /* touches in the meantime belong to the app under the fading lock */
+    window.userInteractionEnabled = NO;
+    [UIView animateWithDuration:UNLOCK_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction animations:^{
+        window.alpha = 0;
+        controller.view.transform = CGAffineTransformMakeScale(1.08f, 1.08f);
+    } completion:^(BOOL finished) {
+        (void)finished;
+        finish();
+    }];
 }
 
 - (void)ask {
