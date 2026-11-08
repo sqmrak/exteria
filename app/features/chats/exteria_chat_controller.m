@@ -239,6 +239,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     ExteriaMiniPlayer *_miniPlayer;
     ExteriaFallingView *_snow;
     ExteriaFallingView *_foxes;
+    ExteriaFallingView *_boys;
     UITableView *_table;
     BOOL _premium;
     BOOL _premiumKnown;
@@ -610,8 +611,10 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_stickers release];
     [_snow stop];
     [_foxes stop];
+    [_boys stop];
     [_snow release];
     [_foxes release];
+    [_boys release];
     _miniPlayer.changeHandler = nil;
     [_miniPlayer release];
     [_toEnd release];
@@ -853,6 +856,12 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if (ExteriaChatFlagGet(ExteriaChatFlagFoxes)) {
         _foxes = [[ExteriaFallingView alloc] initWithFrame:root.bounds spriteNamed:@"senko-fall"];
         [root insertSubview:_foxes belowSubview:_miniPlayer];
+    }
+
+    /* the list of chats already lets them fall, so on a tablet the chat beside it does as well and the two panes show the same */
+    if (ExteriaChatFlagGet(ExteriaChatFlagBoykisser)) {
+        _boys = [[ExteriaFallingView alloc] initWithFrame:root.bounds spriteNamed:@"boykisser"];
+        [root insertSubview:_boys belowSubview:_miniPlayer];
     }
 
     _table = [[UITableView alloc] initWithFrame:root.bounds style:UITableViewStylePlain];
@@ -2762,6 +2771,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _wallpaper.frame = self.view.bounds;
     _snow.frame = self.view.bounds;
     _foxes.frame = self.view.bounds;
+    _boys.frame = self.view.bounds;
     _header.frame = CGRectMake(0, 0, size.width, headerHeight);
     _headerLine.frame = CGRectMake(0, headerHeight - 1.0 / ExteriaScreenScale(), size.width, 1.0 / ExteriaScreenScale());
     /* the only page of the right pane of a tablet has no left pane to go back to, so the title moves into the room the arrow leaves */
@@ -2981,6 +2991,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [self performSelector:@selector(markReadIfNeeded) withObject:nil afterDelay:0];
     [_snow start];
     [_foxes start];
+    [_boys start];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -3046,6 +3057,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     _liveLink = nil;
     [_snow stop];
     [_foxes stop];
+    [_boys stop];
     ExteriaNotifierSetOpenChat(0, 0);
     [self stopRaiseToSpeak];
     [self discardRecording];
@@ -3101,6 +3113,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     if (_visible) {
         [_snow start];
         [_foxes start];
+        [_boys start];
     }
     [self markReadIfNeeded];
     [self pollReactions];
@@ -3118,6 +3131,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [self stopFollowingBottom];
     [_snow stop];
     [_foxes stop];
+    [_boys stop];
     [_liveLink invalidate];
     [_liveLink release];
     _liveLink = nil;
