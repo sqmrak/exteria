@@ -946,7 +946,8 @@ void ExteriaClassicStyleMenuLabel(UILabel *label, CGFloat size) {
     }
 }
 
-/* the white (or dark gray) box of the classic bar with a fifth of the accent mixed in, so it reads as the color of the theme and not as grey; opaque since the emoji of the text are drawn over it */
+/* the white (or dark gray) box of the classic bar with a good share of the accent mixed in (a third on the dark theme, a quarter on the light one), so it reads as the color of the
+   theme and not as grey; opaque since the emoji of the text are drawn over it. more than this takes the placeholder, which is the muted ink, down to the fill */
 UIColor *ExteriaClassicInputFill(void) {
     UIColor *base = ExteriaThemeIsDark() ? [UIColor colorWithWhite:0.23 alpha:1] : [UIColor whiteColor];
     CGFloat br, bg, bb, ba, ar, ag, ab, aa;
@@ -956,7 +957,8 @@ UIColor *ExteriaClassicInputFill(void) {
         br = bg = bb = white;
     }
     if (![ExteriaColorAccent() getRed:&ar green:&ag blue:&ab alpha:&aa]) return base;
-    return [UIColor colorWithRed:br * 0.8 + ar * 0.2 green:bg * 0.8 + ag * 0.2 blue:bb * 0.8 + ab * 0.2 alpha:1];
+    CGFloat share = ExteriaThemeIsDark() ? 0.34 : 0.26;
+    return [UIColor colorWithRed:br * (1 - share) + ar * share green:bg * (1 - share) + ag * share blue:bb * (1 - share) + ab * share alpha:1];
 }
 
 UIImage *ExteriaClassicTintedGlossImage(UIColor *base, CGFloat radius, BOOL pressed) {
