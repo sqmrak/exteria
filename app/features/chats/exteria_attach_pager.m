@@ -965,6 +965,13 @@ static char ExteriaPlayerStatusContext;
     CGFloat pill = _caption.bounds.size.height, lines = [_caption contentHeightForWidth:MAX(20, _caption.bounds.size.width - edge)];
     CGFloat inset = MAX(0, floor((pill - lines) / 2));
     _caption.contentInset = UIEdgeInsetsMake(inset, edge, inset, 0);
+    /* the insets are what centers a line, and a text view that scrolls lets a finger drag the words anywhere inside them and bounce back; while the words fit in the pill the
+       view stays still, and it scrolls only once they overflow */
+    BOOL overflow = lines > pill + 0.5;
+    _caption.scrollEnabled = overflow;
+    _caption.bounces = overflow;
+    _caption.alwaysBounceVertical = overflow;
+    if (!overflow) _caption.contentOffset = CGPointMake(-edge, -inset);
 }
 
 - (void)textViewDidChange:(UITextView *)textView {
