@@ -556,18 +556,22 @@ static void ExteriaPassDotMetrics(NSUInteger count, CGFloat room, CGFloat *side,
     }
     CGFloat padTop = split ? 12 : below + 6 + DOT_SIDE + 28;
     CGFloat padHeight = height - padTop - 16;
+    BOOL widePad = !split && width >= 600 && height >= 600;
     CGFloat side = MAX(40, MIN(KEY_SIDE_MAX, (padHeight - 3 * KEY_GAP) / 4));
-    CGFloat padWidth = 3 * side + 2 * KEY_GAP;
+    CGFloat keyWidth = widePad ? (width - 64 - 2 * KEY_GAP) / 3 : side;
+    CGFloat keyHeight = widePad ? MAX(0, (padHeight - 3 * KEY_GAP) / 4) : side;
+    CGFloat padWidth = 3 * keyWidth + 2 * KEY_GAP;
     CGFloat padLeft = split ? width / 2 + (width / 2 - padWidth) / 2 : (width - padWidth) / 2;
-    if (split) padTop = MAX(8, (height - (4 * side + 3 * KEY_GAP)) / 2);
+    if (split) padTop = MAX(8, (height - (4 * keyHeight + 3 * KEY_GAP)) / 2);
     for (NSInteger row = 0; row < 4; ++row) {
         for (NSInteger column = 0; column < 3; ++column) {
-            CGRect frame = CGRectMake(padLeft + column * (side + KEY_GAP), padTop + row * (side + KEY_GAP), side, side);
+            CGRect frame = CGRectMake(padLeft + column * (keyWidth + KEY_GAP), padTop + row * (keyHeight + KEY_GAP), keyWidth, keyHeight);
             NSInteger digit = row < 3 ? row * 3 + column + 1 : (column == 1 ? 0 : -1);
             if (digit >= 0) {
                 UIButton *key = [_keys objectAtIndex:(NSUInteger)digit];
                 key.frame = frame;
-                key.layer.cornerRadius = side / 2;
+                key.layer.cornerRadius = widePad ? MIN(20, keyHeight / 2) : side / 2;
+                key.titleLabel.font = ExteriaFontRegular(widePad ? 36 : 30);
             } else if (column == 2) {
                 _delete.frame = frame;
             } else {
