@@ -42,6 +42,10 @@
     NSInteger _index;
     BOOL _moving;
     NSUInteger _token;
+    /* the pager is put on the page of _index only when that is stale: the pages were built again, the move ended or the width changed. a layout that put it there every time cut
+       short the swipe of a finger and the slide of a tap, since the circle of the public photo asks for one at each page it turns to */
+    BOOL _offsetStale;
+    CGFloat _laidWidth;
 }
 @end
 
@@ -184,6 +188,7 @@
         [_pages addObject:page];
         [_asked addObject:[NSNumber numberWithBool:NO]];
     }
+    _offsetStale = YES;
     [self setNeedsLayout];
 }
 
@@ -336,7 +341,12 @@
     _pager.frame = self.bounds;
     _pager.contentSize = CGSizeMake(size.width * (CGFloat)_pages.count, size.height);
     for (NSUInteger i = 0; i < _pages.count; ++i) [[_pages objectAtIndex:i] setFrame:CGRectMake(size.width * (CGFloat)i, 0, size.width, size.height)];
-    if (!_moving) _pager.contentOffset = CGPointMake(size.width * (CGFloat)_index, 0);
+    BOOL widthChanged = fabs(size.width - _laidWidth) > 0.5;
+    _laidWidth = size.width;
+    if (!_moving && (_offsetStale || widthChanged) && !_pager.isDragging && !_pager.isDecelerating) {
+        _pager.contentOffset = CGPointMake(size.width * (CGFloat)_index, 0);
+        _offsetStale = NO;
+    }
     CGFloat scrimHeight = MIN(size.height, 200);
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
@@ -433,6 +443,7 @@
 
 - (void)finishOpen {
     _moving = NO;
+    _offsetStale = YES;
     if (!_photos) [self loadList];
     BOOL pages = _photos.count > 0;
     _pager.hidden = !pages;
