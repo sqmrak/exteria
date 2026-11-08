@@ -4,6 +4,8 @@
 
 #import "exteria_notify_store.h"
 
+#include "exteria_notify.h"
+
 void ExteriaPlayAppSound(NSString *file) {
     static NSMutableDictionary *loaded;
     if (!file.length) return;
@@ -34,7 +36,7 @@ void ExteriaVibrateForCall(void) {
     AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
 }
 
-void ExteriaPlayInChatSound(BOOL incoming) {
+static void ExteriaPlayInChatFile(BOOL incoming, NSString *file) {
     static NSTimeInterval lastIn, lastOut;
     if (!ExteriaNotifyInChatSounds()) return;
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
@@ -42,5 +44,15 @@ void ExteriaPlayInChatSound(BOOL incoming) {
     if (incoming ? now - lastIn < 0.5 : now - lastOut < 0.1) return;
     if (incoming) lastIn = now;
     else lastOut = now;
-    ExteriaPlayAppSound(incoming ? @"sound_in.caf" : @"sound_out.caf");
+    ExteriaPlayAppSound(file);
+}
+
+void ExteriaPlayInChatSound(BOOL incoming) {
+    ExteriaPlayInChatFile(incoming, incoming ? @"sound_in.caf" : @"sound_out.caf");
+}
+
+void ExteriaPlayInChatSoundFromUser(long long userId) {
+    const char *tone = exteria_notify_user_tone(userId);
+    NSString *file = tone ? [NSString stringWithUTF8String:tone] : nil;
+    ExteriaPlayInChatFile(YES, file.length ? file : @"sound_in.caf");
 }

@@ -3623,12 +3623,22 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     for (NSNumber *key in [_server allKeys]) knownTop = MAX(knownTop, [key intValue]);
     [self mergeMessages:page];
     BOOL newest = NO, arrived = NO, pinChanged = NO;
+    /* who wrote the newest message that came in, for the tone that person has of their own */
+    int32_t arrivedId = 0;
+    long long arrivedSender = 0;
     for (ExteriaMessage *message in page) {
         /* somebody pinned a message: the bar at the top was made when the chat opened, so it is made again */
         if (message.messageId > knownTop && message.service == (int)EXTERIA_SERVICE_PIN + 1) pinChanged = YES;
         if (message.messageId > _markedRead && !message.outgoing) newest = YES;
         /* only a message past everything the screen held is news, so a refresh of the page makes no sound */
-        if (message.messageId > knownTop && !message.outgoing) arrived = YES;
+        if (message.messageId > knownTop && !message.outgoing) {
+            arrived = YES;
+            if (message.messageId > arrivedId) {
+                arrivedId = message.messageId;
+                /* a private chat may leave the sender out of a message, and then it is the other person */
+                arrivedSender = message.senderKey > 0 ? message.senderKey : (_dialog.peerKind == 1 ? _dialog.peerId : 0);
+            }
+        }
     }
     [self scheduleLiveMessages];
     if (pinChanged && !_pinnedList) {
@@ -3638,7 +3648,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     if (newest) {
         [self markReadIfNeeded];
     }
-    if (arrived && _visible && !_voice) ExteriaPlayInChatSound(YES);
+    if (arrived && _visible && !_voice) ExteriaPlayInChatSoundFromUser(arrivedSender);
 }
 
 /* asks the server for messages the store stopped showing; a failed ask leaves the list as it is */
