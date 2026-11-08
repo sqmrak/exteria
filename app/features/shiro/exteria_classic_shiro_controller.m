@@ -467,6 +467,8 @@ static void ExteriaClassicShiroTween(CALayer *layer, NSString *path, id from, id
 
 @interface ExteriaClassicShiroController () {
     UINavigationController *_nav;
+    /* a tablet shows the screen as a window in the middle, over the screen dimmed, and not over all of it for the sake of one button */
+    UIView *_dim;
     BOOL _closing;
 }
 @end
@@ -831,17 +833,38 @@ static UIImage *ExteriaClassicShiroChevron(UIColor *color) {
 }
 
 - (void)dealloc {
+    [_dim release];
     [_nav release];
     [super dealloc];
 }
+
+/* the window of a tablet: as wide as the sheet of the music player, and as tall as the screen allows */
+#define WINDOW_WIDTH 540.0
+#define WINDOW_HEIGHT 640.0
+#define WINDOW_MARGIN 40.0
+#define DIM_ALPHA 0.45
 
 - (void)loadView {
     UIView *root = [[[UIView alloc] init] autorelease];
     root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.view = root;
+    if (ExteriaIsPad()) {
+        _dim = [[UIView alloc] init];
+        _dim.backgroundColor = [UIColor blackColor];
+        _dim.alpha = 0;
+        _dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        _dim.frame = root.bounds;
+        [_dim addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(close)] autorelease]];
+        [root addSubview:_dim];
+    }
     [self addChildViewController:_nav];
     _nav.view.frame = root.bounds;
     _nav.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    if (_dim) {
+        _nav.view.autoresizingMask = UIViewAutoresizingNone;
+        _nav.view.layer.cornerRadius = 10;
+        _nav.view.layer.masksToBounds = YES;
+    }
     [root addSubview:_nav.view];
     [_nav didMoveToParentViewController:self];
 }
@@ -850,11 +873,31 @@ static UIImage *ExteriaClassicShiroChevron(UIColor *color) {
     [super viewDidLayoutSubviews];
     CGRect bounds = self.view.bounds;
     CGFloat top = ExteriaLayoutInsets(self).top;
+    if (_dim) {
+        CGFloat width = MIN(WINDOW_WIDTH, bounds.size.width - 2 * WINDOW_MARGIN);
+        CGFloat height = MIN(WINDOW_HEIGHT, bounds.size.height - top - 2 * WINDOW_MARGIN);
+        _dim.frame = bounds;
+        /* the window is moved by its transform while it comes and goes, and a frame set under a transform resizes it */
+        CGAffineTransform held = _nav.view.transform;
+        _nav.view.transform = CGAffineTransformIdentity;
+        _nav.view.frame = CGRectMake(floor((bounds.size.width - width) / 2), floor(top + (bounds.size.height - top - height) / 2), MAX(0, width), MAX(0, height));
+        _nav.view.transform = held;
+        return;
+    }
     _nav.view.frame = CGRectMake(0, top, bounds.size.width, MAX(0, bounds.size.height - top));
 }
 
 - (void)enter {
     [self.view layoutIfNeeded];
+    if (_dim) {
+        CGFloat travel = self.view.bounds.size.height;
+        _nav.view.transform = CGAffineTransformMakeTranslation(0, travel);
+        [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : ENTER_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
+            _dim.alpha = DIM_ALPHA;
+            _nav.view.transform = CGAffineTransformIdentity;
+        } completion:nil];
+        return;
+    }
     CGRect rest = self.view.frame;
     self.view.frame = CGRectOffset(rest, 0, rest.size.height);
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : ENTER_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
@@ -866,7 +909,12 @@ static UIImage *ExteriaClassicShiroChevron(UIColor *color) {
     if (_closing) return;
     _closing = YES;
     [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : ENTER_SECONDS delay:0 options:UIViewAnimationOptionCurveEaseIn animations:^{
-        self.view.frame = CGRectOffset(self.view.frame, 0, self.view.bounds.size.height);
+        if (_dim) {
+            _dim.alpha = 0;
+            _nav.view.transform = CGAffineTransformMakeTranslation(0, self.view.bounds.size.height);
+        } else {
+            self.view.frame = CGRectOffset(self.view.frame, 0, self.view.bounds.size.height);
+        }
     } completion:^(BOOL finished) {
         (void)finished;
         [self willMoveToParentViewController:nil];
