@@ -18,6 +18,28 @@ NSString *ExteriaPasscodeText(NSString *key, exteria_passcode_type type) {
     return NSLocalizedString(type == EXTERIA_PASSCODE_PASSWORD ? [key stringByAppendingString:@".password"] : key, nil);
 }
 
+static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) {
+    CGFloat width = key.bounds.size.width, height = key.bounds.size.height;
+    CGFloat side = MIN(width, height);
+    CGFloat normal = fabs(width - height) < 0.5 ? side / 2 : MIN(20, side / 2);
+    CGFloat radius = pressed ? MIN(normal, side * 0.19f) : normal;
+    CALayer *visible = (CALayer *)key.layer.presentationLayer;
+    CGFloat from = visible ? visible.cornerRadius : key.layer.cornerRadius;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    key.layer.cornerRadius = radius;
+    [CATransaction commit];
+    [key.layer removeAnimationForKey:@"keyShape"];
+    if (animated && side > 0) {
+        CABasicAnimation *shape = [CABasicAnimation animationWithKeyPath:@"cornerRadius"];
+        shape.fromValue = [NSNumber numberWithDouble:from];
+        shape.toValue = [NSNumber numberWithDouble:radius];
+        shape.duration = pressed ? 0.12 : 0.22;
+        shape.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        [key.layer addAnimation:shape forKey:@"keyShape"];
+    }
+}
+
 @interface ExteriaPasscodeEntryView () <UITextFieldDelegate> {
     UILabel *_titleLabel;
     UILabel *_messageLabel;
@@ -252,7 +274,15 @@ NSString *ExteriaPasscodeText(NSString *key, exteria_passcode_type type) {
     _inputEnabled = enabled;
     self.userInteractionEnabled = enabled;
     self.alpha = 1;
-    for (UIButton *key in _keys) key.enabled = enabled;
+    for (UIButton *key in _keys) {
+        key.enabled = enabled;
+        if (!enabled) {
+            [key.layer removeAllAnimations];
+            key.transform = CGAffineTransformIdentity;
+            key.backgroundColor = [self plateColor];
+            if (!ExteriaThemeIsClassic()) ExteriaPasscodeKeyShape(key, NO, NO);
+        }
+    }
     _delete.enabled = enabled;
     _biometricButton.enabled = enabled;
     _field.enabled = enabled;
@@ -433,10 +463,24 @@ static void ExteriaPassDotMetrics(NSUInteger count, CGFloat room, CGFloat *side,
 
 - (void)keyDown:(UIButton *)key {
     key.backgroundColor = [self plateDownColor];
+    if (!ExteriaThemeIsClassic())
+        ExteriaPasscodeKeyShape(key, YES, !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]);
+    if (!ExteriaThemeIsClassic() && !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]) {
+        [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
+                         animations:^{ key.transform = CGAffineTransformMakeScale(0.9f, 0.9f); } completion:nil];
+    }
 }
 
 - (void)keyUp:(UIButton *)key {
     key.backgroundColor = [self plateColor];
+    if (!ExteriaThemeIsClassic())
+        ExteriaPasscodeKeyShape(key, NO, !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]);
+    if (!ExteriaThemeIsClassic() && !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]) {
+        [UIView animateWithDuration:0.22 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
+                         animations:^{ key.transform = CGAffineTransformIdentity; } completion:nil];
+    } else {
+        key.transform = CGAffineTransformIdentity;
+    }
 }
 
 - (void)digitPressed:(UIButton *)key {
