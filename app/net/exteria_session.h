@@ -219,6 +219,8 @@ typedef void (^ExteriaListCompletion)(NSArray *items, NSString *errorName);
 /* the chats of the main list beyond the first request, for a search that has to see every chat and not the hundred the list keeps; known is what the screen already holds, and the answer is
    known followed by the chats that were not in it. A page that fails ends the walk with what came so far. */
 - (void)loadRemainingDialogsAfter:(NSArray *)known completion:(void (^)(NSArray *all))completion;
+/* whether the last answer for the main list was a slice, so chats are left beyond the first request */
+- (BOOL)mainListHasMore;
 - (void)loadDialogPageInFolder:(int32_t)folder after:(ExteriaDialog *)cursor completion:(void (^)(NSArray *items, ExteriaDialog *next, NSString *errorName))completion;
 /* the list as the last good load left it, so a screen can show it before the network answers; a nil list means
    nothing is kept yet and is not an error */

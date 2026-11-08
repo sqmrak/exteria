@@ -168,6 +168,7 @@
     int32_t _migrateDc;
     BOOL _dropKeyPending;
     BOOL _archiveLoading;
+    BOOL _mainListHasMore;
     BOOL _archiveSummaryStale;
     BOOL _archiveSummarySeen;
     uint64_t _archiveSummaryAtMs;
@@ -812,6 +813,10 @@ static NSString *ExteriaMachineName(void) {
     [done release];
 }
 
+- (BOOL)mainListHasMore {
+    return _mainListHasMore;
+}
+
 - (void)loadDialogs:(ExteriaListCompletion)completion {
     [self loadDialogsInFolder:0 completion:completion];
 }
@@ -862,6 +867,7 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item);
         return ExteriaConfigureDialogList(arena, request, folder);
     } parse:^NSArray *(const exteria_tl_value *answer) {
         hasMorePages = exteria_tl_is(answer, EXTERIA_TL_ID_messages_dialogsSlice);
+        if (folder == 0) _mainListHasMore = hasMorePages;
         NSArray *dialogs = [self dialogsFromAnswer:answer folder:folder];
         NSUInteger folders = 0;
         for (ExteriaDialog *entry in dialogs) if (entry.folder) ++folders;

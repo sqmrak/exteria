@@ -72,6 +72,9 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     ExteriaChatSwipe _swipe;
     NSArray *_dialogs;
     NSArray *_mainDialogs;
+    /* the chats of the main list beyond the first request, kept across reloads so a refresh that returns the first hundred does not cut the list back */
+    NSArray *_moreDialogs;
+    BOOL _moreLoading;
     NSMutableDictionary *_folderSnapshots;
     NSMutableDictionary *_folderSnapshotDates;
     BOOL _usingFolderSnapshot;
@@ -396,6 +399,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_openCell release];
     [_dialogs release];
     [_mainDialogs release];
+    [_moreDialogs release];
     [_folderSnapshots release];
     [_folderSnapshotDates release];
     [_leavingRows removeFromSuperview];
@@ -692,7 +696,64 @@ static CGFloat ExteriaChatsHeaderTop(void) {
             if (kept && ![controller->_folderSnapshots objectForKey:key]) show(kept);
             scan();
         }];
-    } else [self.session loadDialogsInFolder:_folderId completion:completion];
+    } else if (_folderId) {
+        [self.session loadDialogsInFolder:_folderId completion:completion];
+    } else {
+        ExteriaWeakReference *weak = _badgeWeak;
+        ExteriaListCompletion keptCompletion = [[completion copy] autorelease];
+        [self.session loadDialogsInFolder:0 completion:^(NSArray *items, NSString *errorName) {
+            ExteriaChatsController *controller = weak.target;
+            if (!items || !controller) { keptCompletion(items, errorName); return; }
+            keptCompletion([controller dialogsAppendingMoreTo:items], nil);
+            [controller loadMoreDialogsAfter:items];
+        }];
+    }
+}
+
+static NSString *ExteriaDialogListKey(ExteriaDialog *dialog) {
+    return [NSString stringWithFormat:@"%d:%lld", (int)dialog.peerKind, dialog.peerId];
+}
+
+/* a request returns the newest hundred chats, so the older ones that an earlier walk found are put back behind them */
+- (NSArray *)dialogsAppendingMoreTo:(NSArray *)items {
+    if (![_moreDialogs count]) return items;
+    NSMutableSet *keys = [NSMutableSet set];
+    for (ExteriaDialog *dialog in items) [keys addObject:ExteriaDialogListKey(dialog)];
+    NSMutableArray *all = [NSMutableArray arrayWithArray:items];
+    for (ExteriaDialog *dialog in _moreDialogs) if (![keys containsObject:ExteriaDialogListKey(dialog)]) [all addObject:dialog];
+    return all;
+}
+
+/* the main list stopped at the first hundred chats; the pages after it are walked once, and a failed page leaves the chats that came */
+- (void)loadMoreDialogsAfter:(NSArray *)first {
+    if (_moreLoading || _moreDialogs || ![self.session mainListHasMore]) return;
+    _moreLoading = YES;
+    ExteriaWeakReference *weak = _badgeWeak;
+    [self.session loadRemainingDialogsAfter:first completion:^(NSArray *all) {
+        ExteriaChatsController *controller = weak.target;
+        if (!controller) return;
+        controller->_moreLoading = NO;
+        NSMutableSet *keys = [NSMutableSet set];
+        for (ExteriaDialog *dialog in first) [keys addObject:ExteriaDialogListKey(dialog)];
+        NSMutableArray *more = [NSMutableArray array];
+        for (ExteriaDialog *dialog in all) if (![keys containsObject:ExteriaDialogListKey(dialog)]) [more addObject:dialog];
+        /* a walk that found nothing is asked again by the next reload */
+        if (!more.count) return;
+        controller->_moreDialogs = [more retain];
+        if (!controller.isViewLoaded) return;
+        /* the main list is whatever the updates made of the first page meanwhile; the new chats go behind it */
+        NSArray *merged = [[controller dialogsAppendingMoreTo:controller->_mainDialogs ? controller->_mainDialogs : first] retain];
+        [controller->_mainDialogs release];
+        controller->_mainDialogs = merged;
+        ExteriaSetMainDialogsSnapshot(merged);
+        /* a chat folder tab shows its own scan, which the main list does not replace */
+        if (controller->_folders.selectedFolder.folderId) return;
+        [controller->_dialogs release];
+        controller->_dialogs = [merged retain];
+        [controller refreshCounts];
+        [controller applyFilters];
+        [controller reloadTable];
+    }];
 }
 
 - (void)loadKeptItemsWithCompletion:(ExteriaListCompletion)completion {
