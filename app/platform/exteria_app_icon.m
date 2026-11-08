@@ -295,8 +295,9 @@ static NSError *ExteriaWriteUserIconFiles(NSString *name) {
             if (!image) return ExteriaIconFailure(9, @"the selected icon could not be read");
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, 1);
             /* this install keeps the primary names and their pre-rendered flag, so nothing masks the picture: the corners the original file has are cut here, which
-               also covers an opaque alternate file of a size that is not one of the rounded ones */
-            if (ExteriaPNGHasAlpha(original)) [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, width, height) cornerRadius:width * 0.18] addClip];
+               covers an opaque alternate file of a size that is not one of the rounded ones. an alternate that already carries its rounded corners is drawn as it is: cutting it
+               again at another radius edged it twice, which showed as a dark rim and uneven corners on the home screen */
+            if (ExteriaPNGHasAlpha(original) && !ExteriaPNGHasAlpha(best)) [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, width, height) cornerRadius:width * 0.18] addClip];
             [image drawInRect:CGRectMake(0, 0, width, height)];
             UIImage *resized = UIGraphicsGetImageFromCurrentImageContext();
             data = resized ? UIImagePNGRepresentation(resized) : nil;
