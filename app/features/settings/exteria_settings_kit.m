@@ -1325,9 +1325,11 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
 
 - (UIView *)headerView { return _headerView; }
 - (void)setHeaderView:(UIView *)view {
-    if (view == _headerView) return;
-    [_headerView release];
-    _headerView = [view retain];
+    if (view != _headerView) {
+        [_headerView release];
+        _headerView = [view retain];
+    }
+    /* a table takes the height of its head when the head is handed over, so a head that grew in place is handed over again, or the rows stay where the short one ended */
     if ([self isViewLoaded]) {
         _table.tableHeaderView = _classic ? [self classicTableHeader] : _headerView;
         [self.view setNeedsLayout];
