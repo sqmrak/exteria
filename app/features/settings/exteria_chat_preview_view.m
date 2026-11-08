@@ -51,6 +51,24 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     {YES, YES, nil, @"10:47", nil, nil, 0},
 };
 
+/* the classic bubble as the chat draws it: the picture with its tail on the side the bubble leans to, and the gloss over it at the real size */
+@interface ExteriaPreviewClassicShape : UIView {
+    BOOL _outgoing;
+}
+@property (nonatomic, assign) BOOL outgoing;
+@end
+
+@implementation ExteriaPreviewClassicShape
+@synthesize outgoing = _outgoing;
+- (void)drawRect:(CGRect)rect {
+    (void)rect;
+    UIImage *bubble = ExteriaClassicBubbleImage(_outgoing, YES);
+    if (!bubble) return;
+    [bubble drawInRect:self.bounds];
+    ExteriaClassicBubbleGloss(UIGraphicsGetCurrentContext(), self.bounds, _outgoing, YES);
+}
+@end
+
 /* one item of the preview: a bubble with its box, the picture of the classic style, the quote of the message it
    answers, the words */
 @interface ExteriaPreviewBubble : NSObject {
@@ -59,7 +77,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     BOOL sticker;
     NSInteger quoteColorId;
     UIView *box;
-    UIImageView *shape;
+    ExteriaPreviewClassicShape *shape;
     UIView *quotePlate;
     UIView *quoteBar;
     UILabel *quoteName;
@@ -166,7 +184,11 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
             bubble->box = [[UIView alloc] init];
             [self addSubview:bubble->box];
             /* the classic bubble is the glossy picture of the chat, in its plain form */
-            bubble->shape = [[UIImageView alloc] init];
+            bubble->shape = [[ExteriaPreviewClassicShape alloc] init];
+            bubble->shape.backgroundColor = [UIColor clearColor];
+            bubble->shape.opaque = NO;
+            bubble->shape.contentMode = UIViewContentModeRedraw;
+            bubble->shape.outgoing = _lines[i].outgoing;
             bubble->shape.hidden = !ExteriaThemeIsClassic();
             [bubble->box insertSubview:bubble->shape atIndex:0];
             bubble->text = [[[ExteriaEmojiLabel alloc] init] autorelease];
@@ -249,7 +271,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
             continue;
         }
         if (ExteriaThemeIsClassic()) {
-            bubble->shape.image = ExteriaClassicBubbleImage(out, NO);
+            [bubble->shape setNeedsDisplay];
             bubble->box.backgroundColor = [UIColor clearColor];
         } else {
             bubble->box.backgroundColor = out ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn();
@@ -342,7 +364,10 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
         /* the last line shares its row with the time only when both fit within the limit */
         BOOL beside = textWidth + 6 + timeWidth <= limit;
         CGFloat contentWidth = MAX(MAX(textWidth, quoteWidth), beside ? textWidth + 6 + timeWidth : timeWidth);
-        CGFloat boxWidth = MIN(limit, contentWidth) + 2 * BUBBLE_PAD_X;
+        /* the picture of a classic bubble keeps its tail on the side it leans to, and the words stand clear of it */
+        CGFloat tail = ExteriaThemeIsClassic() ? EXTERIA_CLASSIC_BUBBLE_TAIL : 0;
+        CGFloat lead = bubble->outgoing ? 0 : tail, trail = bubble->outgoing ? tail : 0;
+        CGFloat boxWidth = MIN(limit, contentWidth) + 2 * BUBBLE_PAD_X + tail;
         CGFloat reactionHeight = _quickReaction && bubble == [_bubbles objectAtIndex:0] ? 38 : 0;
         CGFloat boxHeight = BUBBLE_PAD_Y + quoteBlock + ceil(textSize.height) + (beside || reactionHeight ? 0 : meta - 2) + BUBBLE_PAD_Y + reactionHeight;
         if (apply) {
@@ -351,15 +376,15 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
             bubble->box.layer.cornerRadius = corner;
             bubble->box.frame = CGRectMake(x, y, boxWidth, boxHeight);
             bubble->shape.frame = bubble->box.bounds;
-            CGFloat inner = boxWidth - 2 * BUBBLE_PAD_X;
+            CGFloat inner = boxWidth - 2 * BUBBLE_PAD_X - tail;
             if (bubble->quotePlate) {
-                bubble->quotePlate.frame = CGRectMake(BUBBLE_PAD_X, BUBBLE_PAD_Y, inner, quoteHeight);
+                bubble->quotePlate.frame = CGRectMake(BUBBLE_PAD_X + lead, BUBBLE_PAD_Y, inner, quoteHeight);
                 [self layoutQuote:bubble width:inner height:quoteHeight line:quoteLine];
             }
-            bubble->text.frame = CGRectMake(BUBBLE_PAD_X, BUBBLE_PAD_Y + quoteBlock, inner, ceil(textSize.height));
-            if (reactionHeight) _quickReaction.frame = CGRectMake(BUBBLE_PAD_X, boxHeight - reactionHeight, inner, reactionHeight);
-            bubble->time.frame = CGRectMake(boxWidth - BUBBLE_PAD_X - timeWidth, boxHeight - BUBBLE_PAD_Y - meta + 2, timeText, meta);
-            bubble->checks.frame = CGRectMake(boxWidth - BUBBLE_PAD_X - CHECK_WIDTH + 2, boxHeight - BUBBLE_PAD_Y - meta + 4, 14, 10);
+            bubble->text.frame = CGRectMake(BUBBLE_PAD_X + lead, BUBBLE_PAD_Y + quoteBlock, inner, ceil(textSize.height));
+            if (reactionHeight) _quickReaction.frame = CGRectMake(BUBBLE_PAD_X + lead, boxHeight - reactionHeight, inner, reactionHeight);
+            bubble->time.frame = CGRectMake(boxWidth - BUBBLE_PAD_X - trail - timeWidth, boxHeight - BUBBLE_PAD_Y - meta + 2, timeText, meta);
+            bubble->checks.frame = CGRectMake(boxWidth - BUBBLE_PAD_X - trail - CHECK_WIDTH + 2, boxHeight - BUBBLE_PAD_Y - meta + 4, 14, 10);
         }
         y += boxHeight + BUBBLE_GAP;
     }
