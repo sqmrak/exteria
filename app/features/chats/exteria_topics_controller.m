@@ -33,6 +33,7 @@
     self.heading = forum.saved ? NSLocalizedString(@"chat.saved.dialogs", nil) : forum.title;
     self.showsBack = YES;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(draftChanged:) name:ExteriaDraftDidChangeNotification object:session.drafts];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogRead:) name:ExteriaDialogReadNotification object:session];
     return self;
 }
 
@@ -46,8 +47,14 @@
     if (affected.count) [self.table reloadRowsAtIndexPaths:affected withRowAnimation:UITableViewRowAnimationNone];
 }
 
+/* a topic was read here: its count goes from its row at once */
+- (void)dialogRead:(NSNotification *)note {
+    if (ExteriaDialogsApplyingRead(_topics, note.userInfo) && self.isViewLoaded) [self reloadTable];
+}
+
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDraftDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogReadNotification object:nil];
     [_weak clear];
     [_weak release];
     [_forum release];
@@ -56,6 +63,12 @@
     [_stickers release];
     [_closeHandler release];
     [super dealloc];
+}
+
+/* the list is fetched once, so a topic read or written in the chat opened over it kept its old count here until someone else wrote; coming back asks the server again */
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    if (_topics.count) [self reloadAfterCurrent];
 }
 
 - (void)loadItemsWithCompletion:(ExteriaListCompletion)completion {

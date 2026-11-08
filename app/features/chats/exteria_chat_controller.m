@@ -2983,6 +2983,13 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     [_foxes start];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    /* visible rows are unavailable until the table has entered the window */
+    [_table layoutIfNeeded];
+    [self markReadIfNeeded];
+}
+
 static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
 #define CHAT_SCROLL_KEPT_MAX 200
 
@@ -3806,12 +3813,30 @@ static NSString *const ExteriaListenedKey = @"exteria.voice.listened";
         if ((NSUInteger)path.row >= _items.count) continue;
         ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)path.row];
         ExteriaMessage *message = item.message;
-        if (!message.outgoing && message.messageId > newest) newest = message.messageId;
-        for (ExteriaMessage *part in item.albumMessages) if (!part.outgoing && part.messageId > newest) newest = part.messageId;
+        /* a message of ours counts as well: whoever wrote has seen all that stands before it, and the server takes the mark up to it as read. with only incoming ones counted, a chat whose
+           screen showed nothing but our own words, after the answer, never said anything of what it had shown above, and the count of the row stayed */
+        if (message.messageId > newest) newest = message.messageId;
+        for (ExteriaMessage *part in item.albumMessages) if (part.messageId > newest) newest = part.messageId;
     }
     if (newest <= _markedRead || newest <= _dialog.readInboxMaxId || [UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+    int32_t before = _markedRead;
     _markedRead = newest;
-    [_session markDialogRead:_dialog upTo:newest];
+    /* the end of the chat is in view when the history has nothing newer to load and the last row is on the screen, so no message is left unread beyond the one marked */
+    NSUInteger last = _items.count ? _items.count - 1 : NSNotFound;
+    BOOL toEnd = !_window && !_canLoadNewer && last != NSNotFound && [[_table indexPathsForVisibleRows] containsObject:[NSIndexPath indexPathForRow:(NSInteger)last inSection:0]];
+    ExteriaWeakReference *weak = _weak;
+    [_session markDialogRead:_dialog upTo:newest toEnd:toEnd completion:^(NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) {
+            /* the mark did not reach the server, so the next time the end comes into view says it again, instead of waiting for a newer message */
+            if (chat->_markedRead == newest) chat->_markedRead = before;
+            return;
+        }
+        NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:chat->_dialog.peerKind], @"kind", [NSNumber numberWithLongLong:chat->_dialog.peerId], @"peer",
+                              [NSNumber numberWithInt:chat->_dialog.topicId], @"topic", [NSNumber numberWithInt:newest], @"maxId", [NSNumber numberWithBool:toEnd], @"toEnd", nil];
+        ExteriaDialogsApplyingRead([NSArray arrayWithObject:chat->_dialog], info);
+    }];
 }
 
 - (void)scheduleVisibleMentionsRead {

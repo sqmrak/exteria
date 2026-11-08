@@ -307,6 +307,8 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshConnectionTitle)
                                                  name:ExteriaSessionConnectionDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogsChanged) name:ExteriaDialogsChangedNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogRead:) name:ExteriaDialogReadNotification object:_session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(outboxRead:) name:ExteriaReadOutboxDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(newMessageArrived:) name:ExteriaNewMessageDidArriveNotification object:_session];
     [self refreshConnectionTitle];
@@ -320,6 +322,18 @@
 - (void)dialogsChanged {
     [_loadedAt release];
     _loadedAt = [[NSDate distantPast] retain];
+}
+
+/* a chat was read here: the count of its row goes at once, where the list under the chat waited up to a minute for its own reload before it drew the count the server has now */
+/* the other side read our last message here: the double check comes to its row now */
+- (void)outboxRead:(NSNotification *)note {
+    if (ExteriaDialogsApplyingReadOutbox(_dialogs, note.userInfo) && self.isViewLoaded) [self reloadList:NO];
+}
+
+- (void)dialogRead:(NSNotification *)note {
+    if (!ExteriaDialogsApplyingRead(_dialogs, note.userInfo)) return;
+    [self refreshCounts];
+    if (self.isViewLoaded) [self reloadList:NO];
 }
 
 - (void)liveDialogsChanged:(NSNotification *)note {

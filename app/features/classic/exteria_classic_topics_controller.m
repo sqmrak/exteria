@@ -36,6 +36,7 @@
     _media = [media retain];
     _stickers = [stickers retain];
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogRead:) name:ExteriaDialogReadNotification object:session];
     _topics = [[NSArray alloc] init];
     NSString *heading = forum.saved ? NSLocalizedString(@"chat.saved.dialogs", nil) : forum.title;
     self.title = heading;
@@ -44,7 +45,13 @@
     return self;
 }
 
+/* a topic was read here: its count goes from its row at once */
+- (void)dialogRead:(NSNotification *)note {
+    if (ExteriaDialogsApplyingRead(_topics, note.userInfo) && [self isViewLoaded]) [self.tableView reloadData];
+}
+
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogReadNotification object:nil];
     [_weak clear];
     [_weak release];
     if ([self isViewLoaded]) {
@@ -121,6 +128,13 @@
         ExteriaClassicTopicsController *topics = weak.target;
         if (topics) [topics.tableView reloadData];
     }];
+}
+
+/* the list is fetched once, so a topic read or written in the chat opened over it kept its old count here, and only a message from someone else made the server say it again;
+   coming back to the list asks the server again */
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    if (_loaded) [self reload];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {

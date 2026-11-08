@@ -118,6 +118,8 @@ extern NSString *const ExteriaSessionConnectionDidChangeNotification;
 extern NSString *const ExteriaSessionDialogsUpdatedNotification;
 /* the other side read more of our messages in a chat; userInfo has kind, peer and maxId */
 extern NSString *const ExteriaReadOutboxDidChangeNotification;
+/* the server took the read mark of a chat of ours (the person read it here); userInfo has kind, peer, topic, maxId and toEnd, which ExteriaDialogsApplyingRead applies to a list */
+extern NSString *const ExteriaDialogReadNotification;
 /* posted on the main thread when a message arrives live: the last-message part of its chat row twice over under the keys "user" (a private chat names nobody) and "group" (the
    sender is named), both ExteriaDialog; ExteriaDialogsApplyingNewMessage puts the right one into a list */
 extern NSString *const ExteriaNewMessageDidArriveNotification;
@@ -379,8 +381,9 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)loadReactionLimits:(void (^)(int32_t standard, int32_t premium, NSString *errorName))completion;
 - (void)sendReactions:(NSArray *)reactions messageId:(int32_t)messageId dialog:(ExteriaDialog *)dialog
            completion:(ExteriaListCompletion)completion;
-/* tells the server everything up to maxId is read; a failure only shows in the log, the next open says it again */
-- (void)markDialogRead:(ExteriaDialog *)dialog upTo:(int32_t)maxId;
+/* tells the server everything up to maxId is read. toEnd says the person has seen the end of the chat, so nothing newer than maxId is unread. when the server has taken it the
+   ExteriaDialogReadNotification goes out, so the lists clear their counts at once, and completion runs on the main thread with nil, or with the error that stopped it */
+- (void)markDialogRead:(ExteriaDialog *)dialog upTo:(int32_t)maxId toEnd:(BOOL)toEnd completion:(void (^)(NSString *errorName))completion;
 - (void)markMentionsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 /* messages.readMessageContents: the voice notes, round videos and one-time media of these messages count as played or opened; the ids are NSNumbers */
 - (void)markContentsRead:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;

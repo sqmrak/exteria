@@ -461,6 +461,7 @@ exteria_status exteria_emoji_set_parse(const exteria_tl_value *answer, exteria_s
 exteria_status exteria_search_request(exteria_arena *arena, const char *query, exteria_search_kind kind, int32_t offset_rate,
                                       int32_t limit, exteria_tl_value **out);
 /* messages.readHistory, channels.readHistory for a channel, or messages.readDiscussion for a peer narrowed to a topic */
+int exteria_read_history_answer_valid(const exteria_peer_ref *peer, const exteria_tl_value *answer);
 exteria_status exteria_read_history_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t max_id,
                                            exteria_tl_value **out);
 /* the InputFileLocation of a ref, and of the thumbnail of a sticker set */

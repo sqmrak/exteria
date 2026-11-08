@@ -1585,18 +1585,41 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
     }];
 }
 
-- (void)markDialogRead:(ExteriaDialog *)dialog upTo:(int32_t)maxId {
+- (void)markDialogRead:(ExteriaDialog *)dialog upTo:(int32_t)maxId toEnd:(BOOL)toEnd completion:(void (^)(NSString *))completion {
+    void (^done)(NSString *) = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
-    if (maxId <= 0 || !exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return;
+    if (maxId <= 0 || !exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) {
+        if (done) done(@"NOT_SENT");
+        [done release];
+        return;
+    }
+    NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:dialog.peerKind], @"kind", [NSNumber numberWithLongLong:dialog.peerId], @"peer",
+                          [NSNumber numberWithInt:dialog.topicId], @"topic", [NSNumber numberWithInt:maxId], @"maxId", [NSNumber numberWithBool:toEnd], @"toEnd", nil];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         if (!exteria_read_action_allowed(ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead), EXTERIA_READ_AUTOMATIC)) return EXTERIA_E_RETRY;
         return exteria_read_history_request(arena, &peer, maxId, request);
     } handler:^(const exteria_mt_rpc_result *result) {
-        if (result->status == EXTERIA_OK) return;
-        if (result->status == EXTERIA_E_RETRY && ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) return;
-        NSString *error = ExteriaRpcErrorName(result);
-        [self noteRpcError:error];
-        NSLog(@"exteria: marking chat %lld read failed: %@", peer.id, error);
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) {
+            if (result->status == EXTERIA_E_RETRY && ExteriaChatFlagGet(ExteriaChatFlagGhostNoRead)) {
+                error = @"NOT_SENT";
+            } else {
+                error = ExteriaRpcErrorName(result);
+                [self noteRpcError:error];
+                NSLog(@"exteria: marking chat %lld read failed: %@", peer.id, error);
+            }
+        } else if (!exteria_read_history_answer_valid(&peer, result->value)) {
+            error = @"MALFORMED";
+            [self noteRpcError:error];
+            NSLog(@"exteria: marking chat %lld read returned an invalid answer", peer.id);
+        }
+        NSString *delivered = [[error copy] autorelease];
+        [self deliverMain:^{
+            /* the lists draw their counts from the rows they hold, and the server's own news of the read comes through a reload that can lag or wait out a flood limit */
+            if (!delivered) [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogReadNotification object:self userInfo:info];
+            if (done) done(delivered);
+            [done release];
+        }];
     }];
 }
 

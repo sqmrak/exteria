@@ -1431,6 +1431,7 @@ static void ExteriaClientFoldersChanged(void *ctx) {
 }
 
 NSString *const ExteriaNewMessageDidArriveNotification = @"ExteriaNewMessageDidArrive";
+NSString *const ExteriaDialogReadNotification = @"ExteriaDialogRead";
 
 static void ExteriaClientNewMessage(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users) {
     ExteriaSession *session = (ExteriaSession *)ctx;

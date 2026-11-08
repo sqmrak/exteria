@@ -194,6 +194,11 @@
 /* the row of this chat takes the message that just arrived: patch is the last-message part of a row made by ExteriaClientNewMessage for the same peer. NO when the message is
    not newer than the one the row shows, or the row is one that a message does not change (the archive, a community, a forum with its topics, the favorites) */
 - (BOOL)takeNewMessageFrom:(ExteriaDialog *)patch;
+/* the server took the read mark up to maxId: the mark moves, and the count and the unread flag go when nothing newer is left to read, which is so when the mark reaches the last
+   message or when toEnd says the person has seen the end of the chat. YES when anything changed */
+- (BOOL)applyReadUpTo:(int32_t)maxId toEnd:(BOOL)toEnd;
+/* the other side read more of what we wrote, up to maxId: the double check of the row, when its last message is ours and is covered. YES when the row changed */
+- (BOOL)applyReadOutboxUpTo:(int32_t)maxId;
 /* the chat with a contact, for a person who has no chat in the list yet; nil when no access hash is known */
 + (ExteriaDialog *)dialogWithPerson:(ExteriaPerson *)person;
 /* a chat known by its address and name alone, as the history of the search keeps one: enough to open it, drawn with initials until the list brings the photo */
@@ -227,3 +232,9 @@ NSArray *ExteriaDialogsReplacingArchive(NSArray *dialogs, ExteriaDialog *summary
 /* the dialogs with the chat of a live message moved up to where its time puts it and its row changed to show the message; nil when the list holds no such chat or the message is
    not news to it. userInfo is that of ExteriaNewMessageDidArriveNotification */
 NSArray *ExteriaDialogsApplyingNewMessage(NSArray *dialogs, NSDictionary *userInfo);
+
+/* what the chat list shows once the server has taken the read mark of a chat: the userInfo of ExteriaDialogReadNotification (kind, peer, topic, maxId, toEnd) is applied to the rows
+   of the chat, topic or not, and YES comes back when one of them changed, so the list draws again with no new request */
+BOOL ExteriaDialogsApplyingRead(NSArray *dialogs, NSDictionary *userInfo);
+/* the same for what the other side read of our messages: the userInfo of ExteriaReadOutboxDidChangeNotification (kind, peer, maxId) on the rows of the chat that are not topics */
+BOOL ExteriaDialogsApplyingReadOutbox(NSArray *dialogs, NSDictionary *userInfo);

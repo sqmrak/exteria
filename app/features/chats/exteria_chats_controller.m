@@ -109,6 +109,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(localMarksChanged) name:ExteriaLocalMarksDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerHostChanged) name:ExteriaPlayerHostDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogRead:) name:ExteriaDialogReadNotification object:session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(outboxRead:) name:ExteriaReadOutboxDidChangeNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(newMessageArrived:) name:ExteriaNewMessageDidArriveNotification object:session];
     self.heading = [self titleForMode:ExteriaChatListTitleStored() person:nil];
@@ -352,6 +354,18 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 - (BOOL)playerStripShowing { return _miniPlayer.showing; }
 
+/* a chat was read here: its count goes from the row now, without asking the server for the list, which can still answer with the old count or make the list wait */
+- (void)dialogRead:(NSNotification *)note {
+    if (!ExteriaDialogsApplyingRead(_dialogs, note.userInfo)) return;
+    [self refreshCounts];
+    if (self.isViewLoaded) [self reloadTable];
+}
+
+/* the other side read our last message here: the double check comes to its row now, as the list under a chat did not draw it until its next reload */
+- (void)outboxRead:(NSNotification *)note {
+    if (ExteriaDialogsApplyingReadOutbox(_dialogs, note.userInfo) && self.isViewLoaded) [self reloadTable];
+}
+
 - (BOOL)playerYielded {
     return [_chatsDelegate respondsToSelector:@selector(chatsControllerYieldsPlayer:)] && [_chatsDelegate chatsControllerYieldsPlayer:self];
 }
@@ -362,6 +376,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaPlayerHostDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogReadNotification object:self.session];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaReadOutboxDidChangeNotification object:self.session];
     [_feedSeen release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];

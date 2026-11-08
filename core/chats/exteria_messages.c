@@ -2070,6 +2070,13 @@ exteria_status exteria_search_request(exteria_arena *arena, const char *query, e
     return status;
 }
 
+
+int exteria_read_history_answer_valid(const exteria_peer_ref *peer, const exteria_tl_value *answer) {
+    if (!peer || !answer) return 0;
+    if (peer->topic_id > 0 || (peer->kind == 3 && !peer->self))
+        return exteria_tl_is(answer, EXTERIA_TL_ID_boolTrue);
+    return exteria_tl_is(answer, EXTERIA_TL_ID_messages_affectedMessages);
+}
 exteria_status exteria_read_history_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t max_id,
                                            exteria_tl_value **out) {
     exteria_tl_value *request, *input;

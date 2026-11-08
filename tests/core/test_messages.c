@@ -1767,6 +1767,18 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_read_history_request(&arena, &channel, 10, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_channels_readHistory);
     CHECK_EQ_INT(exteria_read_history_request(&arena, &user, 0, &request), EXTERIA_E_ARG);
+    {
+        exteria_tl_value *affected = obj("messages.affectedMessages");
+        exteria_tl_value *yes = obj("boolTrue");
+        exteria_tl_value *no = obj("boolFalse");
+        CHECK(exteria_read_history_answer_valid(&user, affected));
+        CHECK(!exteria_read_history_answer_valid(&user, yes));
+        CHECK(exteria_read_history_answer_valid(&channel, yes));
+        CHECK(!exteria_read_history_answer_valid(&channel, no));
+        CHECK(!exteria_read_history_answer_valid(&channel, affected));
+        CHECK(!exteria_read_history_answer_valid(NULL, yes));
+        CHECK(!exteria_read_history_answer_valid(&user, NULL));
+    }
 
     sticker.source = EXTERIA_MEDIA_SOURCE_DOCUMENT;
     CHECK_EQ_INT(exteria_media_location(&arena, &sticker, &request), EXTERIA_OK);

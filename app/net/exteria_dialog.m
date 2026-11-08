@@ -368,6 +368,36 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     return YES;
 }
 
+- (BOOL)applyReadUpTo:(int32_t)maxId toEnd:(BOOL)toEnd {
+    /* a forum row counts the unread messages of its topics, which only the topics can say */
+    if (_forum || _folder || _community) return NO;
+    BOOL changed = NO;
+    if (maxId > _readInboxMaxId) {
+        _readInboxMaxId = maxId;
+        changed = YES;
+    }
+    if ((toEnd || (_topMessage > 0 && maxId >= _topMessage)) && (_unreadCount > 0 || _unreadMark)) {
+        _unreadCount = 0;
+        _unreadMark = NO;
+        changed = YES;
+    }
+    return changed;
+}
+
+- (BOOL)applyReadOutboxUpTo:(int32_t)maxId {
+    if (_forum || _folder || _community) return NO;
+    BOOL changed = NO;
+    if (maxId > _readOutboxMaxId) {
+        _readOutboxMaxId = maxId;
+        changed = YES;
+    }
+    if (_outgoing && !_read && _topMessage > 0 && maxId >= _topMessage) {
+        _read = YES;
+        changed = YES;
+    }
+    return changed;
+}
+
 - (void)applyCommunityChats:(NSArray *)chats {
     if (!_community) return;
     [_communityChats release];
@@ -455,6 +485,30 @@ NSArray *ExteriaDialogsApplyingNewMessage(NSArray *dialogs, NSDictionary *userIn
     while (place < updated.count && ([[updated objectAtIndex:place] pinned] || [[updated objectAtIndex:place] folder])) ++place;
     [updated insertObject:dialog atIndex:place];
     return updated;
+}
+
+BOOL ExteriaDialogsApplyingRead(NSArray *dialogs, NSDictionary *userInfo) {
+    int kind = [[userInfo objectForKey:@"kind"] intValue];
+    long long peer = [[userInfo objectForKey:@"peer"] longLongValue];
+    int32_t topic = [[userInfo objectForKey:@"topic"] intValue], maxId = [[userInfo objectForKey:@"maxId"] intValue];
+    BOOL toEnd = [[userInfo objectForKey:@"toEnd"] boolValue], changed = NO;
+    for (ExteriaDialog *dialog in dialogs) {
+        if (dialog.folder || dialog.community || dialog.peerKind != kind || dialog.peerId != peer || dialog.topicId != topic) continue;
+        if ([dialog applyReadUpTo:maxId toEnd:toEnd]) changed = YES;
+    }
+    return changed;
+}
+
+BOOL ExteriaDialogsApplyingReadOutbox(NSArray *dialogs, NSDictionary *userInfo) {
+    int kind = [[userInfo objectForKey:@"kind"] intValue];
+    long long peer = [[userInfo objectForKey:@"peer"] longLongValue];
+    int32_t maxId = [[userInfo objectForKey:@"maxId"] intValue];
+    BOOL changed = NO;
+    for (ExteriaDialog *dialog in dialogs) {
+        if (dialog.folder || dialog.community || dialog.topicId || dialog.peerKind != kind || dialog.peerId != peer) continue;
+        if ([dialog applyReadOutboxUpTo:maxId]) changed = YES;
+    }
+    return changed;
 }
 
 NSArray *ExteriaDialogsFoldingCommunities(NSArray *dialogs) {
