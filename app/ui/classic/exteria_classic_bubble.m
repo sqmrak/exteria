@@ -108,28 +108,30 @@ void ExteriaClassicBubbleGloss(CGContextRef context, CGRect bounds, BOOL outgoin
     if (inner.size.width < 2 * GLOSS_RADIUS || inner.size.height < 2 * GLOSS_RADIUS) return;
     UIColor *top, *bottom, *outline;
     ExteriaClassicBubbleColors(outgoing, &top, &bottom, &outline);
+    (void)outline;
     BOOL dark = ExteriaThemeIsDark();
-    CGFloat t[3], b[3], o[3], mid[3], step[3];
+    CGFloat t[3], b[3], mid[3];
     ExteriaBubbleRGB(top, t);
     ExteriaBubbleRGB(bottom, b);
-    ExteriaBubbleRGB(outline, o);
     ExteriaBubbleMix(t, b, 0.35, mid);
-    ExteriaBubbleMix(mid, o, 0.10, step);
-    /* the upper half fades from the lit edge to the body, the lower half starts a shade darker at the middle, with the hard edge of the glass of the old chrome, and warms
-       back to the bottom color */
-    CGFloat colors[] = {t[0], t[1], t[2], 1,  mid[0], mid[1], mid[2], 1,  step[0], step[1], step[2], 1,  b[0], b[1], b[2], 1};
-    CGFloat at[] = {0, 0.49, 0.5, 1};
+    /* the lit edge fades into the body over a fixed height and the body stays flat below it. a step at the middle of the bubble split a tall message in two tones, and showed
+       as a line across the text of some bubbles and under the picture of others */
+    CGFloat colors[] = {t[0], t[1], t[2], 1,  mid[0], mid[1], mid[2], 1,  b[0], b[1], b[2], 1};
+    CGFloat at[] = {0, 0.4, 1};
     CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGGradientRef ramp = CGGradientCreateWithColorComponents(space, colors, at, 4);
+    CGGradientRef ramp = CGGradientCreateWithColorComponents(space, colors, at, 3);
+    CGFloat reach = MIN(inner.size.height, 2 * GLOSS_MAX_HEIGHT);
     CGContextSaveGState(context);
     [[UIBezierPath bezierPathWithRoundedRect:inner cornerRadius:GLOSS_RADIUS] addClip];
-    CGContextDrawLinearGradient(context, ramp, CGPointMake(0, inner.origin.y), CGPointMake(0, CGRectGetMaxY(inner)), 0);
+    CGContextDrawLinearGradient(context, ramp, CGPointMake(0, inner.origin.y), CGPointMake(0, inner.origin.y + reach), kCGGradientDrawsAfterEndLocation);
     CGContextRestoreGState(context);
     CGGradientRelease(ramp);
     /* a capsule of light on the upper part, with the oval of the glossy balloons of the old messaging apps */
     CGFloat height = MIN(GLOSS_MAX_HEIGHT, floor(inner.size.height * 0.46));
     CGRect capsule = CGRectMake(inner.origin.x + GLOSS_MARGIN, inner.origin.y + 2, inner.size.width - 2 * GLOSS_MARGIN, height);
-    CGFloat shine[] = {1, 1, 1, dark ? 0.30 : (outgoing ? 0.58 : 0.85),  1, 1, 1, dark ? 0.05 : 0.14};
+    /* the light dies out at the foot of the capsule: a floor of alpha there drew the rounded lower edge of the shape inside the bubble, which showed on the text bubbles and
+       never on the ones whose picture covers the top */
+    CGFloat shine[] = {1, 1, 1, dark ? 0.16 : 0.58,  1, 1, 1, 0};
     CGGradientRef light = CGGradientCreateWithColorComponents(space, shine, NULL, 2);
     CGContextSaveGState(context);
     [[UIBezierPath bezierPathWithRoundedRect:capsule cornerRadius:MIN(height / 2, GLOSS_RADIUS - 2)] addClip];

@@ -341,7 +341,7 @@ void ExteriaClassicBubbleColors(BOOL outgoing, UIColor **top, UIColor **bottom, 
     UIColor *white = [UIColor whiteColor], *black = [UIColor blackColor];
     if (ExteriaDark) {
         if (outgoing) {
-            *top = ExteriaMixedColor(accent, white, 0.10);
+            *top = ExteriaMixedColor(accent, black, 0.12);
             *bottom = ExteriaMixedColor(accent, black, 0.34);
             *outline = ExteriaMixedColor(accent, black, 0.68);
         } else {
@@ -351,8 +351,8 @@ void ExteriaClassicBubbleColors(BOOL outgoing, UIColor **top, UIColor **bottom, 
             *outline = ExteriaMixedColor([UIColor colorWithWhite:0.06 alpha:1], accent, 0.12);
         }
     } else if (outgoing) {
-        *top = ExteriaMixedColor(accent, white, 0.74);
-        *bottom = ExteriaMixedColor(accent, white, 0.52);
+        *top = ExteriaMixedColor(accent, white, 0.56);
+        *bottom = ExteriaMixedColor(accent, white, 0.36);
         *outline = ExteriaMixedColor(accent, black, 0.45);
     } else {
         *top = white;
