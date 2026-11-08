@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 #import "exteria_platform.h"
+#import "exteria_wave_progress.h"
 
 #include "exteria_motion.h"
 
@@ -91,8 +92,8 @@ static BOOL ExteriaViewTakesRightwardDrag(UIView *view) {
 /* the place of the touch is judged where it lands, since by the first movement the finger has left it */
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
     (void)gesture;
-    /* a slider that begins inside the edge strip (the seek bar of the player starts 16 points in) is dragged, never a swipe back */
-    if ([touch.view isKindOfClass:[UISlider class]]) return NO;
+    /* a seek bar that begins inside the edge strip (the wave bar of the profile player starts a few points in) is dragged, never a swipe back */
+    if ([touch.view isKindOfClass:[UISlider class]] || [touch.view isKindOfClass:[ExteriaWaveProgress class]]) return NO;
     if ([touch locationInView:_navigation.view].x < EDGE_WIDTH) return YES;
     for (UIView *view = touch.view; view && view != _navigation.view; view = view.superview) {
         if (ExteriaViewTakesRightwardDrag(view)) return NO;
