@@ -14,6 +14,7 @@
 /* the buttons of the profile stand over the lower edge of the photo; the words stand over them */
 #define ACTIONS_ROOM 84.0
 #define SWITCH_CIRCLE 26.0
+#define SWITCH_REACH 10.0
 
 @interface ExteriaProfileHeroView () {
     ExteriaSession *_session;
@@ -88,6 +89,7 @@
     _pager.hidden = YES;
     [self addSubview:_pager];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped:)] autorelease];
+    tap.delegate = self;
     [self addGestureRecognizer:tap];
     _scrim = [[CAGradientLayer layer] retain];
     _scrim.colors = [NSArray arrayWithObjects:(id)[UIColor colorWithWhite:0 alpha:0].CGColor, (id)[UIColor colorWithWhite:0 alpha:0.62].CGColor, nil];
@@ -347,9 +349,10 @@
     CGFloat switchWidth = 0;
     if (!_switch.hidden) {
         switchWidth = MIN(ceil([_switchLabel sizeThatFits:CGSizeMake(size.width, SWITCH_CIRCLE)].width), size.width / 2) + SWITCH_CIRCLE + 8;
-        _switch.frame = CGRectMake(size.width - 20 - switchWidth, size.height - _bottomRoom - 22 + 10 - SWITCH_CIRCLE / 2 - 2, switchWidth, SWITCH_CIRCLE + 4);
-        _switchThumb.frame = CGRectMake(0, 2, SWITCH_CIRCLE, SWITCH_CIRCLE);
-        _switchLabel.frame = CGRectMake(SWITCH_CIRCLE + 8, 2, switchWidth - SWITCH_CIRCLE - 8, SWITCH_CIRCLE);
+        /* the control reaches a fingertip past the circle and the words, which are small, and they stand inside it where they stood */
+        _switch.frame = CGRectMake(size.width - 20 - switchWidth - SWITCH_REACH, size.height - _bottomRoom - 22 + 10 - SWITCH_CIRCLE / 2 - 2 - SWITCH_REACH, switchWidth + 2 * SWITCH_REACH, SWITCH_CIRCLE + 4 + 2 * SWITCH_REACH);
+        _switchThumb.frame = CGRectMake(SWITCH_REACH, 2 + SWITCH_REACH, SWITCH_CIRCLE, SWITCH_CIRCLE);
+        _switchLabel.frame = CGRectMake(SWITCH_REACH + SWITCH_CIRCLE + 8, 2 + SWITCH_REACH, switchWidth - SWITCH_CIRCLE - 8, SWITCH_CIRCLE);
         switchWidth += 10;
     }
     _ratingBadge.frame = CGRectMake(20, size.height - _bottomRoom - 22, 22, 20);
@@ -384,7 +387,16 @@
 
 /* the swipe runs beside the scrolling of the list, which also sees the finger */
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
-    (void)gesture; (void)other;
+    (void)other;
+    return ![gesture isKindOfClass:[UITapGestureRecognizer class]];
+}
+
+/* a tap on the circle of the public photo or on the badge of the rating is theirs, and must not also turn the page */
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
+    (void)gesture;
+    for (UIView *view = touch.view; view && view != self; view = view.superview) {
+        if ([view isKindOfClass:[UIControl class]]) return NO;
+    }
     return YES;
 }
 
