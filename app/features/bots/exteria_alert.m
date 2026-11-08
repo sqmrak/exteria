@@ -1,6 +1,8 @@
 #import "exteria_platform.h"
 #import "exteria_alert_view.h"
 #import "exteria_alert.h"
+#import "exteria_sheet.h"
+#import "exteria_theme.h"
 
 #import <UIKit/UIKit.h>
 
@@ -138,6 +140,16 @@ void ExteriaChoose(NSString *title, NSArray *choices, NSInteger destructiveIndex
 }
 
 void ExteriaChooseFromView(UIView *source, NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index)) {
+    /* the modern style lists the choices on the sheet of the application, from the bottom on a phone and an ipad alike; the classic style keeps the system sheet */
+    UIView *overlay = ExteriaThemeIsClassic() ? nil : ExteriaOverlayHost();
+    if (overlay) {
+        NSIndexSet *destructive = destructiveIndex >= 0 && destructiveIndex < (NSInteger)choices.count ? [NSIndexSet indexSetWithIndex:(NSUInteger)destructiveIndex] : nil;
+        [ExteriaSheet presentInView:overlay title:title message:nil options:choices destructive:destructive cancelTitle:NSLocalizedString(@"picker.cancel", nil)
+                            handler:^(NSUInteger index) {
+            if (handler) handler((NSInteger)index);
+        }];
+        return;
+    }
     Class sheetClass = NSClassFromString(@"UIActionSheet");
     ExteriaAlertTarget *target = [[ExteriaAlertTarget alloc] init];
     target->sheetHandler = [handler copy];

@@ -8,11 +8,12 @@
 #import "exteria_theme.h"
 #import "exteria_platform.h"
 #import "exteria_weak_reference.h"
+#import "exteria_alert.h"
 #import "exteria_symbol.h"
 #import <CoreLocation/CoreLocation.h>
 #import <QuartzCore/QuartzCore.h>
 
-@interface ExteriaLocationController () <ExteriaMapViewDelegate,UITableViewDataSource,UITableViewDelegate,UISearchBarDelegate,CLLocationManagerDelegate,UIActionSheetDelegate> {
+@interface ExteriaLocationController () <ExteriaMapViewDelegate,UITableViewDataSource,UITableViewDelegate,UISearchBarDelegate,CLLocationManagerDelegate> {
     ExteriaSession *_session;
     ExteriaDialog *_dialog;
     ExteriaWeakReference *_weak;
@@ -491,17 +492,17 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
 - (void)zoomIn { _map.zoom=_map.zoom+1; }
 - (void)zoomOut { _map.zoom=_map.zoom-1; }
 - (void)showActions {
-    UIActionSheet *sheet=[[[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:NSLocalizedString(@"attach.cancel",nil)
-        destructiveButtonTitle:nil otherButtonTitles:NSLocalizedString(@"map.copy_coordinates",nil),NSLocalizedString(@"map.copy_link",nil),NSLocalizedString(@"map.open_osm",nil),nil] autorelease];
-    sheet.tag=2; [sheet showInView:self.view];
-}
-- (void)actionSheet:(UIActionSheet *)sheet clickedButtonAtIndex:(NSInteger)index {
-    if (index==sheet.cancelButtonIndex || _closed) return;
-    NSString *link=[NSString stringWithFormat:@"https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f#map=15/%.6f/%.6f",
-        _location.latitude,_location.longitude,_location.latitude,_location.longitude];
-    if (index==0) [UIPasteboard generalPasteboard].string=[NSString stringWithFormat:@"%.6f, %.6f",_location.latitude,_location.longitude];
-    else if (index==1) [UIPasteboard generalPasteboard].string=link;
-    else if (index==2) [[UIApplication sharedApplication] openURL:[NSURL URLWithString:link]];
+    NSArray *choices=[NSArray arrayWithObjects:NSLocalizedString(@"map.copy_coordinates",nil),NSLocalizedString(@"map.copy_link",nil),NSLocalizedString(@"map.open_osm",nil),nil];
+    ExteriaWeakReference *weak=_weak;
+    ExteriaChoose(nil, choices, -1, ^(NSInteger index) {
+        ExteriaLocationController *me=weak.target;
+        if (!me || me->_closed) return;
+        NSString *link=[NSString stringWithFormat:@"https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f#map=15/%.6f/%.6f",
+            me->_location.latitude,me->_location.longitude,me->_location.latitude,me->_location.longitude];
+        if (index==0) [UIPasteboard generalPasteboard].string=[NSString stringWithFormat:@"%.6f, %.6f",me->_location.latitude,me->_location.longitude];
+        else if (index==1) [UIPasteboard generalPasteboard].string=link;
+        else if (index==2) [[UIApplication sharedApplication] openURL:[NSURL URLWithString:link]];
+    });
 }
 - (void)cancel {
     if (_closed) return;
