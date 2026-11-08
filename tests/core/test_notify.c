@@ -431,6 +431,69 @@ static void test_rules(void) {
     CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
 }
 
+/* the tone of one person: it follows their id in a private chat and in a group, over the sound the chat asks for, and never makes a banner for a muted chat */
+static void test_user_tone(void) {
+    exteria_notify_state state;
+    exteria_notify_settings s = settings();
+    exteria_dialog_row r;
+    exteria_notify_event events[4];
+    size_t more;
+    CHECK(!strcmp(exteria_notify_user_tone(8202789099LL), "sqmrak.caf"));
+    CHECK(exteria_notify_user_tone(8202789098LL) == NULL);
+    CHECK(exteria_notify_user_tone(0) == NULL);
+    CHECK(exteria_notify_user_tone(-8202789099LL) == NULL);
+
+    /* a private chat with that person */
+    exteria_notify_state_init(&state);
+    r = row(8202789099LL, 10, "sqmrak", "hi");
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 0);
+    r.top_message = 11;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
+    CHECK_EQ_INT(events[0].sound.kind, EXTERIA_SOUND_LOCAL);
+    CHECK(!strcmp(events[0].sound.data, "sqmrak.caf"));
+    /* the sound the chat asked for does not hold against the tone of the person */
+    r.notify.has_silent = 1;
+    r.notify.silent = 1;
+    r.top_message = 12;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
+    CHECK_EQ_INT(events[0].sound.kind, EXTERIA_SOUND_LOCAL);
+    /* a muted chat has no banner, so no tone either */
+    r.notify.has_mute = 1;
+    r.notify.mute_until = EXTERIA_NOTIFY_MUTE_FOREVER;
+    r.top_message = 13;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 0);
+
+    /* someone else keeps the tone of the chat */
+    exteria_notify_state_init(&state);
+    r = row(55, 10, "Ann", "hi");
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 0);
+    r.top_message = 11;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
+    CHECK_EQ_INT(events[0].sound.kind, EXTERIA_SOUND_DEFAULT);
+
+    /* a group: the sender of the newest message decides, not the group */
+    exteria_notify_state_init(&state);
+    r = row(77, 10, "Group", "hi");
+    r.peer_kind = 2;
+    r.kind = EXTERIA_DIALOG_GROUP;
+    snprintf(r.sender, sizeof(r.sender), "%s", "sqmrak");
+    r.sender_id = 1234;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 0);
+    r.top_message = 11;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
+    CHECK_EQ_INT(events[0].sound.kind, EXTERIA_SOUND_DEFAULT);
+    r.sender_id = 8202789099LL;
+    r.top_message = 12;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
+    CHECK_EQ_INT(events[0].sound.kind, EXTERIA_SOUND_LOCAL);
+    CHECK(!strcmp(events[0].sound.data, "sqmrak.caf"));
+    /* a post of a channel or of an anonymous admin names no sender */
+    r.sender_id = 0;
+    r.top_message = 13;
+    CHECK_EQ_INT(run(&state, &s, &r, 1, events, 4, &more), 1);
+    CHECK_EQ_INT(events[0].sound.kind, EXTERIA_SOUND_DEFAULT);
+}
+
 int main(void) {
     test_baseline_and_new();
     test_long_body();
@@ -441,5 +504,6 @@ int main(void) {
     test_state_file();
     test_lines();
     test_rules();
+    test_user_tone();
     return test_finish("test_notify");
 }
