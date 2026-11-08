@@ -13,6 +13,7 @@
 #import "exteria_force_touch.h"
 #import "exteria_music_player.h"
 #import "exteria_round_playback.h"
+#import "exteria_audio_session.h"
 
 /* the swell of a playing video message and its settling back, shared by the circle, its ring and the buttons on it so they move as one */
 #define ROUND_SWELL_SECONDS 0.32
@@ -2549,6 +2550,11 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         return;
     }
     picture.preferredTransform = video.preferredTransform;
+    /* an AVPlayer takes the audio session the first time it plays, even a player with no sound track, and the default session of the application does not mix, so the music that
+       played (of another application, or ours left on the session of its own) stopped as the first animation of the chat began. a session that mixes is taken first; a call, a recording
+       and a song of ours are on sessions of their own and are left as they are */
+    NSString *category = ExteriaAudioSessionCategory();
+    if (![category isEqualToString:ExteriaAudioCategoryPlayAndRecord()] && ![category isEqualToString:ExteriaAudioCategoryPlayback()]) ExteriaAudioSessionBeginMixedPlayback();
     _gifItem = [[AVPlayerItem playerItemWithAsset:silent] retain];
     _gifPlayer = [[AVPlayer playerWithPlayerItem:_gifItem] retain];
     _gifPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
