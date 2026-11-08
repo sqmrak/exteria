@@ -251,6 +251,13 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
     return still ? still : [self imageForDocument:document];
 }
 
++ (void)replaceStillImage:(UIImage *)image forDocument:(long long)document {
+    CGImageRef bitmap = image.CGImage;
+    if (!bitmap) return;
+    NSUInteger cost = CGImageGetBytesPerRow(bitmap) * CGImageGetHeight(bitmap);
+    [ExteriaCustomPictures() setObject:image forKey:[NSNumber numberWithLongLong:document] cost:cost];
+}
+
 + (BOOL)needsLoad:(long long)document {
     NSNumber *key = [NSNumber numberWithLongLong:document];
     if ([ExteriaCustomPictures() objectForKey:key] || [ExteriaCustomSet(&ExteriaLoading) containsObject:key]) return NO;

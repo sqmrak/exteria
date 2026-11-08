@@ -34,6 +34,9 @@ extern NSString *const ExteriaCustomEmojiDidLoadNotification;
 /* the still picture at full size, even for an animated emoji, whose frames (imageForDocument:) are drawn at half the size of the still to keep a screenful of them light; for a picture
    that is drawn large and does not move, such as the icon of a forum topic */
 + (UIImage *)stillImageForDocument:(long long)document;
+/* the first frame of an animated emoji drawn at the full size of a picture takes the place of the server thumbnail, which is all the still of an animated document is until then and was soft
+   when a topic icon drew it at 48 points */
++ (void)replaceStillImage:(UIImage *)image forDocument:(long long)document;
 
 /* whether a loader should fetch the picture now: it is not in memory, not on its way, and did not fail in the last minute */
 + (BOOL)needsLoad:(long long)document;

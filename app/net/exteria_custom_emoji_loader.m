@@ -44,6 +44,8 @@ static void ExteriaEmojiBuilderEnded(void);
     NSUInteger _step;
     NSUInteger _next;
     NSUInteger _side;
+    /* the first frame is drawn once at the full size of a picture before the small ones, to stand as the still */
+    BOOL _stillPass;
     void (^_landed)(void);
 }
 /* landed runs on the main thread once the frames are in, so the places that drew the still picture draw the motion */
@@ -109,10 +111,19 @@ static void ExteriaEmojiBuilderEnded(void);
     /* every few frames, enough to keep the motion at about twenty a second without holding all of a long animation */
     _step = MAX((NSUInteger)ceil(fps / ANIMATION_FPS_MAX), (NSUInteger)ceil((double)count / ANIMATION_FRAMES_MAX));
     _next = 0;
+    _stillPass = YES;
     [self renderNext];
 }
 
 - (void)renderNext {
+    if (_stillPass) {
+        if (![_lottie requestFrame:0 side:(NSUInteger)ceil([ExteriaCustomEmoji pictureSide])]) {
+            [self performSelector:@selector(renderNext) withObject:nil afterDelay:0.01];
+            return;
+        }
+        [self collect];
+        return;
+    }
     if (_next >= _lottie.frameCount) {
         double fps = _lottie.framesPerSecond;
         [ExteriaCustomEmoji setAnimationFrames:_frames duration:(double)_lottie.frameCount / fps forDocument:_document];
@@ -140,6 +151,12 @@ static void ExteriaEmojiBuilderEnded(void);
     UIImage *frame = [UIImage imageWithCGImage:image scale:1 orientation:UIImageOrientationUp];
     CGImageRelease(image);
     UIImage *fitted = ExteriaFitEmojiImage(frame);
+    if (_stillPass) {
+        _stillPass = NO;
+        [ExteriaCustomEmoji replaceStillImage:fitted ? fitted : frame forDocument:_document];
+        [self renderNext];
+        return;
+    }
     [_frames addObject:fitted ? fitted : frame];
     _next += _step;
     [self renderNext];
