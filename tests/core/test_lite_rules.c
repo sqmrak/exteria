@@ -3,7 +3,7 @@
 
 static void test_presets(void) {
     /* the numbers writes beside its presets */
-    CHECK_EQ_INT(exteria_lite_default_value(EXTERIA_LITE_CLASS_LOW), 198684);
+    CHECK_EQ_INT(exteria_lite_default_value(EXTERIA_LITE_CLASS_LOW), 198687);
     CHECK_EQ_INT(exteria_lite_default_value(EXTERIA_LITE_CLASS_AVERAGE), 204383);
     CHECK_EQ_INT(exteria_lite_default_value(EXTERIA_LITE_CLASS_HIGH), 262143);
     CHECK_EQ_INT(exteria_lite_default_value((exteria_lite_class)9), 262143);
@@ -31,7 +31,15 @@ static void test_account_bits(void) {
 
 static void test_enabled(void) {
     uint32_t low = exteria_lite_default_value(EXTERIA_LITE_CLASS_LOW), high = exteria_lite_default_value(EXTERIA_LITE_CLASS_HIGH);
-    CHECK(!exteria_lite_enabled(low, 0, EXTERIA_LITE_STICKERS_CHAT, 0));
+    /* the animated stickers run on the low preset, in the chat and in the keyboard; what is heavier stays off */
+    CHECK(exteria_lite_enabled(low, 0, EXTERIA_LITE_STICKERS_CHAT, 0));
+    CHECK(exteria_lite_enabled(low, 0, EXTERIA_LITE_STICKERS_KEYBOARD, 0));
+    /* the panel of stickers has no switch of its own and follows the one of the chat, whatever its own bit says */
+    CHECK(exteria_lite_enabled(EXTERIA_LITE_STICKERS_CHAT, 0, EXTERIA_LITE_STICKERS_KEYBOARD, 0));
+    CHECK(!exteria_lite_enabled(EXTERIA_LITE_STICKERS_KEYBOARD, 0, EXTERIA_LITE_STICKERS_KEYBOARD, 0));
+    CHECK(!exteria_lite_enabled(EXTERIA_LITE_STICKERS_CHAT, 1, EXTERIA_LITE_STICKERS_KEYBOARD, 0));
+    CHECK(!exteria_lite_enabled(low, 0, EXTERIA_LITE_CHAT_BACKGROUND, 0));
+    CHECK(!exteria_lite_enabled(low, 0, EXTERIA_LITE_AUTOPLAY_VIDEOS, 0));
     CHECK(exteria_lite_enabled(high, 0, EXTERIA_LITE_STICKERS_CHAT, 0));
     CHECK(exteria_lite_enabled(high, 0, EXTERIA_LITE_CHAT_BACKGROUND, 0));
     CHECK(!exteria_lite_enabled(low, 0, EXTERIA_LITE_CALLS, 1));

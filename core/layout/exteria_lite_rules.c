@@ -1,7 +1,9 @@
 #include "exteria_lite_rules.h"
 
-#define LOW_PRESET (EXTERIA_LITE_EMOJI_CHAT_PREMIUM | EXTERIA_LITE_EMOJI_KEYBOARD_PREMIUM | EXTERIA_LITE_EMOJI_REACTIONS_PREMIUM | EXTERIA_LITE_AUTOPLAY_GIFS | \
-                    EXTERIA_LITE_CHAT_THANOS | EXTERIA_LITE_PARTICLES)
+/* the animated stickers run on the weakest class too: an ipad with 512 MB (the ipad 2, the first mini) sat on this preset and its stickers never moved, with a switch on the screen of the
+   animations that the person had no reason to look for. the person who wants them still can turn them off there */
+#define LOW_PRESET (EXTERIA_LITE_STICKERS_KEYBOARD | EXTERIA_LITE_STICKERS_CHAT | EXTERIA_LITE_EMOJI_CHAT_PREMIUM | EXTERIA_LITE_EMOJI_KEYBOARD_PREMIUM | \
+                    EXTERIA_LITE_EMOJI_REACTIONS_PREMIUM | EXTERIA_LITE_AUTOPLAY_GIFS | EXTERIA_LITE_CHAT_THANOS | EXTERIA_LITE_PARTICLES)
 #define MEDIUM_PRESET (EXTERIA_LITE_STICKERS_KEYBOARD | EXTERIA_LITE_STICKERS_CHAT | EXTERIA_LITE_EMOJI_KEYBOARD_PREMIUM | EXTERIA_LITE_EMOJI_REACTIONS_PREMIUM | \
                        EXTERIA_LITE_EMOJI_CHAT_PREMIUM | EXTERIA_LITE_EMOJI_CHAT_NOT_PREMIUM | EXTERIA_LITE_CHAT_FORUM_TWOCOLUMN | EXTERIA_LITE_CALLS | \
                        EXTERIA_LITE_AUTOPLAY_VIDEOS | EXTERIA_LITE_AUTOPLAY_GIFS | EXTERIA_LITE_CHAT_THANOS | EXTERIA_LITE_PARTICLES)
@@ -41,6 +43,9 @@ uint32_t exteria_lite_for_account(uint32_t flag, int premium) {
 
 int exteria_lite_enabled(uint32_t value, int power_saver_applied, uint32_t flag, int premium) {
     if (power_saver_applied) return 0;
+    /* the panel of stickers has no switch on the screen of the animations: the one that says animated stickers is the chat's, and the stickers of the panel follow it. the panel kept
+       the bit its preset gave it however the person moved the switch, and stickers turned on there never moved in the panel */
+    if (flag == EXTERIA_LITE_STICKERS_KEYBOARD) flag = EXTERIA_LITE_STICKERS_CHAT;
     return (value & exteria_lite_for_account(flag, premium)) != 0;
 }
 
