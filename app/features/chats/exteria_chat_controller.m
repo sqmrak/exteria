@@ -5049,7 +5049,10 @@ static void ExteriaRedrawTree(UIView *view) {
     for (NSIndexPath *path in [_table indexPathsForVisibleRows]) {
         if ((NSUInteger)path.row >= _items.count) continue;
         ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)path.row];
-        NSMutableArray *messages = [NSMutableArray arrayWithObject:item.message];
+        /* the day marker and the unread line are rows without a message, and arrayWithObject: throws on nil: on ios 6 that took the app down from this delayed call as soon as
+           one of them was on the screen with an unseen reaction */
+        NSMutableArray *messages = [NSMutableArray array];
+        if (item.message) [messages addObject:item.message];
         [messages addObjectsFromArray:item.albumMessages];
         for (ExteriaMessage *message in messages) {
             NSUInteger at = [_unreadReactionIds indexOfObject:[NSNumber numberWithInt:message.messageId]];
