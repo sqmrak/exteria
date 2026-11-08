@@ -3,7 +3,7 @@
 #import "exteria_theme.h"
 
 /* the corners and the tail of the cut pictures, in points: the side with the tail holds the tail and a corner, the others a corner */
-#define CAP_CORNER 12.0
+#define CAP_CORNER EXTERIA_CLASSIC_BUBBLE_CORNER
 #define CAP_PLAIN 13.0
 /* lightness of the grey template at which the body color sits; the edge goes dark below it, and everything above it is the body */
 #define BODY_LIGHTNESS_OUT 0.72

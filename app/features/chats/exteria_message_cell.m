@@ -36,7 +36,9 @@
 #define JOIN_RADIUS 5.0
 /* the corner of a modern bubble, which the person sets in the chat settings; the corner that tucks in against a neighbour is never larger than it */
 static CGFloat ExteriaBubbleRadius(void) {
-    return (CGFloat)ExteriaChatBubbleRadius();
+    /* the picture of a classic bubble has the corners of that picture, not the radius the modern bubbles are set to, or a photo cut to the wrong curve shows its own corner
+       against the rim of the bubble */
+    return ExteriaThemeIsClassic() ? EXTERIA_CLASSIC_BUBBLE_CORNER : (CGFloat)ExteriaChatBubbleRadius();
 }
 #define MEDIA_BUTTON 48.0
 #define VOICE_BUTTON 44.0
