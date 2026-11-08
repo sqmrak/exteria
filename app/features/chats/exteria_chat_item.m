@@ -610,6 +610,10 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
         item->_fileTitle = [NSLocalizedString(@"preview.paid", nil) copy];
         item->_fileDetail = [[NSString stringWithFormat:NSLocalizedString(@"chat.paid.unlock", nil), media.paidStars] copy];
         break;
+    case EXTERIA_PREVIEW_STORY:
+        item->_content = ExteriaChatItemContentFile;
+        item->_fileTitle = [NSLocalizedString(@"preview.story", nil) copy];
+        break;
     case EXTERIA_PREVIEW_OTHER:
         item->_content = ExteriaChatItemContentFile;
         item->_fileTitle = [NSLocalizedString(@"chat.unsupported", nil) copy];

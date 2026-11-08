@@ -308,6 +308,8 @@ void exteria_media_classify_sized(const exteria_tl_value *media, int32_t photo_t
             if (exteria_tl_has(first, "video_duration")) exteria_tl_get_i32(first, "video_duration", &out->duration);
         }
         out->paid_stars = stars;
+    } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaStory)) {
+        out->kind = EXTERIA_PREVIEW_STORY;
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaContact)) {
         out->kind = EXTERIA_PREVIEW_CONTACT;
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaPoll)) {

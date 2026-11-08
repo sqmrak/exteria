@@ -69,6 +69,15 @@ static exteria_tl_value *vec_of(exteria_tl_value **items, uint32_t n) {
     return v;
 }
 
+static void test_story_media(void) {
+    exteria_media_info info;
+    exteria_tl_value *media = obj("messageMediaStory");
+    /* a story sent into a chat is a message that names it, not an unsupported one */
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_STORY);
+    CHECK_EQ_INT(info.ref.source, EXTERIA_MEDIA_SOURCE_NONE);
+}
+
 static void test_paid_media(void) {
     exteria_media_info info;
     exteria_tl_value *media = obj("messageMediaPaidMedia"), *preview = obj("messageExtendedMediaPreview"), *items[1];
@@ -2102,6 +2111,7 @@ static void test_uploaded_media_reply(void) {
 int main(void) {
     exteria_arena_init(&arena, 1u << 20);
     test_paid_media();
+    test_story_media();
     test_history_page_cursor();
     test_text_message();
     test_edit_hide();
