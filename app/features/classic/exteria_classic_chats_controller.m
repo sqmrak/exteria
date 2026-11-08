@@ -324,15 +324,15 @@
     _loadedAt = [[NSDate distantPast] retain];
 }
 
-/* a chat was read here: the count of its row goes at once, where the list under the chat waited up to a minute for its own reload before it drew the count the server has now */
 /* the other side read our last message here: the double check comes to its row now */
 - (void)outboxRead:(NSNotification *)note {
     if (ExteriaDialogsApplyingReadOutbox(_dialogs, note.userInfo) && self.isViewLoaded) [self reloadList:NO];
 }
 
+/* a chat was read here: the count of its row goes at once, where the list under the chat waited up to a minute for its own reload before it drew the count the server has now */
 - (void)dialogRead:(NSNotification *)note {
     if (!ExteriaDialogsApplyingRead(_dialogs, note.userInfo)) return;
-    [self refreshCounts];
+    [self reportUnread];
     if (self.isViewLoaded) [self reloadList:NO];
 }
 
