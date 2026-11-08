@@ -773,7 +773,10 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 }
 
 /* the height the bubble takes at the foot of the list, with its gap */
-#define TYPING_SPACE 36.0
+/* the room under the last message that the three dots take, with the gap above them: the dots stood three points from the message and read as part of it; the footer grows by the six
+   points the gap gained, so the room under the dots stays what it was */
+#define TYPING_GAP 9.0
+#define TYPING_SPACE 42.0
 
 /* a window around an old message, a list of pins and the notes to oneself have no end that the other side writes at */
 - (BOOL)typingBubbleWanted {
@@ -796,7 +799,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }
         CGSize bubbleSize = [ExteriaTypingBubble size];
         _typingBubble.bounds = CGRectMake(0, 0, bubbleSize.width, bubbleSize.height);
-        _typingBubble.center = CGPointMake(10 + bubbleSize.width / 2, 3 + bubbleSize.height / 2);
+        _typingBubble.center = CGPointMake(10 + bubbleSize.width / 2, TYPING_GAP + bubbleSize.height / 2);
         [_typingBubble applyTheme];
         if (!_typingShown) {
             _typingShown = YES;
