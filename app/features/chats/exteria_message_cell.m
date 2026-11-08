@@ -1098,6 +1098,12 @@ static float ExteriaSpoilerRandom(void) {
     _selectMark = [[UIView alloc] initWithFrame:CGRectMake(0, 0, SELECT_MARK, SELECT_MARK)];
     _selectMark.layer.cornerRadius = SELECT_MARK / 2;
     _selectMark.layer.borderWidth = 2;
+    /* a white ring is lost on the light parts of a wallpaper (the white bar of a picture of a chat is one), so the half of the circle over them read as cut off; the dark
+       edge keeps the whole ring in sight on any ground */
+    _selectMark.layer.shadowColor = [UIColor blackColor].CGColor;
+    _selectMark.layer.shadowOpacity = 0.55f;
+    _selectMark.layer.shadowRadius = 1.5f;
+    _selectMark.layer.shadowOffset = CGSizeZero;
     _selectMark.userInteractionEnabled = NO;
     _selectMark.hidden = YES;
     _selectCheck = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolCheck, 14, [UIColor whiteColor])];
@@ -2768,8 +2774,8 @@ static void ExteriaSwipeTick(void) {
         [layer addAnimation:slide forKey:@"exteria.select"];
     }
     void (^apply)(void) = ^{
-        _selectMark.backgroundColor = selected ? ExteriaColorAccent() : [UIColor colorWithWhite:0 alpha:0.15];
-        _selectMark.layer.borderColor = (selected ? ExteriaColorAccent() : [UIColor colorWithWhite:1 alpha:0.85]).CGColor;
+        _selectMark.backgroundColor = selected ? ExteriaColorAccent() : [UIColor colorWithWhite:0 alpha:0.32];
+        _selectMark.layer.borderColor = (selected ? [UIColor whiteColor] : [UIColor colorWithWhite:1 alpha:0.95]).CGColor;
         _selectCheck.alpha = selected ? 1 : 0;
     };
     if (animated) [UIView animateWithDuration:0.18 animations:apply];
