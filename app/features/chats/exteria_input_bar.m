@@ -17,6 +17,11 @@
 
 #define MARGIN 8.0
 #define FIELD_MIN 36.0
+/* the least the field may be: the smiley, the clip and the button of a bot's keyboard, with a few letters between them. the room that the menu of a bot and the picture of the sender take
+   is taken from what is left over this */
+#define FIELD_MIN_WIDTH 168.0
+/* a text view narrower than this is not laying anything out yet, and what it says it needs for the words is not a height */
+#define TEXT_MEASURE_MIN_WIDTH 40.0
 
 /* on an ipad the one line bar is as tall as the tab bar beside it, so the tops of the two bars stand on one line: the system tab bar of the classic theme
    changes its height with the os, our own bar of the modern theme is 49 points */
@@ -630,6 +635,8 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 /* the height the text takes, with the field's own insets: ios 7 lays text out in a container, before that the view
    keeps it in its content size */
 - (CGFloat)textHeight {
+    /* a restored draft is measured before the view has its width, at a width of two hundred; a view that has some, but too little to lay words out in, says nothing worth taking */
+    if (_text.bounds.size.width > 0 && _text.bounds.size.width < TEXT_MEASURE_MIN_WIDTH) return 0;
     CGFloat width = _text.bounds.size.width > 0 ? _text.bounds.size.width : 200;
     if ([_text respondsToSelector:@selector(textContainer)]) return ceil([_text sizeThatFits:CGSizeMake(width, CGFLOAT_MAX)].height);
     return ceil(_text.contentSize.height);
@@ -1020,6 +1027,9 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _send.transform = held;
     CGFloat pillWidth = _menuPill.hidden ? 0 : ceil([_menuTitle sizeWithFont:_menuPill.titleLabel.font].width) + 28;
     CGFloat senderRoom = _senderButton.hidden ? 0 : FIELD_MIN + MARGIN;
+    /* the title of the menu of a bot has no length of its own, and a long one left the field a few points wide: the text view measured its words at that width as a column of letters and
+       the field grew to its full height, while the smiley and the clip lay past its edges, out of sight. the pill gives way, and its title is cut short */
+    if (pillWidth) pillWidth = MIN(pillWidth, MAX(56, size.width - 4 * MARGIN - sendWidth - senderRoom - FIELD_MIN_WIDTH));
     CGFloat menuRoom = (pillWidth ? pillWidth + MARGIN : 0) + senderRoom;
     CGFloat fieldWidth = size.width - 3 * MARGIN - sendWidth - menuRoom;
     _senderButton.frame = CGRectMake(MARGIN, ExteriaInputVerticalMargin() + _fieldHeight - FIELD_MIN, FIELD_MIN, FIELD_MIN);
