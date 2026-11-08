@@ -39,7 +39,14 @@
     picture.layer.rasterizationScale = [UIScreen mainScreen].scale;
     picture.userInteractionEnabled = NO;
     NSString *file = name ? [NSString stringWithFormat:@"%@-60@3x", name] : @"Icon-60@3x";
-    picture.image = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:file ofType:@"png"]];
+    NSString *path = [[NSBundle mainBundle] pathForResource:file ofType:@"png"];
+    if (!name) {
+        /* an install that takes another icon writes its picture over the Icon files of the bundle, so the tile of the app's own icon shows the one chosen; the copies saved
+           before the first rewrite still hold the real one */
+        NSString *saved = [[[NSBundle mainBundle] bundlePath] stringByAppendingPathComponent:[@"exteria-original-icons" stringByAppendingPathComponent:@"Icon-60@3x.png"]];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:saved]) path = saved;
+    }
+    picture.image = path ? [UIImage imageWithContentsOfFile:path] : nil;
     [self addSubview:picture];
     UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(0, ICON_SIDE + 6, ITEM_WIDTH, LABEL_HEIGHT)] autorelease];
     label.backgroundColor = [UIColor clearColor];
