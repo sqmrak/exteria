@@ -754,8 +754,9 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
         CGFloat above = 600;
         /* the wide photo ends the head itself, so the ground shows no strip under it */
         _backdropBottom = _heroOpen ? wideHeight : y - GAP + 6;
-        /* the ground melts at its lower edge unless the wide photo ends the head; the strip past the edge is under the music pill, which is not blurred */
-        _backdrop.softBottom = !_heroOpen;
+        /* the ground melts at its lower edge unless the wide photo ends the head; the strip past the edge is under the music pill, which is not blurred. the melt is
+           drawn once for the final height, so while the height animates it was stretched into a dark band on the way, and it is drawn when the move ends */
+        _backdrop.softBottom = !_heroOpen && !_heroMoving;
         _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom + (_heroOpen ? 0 : EXTERIA_BACKDROP_BLEED));
         _backdrop.focus = CGPointMake(width / 2, above + CGRectGetMidY(_avatar.frame));
     }
