@@ -1,5 +1,6 @@
 #import "exteria_location_controller.h"
 #import "exteria_bar_button.h"
+#import "exteria_classic_chrome.h"
 #import "exteria_image_decoder.h"
 #import "exteria_map_view.h"
 #import "exteria_session_bots.h"
@@ -399,8 +400,20 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
     (void)tableView; return section==1 && !_header ? NSLocalizedString(@"map.nearby",nil) : nil;
 }
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    (void)tableView;
-    if (!_header || section!=1) return nil;
+    if (section!=1) return nil;
+    if (!_header) {
+        /* the system header of a plain table is a grey strip that ignores the accent of the theme, so the classic list draws its own as the other lists of that style do */
+        CGFloat width=tableView.bounds.size.width;
+        UIView *strip=[[[UIView alloc] initWithFrame:CGRectMake(0,0,width,24)] autorelease];
+        strip.autoresizingMask=UIViewAutoresizingFlexibleWidth;
+        strip.backgroundColor=ExteriaClassicStripGround();
+        UILabel *name=[[[UILabel alloc] initWithFrame:CGRectMake(14,0,MAX(0,width-28),24)] autorelease];
+        name.autoresizingMask=UIViewAutoresizingFlexibleWidth;
+        name.backgroundColor=[UIColor clearColor]; name.font=[UIFont boldSystemFontOfSize:15]; name.textColor=ExteriaColorAccent();
+        name.text=NSLocalizedString(@"map.nearby",nil);
+        [strip addSubview:name];
+        return strip;
+    }
     UIView *bar=[[[UIView alloc] initWithFrame:CGRectMake(0,0,320,34)] autorelease];
     bar.backgroundColor=ExteriaColorCard();
     UILabel *label=[[[UILabel alloc] initWithFrame:CGRectMake(16,8,288,22)] autorelease];
