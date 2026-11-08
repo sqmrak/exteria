@@ -18,26 +18,87 @@ NSString *ExteriaPasscodeText(NSString *key, exteria_passcode_type type) {
     return NSLocalizedString(type == EXTERIA_PASSCODE_PASSWORD ? [key stringByAppendingString:@".password"] : key, nil);
 }
 
-static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) {
-    CGFloat width = key.bounds.size.width, height = key.bounds.size.height;
-    CGFloat side = MIN(width, height);
-    CGFloat normal = fabs(width - height) < 0.5 ? side / 2 : MIN(20, side / 2);
-    CGFloat radius = pressed ? MIN(normal, side * 0.19f) : normal;
-    CALayer *visible = (CALayer *)key.layer.presentationLayer;
-    CGFloat from = visible ? visible.cornerRadius : key.layer.cornerRadius;
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    key.layer.cornerRadius = radius;
-    [CATransaction commit];
-    [key.layer removeAnimationForKey:@"keyShape"];
-    if (animated && side > 0) {
-        CABasicAnimation *shape = [CABasicAnimation animationWithKeyPath:@"cornerRadius"];
-        shape.fromValue = [NSNumber numberWithDouble:from];
-        shape.toValue = [NSNumber numberWithDouble:radius];
-        shape.duration = pressed ? 0.12 : 0.22;
-        shape.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-        [key.layer addAnimation:shape forKey:@"keyShape"];
+/* the shapes a pressed key turns into, after the expressive shapes of Material You that the lock screen of a Pixel picks from. every one is the same number of points around the key,
+   so the path of a key moves from the circle to a shape and back point by point, which is the only way a layer animates its path */
+#define KEY_POINTS 96
+#define KEY_HOLD 0.18
+
+typedef enum { ExteriaKeyShapeLobed, ExteriaKeyShapePolygon, ExteriaKeyShapeSuper } ExteriaKeyShapeKind;
+
+/* lobed: count lobes, a the depth of them, b the roundness of a crest (above 1 narrow rays, below 1 broad petals), c the same for a valley.
+   polygon: count sides, a how far the corners are drawn in towards a circle.
+   super: a the exponent of a superellipse (2 is an ellipse, 4 a squircle), b and c its two half axes */
+typedef struct {
+    ExteriaKeyShapeKind kind;
+    int count;
+    CGFloat a, b, c;
+} ExteriaKeyShape;
+
+static const ExteriaKeyShape ExteriaKeyShapes[] = {
+    /* cookies: a circle with scallops */
+    {ExteriaKeyShapeLobed, 4, 0.10f, 1, 1}, {ExteriaKeyShapeLobed, 6, 0.09f, 1, 1}, {ExteriaKeyShapeLobed, 7, 0.08f, 1, 1},
+    {ExteriaKeyShapeLobed, 9, 0.07f, 1, 1}, {ExteriaKeyShapeLobed, 12, 0.055f, 1, 1},
+    /* clovers and flowers: round petals with narrow valleys between them */
+    {ExteriaKeyShapeLobed, 4, 0.30f, 0.6f, 2.0f}, {ExteriaKeyShapeLobed, 5, 0.26f, 0.7f, 1.8f}, {ExteriaKeyShapeLobed, 6, 0.24f, 0.7f, 1.8f},
+    {ExteriaKeyShapeLobed, 8, 0.20f, 0.7f, 1.8f},
+    /* suns and bursts: narrow rays with broad valleys */
+    {ExteriaKeyShapeLobed, 8, 0.16f, 2.0f, 0.7f}, {ExteriaKeyShapeLobed, 12, 0.13f, 2.0f, 0.7f}, {ExteriaKeyShapeLobed, 10, 0.20f, 2.4f, 0.7f},
+    /* rounded triangle, diamond and pentagon */
+    {ExteriaKeyShapePolygon, 3, 0.38f, 0, 0}, {ExteriaKeyShapePolygon, 4, 0.30f, 0, 0}, {ExteriaKeyShapePolygon, 5, 0.30f, 0, 0},
+    /* squircle, oval and pill, drawn in from the rim so that their corners stay inside the circle of the key */
+    {ExteriaKeyShapeSuper, 0, 4.0f, 0.84f, 0.84f}, {ExteriaKeyShapeSuper, 0, 2.0f, 1.0f, 0.78f}, {ExteriaKeyShapeSuper, 0, 3.4f, 0.94f, 0.58f}
+};
+#define KEY_SHAPE_COUNT (sizeof(ExteriaKeyShapes) / sizeof(ExteriaKeyShapes[0]))
+
+/* the points of a shape around the middle of a key of this size, turned by spin; grow 1 reaches the rim of the circle the key is */
+static void ExteriaKeyShapePoints(const ExteriaKeyShape *shape, CGFloat spin, CGSize size, CGFloat grow, CGPoint *out) {
+    CGFloat cx = size.width / 2, cy = size.height / 2, radius = MIN(size.width, size.height) / 2 * grow;
+    for (NSUInteger i = 0; i < KEY_POINTS; ++i) {
+        CGFloat t = (CGFloat)(2 * M_PI) * (CGFloat)i / KEY_POINTS, x, y;
+        if (shape->kind == ExteriaKeyShapeLobed) {
+            CGFloat c = cosf(shape->count * (t - spin));
+            CGFloat v = c >= 0 ? powf(c, shape->b) : -powf(-c, shape->c);
+            CGFloat r = (1 + shape->a * v) / (1 + shape->a);
+            x = cosf(t) * r;
+            y = sinf(t) * r;
+        } else if (shape->kind == ExteriaKeyShapePolygon) {
+            CGFloat sector = (CGFloat)(2 * M_PI) / shape->count, u = t - spin;
+            CGFloat phi = u - sector * floorf(u / sector) - sector / 2;
+            CGFloat edge = cosf(sector / 2) / cosf(phi);
+            CGFloat r = (1 - shape->a) * edge + shape->a * 0.86f;
+            x = cosf(t) * r;
+            y = sinf(t) * r;
+        } else {
+            CGFloat c = cosf(t), sn = sinf(t), e = 2 / shape->a;
+            CGFloat px = shape->b * (c < 0 ? -powf(-c, e) : powf(c, e)), py = shape->c * (sn < 0 ? -powf(-sn, e) : powf(sn, e));
+            x = px * cosf(spin) - py * sinf(spin);
+            y = px * sinf(spin) + py * cosf(spin);
+        }
+        out[i] = CGPointMake(cx + radius * x, cy + radius * y);
     }
+}
+
+/* the key at rest: a circle, or on a wide pad the rounded plate of a key that is wider than it is high */
+static void ExteriaKeyRestPoints(CGSize size, BOOL wide, CGFloat grow, CGPoint *out) {
+    if (!wide) {
+        ExteriaKeyShape circle = {ExteriaKeyShapeLobed, 1, 0, 1, 1};
+        ExteriaKeyShapePoints(&circle, 0, size, grow, out);
+        return;
+    }
+    for (NSUInteger i = 0; i < KEY_POINTS; ++i) {
+        CGFloat t = (CGFloat)(2 * M_PI) * (CGFloat)i / KEY_POINTS, c = cosf(t), sn = sinf(t), e = 2 / 5.0f;
+        out[i] = CGPointMake(size.width / 2 + size.width / 2 * grow * (c < 0 ? -powf(-c, e) : powf(c, e)),
+                             size.height / 2 + size.height / 2 * grow * (sn < 0 ? -powf(-sn, e) : powf(sn, e)));
+    }
+}
+
+/* a closed path through the points; the caller releases it */
+static CGPathRef ExteriaKeyPathCreate(const CGPoint *points) {
+    CGMutablePathRef path = CGPathCreateMutable();
+    CGPathMoveToPoint(path, NULL, points[0].x, points[0].y);
+    for (NSUInteger i = 1; i < KEY_POINTS; ++i) CGPathAddLineToPoint(path, NULL, points[i].x, points[i].y);
+    CGPathCloseSubpath(path);
+    return path;
 }
 
 @interface ExteriaPasscodeEntryView () <UITextFieldDelegate> {
@@ -45,6 +106,13 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
     UILabel *_messageLabel;
     NSMutableArray *_dots;
     NSMutableArray *_keys;
+    /* a modern pad draws each key as a layer of its own, whose path turns into a shape while the key is down; the classic pad keeps plain plates */
+    BOOL _shapeKeys;
+    NSMutableArray *_plates;
+    BOOL _keyDown[10];
+    CFTimeInterval _pressedAt[10];
+    NSUInteger _lastShape;
+    BOOL _wideKeys;
     UIButton *_delete;
     UIButton *_biometricButton;
     UITextField *_field;
@@ -101,6 +169,8 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
         [_dots addObject:dot];
     }
     _keys = [[NSMutableArray alloc] init];
+    _shapeKeys = !ExteriaThemeIsClassic();
+    _plates = [[NSMutableArray alloc] init];
     for (NSInteger i = 0; i < 10; ++i) {
         UIButton *key = [UIButton buttonWithType:UIButtonTypeCustom];
         key.tag = i;
@@ -112,6 +182,13 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
         [key addTarget:self action:@selector(keyDown:) forControlEvents:UIControlEventTouchDown];
         [key addTarget:self action:@selector(keyUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
         key.accessibilityLabel = key.currentTitle;
+        if (_shapeKeys) {
+            CAShapeLayer *plate = [CAShapeLayer layer];
+            plate.fillColor = ExteriaColorField().CGColor;
+            [key.layer insertSublayer:plate atIndex:0];
+            key.backgroundColor = [UIColor clearColor];
+            [_plates addObject:plate];
+        }
         [self addSubview:key];
         [_keys addObject:key];
     }
@@ -165,6 +242,7 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
     [_messageLabel release];
     [_dots release];
     [_keys release];
+    [_plates release];
     [_delete release];
     [_biometricButton release];
     [_biometric release];
@@ -228,7 +306,8 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
     _messageLabel.textColor = [self softInk];
     for (UIButton *key in _keys) {
         [key setTitleColor:[self ink] forState:UIControlStateNormal];
-        key.backgroundColor = [self plateColor];
+        if (!_shapeKeys) key.backgroundColor = [self plateColor];
+        else if (!_keyDown[key.tag]) [self setPlateFill:[self plateColor] ofKey:key animated:NO];
     }
     [_delete setImage:ExteriaSymbolImage(ExteriaSymbolBackspace, 26, [self ink]) forState:UIControlStateNormal];
     [_biometricButton setTitleColor:[self ink] forState:UIControlStateNormal];
@@ -276,12 +355,8 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
     self.alpha = 1;
     for (UIButton *key in _keys) {
         key.enabled = enabled;
-        if (!enabled) {
-            [key.layer removeAllAnimations];
-            key.transform = CGAffineTransformIdentity;
-            key.backgroundColor = [self plateColor];
-            if (!ExteriaThemeIsClassic()) ExteriaPasscodeKeyShape(key, NO, NO);
-        }
+        /* a key that is down when the pad stops taking touches gets no touch up, and would stay in its shape */
+        if (!enabled) [self settleKey:key];
     }
     _delete.enabled = enabled;
     _biometricButton.enabled = enabled;
@@ -343,6 +418,8 @@ static void ExteriaPasscodeKeyShape(UIButton *key, BOOL pressed, BOOL animated) 
 - (void)willMoveToWindow:(UIWindow *)window {
     [super willMoveToWindow:window];
     if (window) return;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(releaseKey:) object:nil];
+    for (UIButton *key in _keys) [self restKey:key animated:NO];
     [_holdTimer invalidate];
     _holdTimer = nil;
     [_holdEnd release];
@@ -461,26 +538,154 @@ static void ExteriaPassDotMetrics(NSUInteger count, CGFloat room, CGFloat *side,
     }
 }
 
-- (void)keyDown:(UIButton *)key {
-    key.backgroundColor = [self plateDownColor];
-    if (!ExteriaThemeIsClassic())
-        ExteriaPasscodeKeyShape(key, YES, !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]);
-    if (!ExteriaThemeIsClassic() && !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]) {
-        [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
-                         animations:^{ key.transform = CGAffineTransformMakeScale(0.9f, 0.9f); } completion:nil];
+- (CAShapeLayer *)plateOfKey:(UIButton *)key {
+    return _shapeKeys && (NSUInteger)key.tag < _plates.count ? [_plates objectAtIndex:(NSUInteger)key.tag] : nil;
+}
+
+- (BOOL)keyMoves {
+    return !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled] && self.window;
+}
+
+/* the color of a plate changes with the press, and a layer that stands on its own animates a change of its fill by itself, which is turned off unless asked for */
+- (void)setPlateFill:(UIColor *)color ofKey:(UIButton *)key animated:(BOOL)animated {
+    CAShapeLayer *plate = [self plateOfKey:key];
+    if (!plate) return;
+    CALayer *visible = plate.presentationLayer;
+    CGColorRef from = visible ? ((CAShapeLayer *)visible).fillColor : plate.fillColor;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    plate.fillColor = color.CGColor;
+    [CATransaction commit];
+    [plate removeAnimationForKey:@"fill"];
+    if (!animated || !from) return;
+    CABasicAnimation *fill = [CABasicAnimation animationWithKeyPath:@"fillColor"];
+    fill.fromValue = (id)from;
+    fill.toValue = (id)color.CGColor;
+    fill.duration = 0.16;
+    [plate addAnimation:fill forKey:@"fill"];
+}
+
+/* moves the path of the plate through the points in order, from where it is drawn now, ending on the last: a push past the end and a settle, which is the spring of the
+   shapes of a Pixel */
+- (void)movePlate:(CAShapeLayer *)plate through:(NSArray *)stops duration:(CFTimeInterval)duration {
+    CAShapeLayer *visible = (CAShapeLayer *)plate.presentationLayer;
+    CGPathRef from = visible && visible.path ? visible.path : plate.path;
+    CGPathRef last = (CGPathRef)[stops lastObject];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    plate.path = last;
+    [CATransaction commit];
+    [plate removeAnimationForKey:@"shape"];
+    if (!from || stops.count < 2) return;
+    NSMutableArray *values = [NSMutableArray arrayWithObject:(id)from];
+    [values addObjectsFromArray:stops];
+    CAKeyframeAnimation *morph = [CAKeyframeAnimation animationWithKeyPath:@"path"];
+    morph.values = values;
+    NSMutableArray *times = [NSMutableArray array], *curves = [NSMutableArray array];
+    for (NSUInteger i = 0; i < values.count; ++i) {
+        [times addObject:[NSNumber numberWithFloat:(float)i / (float)(values.count - 1)]];
+        if (i) [curves addObject:[CAMediaTimingFunction functionWithName:i == 1 ? kCAMediaTimingFunctionEaseOut : kCAMediaTimingFunctionEaseInEaseOut]];
     }
+    morph.keyTimes = times;
+    morph.timingFunctions = curves;
+    morph.duration = duration;
+    [plate addAnimation:morph forKey:@"shape"];
+}
+
+- (void)layoutPlateOfKey:(UIButton *)key {
+    CAShapeLayer *plate = [self plateOfKey:key];
+    if (!plate) return;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    plate.frame = key.bounds;
+    if (!_keyDown[key.tag]) {
+        CGPoint points[KEY_POINTS];
+        ExteriaKeyRestPoints(key.bounds.size, _wideKeys, 1, points);
+        CGPathRef path = ExteriaKeyPathCreate(points);
+        plate.path = path;
+        CGPathRelease(path);
+    }
+    [CATransaction commit];
+}
+
+- (void)keyDown:(UIButton *)key {
+    CAShapeLayer *plate = [self plateOfKey:key];
+    if (!plate) {
+        key.backgroundColor = [self plateDownColor];
+        return;
+    }
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(releaseKey:) object:key];
+    _keyDown[key.tag] = YES;
+    _pressedAt[key.tag] = CACurrentMediaTime();
+    BOOL moves = [self keyMoves];
+    [self setPlateFill:[self plateDownColor] ofKey:key animated:moves];
+    if (!moves || key.bounds.size.width < 1) return;
+    /* every press is a shape of its own, never the one before it, turned to any angle */
+    NSUInteger index;
+    do { index = arc4random() % KEY_SHAPE_COUNT; } while (index == _lastShape && KEY_SHAPE_COUNT > 1);
+    _lastShape = index;
+    CGFloat spin = (CGFloat)(arc4random() % 6283) / 1000.0f;
+    CGPoint push[KEY_POINTS], shape[KEY_POINTS];
+    ExteriaKeyShapePoints(&ExteriaKeyShapes[index], spin, key.bounds.size, 1.12f, push);
+    ExteriaKeyShapePoints(&ExteriaKeyShapes[index], spin, key.bounds.size, 1.0f, shape);
+    CGPathRef over = ExteriaKeyPathCreate(push), final = ExteriaKeyPathCreate(shape);
+    [self movePlate:plate through:[NSArray arrayWithObjects:(id)over, (id)final, nil] duration:0.3];
+    CGPathRelease(over);
+    CGPathRelease(final);
+    /* the shape settles out of a turn, so it does not only grow in place */
+    CABasicAnimation *turn = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
+    turn.fromValue = [NSNumber numberWithFloat:(arc4random() & 1 ? 0.45f : -0.45f)];
+    turn.toValue = [NSNumber numberWithFloat:0];
+    turn.duration = 0.34;
+    turn.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+    [plate addAnimation:turn forKey:@"turn"];
+}
+
+/* the plate goes back to its resting form, with a dip under it and a settle */
+- (void)restKey:(UIButton *)key animated:(BOOL)animated {
+    CAShapeLayer *plate = [self plateOfKey:key];
+    if (!plate) return;
+    _keyDown[key.tag] = NO;
+    BOOL moves = animated && [self keyMoves];
+    [self setPlateFill:[self plateColor] ofKey:key animated:moves];
+    CGPoint under[KEY_POINTS], rest[KEY_POINTS];
+    ExteriaKeyRestPoints(key.bounds.size, _wideKeys, 0.92f, under);
+    ExteriaKeyRestPoints(key.bounds.size, _wideKeys, 1, rest);
+    CGPathRef dip = ExteriaKeyPathCreate(under), end = ExteriaKeyPathCreate(rest);
+    if (moves) {
+        [self movePlate:plate through:[NSArray arrayWithObjects:(id)dip, (id)end, nil] duration:0.34];
+    } else {
+        [plate removeAnimationForKey:@"shape"];
+        [plate removeAnimationForKey:@"turn"];
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        plate.path = end;
+        [CATransaction commit];
+    }
+    CGPathRelease(dip);
+    CGPathRelease(end);
+}
+
+- (void)releaseKey:(UIButton *)key {
+    [self restKey:key animated:YES];
+}
+
+/* a tap is over before the shape has shown, so the key keeps its shape for a moment before it goes back */
+- (void)settleKey:(UIButton *)key {
+    CAShapeLayer *plate = [self plateOfKey:key];
+    if (!plate) {
+        key.backgroundColor = [self plateColor];
+        return;
+    }
+    if (!_keyDown[key.tag]) return;
+    CFTimeInterval wait = [self keyMoves] ? KEY_HOLD - (CACurrentMediaTime() - _pressedAt[key.tag]) : 0;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(releaseKey:) object:key];
+    if (wait > 0.01) [self performSelector:@selector(releaseKey:) withObject:key afterDelay:wait];
+    else [self releaseKey:key];
 }
 
 - (void)keyUp:(UIButton *)key {
-    key.backgroundColor = [self plateColor];
-    if (!ExteriaThemeIsClassic())
-        ExteriaPasscodeKeyShape(key, NO, !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]);
-    if (!ExteriaThemeIsClassic() && !ExteriaReduceMotionEnabled() && [UIView areAnimationsEnabled]) {
-        [UIView animateWithDuration:0.22 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
-                         animations:^{ key.transform = CGAffineTransformIdentity; } completion:nil];
-    } else {
-        key.transform = CGAffineTransformIdentity;
-    }
+    [self settleKey:key];
 }
 
 - (void)digitPressed:(UIButton *)key {
@@ -557,6 +762,7 @@ static void ExteriaPassDotMetrics(NSUInteger count, CGFloat room, CGFloat *side,
     CGFloat padTop = split ? 12 : below + 6 + DOT_SIDE + 28;
     CGFloat padHeight = height - padTop - 16;
     BOOL widePad = !split && width >= 600 && height >= 600;
+    _wideKeys = widePad;
     CGFloat side = MAX(40, MIN(KEY_SIDE_MAX, (padHeight - 3 * KEY_GAP) / 4));
     CGFloat keyWidth = widePad ? (width - 64 - 2 * KEY_GAP) / 3 : side;
     CGFloat keyHeight = widePad ? MAX(0, (padHeight - 3 * KEY_GAP) / 4) : side;
@@ -570,7 +776,8 @@ static void ExteriaPassDotMetrics(NSUInteger count, CGFloat room, CGFloat *side,
             if (digit >= 0) {
                 UIButton *key = [_keys objectAtIndex:(NSUInteger)digit];
                 key.frame = frame;
-                key.layer.cornerRadius = widePad ? MIN(20, keyHeight / 2) : side / 2;
+                if (_shapeKeys) [self layoutPlateOfKey:key];
+                else key.layer.cornerRadius = widePad ? MIN(20, keyHeight / 2) : side / 2;
                 key.titleLabel.font = ExteriaFontRegular(widePad ? 36 : 30);
             } else if (column == 2) {
                 _delete.frame = frame;
