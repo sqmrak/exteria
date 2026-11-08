@@ -81,7 +81,7 @@
     [cell configureWithName:entry.name initials:entry.initials seed:(NSUInteger)(entry.userId % 1000003)
                    subtitle:[entry summaryText] subtitleColor:bad ? ExteriaColorBadgeRed() : nil
                    trailing:ExteriaListTimeText(entry.date) symbol:entry.video ? ExteriaSymbolVideoCallMenu : ExteriaSymbolPhone showsSymbol:YES
-                  nameColor:bad ? ExteriaColorBadgeRed() : nil photo:entry.photo avatars:self.avatars];
+                  nameColor:nil photo:entry.photo avatars:self.avatars];
     cell.avatarDeleted = entry.deleted;
     return cell;
 }
