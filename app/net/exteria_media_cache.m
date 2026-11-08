@@ -492,31 +492,34 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
 
 - (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
     ExteriaRemoteFile *preview = track.previewFile, *audio = track.file;
+    BOOL taggable = audio && track.kind == EXTERIA_PREVIEW_AUDIO;
     void (^done)(UIImage *) = [completion copy];
-    void (^embedded)(void) = ^{
-        /* a voice message or a round video has no tag to read */
-        if (!audio || track.kind != EXTERIA_PREVIEW_AUDIO) {
-            done(nil);
+    /* a voice message or a round video has no tag to read; a picture that was found but is small stays as the answer when the tag has none */
+    void (^embedded)(UIImage *) = ^(UIImage *fallback) {
+        if (!taggable) {
+            done(fallback);
             [done release];
             return;
         }
         [self loadEmbeddedCoverOfFile:audio maxSide:maxSide completion:^(UIImage *image) {
-            done(image);
+            done(image ? image : fallback);
             [done release];
         }];
     };
-    void (^embeddedCopy)(void) = [embedded copy];
+    void (^embeddedCopy)(UIImage *) = [embedded copy];
     if (!preview) {
-        embeddedCopy();
+        embeddedCopy(nil);
         [embeddedCopy release];
         return;
     }
     [self loadImageForFile:preview maxSide:maxSide completion:^(UIImage *image) {
-        if (image) {
+        /* telegram keeps a thumbnail of ninety pixels or so for many songs, and drawn at the size of the player it was soft while the tag of the file holds the real cover */
+        CGFloat longSide = image.CGImage ? (CGFloat)MAX(CGImageGetWidth(image.CGImage), CGImageGetHeight(image.CGImage)) : 0;
+        if (image && !(taggable && longSide < maxSide * 0.75)) {
             done(image);
             [done release];
         } else {
-            embeddedCopy();
+            embeddedCopy(image);
         }
         [embeddedCopy release];
     }];
