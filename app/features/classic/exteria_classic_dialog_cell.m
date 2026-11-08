@@ -406,7 +406,10 @@ static UIImageView *ExteriaClassicTopicImageView(void) {
     _avatar.showsSymbol = NO;
     [_avatar setPhoto:person.photo cache:avatars];
     _mutualButton.hidden = !person.mutual;
-    _title.text = person.name;
+    /* the star of Premium and the marks of Exteria follow the name here as in the contact row of the other style, which lists the same people */
+    NSArray *personBadge = nil;
+    _title.text = ExteriaNameWithBadges(person.name, ExteriaBadgeDocument(0, person.premium), ExteriaPersonIsDeveloper(person), &personBadge);
+    _title.entities = personBadge;
     _preview.text = person.bot ? NSLocalizedString(@"seen.bot", nil) : ExteriaLastSeenText(person.presence, person.seen);
     _preview.entities = nil;
     _preview.hidden = NO;
@@ -442,7 +445,9 @@ static UIImageView *ExteriaClassicTopicImageView(void) {
     _avatar.accent = NO;
     _avatar.showsSymbol = NO;
     [_avatar setPhoto:call.photo cache:avatars];
-    _title.text = call.name;
+    NSArray *callBadge = nil;
+    _title.text = ExteriaNameWithBadges(call.name, 0, ExteriaMarksOfId(call.userId), &callBadge);
+    _title.entities = callBadge;
     _preview.text = [call summaryText];
     _preview.entities = nil;
     _preview.hidden = NO;
