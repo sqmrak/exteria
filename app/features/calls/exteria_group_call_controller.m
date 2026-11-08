@@ -315,6 +315,9 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
         /* a voice chat starts on the loudspeaker, as the official clients do; the audio session exists from the moment the media is up */
         if (!_speakerSet) {
             _speakerSet = YES;
+            /* the loudspeaker override beats whatever is plugged in, so a voice chat that began on it ignored the headphones; with a headset already carrying the sound it stays there */
+            ExteriaAudioRoute route = ExteriaAudioSessionCurrentRoute();
+            if (route == ExteriaAudioRouteWired || route == ExteriaAudioRouteBluetooth) _speakerOn = NO;
             ExteriaAudioSessionSetSpeaker(_speakerOn);
         }
     }
@@ -356,6 +359,14 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
     [self render];
 }
 
+- (void)chooseAudioRoute {
+    ExteriaCallPresentRouteChoices(self, ^(ExteriaAudioRoute route) {
+        _speakerOn = route != ExteriaAudioRouteEarpiece;
+        _speakerSet = YES;
+        [self render];
+    });
+}
+
 - (void)leaveTapped {
     [_session.groupCalls leave];
 }
@@ -367,16 +378,22 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
     [titles addObject:NSLocalizedString(@"group.invite", nil)];
     symbols[0] = ExteriaSymbolShare;
     [kinds addObject:[NSNumber numberWithInt:0]];
+    /* where the sound goes: the phone, the loudspeaker, headphones with a cable or a Bluetooth headset, whichever are there */
+    [titles addObject:NSLocalizedString(@"call.route.title", nil)];
+    symbols[1] = ExteriaSymbolSpeaker;
+    [kinds addObject:[NSNumber numberWithInt:2]];
     if (_call.canManage) {
         [titles addObject:NSLocalizedString(@"group.end.all", nil)];
-        symbols[1] = ExteriaSymbolClose;
+        symbols[2] = ExteriaSymbolClose;
         [kinds addObject:[NSNumber numberWithInt:1]];
     }
     ExteriaWeakReference *weak = _weak;
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
         ExteriaGroupCallController *controller = weak.target;
         if (!controller || index >= kinds.count) return;
-        if ([[kinds objectAtIndex:index] intValue] == 0) [controller shareInvite];
+        int kind = [[kinds objectAtIndex:index] intValue];
+        if (kind == 0) [controller shareInvite];
+        else if (kind == 2) [controller chooseAudioRoute];
         else [controller confirmEnd];
     }] autorelease];
     [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(_more.frame), CGRectGetMaxY(_more.frame) + 4)];

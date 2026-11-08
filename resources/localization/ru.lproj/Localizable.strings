@@ -549,6 +549,7 @@
 "call.route.phone" = "Телефон";
 "call.route.speaker" = "Динамик";
 "call.route.bluetooth" = "Bluetooth";
+"call.route.wired" = "Наушники";
 "call.end" = "завершить";
 "call.accept" = "принять";
 "call.decline" = "отклонить";

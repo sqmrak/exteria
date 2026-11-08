@@ -548,6 +548,7 @@
 "call.route.phone" = "Phone";
 "call.route.speaker" = "Speaker";
 "call.route.bluetooth" = "Bluetooth";
+"call.route.wired" = "Headphones";
 "call.end" = "end";
 "call.accept" = "accept";
 "call.decline" = "decline";

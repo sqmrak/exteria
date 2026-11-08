@@ -550,6 +550,7 @@
 "call.route.phone" = "телефон";
 "call.route.speaker" = "динамик";
 "call.route.bluetooth" = "bluetooth";
+"call.route.wired" = "наушники";
 "call.end" = "завершить";
 "call.accept" = "принять";
 "call.decline" = "отклонить";

@@ -131,6 +131,12 @@ static BOOL ExteriaAudioPortIsBluetooth(NSString *type) {
                     [type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortBluetoothLE")]);
 }
 
+/* a cable: headphones, a headset with a microphone, or a usb sound card */
+static BOOL ExteriaAudioPortIsWired(NSString *type) {
+    return type && ([type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortHeadphones")] || [type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortHeadsetMic")] ||
+                    [type isEqualToString:ExteriaAudioConstant("AVAudioSessionPortUSBAudio")]);
+}
+
 /* the input ports of ios 7 and later: the headset when a type matches, else the built in microphone */
 static id ExteriaAudioInputPort(AVAudioSession *audio, BOOL bluetooth) {
     if (![audio respondsToSelector:NSSelectorFromString(@"availableInputs")]) return nil;
@@ -162,13 +168,55 @@ BOOL ExteriaAudioSessionBluetoothInputAvailable(NSString **name) {
     return NO;
 }
 
+/* ios 5 has no route object: the route is a string such as "Headphone", "HeadsetInOut" or "HeadsetBT" */
+static NSString *ExteriaAudioLegacyRouteName(void) {
+    CFStringRef route = NULL;
+    UInt32 size = sizeof(route);
+    if (AudioSessionGetProperty(kAudioSessionProperty_AudioRoute, &size, &route) != noErr || !route) return nil;
+    return [(NSString *)route autorelease];
+}
+
+BOOL ExteriaAudioSessionWiredAvailable(NSString **name) {
+    AVAudioSession *audio = ExteriaAudioSession();
+    if (name) *name = nil;
+    if (!audio) return NO;
+    if ([audio respondsToSelector:NSSelectorFromString(@"currentRoute")]) {
+        for (id output in [[audio valueForKey:@"currentRoute"] valueForKey:@"outputs"]) {
+            if (ExteriaAudioPortIsWired([output valueForKey:@"portType"])) {
+                if (name) *name = [output valueForKey:@"portName"];
+                return YES;
+            }
+        }
+        /* a headset also lists its microphone among the inputs, which ios 7 shows before it is the route */
+        if ([audio respondsToSelector:NSSelectorFromString(@"availableInputs")]) {
+            for (id port in [audio valueForKey:@"availableInputs"]) {
+                if (ExteriaAudioPortIsWired([port valueForKey:@"portType"])) {
+                    if (name) *name = [port valueForKey:@"portName"];
+                    return YES;
+                }
+            }
+        }
+        return NO;
+    }
+    NSString *legacy = ExteriaAudioLegacyRouteName();
+    return legacy && ([legacy rangeOfString:@"Headphone"].location != NSNotFound || ([legacy rangeOfString:@"Headset"].location != NSNotFound && [legacy rangeOfString:@"BT"].location == NSNotFound));
+}
+
 ExteriaAudioRoute ExteriaAudioSessionCurrentRoute(void) {
     AVAudioSession *audio = ExteriaAudioSession();
-    if (!audio || ![audio respondsToSelector:NSSelectorFromString(@"currentRoute")]) return ExteriaAudioRouteEarpiece;
+    if (!audio) return ExteriaAudioRouteEarpiece;
+    if (![audio respondsToSelector:NSSelectorFromString(@"currentRoute")]) {
+        NSString *legacy = ExteriaAudioLegacyRouteName();
+        if (legacy && [legacy rangeOfString:@"BT"].location != NSNotFound) return ExteriaAudioRouteBluetooth;
+        if (legacy && [legacy rangeOfString:@"Speaker"].location != NSNotFound) return ExteriaAudioRouteSpeaker;
+        if (legacy && ([legacy rangeOfString:@"Headphone"].location != NSNotFound || [legacy rangeOfString:@"Headset"].location != NSNotFound)) return ExteriaAudioRouteWired;
+        return ExteriaAudioRouteEarpiece;
+    }
     NSString *speaker = ExteriaAudioConstant("AVAudioSessionPortBuiltInSpeaker");
     for (id output in [[audio valueForKey:@"currentRoute"] valueForKey:@"outputs"]) {
         NSString *type = [output valueForKey:@"portType"];
         if (ExteriaAudioPortIsBluetooth(type)) return ExteriaAudioRouteBluetooth;
+        if (ExteriaAudioPortIsWired(type)) return ExteriaAudioRouteWired;
         if (speaker && [type isEqualToString:speaker]) return ExteriaAudioRouteSpeaker;
     }
     return ExteriaAudioRouteEarpiece;
@@ -197,6 +245,18 @@ BOOL ExteriaAudioSessionSelectRoute(ExteriaAudioRoute route) {
         }
     }
     ExteriaAudioSessionSetSpeaker(NO);
+    if (preferred && route == ExteriaAudioRouteWired) {
+        /* the cable wins over the built in output once nothing overrides it; the microphone of the headset follows when it has one, else the built in one stays */
+        id headset = nil;
+        for (id port in [audio valueForKey:@"availableInputs"]) {
+            if (ExteriaAudioPortIsWired([port valueForKey:@"portType"])) { headset = port; break; }
+        }
+        if (headset && !((BOOL (*)(id, SEL, id, NSError **))objc_msgSend)(audio, NSSelectorFromString(@"setPreferredInput:error:"), headset, &error)) {
+            NSLog(@"exteria: the headset input was refused: %@", error);
+            return NO;
+        }
+        return YES;
+    }
     if (preferred) {
         id port = ExteriaAudioInputPort(audio, bluetooth);
         if (!port && bluetooth) {
