@@ -326,6 +326,86 @@ static NSArray *ExteriaSearchMarks(NSString *text, NSString *words) {
 }
 
 
+#pragma mark views
+
+- (void)loadView {
+    UIView *root = [[[UIView alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
+    root.backgroundColor = ExteriaColorScreen();
+    root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.view = root;
+
+    _field = [[UITextField alloc] init];
+    _field.backgroundColor = ExteriaColorField();
+    _field.layer.cornerRadius = FIELD_HEIGHT / 2;
+    _field.delegate = self;
+    _field.placeholder = NSLocalizedString(@"chats.search", nil);
+    _field.font = ExteriaFontRegular(16);
+    _field.textColor = ExteriaColorTitle();
+    _field.autocorrectionType = UITextAutocorrectionTypeNo;
+    _field.returnKeyType = UIReturnKeySearch;
+    _field.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
+    _field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    _field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
+    UIImageView *glass = [[[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 16, ExteriaColorMuted())] autorelease];
+    glass.contentMode = UIViewContentModeCenter;
+    glass.frame = CGRectMake(0, 0, 38, FIELD_HEIGHT);
+    _field.leftView = glass;
+    _field.leftViewMode = UITextFieldViewModeAlways;
+    [_field addTarget:self action:@selector(textChanged) forControlEvents:UIControlEventEditingChanged];
+    [root addSubview:_field];
+
+    _cancel = [[ExteriaBarButton alloc] init];
+    _cancel.title = NSLocalizedString(@"picker.cancel", nil);
+    [_cancel addTarget:self action:@selector(close) forControlEvents:UIControlEventTouchUpInside];
+    [root addSubview:_cancel];
+
+    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"search.tab.chats", nil), NSLocalizedString(@"search.tab.channels", nil),
+                       NSLocalizedString(@"search.tab.apps", nil), NSLocalizedString(@"search.tab.posts", nil), NSLocalizedString(@"search.tab.media", nil),
+                       NSLocalizedString(@"search.tab.downloads", nil), NSLocalizedString(@"search.tab.links", nil), NSLocalizedString(@"search.tab.files", nil),
+                       NSLocalizedString(@"search.tab.music", nil), NSLocalizedString(@"search.tab.voice", nil), nil];
+    _tabs = [[ExteriaFilterBar alloc] initWithTitles:titles];
+    _tabs.delegate = self;
+    [root addSubview:_tabs];
+
+    _table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
+    ExteriaScrollViewOwnsInsets(_table);
+    _table.backgroundColor = [UIColor clearColor];
+    _table.separatorStyle = UITableViewCellSeparatorStyleNone;
+    _table.dataSource = self;
+    _table.delegate = self;
+    _table.rowHeight = ROW_HEIGHT;
+    [root addSubview:_table];
+    _peers = [[ExteriaTopPeersView alloc] initWithFrame:CGRectMake(0, 0, 320, PEERS_HEIGHT)];
+    _peers.target = self;
+
+    _emptyView = [[UIView alloc] init];
+    _emptyView.hidden = YES;
+    [root addSubview:_emptyView];
+    _duck = [[ExteriaLottieView alloc] initWithAnimationNamed:@"search_empty"];
+    [_emptyView addSubview:_duck];
+    _emptyTitle = [[UILabel alloc] init];
+    _emptyTitle.backgroundColor = [UIColor clearColor];
+    _emptyTitle.textColor = ExteriaColorTitle();
+    _emptyTitle.textAlignment = ExteriaTextAlignmentCenter;
+    [_emptyView addSubview:_emptyTitle];
+    _emptyText = [[UILabel alloc] init];
+    _emptyText.backgroundColor = [UIColor clearColor];
+    _emptyText.textColor = ExteriaColorSecondary();
+    _emptyText.textAlignment = ExteriaTextAlignmentCenter;
+    _emptyText.numberOfLines = 0;
+    [_emptyView addSubview:_emptyText];
+    _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
+    _spinner.hidesWhenStopped = YES;
+    [root addSubview:_spinner];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self loadRecent];
+    [self refreshState];
+    [self loadEveryChat];
+}
+
 /* the list the screen was given holds one request of chats, and a chat further down would be found only by the server's own search, which keeps few of them */
 - (void)loadEveryChat {
     ExteriaWeakReference *weak = _weak;
