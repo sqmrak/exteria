@@ -1,4 +1,5 @@
 #import "exteria_form_controller.h"
+#import "exteria_alert_view.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -290,7 +291,7 @@ static UILabel *ExteriaFormLabel(UIColor *color, NSInteger lines, NSInteger alig
 }
 
 - (void)showErrorAlert {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:_errorText delegate:nil
                                cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];

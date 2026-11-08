@@ -1,4 +1,5 @@
 #import "exteria_download_log.h"
+#import "exteria_alert_view.h"
 #import "exteria_gift_detail_controller.h"
 #import "exteria_emoji_label.h"
 #import "exteria_pinned_line.h"
@@ -2351,7 +2352,7 @@ enum { ExteriaChatAlertStylePlainTextInput = 2 };
         [self beginChatSearch];
         return;
     }
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:NSLocalizedString(@"chat.search.prompt", nil) message:nil delegate:self
                                cancelButtonTitle:NSLocalizedString(@"picker.cancel", nil) otherButtonTitles:NSLocalizedString(@"chat.search.go", nil), nil];
     [alert setAlertViewStyle:ExteriaChatAlertStylePlainTextInput];
@@ -5249,7 +5250,7 @@ static void ExteriaRedrawTree(UIView *view) {
 }
 
 - (void)showReactionError:(NSString *)error {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:NSLocalizedString(@"chat.reaction.failed", nil)
         message:[self failureTextForError:error] delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil];
     [alert show];
@@ -7195,7 +7196,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)showRecordingFailure:(NSString *)reason {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     NSString *text = reason.length ? [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(@"chat.record.unavailable", nil), reason]
                                    : NSLocalizedString(@"chat.record.unavailable", nil);
     id alert = [[alertClass alloc] initWithTitle:nil message:text delegate:nil

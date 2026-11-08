@@ -1,4 +1,5 @@
 #import "exteria_gift_compose_controller.h"
+#import "exteria_alert_view.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -250,7 +251,7 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
         }
         [_quote release];
         _quote = [quote retain];
-        Class alertClass = NSClassFromString(@"UIAlertView");
+        Class alertClass = ExteriaAlertClass();
         id alert = [[alertClass alloc] initWithTitle:nil
                                              message:[NSString stringWithFormat:NSLocalizedString(@"gifts.confirm", nil), ExteriaStarsText(quote.stars), _dialog.saved ? NSLocalizedString(@"gifts.you", nil) : _dialog.title]
                                             delegate:self cancelButtonTitle:NSLocalizedString(@"picker.cancel", nil)

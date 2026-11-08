@@ -1,4 +1,5 @@
 #import "exteria_gift_detail_controller.h"
+#import "exteria_alert_view.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -730,7 +731,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
 
 - (void)confirm:(NSString *)message tag:(NSInteger)tag action:(NSString *)action {
     if (_working) return;
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:message delegate:self cancelButtonTitle:NSLocalizedString(@"picker.cancel", nil)
                                otherButtonTitles:action, nil];
     [alert setTag:tag];

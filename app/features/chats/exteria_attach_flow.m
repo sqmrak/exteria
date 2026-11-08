@@ -1,4 +1,5 @@
 #import "exteria_attach_flow.h"
+#import "exteria_alert_view.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
@@ -104,7 +105,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
 }
 
 - (void)alert:(NSString *)text {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:text delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];
     [alert release];

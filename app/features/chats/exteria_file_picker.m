@@ -1,4 +1,5 @@
 #import "exteria_file_picker.h"
+#import "exteria_alert_view.h"
 
 #import <sys/stat.h>
 #import <unistd.h>
@@ -183,7 +184,7 @@
     NSString *path = [entry objectForKey:@"path"];
     struct stat info;
     if (stat(path.fileSystemRepresentation, &info) != 0 || (!S_ISDIR(info.st_mode) && !S_ISREG(info.st_mode)) || access(path.fileSystemRepresentation, R_OK) != 0) {
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:NSLocalizedString(@"attach.file.unavailable", nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
+        UIAlertView *alert = [[ExteriaAlertClass() alloc] initWithTitle:nil message:NSLocalizedString(@"attach.file.unavailable", nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
         [alert show]; [alert release]; return;
     }
     if (S_ISDIR(info.st_mode)) {

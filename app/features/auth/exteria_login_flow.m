@@ -1,4 +1,5 @@
 #import "exteria_login_flow.h"
+#import "exteria_alert_view.h"
 
 typedef enum {
     ExteriaLoginStagePhone,
@@ -162,7 +163,7 @@ static NSString *ExteriaMaskedNumber(NSString *number) {
     }
     if (_stage == ExteriaLoginStagePhone) {
         _phone.busy = NO;
-        Class alertClass = NSClassFromString(@"UIAlertView");
+        Class alertClass = ExteriaAlertClass();
         id alert = [[alertClass alloc] initWithTitle:nil message:text delegate:nil
                                    cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
         [alert show];
@@ -338,7 +339,7 @@ static NSString *ExteriaMaskedNumber(NSString *number) {
     if (_stage == ExteriaLoginStagePassword) {
         /* without a recovery e-mail the only way back in is the seven-day reset, which only the official apps can ask for */
         if (!_hasRecovery) {
-            Class alertClass = NSClassFromString(@"UIAlertView");
+            Class alertClass = ExteriaAlertClass();
             id alert = [[alertClass alloc] initWithTitle:NSLocalizedString(@"recovery.none.title", nil) message:NSLocalizedString(@"recovery.none.message", nil)
                                                 delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
             [alert show];

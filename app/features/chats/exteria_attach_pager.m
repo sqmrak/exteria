@@ -1,4 +1,5 @@
 #import <AVFoundation/AVFoundation.h>
+#import "exteria_alert_view.h"
 #import <QuartzCore/QuartzCore.h>
 #import <MobileCoreServices/MobileCoreServices.h>
 #import "exteria_attach_pager.h"
@@ -808,7 +809,7 @@ static char ExteriaPlayerStatusContext;
 }
 
 - (void)photoError:(NSString *)message {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:message delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];
     [alert release];

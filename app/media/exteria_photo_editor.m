@@ -1,4 +1,5 @@
 #import "exteria_slider.h"
+#import "exteria_alert_view.h"
 #import "exteria_photo_editor.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
@@ -796,7 +797,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     }
 }
 - (void)notice:(NSString *)key {
-    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:NSLocalizedString(key, nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
+    UIAlertView *alert = [[ExteriaAlertClass() alloc] initWithTitle:nil message:NSLocalizedString(key, nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show]; [alert release];
 }
 
@@ -1264,7 +1265,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     if (_mode != 3) return;
     _alertText = _selectedText;
     if (_textPoint.x == 0 && _textPoint.y == 0) _textPoint = CGPointMake(0.5, 0.5);
-    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"media.text", nil) message:nil delegate:self cancelButtonTitle:NSLocalizedString(@"attach.cancel", nil) otherButtonTitles:NSLocalizedString(@"media.apply", nil), nil];
+    UIAlertView *alert = [[ExteriaAlertClass() alloc] initWithTitle:NSLocalizedString(@"media.text", nil) message:nil delegate:self cancelButtonTitle:NSLocalizedString(@"attach.cancel", nil) otherButtonTitles:NSLocalizedString(@"media.apply", nil), nil];
     alert.alertViewStyle = UIAlertViewStylePlainTextInput;
     UITextField *field = [alert textFieldAtIndex:0];
     field.textColor = [UIColor blackColor]; field.backgroundColor = [UIColor whiteColor];

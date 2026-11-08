@@ -1,4 +1,5 @@
 #import "exteria_location_controller.h"
+#import "exteria_alert_view.h"
 #import "exteria_bar_button.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_image_decoder.h"
@@ -230,7 +231,7 @@ static UIImage *ExteriaLocationPlaceBadge(UIImage *icon) {
     _plus.frame=CGRectMake(12,12,40,40); _minus.frame=CGRectMake(12,56,40,40);
 }
 - (void)alert:(NSString *)message {
-    id alert=[[NSClassFromString(@"UIAlertView") alloc] initWithTitle:nil message:message delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok",nil) otherButtonTitles:nil];
+    id alert=[[ExteriaAlertClass() alloc] initWithTitle:nil message:message delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok",nil) otherButtonTitles:nil];
     [alert show]; [alert release];
 }
 - (void)stopLocating {

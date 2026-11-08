@@ -1,4 +1,5 @@
 #import <QuartzCore/QuartzCore.h>
+#import "exteria_alert_view.h"
 #import "exteria_community_controller.h"
 
 #import "exteria_chat_controller.h"
@@ -302,7 +303,7 @@ enum { SectionSwitch, SectionJoined, SectionViewable, SectionCount };
         /* the list keeps what the server has, so the switch goes back to it and the person is told */
         _loaded.collapsed = !collapsed;
         sender.on = !collapsed;
-        Class alertClass = NSClassFromString(@"UIAlertView");
+        Class alertClass = ExteriaAlertClass();
         id alert = [[alertClass alloc] initWithTitle:nil message:[NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName]
                                             delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
         [alert show];

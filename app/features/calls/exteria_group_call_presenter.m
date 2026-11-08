@@ -1,4 +1,5 @@
 #import "exteria_group_call_presenter.h"
+#import "exteria_alert_view.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -135,7 +136,7 @@
 - (void)noticeForCall:(ExteriaGroupCall *)call {
     NSString *text = call.phase == ExteriaGroupPhaseEnded ? [self noticeTextForCall:call] : nil;
     if (!text) return;
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:text delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];
     [alert release];

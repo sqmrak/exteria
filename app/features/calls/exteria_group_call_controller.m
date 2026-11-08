@@ -1,4 +1,5 @@
 #import "exteria_group_call_controller.h"
+#import "exteria_alert_view.h"
 
 #import <QuartzCore/QuartzCore.h>
 
@@ -400,7 +401,7 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
 }
 
 - (void)notice:(NSString *)message {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:message delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];
     [alert release];
@@ -434,7 +435,7 @@ static UILabel *GroupLabel(CGFloat size, BOOL bold, CGFloat alpha) {
 }
 
 - (void)confirmEnd {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:NSLocalizedString(@"group.end.confirm", nil) delegate:self
                                cancelButtonTitle:NSLocalizedString(@"notice.cancel", nil) otherButtonTitles:NSLocalizedString(@"group.end.all", nil), nil];
     [alert show];

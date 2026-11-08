@@ -1,4 +1,5 @@
 #import "exteria_plugins.h"
+#import "exteria_alert_view.h"
 #import "exteria_power_notice.h"
 #import "exteria_app_delegate.h"
 #import "exteria_quick_actions.h"
@@ -804,7 +805,7 @@ static NSString *ExteriaSupportDirectory(void) {
 }
 
 - (void)showNoticeTitle:(NSString *)title message:(NSString *)message {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:title message:message delegate:nil
                                cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];

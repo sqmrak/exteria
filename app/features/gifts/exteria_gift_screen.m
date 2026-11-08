@@ -1,4 +1,5 @@
 #import "exteria_emoji_label.h"
+#import "exteria_alert_view.h"
 #import "exteria_gift_screen.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -66,7 +67,7 @@ NSString *ExteriaGiftErrorText(NSString *errorName) {
 }
 
 void ExteriaGiftAlert(NSString *title, NSString *message) {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:title message:message delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];
     [alert release];

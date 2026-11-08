@@ -1,4 +1,5 @@
 #import "exteria_developers.h"
+#import "exteria_alert_view.h"
 #import "exteria_emoji_label.h"
 #import "exteria_gift_folder_bar.h"
 #import "exteria_animation.h"
@@ -1073,7 +1074,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         _signOut.enabled = YES;
         [_spinner stopAnimating];
         if (!errorName) return;
-        Class alertClass = NSClassFromString(@"UIAlertView");
+        Class alertClass = ExteriaAlertClass();
         id failure = [[alertClass alloc] initWithTitle:nil
                                                message:[errorName isEqualToString:@"TIMEOUT"] ? NSLocalizedString(@"error.offline", nil)
                                                        : [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName]

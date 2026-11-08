@@ -1,4 +1,5 @@
 #import "exteria_platform.h"
+#import "exteria_alert_view.h"
 #import "exteria_alert.h"
 
 #import <UIKit/UIKit.h>
@@ -63,7 +64,7 @@
 /* style: 0 none, 1 secure field, 2 plain field with initial and placeholder */
 static void ExteriaPresentAlert(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, int style, NSString *initial, NSString *placeholder,
                                 ExteriaAlertHandler handler) {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     ExteriaAlertTarget *target = [[ExteriaAlertTarget alloc] init];
     target->handler = [handler copy];
     target->cancelIndex = cancelIndex;

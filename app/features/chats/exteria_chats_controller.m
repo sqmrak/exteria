@@ -1,4 +1,5 @@
 #import "exteria_draft.h"
+#import "exteria_alert_view.h"
 #import "exteria_dust_effect.h"
 #import "exteria_lite_mode.h"
 #import "exteria_status_label.h"
@@ -858,7 +859,7 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 }
 
 - (void)askNameForMegagroup:(BOOL)megagroup {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:NSLocalizedString(megagroup ? @"create.group.title" : @"create.channel.title", nil) message:nil delegate:self
                                cancelButtonTitle:NSLocalizedString(@"attach.cancel", nil) otherButtonTitles:NSLocalizedString(@"create.action", nil), nil];
     /* the plain text input style came with ios 5 */
@@ -987,7 +988,7 @@ static NSString *ExteriaDialogRowKey(ExteriaDialog *dialog) {
 }
 
 - (void)showFailureText:(NSString *)text {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:nil message:text delegate:nil
                                cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show];

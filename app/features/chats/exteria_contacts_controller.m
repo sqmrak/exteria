@@ -1,4 +1,5 @@
 #import "exteria_string_drawing.h"
+#import "exteria_alert_view.h"
 #import "exteria_developers.h"
 #import "exteria_contacts_controller.h"
 
@@ -316,7 +317,7 @@ static UIButton *ExteriaContactsBarButton(ExteriaSymbol symbol, id target, SEL a
     [_search resignFirstResponder];
     ExteriaDialog *dialog = [ExteriaDialog dialogWithPerson:[_list personAtIndexPath:indexPath]];
     if (!dialog) {
-        Class alertClass = NSClassFromString(@"UIAlertView");
+        Class alertClass = ExteriaAlertClass();
         id alert = [[alertClass alloc] initWithTitle:nil message:NSLocalizedString(@"contacts.nochat", nil) delegate:nil
                                    cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
         [alert show];

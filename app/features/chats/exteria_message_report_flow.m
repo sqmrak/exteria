@@ -1,4 +1,5 @@
 #import "exteria_message_report_flow.h"
+#import "exteria_alert_view.h"
 
 #import "exteria_gift_screen.h"
 #import "exteria_session_report.h"
@@ -99,7 +100,7 @@ enum { ExteriaAlertStylePlainTextInput = 2 };
 }
 
 - (void)askComment {
-    Class alertClass = NSClassFromString(@"UIAlertView");
+    Class alertClass = ExteriaAlertClass();
     id alert = [[alertClass alloc] initWithTitle:NSLocalizedString(@"report.comment", nil) message:nil delegate:self
                                cancelButtonTitle:NSLocalizedString(@"picker.cancel", nil) otherButtonTitles:NSLocalizedString(@"report.send", nil), nil];
     [alert setAlertViewStyle:ExteriaAlertStylePlainTextInput];

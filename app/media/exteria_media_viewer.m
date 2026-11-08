@@ -1,4 +1,5 @@
 #import "exteria_name_badge.h"
+#import "exteria_alert_view.h"
 #import "exteria_media_action_view.h"
 #import "exteria_progress_bar.h"
 #import "exteria_slider.h"
@@ -1006,7 +1007,7 @@ static NSString *ExteriaVideoTime(double seconds) {
 }
 
 - (void)notice:(NSString *)text {
-    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:text delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
+    UIAlertView *alert = [[ExteriaAlertClass() alloc] initWithTitle:nil message:text delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
     [alert show]; [alert release];
 }
 - (void)save {

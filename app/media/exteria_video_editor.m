@@ -1,4 +1,5 @@
 #import "exteria_video_editor.h"
+#import "exteria_alert_view.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -271,7 +272,7 @@
                 [editor->_spinner stopAnimating];
                 double from = 0, length = 0;
                 if (!valid || exteria_video_edit_range(duration, editor->_start, editor->_end, &from, &length) != EXTERIA_OK) {
-                    UIAlertView *alert = [[[UIAlertView alloc] initWithTitle:nil message:NSLocalizedString(@"video.edit.failed", nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil] autorelease];
+                    UIAlertView *alert = [[[ExteriaAlertClass() alloc] initWithTitle:nil message:NSLocalizedString(@"video.edit.failed", nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil] autorelease];
                     [alert show];
                 } else {
                     editor->_duration = duration;
@@ -370,7 +371,7 @@
 #pragma mark - orientation
 
 - (void)showEditError {
-    UIAlertView *alert = [[[UIAlertView alloc] initWithTitle:nil message:NSLocalizedString(@"video.edit.failed", nil) delegate:nil
+    UIAlertView *alert = [[[ExteriaAlertClass() alloc] initWithTitle:nil message:NSLocalizedString(@"video.edit.failed", nil) delegate:nil
         cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil] autorelease];
     [alert show];
 }
