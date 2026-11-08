@@ -191,6 +191,17 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
 }
 @end
 
+/* the name of a file as it goes in the upload and in the attribute of the document. a file system allows 255 characters, which is up to 510 bytes of utf-8 and more than the 256 the buffers
+   of a transfer hold, so a long name sent from another application (the share sheet hands the file over with its own name) failed as FILE_NAME_TOO_LONG; the base of the name
+   is cut short at a character and the extension stays */
+static NSString *ExteriaFittedFileName(NSString *name) {
+    const char *utf8 = name.UTF8String;
+    char fitted[EXTERIA_UPLOAD_NAME_MAX];
+    if (!utf8 || exteria_upload_fit_name(utf8, fitted, sizeof(fitted)) != EXTERIA_OK) return name ? name : @"";
+    NSString *result = [NSString stringWithUTF8String:fitted];
+    return result ? result : name;
+}
+
 @implementation ExteriaSession (Chat)
 
 - (void)deliverMain:(void (^)(void))block {
@@ -509,7 +520,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     NSString *file = [path copy];
     [self post:^{
         int fd = open(file.fileSystemRepresentation, O_RDONLY);
-        exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&job->transfer, fd, file.lastPathComponent.UTF8String, [self workerDc],
+        exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&job->transfer, fd, ExteriaFittedFileName(file.lastPathComponent).UTF8String, [self workerDc],
                                                                            UPLOAD_PART, UPLOAD_PARTS_MAX);
         if (fd >= 0) close(fd);
         if (status != EXTERIA_OK) {
@@ -545,7 +556,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     } else if (item->kind == ExteriaOutgoingFile) {
         /* files sent without compression go out as a group of documents, which the server shows as one album */
         upload->spec = ExteriaSpec(EXTERIA_UPLOAD_FILE, 0, 0, 0);
-        int nameLength = snprintf(upload->spec.name, sizeof(upload->spec.name), "%s", item->name.UTF8String ? item->name.UTF8String : "");
+        int nameLength = snprintf(upload->spec.name, sizeof(upload->spec.name), "%s", ExteriaFittedFileName(item->name).UTF8String);
         int mimeLength = snprintf(upload->spec.mime, sizeof(upload->spec.mime), "%s", item->mime.length ? item->mime.UTF8String : "application/octet-stream");
         fits = nameLength >= 0 && (size_t)nameLength < sizeof(upload->spec.name) && mimeLength >= 0 && (size_t)mimeLength < sizeof(upload->spec.mime);
     } else {
@@ -567,7 +578,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     }
     NSString *file = [item->path copy];
     int fd = open(file.fileSystemRepresentation, O_RDONLY);
-    exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&upload->transfer, fd, file.lastPathComponent.UTF8String, [self workerDc], UPLOAD_PART, UPLOAD_PARTS_MAX);
+    exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&upload->transfer, fd, ExteriaFittedFileName(file.lastPathComponent).UTF8String, [self workerDc], UPLOAD_PART, UPLOAD_PARTS_MAX);
     if (fd >= 0) close(fd);
     [file release];
     if (status != EXTERIA_OK) {
@@ -641,7 +652,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     NSString *file = [path copy];
     [self post:^{
         int fd = open(file.fileSystemRepresentation, O_RDONLY);
-        exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&job->transfer, fd, file.lastPathComponent.UTF8String, [self workerDc],
+        exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&job->transfer, fd, ExteriaFittedFileName(file.lastPathComponent).UTF8String, [self workerDc],
                                                                            UPLOAD_PART, UPLOAD_PARTS_MAX);
         if (fd >= 0) close(fd);
         if (status != EXTERIA_OK) {
@@ -738,7 +749,7 @@ static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answe
     NSString *file = [path copy];
     [self post:^{
         int fd = open(file.fileSystemRepresentation, O_RDONLY);
-        exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&job->transfer, fd, file.lastPathComponent.UTF8String, [self workerDc],
+        exteria_status status = fd < 0 ? EXTERIA_E_IO : exteria_file_upload(&job->transfer, fd, ExteriaFittedFileName(file.lastPathComponent).UTF8String, [self workerDc],
                                                                            UPLOAD_PART, UPLOAD_PARTS_MAX);
         if (fd >= 0) close(fd);
         if (status != EXTERIA_OK) {
@@ -813,7 +824,7 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
     spec.animated = outgoing->animated && kind == EXTERIA_UPLOAD_FILE ? 1 : 0;
     if (!ExteriaUploadCaption(&spec, outgoing->caption)) { completion(0, @"CAPTION_TOO_LONG"); return; }
     if (kind == EXTERIA_UPLOAD_FILE) {
-        int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", outgoing->name.UTF8String ? outgoing->name.UTF8String : "");
+        int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", ExteriaFittedFileName(outgoing->name).UTF8String);
         int mimeLength = snprintf(spec.mime, sizeof(spec.mime), "%s", outgoing->mime.length ? outgoing->mime.UTF8String : "application/octet-stream");
         if (nameLength < 0 || (size_t)nameLength >= sizeof(spec.name) || mimeLength < 0 || (size_t)mimeLength >= sizeof(spec.mime)) { completion(0, @"FILE_NAME_TOO_LONG"); return; }
         if (outgoing->music) {

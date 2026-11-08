@@ -2070,6 +2070,31 @@ exteria_status exteria_search_request(exteria_arena *arena, const char *query, e
     return status;
 }
 
+exteria_status exteria_upload_fit_name(const char *name, char *out, size_t capacity) {
+    size_t length, extension = 0, base, keep;
+    const char *dot;
+    if (out && capacity) out[0] = 0;
+    if (!name || !out || capacity < 2) return EXTERIA_E_ARG;
+    length = strlen(name);
+    if (length < capacity) {
+        memcpy(out, name, length + 1);
+        return EXTERIA_OK;
+    }
+    /* the extension is what follows the last dot, which is a name's own only when something comes before it, and an extension that takes half the room is part of the junk */
+    dot = strrchr(name, '.');
+    if (dot && dot != name) extension = length - (size_t)(dot - name);
+    if (extension >= capacity / 2) extension = 0;
+    base = length - extension;
+    keep = capacity - 1 - extension;
+    if (keep > base) keep = base;
+    /* a byte that continues a character (10xxxxxx) cannot start the part that is dropped, so the cut steps back to where the character began */
+    while (keep > 0 && ((unsigned char)name[keep] & 0xC0u) == 0x80u) --keep;
+    if (keep == 0) return EXTERIA_E_ARG;
+    memcpy(out, name, keep);
+    memcpy(out + keep, name + base, extension);
+    out[keep + extension] = 0;
+    return EXTERIA_OK;
+}
 
 int exteria_read_history_answer_valid(const exteria_peer_ref *peer, const exteria_tl_value *answer) {
     if (!peer || !answer) return 0;
@@ -2077,6 +2102,7 @@ int exteria_read_history_answer_valid(const exteria_peer_ref *peer, const exteri
         return exteria_tl_is(answer, EXTERIA_TL_ID_boolTrue);
     return exteria_tl_is(answer, EXTERIA_TL_ID_messages_affectedMessages);
 }
+
 exteria_status exteria_read_history_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t max_id,
                                            exteria_tl_value **out) {
     exteria_tl_value *request, *input;

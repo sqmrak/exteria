@@ -401,6 +401,10 @@ typedef enum exteria_upload_kind {
 
 /* the longest name a file system holds, 255 bytes, and the end of the string; the android client sends the name of the file as it is */
 #define EXTERIA_UPLOAD_NAME_MAX 256
+/* a file system counts a name in characters (255 of them), and a name in Cyrillic or Chinese takes two or three bytes each, so a name a person gave a file can be longer than the buffer
+   above. this writes it into out (capacity bytes with the end of the string) the way it is when it fits, and otherwise with the base of the name cut short at the edge of a character
+   and the extension kept, so a long name goes out shortened and not as an error. EXTERIA_E_ARG for a null pointer, a capacity under two, or a name with no room left for a character */
+exteria_status exteria_upload_fit_name(const char *name, char *out, size_t capacity);
 #define EXTERIA_UPLOAD_CAPTION_MAX 4096
 #define EXTERIA_UPLOAD_MUSIC_TEXT_MAX 128
 
