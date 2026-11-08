@@ -344,7 +344,7 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     ExteriaAttachItem *item = [[[_ready objectAtIndex:0] retain] autorelease];
     [_ready removeObjectAtIndex:0];
     [self takeCaptionForNextItem];
-    if (item->movie) [self prepareMovieAtURL:item->movie start:item->trimStart end:item->trimEnd muted:item->muted turns:item->turns mirrored:item->mirrored aspect:item->aspect];
+    if (item->movie) [self prepareMovieAtURL:item->movie start:item->trimStart end:item->trimEnd muted:item->muted turns:item->turns mirrored:item->mirrored crop:item->crop];
     else [self preparePhoto:item->image];
 }
 
@@ -610,10 +610,10 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
 
 /* normal videos are exported to mp4; files keep their encoded tracks */
 - (void)prepareMovieAtURL:(NSURL *)url {
-    [self prepareMovieAtURL:url start:0 end:1 muted:NO turns:0 mirrored:NO aspect:0];
+    [self prepareMovieAtURL:url start:0 end:1 muted:NO turns:0 mirrored:NO crop:CGRectZero];
 }
 
-- (void)prepareMovieAtURL:(NSURL *)url start:(double)start end:(double)end muted:(BOOL)muted turns:(NSInteger)turns mirrored:(BOOL)mirrored aspect:(unsigned)aspect {
+- (void)prepareMovieAtURL:(NSURL *)url start:(double)start end:(double)end muted:(BOOL)muted turns:(NSInteger)turns mirrored:(BOOL)mirrored crop:(CGRect)crop {
     [self showBusy];
     AVURLAsset *original = [AVURLAsset URLAssetWithURL:url options:nil];
     BOOL asFile = _options && _options->asFiles;
@@ -637,8 +637,8 @@ static NSString *ExteriaTemporaryFile(NSString *extension) {
     export.outputFileType = fileType;
     export.shouldOptimizeForNetworkUse = YES;
     export.timeRange = CMTimeRangeMake(CMTimeMakeWithSeconds(begin, 600), CMTimeMakeWithSeconds(length, 600));
-    if (turns || mirrored || aspect) {
-        AVVideoComposition *composition = ExteriaVideoComposition(asset, turns, mirrored, exteria_video_edit_aspect(aspect));
+    if (turns || mirrored || !CGRectIsEmpty(crop)) {
+        AVVideoComposition *composition = ExteriaVideoComposition(asset, turns, mirrored, crop);
         if (!composition) {
             [_export release]; _export = nil;
             [export release]; [self hideBusy]; [self alert:NSLocalizedString(@"attach.failed", nil)]; return;

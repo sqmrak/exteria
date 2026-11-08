@@ -1,7 +1,7 @@
 #import "exteria_video_composition.h"
 #include "exteria_video_edit.h"
 
-AVVideoComposition *ExteriaVideoComposition(AVAsset *asset, NSInteger turns, BOOL mirror, double ratio) {
+AVVideoComposition *ExteriaVideoComposition(AVAsset *asset, NSInteger turns, BOOL mirror, CGRect crop) {
     if (!asset || turns < 0 || turns > 3) return nil;
     NSArray *tracks = [asset tracksWithMediaType:AVMediaTypeVideo];
     if (!tracks.count) return nil;
@@ -20,7 +20,9 @@ AVVideoComposition *ExteriaVideoComposition(AVAsset *asset, NSInteger turns, BOO
     }
     if (mirror) place = CGAffineTransformConcat(place, CGAffineTransformMake(-1, 0, 0, 1, width, 0));
     double x = 0, y = 0, cropWidth = 0, cropHeight = 0;
-    if (exteria_video_edit_crop(width, height, ratio, &x, &y, &cropWidth, &cropHeight) != EXTERIA_OK) return nil;
+    exteria_status cropped = CGRectIsEmpty(crop) ? exteria_video_edit_crop(width, height, 0, &x, &y, &cropWidth, &cropHeight)
+                                                  : exteria_video_edit_crop_rect(width, height, crop.origin.x, crop.origin.y, crop.size.width, crop.size.height, &x, &y, &cropWidth, &cropHeight);
+    if (cropped != EXTERIA_OK) return nil;
     place = CGAffineTransformConcat(place, CGAffineTransformMakeTranslation(-x, -y));
     AVMutableVideoCompositionLayerInstruction *layer = [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:track];
     [layer setTransform:place atTime:kCMTimeZero];

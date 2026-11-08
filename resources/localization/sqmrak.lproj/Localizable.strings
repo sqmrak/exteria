@@ -2513,6 +2513,7 @@
 "video.edit.mute" = "убрать звук";
 "video.edit.unmute" = "вернуть звук";
 "video.edit.failed" = "не удалось открыть видео для редактирования :#";
+"video.crop.original" = "исходное";
 "attach.video.failed" = "не удалось воспроизвести видео :#";
 "media.blur" = "размытие";
 "media.pipette" = "пипетка";

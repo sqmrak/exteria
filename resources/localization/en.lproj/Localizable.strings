@@ -2507,6 +2507,7 @@
 "video.edit.mute" = "Mute";
 "video.edit.unmute" = "Restore sound";
 "video.edit.failed" = "Could not open the video for editing.";
+"video.crop.original" = "Original";
 "attach.video.failed" = "The video cannot be played.";
 "media.blur" = "Blur";
 "media.pipette" = "Eyedropper";

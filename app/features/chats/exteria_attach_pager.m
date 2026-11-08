@@ -261,14 +261,14 @@ static char ExteriaPlayerStatusContext;
         double start = item->trimStart;
         NSInteger turns = item->turns;
         BOOL mirrored = item->mirrored;
-        unsigned aspect = item->aspect;
+        CGRect crop = item->crop;
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
             AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
             AVAssetImageGenerator *generator = [AVAssetImageGenerator assetImageGeneratorWithAsset:asset];
             generator.appliesPreferredTrackTransform = YES;
-            if (turns || mirrored || aspect) {
-                generator.videoComposition = ExteriaVideoComposition(asset, turns, mirrored, exteria_video_edit_aspect(aspect));
+            if (turns || mirrored || !CGRectIsEmpty(crop)) {
+                generator.videoComposition = ExteriaVideoComposition(asset, turns, mirrored, crop);
                 if (!generator.videoComposition) NSLog(@"exteria: the edited video poster could not be composed");
             }
             generator.maximumSize = CGSizeMake(POSTER_SIDE, POSTER_SIDE);
@@ -624,7 +624,7 @@ static char ExteriaPlayerStatusContext;
     double trimStart = item->trimStart, trimEnd = item->trimEnd;
     NSInteger turns = item->turns;
     BOOL mirrored = item->mirrored, muted = item->muted;
-    unsigned aspect = item->aspect;
+    CGRect crop = item->crop;
     ExteriaWeakReference *weak = _weak;
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
     [url release];
@@ -638,8 +638,8 @@ static char ExteriaPlayerStatusContext;
             BOOL ready = [asset statusOfValueForKey:@"duration" error:&error] == AVKeyValueStatusLoaded && [asset statusOfValueForKey:@"playable" error:&error] == AVKeyValueStatusLoaded
                 && asset.playable && isfinite(duration) && exteria_video_edit_range(duration, trimStart, trimEnd, &from, &length) == EXTERIA_OK;
             AVVideoComposition *composition = nil;
-            if (ready && (turns || mirrored || aspect)) {
-                composition = ExteriaVideoComposition(asset, turns, mirrored, exteria_video_edit_aspect(aspect));
+            if (ready && (turns || mirrored || !CGRectIsEmpty(crop))) {
+                composition = ExteriaVideoComposition(asset, turns, mirrored, crop);
                 ready = composition != nil;
             }
             if (!ready) {
@@ -896,7 +896,7 @@ static char ExteriaPlayerStatusContext;
     ExteriaWeakReference *weak = _weak;
     if (item->movie) {
         ExteriaVideoEditor *editor = [[[ExteriaVideoEditor alloc] initWithURL:item->movie start:item->trimStart end:item->trimEnd muted:item->muted
-            turns:item->turns mirrored:item->mirrored aspect:item->aspect completion:^(double start, double end, BOOL muted, NSInteger turns, BOOL mirrored, unsigned aspect) {
+            turns:item->turns mirrored:item->mirrored crop:item->crop completion:^(double start, double end, BOOL muted, NSInteger turns, BOOL mirrored, CGRect crop) {
                 ExteriaAttachPager *me = weak.target;
                 if (!me || ![me->_items containsObject:item]) return;
                 item->trimStart = start;
@@ -904,7 +904,7 @@ static char ExteriaPlayerStatusContext;
                 item->muted = muted;
                 item->turns = turns;
                 item->mirrored = mirrored;
-                item->aspect = aspect;
+                item->crop = crop;
                 [item->poster release]; item->poster = nil;
                 [me loadPosters];
             }] autorelease];

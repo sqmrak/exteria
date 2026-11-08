@@ -9,12 +9,14 @@
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_video_composition.h"
+#import "exteria_video_crop_view.h"
 #import "exteria_video_timeline.h"
 #import "exteria_weak_reference.h"
 #include "exteria_video_edit.h"
 
 #define VIDEO_FRAME_COUNT 10
-#define VIDEO_RATIO_COUNT 6
+/* the states of the crop button: the whole picture, a frame of any shape, then a frame of each of five shapes */
+#define VIDEO_CROP_STATES 7
 
 @interface ExteriaVideoPreview : UIView
 @end
@@ -24,7 +26,7 @@
 
 @interface ExteriaVideoEditor () {
     NSURL *_url;
-    void (^_completion)(double, double, BOOL, NSInteger, BOOL, unsigned);
+    void (^_completion)(double, double, BOOL, NSInteger, BOOL, CGRect);
     ExteriaWeakReference *_weak;
     AVPlayer *_player;
     AVPlayerItem *_item;
@@ -39,7 +41,7 @@
     ExteriaEditorButton *_sound;
     ExteriaEditorButton *_rotate;
     ExteriaEditorButton *_mirror;
-    ExteriaEditorButton *_crop;
+    ExteriaEditorButton *_cropButton;
     UILabel *_length;
     UIActivityIndicatorView *_spinner;
     CADisplayLink *_link;
@@ -49,7 +51,10 @@
     BOOL _muted;
     NSInteger _turns;
     BOOL _mirrored;
-    unsigned _aspect;
+    /* the state of the crop button, and the frame as fractions of the picture after its turns; empty while the whole picture is kept */
+    NSUInteger _cropState;
+    CGRect _crop;
+    ExteriaVideoCropView *_cropView;
     BOOL _playing;
     BOOL _resumeAfterDrag;
     BOOL _closed;
@@ -59,14 +64,17 @@
 @end
 
 @implementation ExteriaVideoEditor
-- (id)initWithURL:(NSURL *)url start:(double)start end:(double)end muted:(BOOL)muted turns:(NSInteger)turns mirrored:(BOOL)mirrored aspect:(unsigned)aspect
-      completion:(void (^)(double, double, BOOL, NSInteger, BOOL, unsigned))completion {
+- (id)initWithURL:(NSURL *)url start:(double)start end:(double)end muted:(BOOL)muted turns:(NSInteger)turns mirrored:(BOOL)mirrored crop:(CGRect)crop
+      completion:(void (^)(double, double, BOOL, NSInteger, BOOL, CGRect))completion {
     self = [super init];
     if (self) {
         _url = [url retain];
         _completion = [completion copy];
         _weak = [[ExteriaWeakReference referenceTo:self] retain];
-        _start = start; _end = end; _muted = muted; _turns = turns; _mirrored = mirrored; _aspect = aspect;
+        _start = start; _end = end; _muted = muted; _turns = turns; _mirrored = mirrored;
+        /* a frame kept from an earlier visit opens as a frame of any shape, to be taken up where it was left */
+        _crop = CGRectIsEmpty(crop) ? CGRectZero : crop;
+        _cropState = CGRectIsEmpty(_crop) ? 0 : 1;
         self.wantsFullScreenLayout = YES;
         self.modalPresentationStyle = UIModalPresentationFullScreen;
     }
@@ -79,8 +87,8 @@
     [_player pause]; ((AVPlayerLayer *)_preview.layer).player = nil;
     [_player release]; [_item release]; [_url release]; [_completion release]; [_weak release];
     [_preview release]; [_playBadge release]; [_top release]; [_bottom release]; [_timeline release];
-    [_cancel release]; [_done release]; [_play release]; [_sound release]; [_rotate release]; [_mirror release]; [_crop release];
-    [_length release]; [_spinner release];
+    [_cancel release]; [_done release]; [_play release]; [_sound release]; [_rotate release]; [_mirror release]; [_cropButton release];
+    [_cropView release]; [_length release]; [_spinner release];
     [super dealloc];
 }
 - (ExteriaEditorButton *)tool:(ExteriaSymbol)symbol title:(NSString *)key action:(SEL)action {
@@ -107,6 +115,15 @@
     _preview = [[ExteriaVideoPreview alloc] init];
     ((AVPlayerLayer *)_preview.layer).videoGravity = AVLayerVideoGravityResizeAspect;
     [self.view addSubview:_preview];
+    /* the frame of the crop stands over the picture, which the preview shows whole while the frame is being shaped */
+    _cropView = [[ExteriaVideoCropView alloc] init];
+    _cropView.hidden = YES;
+    ExteriaWeakReference *cropWeak = _weak;
+    _cropView.changed = ^(CGRect crop) {
+        ExteriaVideoEditor *editor = cropWeak.target;
+        if (editor) editor->_crop = crop;
+    };
+    [self.view addSubview:_cropView];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(togglePlay)] autorelease];
     [_preview addGestureRecognizer:tap];
     /* the mark of a paused picture, which comes back when the video stops and goes when it plays */
@@ -136,7 +153,7 @@
     _sound = [self tool:ExteriaSymbolSpeaker title:@"video.edit.sound" action:@selector(toggleMute)];
     _rotate = [self tool:ExteriaSymbolRotate title:@"media.rotate" action:@selector(rotate)];
     _mirror = [self tool:ExteriaSymbolMirror title:@"media.flip" action:@selector(mirror)];
-    _crop = [self tool:ExteriaSymbolCrop title:@"media.free" action:@selector(crop)];
+    _cropButton = [self tool:ExteriaSymbolCrop title:@"video.crop.original" action:@selector(crop)];
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
     _spinner.hidesWhenStopped = YES; [self.view addSubview:_spinner]; [_spinner startAnimating];
     _top.alpha = 0; _bottom.alpha = 0; _playBadge.alpha = 0;
@@ -150,7 +167,7 @@
     _entered = YES;
     ExteriaEditorRise([NSArray arrayWithObject:_top], -18, 0);
     ExteriaEditorRise([NSArray arrayWithObject:_bottom], 36, 0);
-    ExteriaEditorRise([NSArray arrayWithObjects:_play, _sound, _rotate, _mirror, _crop, nil], 14, 0.03);
+    ExteriaEditorRise([NSArray arrayWithObjects:_play, _sound, _rotate, _mirror, _cropButton, nil], 14, 0.03);
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
@@ -194,7 +211,7 @@
     CGFloat inset = floating ? 12 : 8;
     _timeline.frame = CGRectMake(inset, 10, panelWidth - 2 * inset, timelineHeight);
     CGFloat toolsWidth = panelWidth - 2 * (floating ? 8 : 4), toolWidth = floor(toolsWidth / 5), toolX = (panelWidth - toolWidth * 5) / 2;
-    NSArray *tools = [NSArray arrayWithObjects:_play, _sound, _rotate, _mirror, _crop, nil];
+    NSArray *tools = [NSArray arrayWithObjects:_play, _sound, _rotate, _mirror, _cropButton, nil];
     for (NSUInteger i = 0; i < tools.count; ++i) [(UIView *)[tools objectAtIndex:i] setFrame:CGRectMake(toolX + i * toolWidth, 10 + timelineHeight + 8, toolWidth, toolsHeight)];
 
     CGFloat previewTop = topY + topHeight + (floating ? 8 : 0);
@@ -203,6 +220,7 @@
     _preview.frame = CGRectMake(safe.left, previewTop, MAX(1, previewRight - safe.left), MAX(1, previewBottom - previewTop));
     _playBadge.center = _preview.center;
     _spinner.center = _preview.center;
+    [self layoutCropView];
 }
 - (void)updateControls {
     _timeline.start = _start; _timeline.end = _end; _timeline.duration = _duration;
@@ -214,11 +232,11 @@
     _sound.accessibilityLabel = NSLocalizedString(_muted ? @"video.edit.unmute" : @"video.edit.mute", nil);
     _play.enabled = _duration > 0;
     _timeline.enabled = _duration > 0;
-    NSArray *ratios = [NSArray arrayWithObjects:NSLocalizedString(@"media.free", nil), @"1:1", @"4:3", @"3:4", @"16:9", @"9:16", nil];
-    NSString *ratio = [ratios objectAtIndex:MIN(_aspect, (unsigned)(VIDEO_RATIO_COUNT - 1))];
-    [_crop setTitle:ratio animated:YES];
-    _crop.accessibilityLabel = [NSString stringWithFormat:@"%@ %@", NSLocalizedString(@"media.crop", nil), ratio];
-    [_crop setLit:_aspect != 0 animated:YES];
+    NSArray *shapes = [NSArray arrayWithObjects:NSLocalizedString(@"video.crop.original", nil), NSLocalizedString(@"media.free", nil), @"1:1", @"4:3", @"3:4", @"16:9", @"9:16", nil];
+    NSString *shape = [shapes objectAtIndex:MIN(_cropState, (NSUInteger)(VIDEO_CROP_STATES - 1))];
+    [_cropButton setTitle:shape animated:YES];
+    _cropButton.accessibilityLabel = [NSString stringWithFormat:@"%@ %@", NSLocalizedString(@"media.crop", nil), shape];
+    [_cropButton setLit:_cropState != 0 animated:YES];
     [_rotate setLit:_turns != 0 animated:YES];
     [_mirror setLit:_mirrored animated:YES];
     [self refreshBadge];
@@ -260,7 +278,7 @@
                     editor->_item = [[AVPlayerItem playerItemWithAsset:asset] retain];
                     editor->_player = [[AVPlayer playerWithPlayerItem:editor->_item] retain];
                     ((AVPlayerLayer *)editor->_preview.layer).player = editor->_player;
-                    if ((editor->_turns || editor->_mirrored || editor->_aspect) && ![editor applyComposition]) {
+                    if ((editor->_turns || editor->_mirrored) && ![editor applyComposition]) {
                         editor->_done.enabled = NO;
                         [editor updateControls];
                         NSLog(@"exteria: video orientation cannot be edited");
@@ -358,8 +376,10 @@
 }
 - (BOOL)applyComposition {
     if (!_item) return NO;
-    AVVideoComposition *composition = _turns || _mirrored || _aspect ? ExteriaVideoComposition(_item.asset, _turns, _mirrored, exteria_video_edit_aspect(_aspect)) : nil;
-    if ((_turns || _mirrored || _aspect) && !composition) return NO;
+    /* the preview has the turns and the mirror and never the crop: the frame over the whole picture shows what the crop keeps, where a picture cut by the composition was drawn
+       by the player of an old system stretched over the size of the whole video */
+    AVVideoComposition *composition = _turns || _mirrored ? ExteriaVideoComposition(_item.asset, _turns, _mirrored, CGRectZero) : nil;
+    if ((_turns || _mirrored) && !composition) return NO;
     _item.videoComposition = composition;
     return YES;
 }
@@ -395,6 +415,7 @@
     NSInteger old = _turns; _turns = (_turns + 1) % 4;
     CGSize before = [self pictureSize];
     if (![self applyComposition]) { _turns = old; [self showEditError]; return; }
+    [self turnCropForQuarterTurn];
     [_rotate playQuarterTurn];
     /* a quarter turn swaps the sides, and the aspect fit scales the new shape differently from the old one; the turned preview has to match the old picture's size */
     CGFloat was = [self fitOfSize:before], now = [self fitOfSize:[self pictureSize]];
@@ -406,24 +427,51 @@
     if (!_item) return;
     _mirrored = !_mirrored;
     if (![self applyComposition]) { _mirrored = !_mirrored; [self showEditError]; return; }
+    if (_cropState) _crop = CGRectMake(1 - CGRectGetMaxX(_crop), _crop.origin.y, _crop.size.width, _crop.size.height);
     [_mirror playFlip];
     [self seekToStartThenChange:CGAffineTransformMakeScale(-1, 1)];
     [self updateControls];
 }
+/* a quarter turn of the picture carries the frame with it: the turns come before the mirror, so over a mirrored picture the same turn runs the other way round */
+- (void)turnCropForQuarterTurn {
+    if (!_cropState) return;
+    CGRect r = _crop;
+    _crop = _mirrored ? CGRectMake(r.origin.y, 1 - CGRectGetMaxX(r), r.size.height, r.size.width)
+                      : CGRectMake(1 - CGRectGetMaxY(r), r.origin.x, r.size.height, r.size.width);
+}
+/* the whole picture, a frame of any shape, then a centered frame of each shape; the frame stays as it is when it goes from the shapes to the free one, to be shaped further */
 - (void)crop {
     if (!_item) return;
-    unsigned old = _aspect; _aspect = (_aspect + 1) % VIDEO_RATIO_COUNT;
-    if (![self applyComposition]) { _aspect = old; [self showEditError]; return; }
-    [self seekToStartThenChange:CGAffineTransformMakeScale(0.92, 0.92)];
+    CGSize picture = [self pictureSize];
+    if (picture.width < 2 || picture.height < 2) return;
+    static const double ratios[] = {1, 4.0 / 3, 3.0 / 4, 16.0 / 9, 9.0 / 16};
+    _cropState = (_cropState + 1) % VIDEO_CROP_STATES;
+    if (_cropState == 0) _crop = CGRectZero;
+    else if (_cropState == 1) { if (CGRectIsEmpty(_crop)) _crop = CGRectMake(0, 0, 1, 1); }
+    else _crop = [ExteriaVideoCropView centeredCropOfRatio:ratios[_cropState - 2] inPicture:picture];
+    [self layoutCropView];
     [self updateControls];
+}
+/* the frame stands over the picture as the preview fits it, and keeps the shape of the state while it is dragged */
+- (void)layoutCropView {
+    CGSize picture = _loaded ? [self pictureSize] : CGSizeZero;
+    BOOL show = _cropState != 0 && picture.width > 1 && picture.height > 1 && _preview.bounds.size.width > 1;
+    _cropView.hidden = !show;
+    if (!show) return;
+    _cropView.frame = AVMakeRectWithAspectRatioInsideRect(picture, _preview.frame);
+    _cropView.pictureSize = picture;
+    _cropView.ratio = _cropState >= 2 && _crop.size.height > 0 ? _crop.size.width / _crop.size.height : 0;
+    _cropView.crop = _crop;
 }
 - (void)cancel { _closed = YES; [self dismissViewControllerAnimated:YES completion:nil]; }
 - (void)done {
     double start = 0, duration = 0;
     if (exteria_video_edit_range(_duration, _start, _end, &start, &duration) != EXTERIA_OK) return;
     _closed = YES;
-    void (^completion)(double, double, BOOL, NSInteger, BOOL, unsigned) = [[_completion copy] autorelease];
-    double from = _start, to = _end; BOOL muted = _muted, mirrored = _mirrored; NSInteger turns = _turns; unsigned aspect = _aspect;
-    [self dismissViewControllerAnimated:YES completion:^{ if (completion) completion(from, to, muted, turns, mirrored, aspect); }];
+    void (^completion)(double, double, BOOL, NSInteger, BOOL, CGRect) = [[_completion copy] autorelease];
+    double from = _start, to = _end; BOOL muted = _muted, mirrored = _mirrored; NSInteger turns = _turns;
+    /* a frame that keeps the whole picture is no crop, so the video is not re-encoded for nothing */
+    CGRect crop = _cropState == 0 || (_crop.origin.x < 0.0005 && _crop.origin.y < 0.0005 && _crop.size.width > 0.999 && _crop.size.height > 0.999) ? CGRectZero : _crop;
+    [self dismissViewControllerAnimated:YES completion:^{ if (completion) completion(from, to, muted, turns, mirrored, crop); }];
 }
 @end

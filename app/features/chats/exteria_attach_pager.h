@@ -11,7 +11,8 @@
     BOOL muted;
     NSInteger turns;
     BOOL mirrored;
-    unsigned aspect;
+    /* the crop as fractions of the picture after its turns; empty for the whole picture */
+    CGRect crop;
     NSUInteger posterGeneration;
 }
 @end
