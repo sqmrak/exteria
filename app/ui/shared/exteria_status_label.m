@@ -5,6 +5,7 @@
 
 #import "exteria_emoji_store.h"
 #import "exteria_text_layout.h"
+#import "exteria_custom_emoji.h"
 #import "exteria_theme.h"
 
 #include "exteria_typing.h"
@@ -179,8 +180,10 @@ static NSString *const ExteriaDotKey = @"exteria.status.dot";
     area.size.width -= dots;
     ExteriaTextLayout *layout = [self layoutForWidth:area.size.width];
     NSUInteger misses = ExteriaEmojiMissCount();
+    NSUInteger animated = ExteriaCustomEmojiAnimatedDraws();
     [layout drawAtPoint:[self textRectInArea:area layout:layout].origin];
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(self);
+    if (ExteriaCustomEmojiAnimatedDraws() != animated) [ExteriaCustomEmoji keepAnimatingView:self];
 }
 
 - (void)layoutSubviews {

@@ -226,6 +226,7 @@
     const uint16_t *units = _units.bytes;
     size_t length = _units.length / sizeof(uint16_t);
     NSUInteger misses = ExteriaEmojiMissCount();
+    NSUInteger animated = ExteriaCustomEmojiAnimatedDraws();
     for (size_t i = 0; i < _spans.length / sizeof(*spans); ++i) {
         exteria_emoji_span span = spans[i];
         if (!ExteriaEmojiHasPicture(span.entry)) continue;
@@ -296,5 +297,6 @@
         }
     }
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(_emojiOverlay);
+    if (ExteriaCustomEmojiAnimatedDraws() != animated) [ExteriaCustomEmoji keepAnimatingView:_emojiOverlay];
 }
 @end

@@ -212,6 +212,7 @@ static void ExteriaAnimateDocument(ExteriaCustomEmojiDocument *document, Exteria
         [ExteriaCustomEmoji beginLoad:identifier];
         ExteriaLoadPicture(document, media, ^(UIImage *image) {
             [ExteriaCustomEmoji finishLoad:identifier image:image];
+            if (image) ExteriaAnimateDocument(document, media, landed);
             if (image && landed) landed();
         });
     }

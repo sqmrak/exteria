@@ -48,12 +48,14 @@
     NSUInteger first = (NSUInteger)MAX(0, floor(rect.origin.y / CELL_SIDE)) * _columns;
     NSUInteger last = MIN(_emoji.count, ((NSUInteger)ceil(CGRectGetMaxY(rect) / CELL_SIDE) + 1) * _columns);
     CGFloat inset = (CELL_SIDE - PICTURE_SIDE) / 2;
+    NSUInteger animated = ExteriaCustomEmojiAnimatedDraws();
     for (NSUInteger i = first; i < last; ++i) {
         ExteriaCustomEmojiDocument *document = [_emoji objectAtIndex:i];
         UIImage *picture = [ExteriaCustomEmoji imageForDocument:document.documentId];
         CGRect cell = CGRectMake(CELL_SIDE * (CGFloat)(i % _columns) + inset, CELL_SIDE * (CGFloat)(i / _columns) + inset, PICTURE_SIDE, PICTURE_SIDE);
         if (picture) [picture drawInRect:cell];
     }
+    if (ExteriaCustomEmojiAnimatedDraws() != animated) [ExteriaCustomEmoji keepAnimatingView:self];
 }
 
 - (void)tapped:(UITapGestureRecognizer *)tap {
