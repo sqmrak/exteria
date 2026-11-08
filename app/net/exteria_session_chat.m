@@ -2098,13 +2098,19 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
             } else {
                 art = [NSMutableArray arrayWithCapacity:count];
                 for (size_t i = 0; i < count; ++i) {
+                    /* the catalog is keyed by this emoji, and stringWithUTF8String: answers nil for bytes that are not utf-8, which threw on the nil key in setCatalog: */
+                    NSString *emoji = [NSString stringWithUTF8String:rows[i].emoji];
+                    if (!emoji.length) {
+                        NSLog(@"exteria: reaction art row %lu has no readable emoji and is skipped", (unsigned long)i);
+                        continue;
+                    }
                     ExteriaCustomEmojiDocument *icon = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].icon];
                     ExteriaCustomEmojiDocument *appear = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].appear];
                     ExteriaCustomEmojiDocument *select = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].select];
                     ExteriaCustomEmojiDocument *activate = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].activate];
                     ExteriaCustomEmojiDocument *effect = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].effect];
                     ExteriaCustomEmojiDocument *around = rows[i].around.id ? [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].around] : nil;
-                    ExteriaReactionArtwork *item = [[ExteriaReactionArtwork alloc] initWithEmoji:[NSString stringWithUTF8String:rows[i].emoji] icon:icon appear:appear
+                    ExteriaReactionArtwork *item = [[ExteriaReactionArtwork alloc] initWithEmoji:emoji icon:icon appear:appear
                                                                                   select:select activate:activate effect:effect around:around];
                     [art addObject:item];
                     [item release];
