@@ -18,6 +18,7 @@
 #import "exteria_force_touch.h"
 #import "exteria_quick_actions.h"
 #import "exteria_search_controller.h"
+#import "exteria_split_controller.h"
 #import "exteria_search_field.h"
 #import "exteria_dialog_cell.h"
 #import "exteria_login_prompt.h"
@@ -107,6 +108,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     _badgeWeak = [[ExteriaWeakReference referenceTo:self] retain];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(localMarksChanged) name:ExteriaLocalMarksDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerHostChanged) name:ExteriaPlayerHostDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(newMessageArrived:) name:ExteriaNewMessageDidArriveNotification object:session];
     self.heading = [self titleForMode:ExteriaChatListTitleStored() person:nil];
@@ -350,7 +352,16 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 - (BOOL)playerStripShowing { return _miniPlayer.showing; }
 
+- (BOOL)playerYielded {
+    return [_chatsDelegate respondsToSelector:@selector(chatsControllerYieldsPlayer:)] && [_chatsDelegate chatsControllerYieldsPlayer:self];
+}
+
+- (void)playerHostChanged {
+    if (self.isViewLoaded) [self.view setNeedsLayout];
+}
+
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaPlayerHostDidChangeNotification object:nil];
     [_feedSeen release];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];
@@ -570,7 +581,9 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     CGRect frame = _header.frame;
     CGFloat promptHeight = [_prompt heightForWidth:width];
     CGFloat top = ExteriaChatsHeaderTop();
-    CGFloat player = _miniPlayer.showing ? [ExteriaMiniPlayer height] : 0;
+    BOOL yielded = [self playerYielded];
+    CGFloat player = _miniPlayer.showing && !yielded ? [ExteriaMiniPlayer height] : 0;
+    _miniPlayer.hidden = yielded;
     CGFloat height = top + player + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 8 : 0);
     if (frame.size.width != width || frame.size.height != height) {
         frame.size.width = width;

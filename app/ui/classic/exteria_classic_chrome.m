@@ -364,7 +364,14 @@ void ExteriaClassicStyleSegmented(UISegmentedControl *control) {
     control.tintColor = ExteriaClassicIsFlatSystem() ? [UIColor whiteColor] : ExteriaClassicBarColor();
 }
 
+static CGFloat ExteriaClassicRealTabBarHeight = 0;
+
+void ExteriaClassicNoteTabBarHeight(CGFloat height) {
+    if (height > 0) ExteriaClassicRealTabBarHeight = height;
+}
+
 CGFloat ExteriaClassicTabBarHeight(void) {
+    if (ExteriaClassicRealTabBarHeight > 0) return ExteriaClassicRealTabBarHeight;
     static CGFloat height = 0;
     if (height <= 0) {
         UITabBar *bar = [[UITabBar alloc] init];

@@ -81,7 +81,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     badge.frame = CGRectMake(floor(width * (CGFloat)(2 * index + 1) / (CGFloat)(ExteriaTabCount * 2)) + 4, 1, badge.frame.size.width, badge.frame.size.height);
 }
 
-@interface ExteriaMainController () <UITabBarControllerDelegate, UIGestureRecognizerDelegate> {
+@interface ExteriaMainController () <UITabBarControllerDelegate, UINavigationControllerDelegate, UIGestureRecognizerDelegate> {
     ExteriaSession *_session;
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
@@ -96,6 +96,12 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     UITabBarItem *_classicProfileItem;
     /* the strip of the song for the screens of the modern tabs, over the tab bar; the chat list and the chat have their own under the header, in both styles */
     ExteriaMiniPlayer *_dock;
+    /* the classic strip stands on the system tab bar, and the table of the screen under it is given the room of the strip at its foot so the last rows can be reached: the table that has
+       it, the inset it had before, the room added, and whether the strip is up now */
+    UIScrollView *_dockScroll;
+    CGFloat _dockBaseline;
+    CGFloat _dockExtra;
+    BOOL _dockShown;
     UIImageView *_veil;
     ExteriaThemeBusyView *_busy;
     BOOL _busyShown;
@@ -161,7 +167,10 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     for (UINavigationController *navigation in _classicTabs.viewControllers) {
         id root = navigation.viewControllers.count ? [navigation.viewControllers objectAtIndex:0] : nil;
         if ([root respondsToSelector:@selector(setSignOutHandler:)]) [root setSignOutHandler:nil];
+        if (navigation.delegate == (id)self) navigation.delegate = nil;
     }
+    [self releaseDockInset];
+    _dockShown = NO;
     [_classicTabs willMoveToParentViewController:nil];
     [_classicTabs.view removeFromSuperview];
     [_classicTabs removeFromParentViewController];
@@ -203,6 +212,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(ownProfileChanged) name:ExteriaOwnProfileDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openTeamPerson:) name:ExteriaOpenTeamPersonNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openChatRequested:) name:ExteriaOpenChatNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerHostChanged) name:ExteriaPlayerHostDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openLinkRequested:) name:ExteriaOpenLinkNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(shareFilesRequested:) name:ExteriaShareFilesNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(pluginPickRequested:) name:ExteriaPluginPickNotification object:nil];
@@ -365,6 +375,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         UINavigationController *navigation = [[[ExteriaSplitNavigationController alloc] initWithRootViewController:[screens objectAtIndex:i]] autorelease];
         [(ExteriaSplitNavigationController *)navigation setDetailHost:_detailHost];
         ExteriaClassicStyleNavigationBar(navigation.navigationBar);
+        /* the strip of the song comes and goes with the screens a tab pushes */
+        navigation.delegate = self;
         navigation.tabBarItem = [[[UITabBarItem alloc] initWithTitle:ExteriaTabTitle(_kinds[i]) image:ExteriaClassicTabImage(symbol) tag:(NSInteger)i] autorelease];
         ExteriaClassicStyleTabItem(navigation.tabBarItem, symbol);
         [navigations addObject:navigation];
@@ -391,6 +403,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     _classicTabs.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:_classicTabs.view];
     [_classicTabs didMoveToParentViewController:self];
+    /* the tabs other than the chats have no header of their own for the song that plays: its strip stands on the tab bar, over them */
+    if (!_dock) [self installDock];
 
     /* the profile tab, when the layout has one, wears the profile photo once it is here */
     NSInteger profileIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabProfile);
@@ -749,20 +763,35 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
     [self.view addSubview:_dock];
 }
 
+- (void)playerHostChanged {
+    if (self.isViewLoaded) [self.view setNeedsLayout];
+}
+
 - (BOOL)currentScreenIsChatList {
     UIViewController *screen = _classicTabs ? [(UINavigationController *)_classicTabs.selectedViewController topViewController] : _current;
     return [screen isKindOfClass:[ExteriaChatsController class]];
 }
 
+/* a modern chat in the right pane of a tablet carries the strip under its own header, so neither the list nor the dock of this pane shows one */
+- (BOOL)playerYieldedToDetail {
+    return _detailHost && [_detailHost detailCarriesPlayer];
+}
+
+- (BOOL)chatsControllerYieldsPlayer:(ExteriaChatsController *)controller {
+    (void)controller;
+    return [self playerYieldedToDetail];
+}
+
 - (BOOL)showsPlayerStrip {
     UIViewController *screen = _classicTabs ? [(UINavigationController *)_classicTabs.selectedViewController topViewController] : _current;
     if ([screen isKindOfClass:[ExteriaChatsController class]]) return [(ExteriaChatsController *)screen playerStripShowing];
-    return !_classicTabs && _dock.showing;
+    if ([screen isKindOfClass:[ExteriaClassicChatsController class]]) return [(ExteriaClassicChatsController *)screen playerStripShowing];
+    return _classicTabs ? _dockShown : _dock.showing;
 }
 
 /* the height the modern dock takes over the tab bar, which the screens leave as room at their foot */
 - (CGFloat)modernDockHeight {
-    return !_classicTabs && _dock.showing && ![self currentScreenIsChatList] ? [ExteriaMiniPlayer height] : 0;
+    return !_classicTabs && _dock.showing && ![self currentScreenIsChatList] && ![self playerYieldedToDetail] ? [ExteriaMiniPlayer height] : 0;
 }
 
 - (UIViewController *)screenForTab:(NSInteger)tab {
@@ -886,6 +915,7 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
     CGFloat dock = [self modernDockHeight];
     CGRect column = ExteriaContentColumn(size, insets, EXTERIA_COLUMN_LIST);
     _dock.frame = CGRectMake(column.origin.x, size.height - height - dock, column.size.width, dock);
+    _dock.hidden = [self playerYieldedToDetail];
     for (UIViewController *screen in _screens) {
         if (screen != (id)[NSNull null]) [self setBottomInsetOf:screen to:height + dock];
     }
@@ -894,7 +924,95 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     [self layoutTabBar];
-    if (_classicTabs) ExteriaPlaceClassicBadge(_classicTabs.tabBar, self.view.bounds.size.width, ExteriaTabIndexOfKind(_kinds, ExteriaTabChats));
+    if (_classicTabs) {
+        ExteriaClassicNoteTabBarHeight(_classicTabs.tabBar.frame.size.height);
+        ExteriaPlaceClassicBadge(_classicTabs.tabBar, self.view.bounds.size.width, ExteriaTabIndexOfKind(_kinds, ExteriaTabChats));
+        [self layoutClassicDock];
+    }
+}
+
+/* the first scroll view in the tree of a screen: the table of a list, or the one a settings page holds */
+static UIScrollView *ExteriaPrimaryScroll(UIView *view) {
+    if ([view isKindOfClass:[UIScrollView class]]) return (UIScrollView *)view;
+    for (UIView *child in view.subviews) {
+        UIScrollView *found = ExteriaPrimaryScroll(child);
+        if (found) return found;
+    }
+    return nil;
+}
+
+- (void)releaseDockInset {
+    if (_dockScroll && _dockExtra > 0) {
+        UIEdgeInsets inset = _dockScroll.contentInset;
+        /* what the system set in the meantime is left as it is */
+        if (fabs(inset.bottom - (_dockBaseline + _dockExtra)) < 0.5) {
+            inset.bottom = _dockBaseline;
+            _dockScroll.contentInset = inset;
+            UIEdgeInsets bar = _dockScroll.scrollIndicatorInsets;
+            bar.bottom = MAX(0, bar.bottom - _dockExtra);
+            _dockScroll.scrollIndicatorInsets = bar;
+        }
+    }
+    [_dockScroll release];
+    _dockScroll = nil;
+    _dockExtra = 0;
+}
+
+- (void)applyDockInset:(CGFloat)extra toScroll:(UIScrollView *)scroll {
+    if (scroll != _dockScroll) {
+        [self releaseDockInset];
+        _dockScroll = [scroll retain];
+        _dockBaseline = scroll.contentInset.bottom;
+        _dockExtra = 0;
+    }
+    if (!scroll) return;
+    UIEdgeInsets inset = scroll.contentInset;
+    /* ios 7 and later fit a table to the tab bar on their own and set the bottom inset again at a layout; what they left is the ground the room of the strip is added to */
+    if (fabs(inset.bottom - (_dockBaseline + _dockExtra)) > 0.5) {
+        _dockBaseline = inset.bottom;
+        _dockExtra = 0;
+    }
+    if (fabs(extra - _dockExtra) < 0.5) return;
+    inset.bottom = _dockBaseline + extra;
+    scroll.contentInset = inset;
+    UIEdgeInsets bar = scroll.scrollIndicatorInsets;
+    bar.bottom = MAX(0, bar.bottom + extra - _dockExtra);
+    scroll.scrollIndicatorInsets = bar;
+    _dockExtra = extra;
+}
+
+/* the strip of the song on the system tab bar, for the classic tabs that are not the chat list (which has it in its header) while their first screen is up; a screen that is pushed,
+   a chat among them, has its own */
+- (void)layoutClassicDock {
+    if (!_classicTabs || !_dock) return;
+    UINavigationController *navigation = (UINavigationController *)_classicTabs.selectedViewController;
+    UIViewController *screen = navigation.topViewController;
+    UITabBar *bar = _classicTabs.tabBar;
+    CGRect barFrame = [self.view convertRect:bar.frame fromView:bar.superview];
+    BOOL barShown = !bar.hidden && barFrame.origin.y < self.view.bounds.size.height - 1;
+    BOOL show = _dock.showing && navigation.viewControllers.count <= 1 && ![screen isKindOfClass:[ExteriaClassicChatsController class]] && barShown;
+    CGFloat height = show ? [ExteriaMiniPlayer height] : 0;
+    _dockShown = show;
+    _dock.hidden = !show;
+    _dock.frame = CGRectMake(0, barFrame.origin.y - height, self.view.bounds.size.width, height);
+    [self.view bringSubviewToFront:_dock];
+    if (show) [self applyDockInset:height toScroll:ExteriaPrimaryScroll(screen.view)];
+    else [self releaseDockInset];
+}
+
+- (void)tabBarController:(UITabBarController *)tabs didSelectViewController:(UIViewController *)screen {
+    (void)tabs; (void)screen;
+    [self.view setNeedsLayout];
+}
+
+- (void)navigationController:(UINavigationController *)navigation willShowViewController:(UIViewController *)screen animated:(BOOL)animated {
+    (void)navigation; (void)screen; (void)animated;
+    [self.view setNeedsLayout];
+}
+
+- (void)navigationController:(UINavigationController *)navigation didShowViewController:(UIViewController *)screen animated:(BOOL)animated {
+    (void)navigation; (void)screen; (void)animated;
+    [self.view setNeedsLayout];
 }
 
 #pragma mark delegates

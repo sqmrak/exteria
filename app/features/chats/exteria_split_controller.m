@@ -2,6 +2,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_chat_controller.h"
 #import "exteria_chats_controller.h"
 #import "exteria_classic_chats_controller.h"
 #import "exteria_classic_chrome.h"
@@ -83,6 +84,10 @@
     /* a folder of the chat list (the archive) is a list of the left pane; the main list itself is never pushed */
     if ([screen isKindOfClass:[ExteriaChatsController class]] || [screen isKindOfClass:[ExteriaClassicChatsController class]]) return NO;
     return YES;
+}
+
+- (BOOL)detailCarriesPlayer {
+    return !ExteriaThemeIsClassic() && [_detail.topViewController isKindOfClass:[ExteriaChatController class]];
 }
 
 - (BOOL)detailIsEmpty {
@@ -196,9 +201,12 @@
 
 @end
 
+NSString *const ExteriaPlayerHostDidChangeNotification = @"ExteriaPlayerHostDidChange";
+
 BOOL ExteriaListShowsPlayer(UIViewController *screen) {
     UINavigationController *navigation = screen.navigationController;
     if (![navigation isKindOfClass:[ExteriaDetailNavigationController class]]) return NO;
+    if (!ExteriaThemeIsClassic()) return NO;
     return [[[(ExteriaDetailNavigationController *)navigation detailHost] main] showsPlayerStrip];
 }
 

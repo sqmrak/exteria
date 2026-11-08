@@ -15,4 +15,7 @@
 /* the unread messages of the chats that are not muted, for the badge on the tab */
 @property (nonatomic, copy) void (^unreadHandler)(NSInteger total);
 
+/* whether the strip of the song that plays is up in this list, so the chat beside it on a tablet does not show a second one */
+@property (nonatomic, readonly) BOOL playerStripShowing;
+
 @end

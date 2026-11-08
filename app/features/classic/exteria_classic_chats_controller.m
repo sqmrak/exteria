@@ -33,6 +33,7 @@
 #import "exteria_topics_screen.h"
 #import "exteria_weak_reference.h"
 #import "exteria_falling_view.h"
+#import "exteria_mini_player.h"
 #include "exteria_list_state.h"
 #include "exteria_clock.h"
 #import "exteria_time.h"
@@ -58,6 +59,7 @@
     UIView *_search;
     UIButton *_searchButton;
     UIView *_header;
+    ExteriaMiniPlayer *_miniPlayer;
     ExteriaFolderTabs *_folders;
     id<ExteriaFolderDialogRequest> _folderLoad;
     ExteriaStoryStrip *_stories;
@@ -201,6 +203,8 @@
     [_folderLoad cancel];
     [_folderLoad release];
     [_folders release];
+    _miniPlayer.changeHandler = nil;
+    [_miniPlayer release];
     [_header release];
     [_status release];
     [_statusLabel release];
@@ -234,6 +238,11 @@
     CGFloat width = table.bounds.size.width;
     UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 44)] autorelease];
     _header = [header retain];
+    /* the song that plays has its strip under the search bar, with the buttons to change it, as the chat list of the other style has: the controls of the music were only inside a chat */
+    ExteriaWeakReference *playerWeak = [ExteriaWeakReference referenceTo:self];
+    _miniPlayer = [[ExteriaMiniPlayer alloc] init];
+    _miniPlayer.changeHandler = ^{ [(ExteriaClassicChatsController *)playerWeak.target layoutHeader]; };
+    [header addSubview:_miniPlayer];
     NSString *searchPlaceholder = NSLocalizedString(@"chats.search", nil);
     _search = [ExteriaClassicSearchFacade(CGRectMake(0, 0, width, 44), searchPlaceholder) retain];
     _search.userInteractionEnabled = NO;
@@ -375,17 +384,21 @@
 }
 
 /* the stories sit under the search bar and push the rows down by their own height */
+- (BOOL)playerStripShowing { return _miniPlayer.showing; }
+
 - (void)layoutHeader {
     CGFloat width = self.tableView.bounds.size.width;
     CGFloat promptHeight = [_prompt heightForWidth:width];
     CGFloat search = _search.hidden ? 0 : 44;
-    CGFloat height = search + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 16 : 0);
-    _folders.frame = CGRectMake(0, search, width, _folders.height);
+    CGFloat player = _miniPlayer.showing ? [ExteriaMiniPlayer height] : 0;
+    CGFloat height = search + player + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 16 : 0);
+    _miniPlayer.frame = CGRectMake(0, search, width, player);
+    _folders.frame = CGRectMake(0, search + player, width, _folders.height);
     [_stories layoutInWidth:width];
     CGRect strip = _stories.view.frame;
-    strip.origin = CGPointMake(0, search + _folders.height);
+    strip.origin = CGPointMake(0, search + player + _folders.height);
     _stories.view.frame = strip;
-    if (promptHeight > 0) [_prompt layoutInWidth:width atY:search + _folders.height + _stories.height + 8];
+    if (promptHeight > 0) [_prompt layoutInWidth:width atY:search + player + _folders.height + _stories.height + 8];
     if (_header.frame.size.height == height && _header.frame.size.width == width) return;
     CGRect frame = _header.frame;
     frame.size = CGSizeMake(width, height);

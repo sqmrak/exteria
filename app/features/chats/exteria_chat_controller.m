@@ -2949,6 +2949,7 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPlayerHostDidChangeNotification object:nil];
     /* no screen over the whole display is up, so a bar one of them left hidden comes back */
     ExteriaStatusBarSettle();
     [self refreshBackBadge];
@@ -3028,6 +3029,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     if (_typingSent) { [_session setTyping:NO inDialog:_dialog]; _typingSent = NO; }
     [self clearTextSelection];
     [super viewWillDisappear:animated];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPlayerHostDidChangeNotification object:nil];
     ++_codeCopyToken;
     _visible = NO;
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];

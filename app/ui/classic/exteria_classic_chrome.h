@@ -30,8 +30,11 @@ UIView *ExteriaClassicSearchFacade(CGRect frame, NSString *placeholder);
 @end
 void ExteriaClassicStyleSegmented(UISegmentedControl *control);
 void ExteriaClassicStyleTabBar(UITabBar *bar);
-/* the height the system gives a tab bar on this os, so a bar standing beside it can match */
+/* the height the system gives a tab bar on this os, so a bar standing beside it can match: the one of the tab controller on screen once it has laid out, else a bar measured
+   alone */
 CGFloat ExteriaClassicTabBarHeight(void);
+/* the height of the real tab bar, which the one measured alone can miss by a point or two on a tablet, leaving the input bar of the chat beside it a step off */
+void ExteriaClassicNoteTabBarHeight(CGFloat height);
 
 /* a plain or grouped table in the colors of the theme; the light theme keeps the system's own background */
 void ExteriaClassicStyleTable(UITableView *table);
