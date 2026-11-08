@@ -4359,7 +4359,10 @@ static void ExteriaRedrawTree(UIView *view) {
         /* the key is a formatted string, so it is made only for a reply whose original is not in the list */
         id cachedReply = replySource && !original ? [_replyCache objectForKey:[self replyCacheKey:replyId source:replySource]] : nil;
         if (!original && [cachedReply isKindOfClass:[ExteriaMessage class]]) original = cachedReply;
-        NSString *replyTitle = replyId > 0 ? (original ? (original.post && !localReply ? replySource.title : [self senderNameOfMessage:original]) : NSLocalizedString(@"chat.reply.title", nil)) : nil;
+        /* a message that was forwarded here is quoted under the name of whoever wrote it, as the other clients do, and not under the name of the person who forwarded it, which
+           made an answer to it read as an answer to that person */
+        NSString *originName = original ? ExteriaForwardName(original, _people) : @"";
+        NSString *replyTitle = replyId > 0 ? (original ? (originName.length ? originName : (original.post && !localReply ? replySource.title : [self senderNameOfMessage:original])) : NSLocalizedString(@"chat.reply.title", nil)) : nil;
         NSString *replyText = replyId > 0 ? (original ? ExteriaMessageSummary(original) : NSLocalizedString(cachedReply || !replySource ? @"chat.reply.unavailable" : @"chat.reply.loading", nil)) : nil;
         if (replyId > 0 && message.replyQuote.length) replyText = message.replyQuote;
         /* an answer to a story names the story, since there is no message to show */
@@ -4382,9 +4385,15 @@ static void ExteriaRedrawTree(UIView *view) {
         if (replyId > 0 || message.replyStory > 0) {
             if (classicTheme) replyColor = message.outgoing ? classicOwnQuote : classicOtherQuote;
             else replyColor = ExteriaColorBubbleLink(message.outgoing);
-            if (original && !message.outgoing && !classicTheme && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) {
-                ExteriaPerson *author = [_people objectForKey:[NSNumber numberWithLongLong:original.senderKey]];
-                if (author) replyColor = ExteriaNameColor(author.nameColor, llabs(original.senderKey), darkTheme);
+            if (original && !classicTheme && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) {
+                /* a forward whose author hides the account has a name and no key, and takes no color rather than the color of the person who forwarded it */
+                long long authorKey = originName.length ? original.forwardKey : original.senderKey;
+                ExteriaPerson *author = authorKey ? [_people objectForKey:[NSNumber numberWithLongLong:authorKey]] : nil;
+                if (author) {
+                    UIColor *named = ExteriaNameColor(author.nameColor, llabs(authorKey), darkTheme);
+                    /* on the accent of our own bubble the plain name color sinks in, so it is taken half way to white, which keeps the hue of the person who is quoted */
+                    replyColor = message.outgoing ? ExteriaMixedColor(named, [UIColor whiteColor], 0.55) : named;
+                }
             }
         }
         if (item && (!(item.replyTitle == replyTitle || [item.replyTitle isEqualToString:replyTitle]) ||
