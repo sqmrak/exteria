@@ -662,7 +662,11 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     CGFloat actionsHeight = actions.count ? ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10) : 0;
     if (_heroOpen) {
         /* over the lower edge of the photo, and the rest of the head under it */
-        if (actions.count) ExteriaLayoutActions(actions, x, wideHeight - actionsHeight - 12, contentWidth, ACTION_HEIGHT, 10);
+        if (actions.count) {
+            ExteriaLayoutActions(actions, x, wideHeight - actionsHeight - 12, contentWidth, ACTION_HEIGHT, 10);
+            /* the cards wrap into a second row when there are many of them, and the name and the status stand above whatever height they take, not above one row */
+            _hero.bottomRoom = actionsHeight + 18;
+        }
         y = wideHeight + GAP;
     } else if (actions.count) {
         y += actionsHeight + GAP;

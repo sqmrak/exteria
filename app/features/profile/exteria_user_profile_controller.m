@@ -741,6 +741,8 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     if (_heroOpen && actions.count) {
         /* over the lower edge of the photo, and the rest of the head under it */
         ExteriaLayoutActions(actions, x, wideHeight - actionsHeight - 12, contentWidth, ACTION_HEIGHT, 10);
+        /* the cards wrap into a second row when there are many of them, and the name and the status stand above whatever height they take, not above one row */
+        _hero.bottomRoom = actionsHeight + 18;
         y = wideHeight + GAP;
     } else if (_heroOpen) {
         y = wideHeight + GAP;

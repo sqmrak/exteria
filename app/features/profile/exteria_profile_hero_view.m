@@ -424,6 +424,12 @@
 
 #pragma mark moving
 
+- (void)setBottomRoom:(CGFloat)room {
+    if (fabs(room - _bottomRoom) < 0.5) return;
+    _bottomRoom = room;
+    [self setNeedsLayout];
+}
+
 - (void)setContentAlpha:(CGFloat)alpha {
     _strips.alpha = alpha;
     _name.alpha = alpha;
