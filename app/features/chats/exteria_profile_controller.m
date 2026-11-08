@@ -267,6 +267,7 @@
     if (!_hero || !_heroOpen || _heroMoving || self.presentedViewController) return;
     ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:_session dialog:[ExteriaDialog savedMessagesWithPerson:_person] avatars:_avatars media:_media] autorelease];
     viewer.title = _person.name;
+    viewer.publicPhoto = _full.publicPhoto;
     viewer.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
     [self presentViewController:viewer animated:YES completion:nil];
 }

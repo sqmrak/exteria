@@ -14,6 +14,7 @@
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
     NSArray *_photos;
+    ExteriaMedia *_publicPhoto;
     UIScrollView *_pager;
     UILabel *_counter;
     UIButton *_back;
@@ -31,5 +32,9 @@
 }
 
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media;
+
+/* the photo that those who may not see the main one get, in the profile of the signed in person: the page after the last profile photo, as the wide photo of the profile has it, unless
+   the list of photos holds it already; set before the screen is shown */
+@property (nonatomic, retain) ExteriaMedia *publicPhoto;
 
 @end

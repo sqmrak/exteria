@@ -57,6 +57,17 @@
 
 @implementation ExteriaAvatarViewer
 
+@synthesize publicPhoto = _publicPhoto;
+
+/* the profile photos, then the public photo, which the list of the profile photos does not carry */
+- (NSArray *)photosWithPublic:(NSArray *)photos {
+    if (!_publicPhoto || _publicPhoto.ref.id == 0) return photos;
+    for (ExteriaMedia *photo in photos) {
+        if (photo.ref.id == _publicPhoto.ref.id) return photos;
+    }
+    return [photos arrayByAddingObject:_publicPhoto];
+}
+
 - (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media {
     self = [super init];
     if (!self) return nil;
@@ -77,6 +88,7 @@
     [_avatars release];
     [_media release];
     [_photos release];
+    [_publicPhoto release];
     [_pager release];
     [_counter release];
     [_back release];
@@ -192,7 +204,9 @@
     [_spinner startAnimating];
     [_session loadAvatarsOfDialog:_dialog completion:^(NSArray *photos, NSString *errorName) {
         [_spinner stopAnimating];
-        if (errorName || photos.count == 0) return;
+        if (errorName) return;
+        photos = [self photosWithPublic:photos];
+        if (photos.count == 0) return;
         [_photos release];
         _photos = [photos retain];
         _index = 0;

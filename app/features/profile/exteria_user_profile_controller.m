@@ -396,6 +396,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
         }
         [profile->_fullUser release];
         profile->_fullUser = [user retain];
+        profile->_hero.publicPhoto = user.publicPhoto;
         [profile showFull];
     }];
     [self loadStories];
@@ -1028,9 +1029,11 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
    scrolls with the rest of the screen */
 - (void)openHero {
     if (_hero || _heroMoving) return;
-    /* with no photo there is nothing to open wide, and the viewer would be a black screen */
-    if (!_dialog.photo) return;
+    /* with no photo there is nothing to open wide, and the viewer would be a black screen; a person with only the public photo has one to show */
+    if (!_dialog.photo && !_fullUser.publicPhoto) return;
     ExteriaProfileHeroView *hero = [[[ExteriaProfileHeroView alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
+    /* the public photo is the last page of the wide photo, with the circle that leads to it and back; it is set again when the full profile arrives after the photo was opened */
+    hero.publicPhoto = _fullUser.publicPhoto;
     hero.name.text = _name.text;
     hero.name.entities = _name.entities;
     hero.status.text = _status.text;
@@ -1099,6 +1102,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
 - (void)openAvatarViewer {
     if (!_hero || !_heroOpen || _heroMoving || self.presentedViewController) return;
     ExteriaAvatarViewer *viewer = [[[ExteriaAvatarViewer alloc] initWithSession:self.session dialog:_dialog avatars:self.avatars media:self.media] autorelease];
+    viewer.publicPhoto = _fullUser.publicPhoto;
     viewer.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
     [self presentViewController:viewer animated:YES completion:nil];
 }

@@ -238,7 +238,8 @@
 }
 
 - (void)refreshSwitch {
-    BOOL shown = _hasPublicPage && !_moving;
+    /* with a single photo there is nothing to lead to and the circle would name the page that is already shown */
+    BOOL shown = _hasPublicPage && _photos.count > 1 && !_moving;
     _switch.hidden = !shown;
     if (!shown) return;
     BOOL onPublic = [self onPublicPage];
