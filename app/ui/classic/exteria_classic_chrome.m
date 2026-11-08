@@ -543,10 +543,18 @@ static UIImage *ExteriaClassicRoundImageMade(ExteriaSymbol symbol, CGFloat side,
     CGContextAddEllipseInRect(context, bounds);
     CGContextClip(context);
     CGContextDrawLinearGradient(context, gradient, CGPointMake(0, 0), CGPointMake(0, side), 0);
-    /* the pale cap of the dome */
-    CGContextSetFillColorWithColor(context, [UIColor colorWithWhite:1 alpha:0.18].CGColor);
-    CGContextFillEllipseInRect(context, CGRectMake(side * 0.12, -side * 0.35, side * 0.76, side * 0.85));
     CGContextRestoreGState(context);
+    /* the pale cap of the dome stands wholly inside the rim and fades towards its foot: an ellipse that ran past the rim was cut by it, and the cut showed as flat corners on the
+       top of the circle */
+    CGFloat capAlpha[] = {1, 1, 1, 0.34,  1, 1, 1, 0.02};
+    CGGradientRef cap = CGGradientCreateWithColorComponents(space, capAlpha, NULL, 2);
+    CGRect capRect = CGRectMake(side * 0.12, side * 0.06, side * 0.76, side * 0.46);
+    CGContextSaveGState(context);
+    CGContextAddEllipseInRect(context, capRect);
+    CGContextClip(context);
+    CGContextDrawLinearGradient(context, cap, CGPointMake(0, capRect.origin.y), CGPointMake(0, CGRectGetMaxY(capRect)), 0);
+    CGContextRestoreGState(context);
+    CGGradientRelease(cap);
     UIColor *outline = red ? [UIColor colorWithRed:0.40 green:0.04 blue:0.03 alpha:1]
                            : ExteriaThemeTinted([UIColor colorWithRed:0.26 green:0.12 blue:0.40 alpha:1]);
     CGContextSetStrokeColorWithColor(context, outline.CGColor);
