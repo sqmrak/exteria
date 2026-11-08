@@ -54,6 +54,23 @@ static dispatch_queue_t ExteriaMediaWorkQueue(void) {
     return queue;
 }
 
+/* picture decoding has a queue of its own. the one above reads and writes the files and trims the cache, and every sticker that was already on the disk waited behind each photo
+   being decoded, so a chat full of pictures filled in one at a time. two decodes run at once where there are two cores, one where there is one; each is made at the size it is
+   shown, so the memory of the two stays bounded */
+static dispatch_queue_t ExteriaMediaDecodeQueue(void) {
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ queue = dispatch_queue_create("exteria.media.decode", DISPATCH_QUEUE_CONCURRENT); });
+    return queue;
+}
+
+static dispatch_semaphore_t ExteriaMediaDecodeGate(void) {
+    static dispatch_semaphore_t gate;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ gate = dispatch_semaphore_create([[NSProcessInfo processInfo] activeProcessorCount] > 1 ? 2 : 1); });
+    return gate;
+}
+
 static NSMutableSet *ExteriaMediaCleanedDirectories(void) {
     static NSMutableSet *directories;
     static dispatch_once_t once;
@@ -313,7 +330,7 @@ static BOOL ExteriaReferenceExpired(NSString *errorName) {
             [deliverCopy release];
             return;
         }
-        dispatch_async(_work, ^{
+        dispatch_async(ExteriaMediaDecodeQueue(), ^{
             NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
             if (ExteriaFileFormatOfData(data) == ExteriaFileFormatGzip) {
                 ExteriaLottie *animation = [ExteriaLottie animationWithPackedData:data key:file.key];
@@ -325,7 +342,10 @@ static BOOL ExteriaReferenceExpired(NSString *errorName) {
                     [pool drain]; return;
                 }
             }
+            /* the gate is held only for the decode itself: the animation above renders on its own queue and takes no turn */
+            dispatch_semaphore_wait(ExteriaMediaDecodeGate(), DISPATCH_TIME_FOREVER);
             UIImage *image = ExteriaDecodeImage(data, maxSide);
+            dispatch_semaphore_signal(ExteriaMediaDecodeGate());
             dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image); [deliverCopy release]; });
             [pool drain];
         });
