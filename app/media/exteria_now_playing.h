@@ -12,3 +12,5 @@ void ExteriaNowPlayingClear(void);
 /* asks for the remote buttons for as long as a song plays */
 void ExteriaRemoteControlsStart(id target, SEL play, SEL pause, SEL toggle, SEL next, SEL previous);
 void ExteriaRemoteControlsStop(id target);
+/* before ios 7.1: takes the remote events for this app again when the focus left the view that holds them, as the player does while a song plays; it leaves a text field alone */
+void ExteriaRemoteControlsClaim(void);

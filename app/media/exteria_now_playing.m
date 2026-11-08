@@ -52,6 +52,51 @@ void ExteriaNowPlayingClear(void) {
     [center setValue:nil forKey:@"nowPlayingInfo"];
 }
 
+/* before ios 7.1 an application is the one that plays for the lock screen and the tray of the multitasking bar only while a first responder takes the remote events: asking for them is
+   not enough, and without a responder the system kept the Music app there, with its name and its icon, over the buttons of this one. a view of no size in the window is that responder.
+   it never takes the focus from a text field, which would close the keyboard */
+@interface ExteriaRemoteResponder : UIView
+@end
+
+@implementation ExteriaRemoteResponder
+- (BOOL)canBecomeFirstResponder { return YES; }
+- (void)remoteControlReceivedWithEvent:(UIEvent *)event {
+    id<UIApplicationDelegate> delegate = [UIApplication sharedApplication].delegate;
+    if ([delegate respondsToSelector:@selector(remoteControlReceivedWithEvent:)]) [(id)delegate remoteControlReceivedWithEvent:event];
+}
+@end
+
+static ExteriaRemoteResponder *ExteriaRemoteResponderView;
+static BOOL ExteriaKeyboardUp;
+static BOOL ExteriaRemoteActive;
+
+void ExteriaRemoteControlsClaim(void) {
+    if (!ExteriaRemoteActive || NSClassFromString(@"MPRemoteCommandCenter") || ExteriaKeyboardUp) return;
+    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    if (!window) return;
+    if (!ExteriaRemoteResponderView) {
+        ExteriaRemoteResponderView = [[ExteriaRemoteResponder alloc] initWithFrame:CGRectZero];
+        ExteriaRemoteResponderView.hidden = YES;
+        ExteriaRemoteResponderView.userInteractionEnabled = NO;
+    }
+    if (ExteriaRemoteResponderView.superview != window) [window addSubview:ExteriaRemoteResponderView];
+    if (!ExteriaRemoteResponderView.isFirstResponder) [ExteriaRemoteResponderView becomeFirstResponder];
+}
+
+static void ExteriaWatchKeyboard(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        [center addObserverForName:UIKeyboardDidShowNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) { (void)note; ExteriaKeyboardUp = YES; }];
+        [center addObserverForName:UIKeyboardDidHideNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            (void)note;
+            ExteriaKeyboardUp = NO;
+            /* the field that held the focus is gone, so the remote events have no responder again until it is taken back */
+            ExteriaRemoteControlsClaim();
+        }];
+    });
+}
+
 static void ExteriaCommand(id center, NSString *name, id target, SEL action) {
     id command = [center valueForKey:name];
     if (!command || !action) return;
@@ -73,8 +118,11 @@ void ExteriaRemoteControlsStart(id target, SEL play, SEL pause, SEL toggle, SEL 
         ExteriaCommand(center, @"previousTrackCommand", target, previous);
         return;
     }
-    /* before ios 7.1 the buttons come as events to the application delegate */
+    /* before ios 7.1 the buttons come as events to the first responder, and the application delegate at the end of its chain */
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
+    ExteriaRemoteActive = YES;
+    ExteriaWatchKeyboard();
+    ExteriaRemoteControlsClaim();
 }
 
 void ExteriaRemoteControlsStop(id target) {
@@ -88,4 +136,7 @@ void ExteriaRemoteControlsStop(id target) {
         return;
     }
     [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
+    ExteriaRemoteActive = NO;
+    [ExteriaRemoteResponderView resignFirstResponder];
+    [ExteriaRemoteResponderView removeFromSuperview];
 }

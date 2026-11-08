@@ -6,6 +6,7 @@
 #import "exteria_window.h"
 #import "exteria_crash_log.h"
 #import "exteria_app_icon.h"
+#import "exteria_now_playing.h"
 
 #import "exteria_accounts.h"
 #import "exteria_avatar_cache.h"
@@ -288,6 +289,8 @@ static NSString *ExteriaSupportDirectory(void) {
     ExteriaPluginsEvent("resume");
     [_passcodeLock evaluateReturn];
     [_notifier applicationDidBecomeActive:application];
+    /* the remote events of a song that plays need a responder in the window, which a screen that came and went in the meantime may have taken the focus from */
+    ExteriaRemoteControlsClaim();
     /* what the share extension left while the app was away, when the wake address did not reach it */
     if ([ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)]) ExteriaShareCollectPending();
     ExteriaPowerNoticeStart();
