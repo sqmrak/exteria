@@ -1,3 +1,4 @@
+#import <QuartzCore/QuartzCore.h>
 #import "exteria_passcode_lock.h"
 
 #import "exteria_biometric.h"
@@ -6,6 +7,35 @@
 #import "exteria_platform.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
+
+/* the lock stands on the accent of the theme, darkened so the white ink of the pad reads on a light accent too, and fading from a lighter top to a deeper foot. the dark theme
+   goes a good deal deeper than the light one, where the flat accent shone too brightly in the night */
+static void ExteriaLockColors(UIColor **top, UIColor **bottom) {
+    UIColor *accent = ExteriaColorAccent(), *black = [UIColor blackColor];
+    BOOL dark = ExteriaThemeIsDark();
+    *top = ExteriaMixedColor(accent, black, dark ? 0.45 : 0.26);
+    *bottom = ExteriaMixedColor(accent, black, dark ? 0.72 : 0.46);
+}
+
+/* the ground of the lock: a vertical gradient, which a view gets from the layer it is made of */
+@interface ExteriaLockBackdrop : UIView
+@end
+
+@implementation ExteriaLockBackdrop
++ (Class)layerClass { return [CAGradientLayer class]; }
+
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    UIColor *top = nil, *bottom = nil;
+    ExteriaLockColors(&top, &bottom);
+    CAGradientLayer *layer = (CAGradientLayer *)self.layer;
+    layer.colors = [NSArray arrayWithObjects:(id)top.CGColor, (id)bottom.CGColor, nil];
+    layer.startPoint = CGPointMake(0.5, 0);
+    layer.endPoint = CGPointMake(0.5, 1);
+    return self;
+}
+@end
 
 @interface ExteriaPasscodeLockController : UIViewController {
     ExteriaPasscodeEntryView *_entry;
@@ -47,14 +77,9 @@
     [super dealloc];
 }
 
-/* the lock stands on the accent of the theme, a little darker so the white ink of the pad reads on a light accent too */
-static UIColor *ExteriaLockColor(void) {
-    return ExteriaMixedColor(ExteriaColorAccent(), [UIColor blackColor], 0.22);
-}
-
 - (void)loadView {
-    UIView *root = [[[UIView alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
-    root.backgroundColor = ExteriaLockColor();
+    UIView *root = [[[ExteriaLockBackdrop alloc] initWithFrame:[[UIScreen mainScreen] bounds]] autorelease];
+    root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.view = root;
     _entry = [[ExteriaPasscodeEntryView alloc] initWithFrame:root.bounds];
     _entry.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -188,7 +213,9 @@ typedef enum { ExteriaLockStateOpen, ExteriaLockStateCover, ExteriaLockStateAski
     _controller = [[ExteriaPasscodeLockController alloc] initWithUnlocked:^{ [me open]; }];
     _window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     _window.windowLevel = UIWindowLevelAlert + 100;
-    _window.backgroundColor = ExteriaLockColor();
+    UIColor *ground = nil, *unused = nil;
+    ExteriaLockColors(&ground, &unused);
+    _window.backgroundColor = ground;
     _window.rootViewController = _controller;
     [_window makeKeyAndVisible];
 }
