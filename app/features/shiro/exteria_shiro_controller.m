@@ -55,6 +55,11 @@
             break;
         }
     }
+    /* the tab bar of the ipad is a part of the split screen that stands under the card, so a card put on the split ended above it and hung in the air: the screen goes
+       on the root, which is the whole window, and the card reaches its bottom edge */
+    if (ExteriaIsPad()) {
+        while (parent.parentViewController) parent = parent.parentViewController;
+    }
     for (UIViewController *child in parent.childViewControllers) {
         if ([child isKindOfClass:[ExteriaShiroController class]]) return;
     }
