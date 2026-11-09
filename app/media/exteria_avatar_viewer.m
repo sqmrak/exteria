@@ -266,7 +266,11 @@
     for (NSUInteger i = 0; i < _pages.count; ++i) {
         [[_pages objectAtIndex:i] setFrame:CGRectMake(size.width * (CGFloat)i, 0, size.width, size.height)];
     }
-    _pager.contentOffset = CGPointMake(size.width * (CGFloat)_index, 0);
+    /* the pager is put back on its page only when the person is not turning it: a layout pass that came while a finger moved the pages (the counter, the date and the strip
+       change as the middle is passed) set the offset back to the page it left and made the photos jump */
+    if (_pager.isTracking || _pager.isDragging || _pager.isDecelerating) return;
+    CGPoint target = CGPointMake(size.width * (CGFloat)_index, 0);
+    if (fabs(_pager.contentOffset.x - target.x) > 0.5) _pager.contentOffset = target;
 }
 
 - (void)showCurrentPhoto {
