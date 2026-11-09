@@ -96,15 +96,28 @@
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width, height = self.bounds.size.height;
     if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(self, 0);
+    /* the classic key sits 2 points inside the plate, so its radius of 8 stays concentric with the plate's 10; the modern pill is 4 inside */
+    CGFloat inset = ExteriaThemeIsClassic() ? 2 : 4;
     CGFloat natural = 0;
-    for (UILabel *label in _labels) natural += ceil(ExteriaStringSize(label.text, label.font).width) + 28;
+    for (UILabel *label in _labels) natural += ceil(ExteriaStringSize(label.text, ExteriaFontMedium(15)).width) + 28;
+    /* two tabs always fit the width, since a scroll of two keys leaves the chosen one cut off by the plate (the testers tab on a 320 point screen); more tabs scroll */
+    BOOL fit = _labels.count <= 2 && natural > width && width > 0;
     CGFloat extra = _labels.count && natural < width ? (width - natural) / _labels.count : 0;
     CGFloat x = 0;
     for (NSUInteger i = 0; i < _labels.count; ++i) {
         UILabel *label = [_labels objectAtIndex:i];
-        CGFloat item = ceil(ExteriaStringSize(label.text, label.font).width) + 28 + extra;
-        label.frame = CGRectMake(x + 4, 0, MAX(0, item - 8), height);
-        if (i == _selectedIndex) _chosen.frame = CGRectMake(x + 4, 4, MAX(0, item - 8), height - 8);
+        CGFloat textWidth = ceil(ExteriaStringSize(label.text, ExteriaFontMedium(15)).width);
+        CGFloat item = textWidth + 28 + extra;
+        if (fit) {
+            item = width / _labels.count;
+            CGFloat room = item - 2 * inset - 12;
+            /* the text shrinks to the key, down to 11 points, and is cut with an ellipsis below that */
+            label.font = ExteriaFontMedium(textWidth > room ? MAX(11, floor(15 * room / textWidth)) : 15);
+        } else {
+            label.font = ExteriaFontMedium(15);
+        }
+        label.frame = CGRectMake(x + inset, 0, MAX(0, item - 2 * inset), height);
+        if (i == _selectedIndex) _chosen.frame = CGRectMake(x + inset, inset, MAX(0, item - 2 * inset), height - 2 * inset);
         x += item;
     }
     _scroll.contentSize = CGSizeMake(MAX(width, x), height);
