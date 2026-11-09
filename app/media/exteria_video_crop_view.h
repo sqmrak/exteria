@@ -2,6 +2,9 @@
 
 /* the frame of the crop over a picture: the part outside it is dimmed, and its corners and sides are dragged to give it any shape, or, with a ratio set, only the corners, which keep the
    shape. the view stands exactly over the picture, and the frame is a rectangle of fractions of it (x, y, width, height) */
+/* the room the view keeps round the picture; the frame of the view is the picture's outset by it */
+#define ExteriaVideoCropMargin 8.0
+
 @interface ExteriaVideoCropView : UIView
 
 @property (nonatomic, assign) CGRect crop;

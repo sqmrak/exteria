@@ -70,16 +70,21 @@ enum { GrabNone = 0, GrabLeft = 1, GrabRight = 2, GrabTop = 4, GrabBottom = 8, G
     _ratio = ratio > 0 ? ratio : 0;
 }
 
+/* the picture lies inside the view with a margin round it, so the brackets of a frame that keeps the whole picture have room and are not cut at the edge of the view */
+- (CGRect)pictureArea {
+    return CGRectInset(self.bounds, ExteriaVideoCropMargin, ExteriaVideoCropMargin);
+}
+
 /* the frame in the points of the view */
 - (CGRect)frameInView {
-    CGSize size = self.bounds.size;
-    return CGRectMake(_crop.origin.x * size.width, _crop.origin.y * size.height, _crop.size.width * size.width, _crop.size.height * size.height);
+    CGRect area = [self pictureArea];
+    return CGRectMake(area.origin.x + _crop.origin.x * area.size.width, area.origin.y + _crop.origin.y * area.size.height, _crop.size.width * area.size.width, _crop.size.height * area.size.height);
 }
 
 - (CGPoint)normalized:(CGPoint)point {
-    CGSize size = self.bounds.size;
-    if (size.width < 1 || size.height < 1) return CGPointZero;
-    return CGPointMake(MAX(0, MIN(1, point.x / size.width)), MAX(0, MIN(1, point.y / size.height)));
+    CGRect area = [self pictureArea];
+    if (area.size.width < 1 || area.size.height < 1) return CGPointZero;
+    return CGPointMake(MAX(0, MIN(1, (point.x - area.origin.x) / area.size.width)), MAX(0, MIN(1, (point.y - area.origin.y) / area.size.height)));
 }
 
 - (CGFloat)smallestWidth {
@@ -175,7 +180,7 @@ enum { GrabNone = 0, GrabLeft = 1, GrabRight = 2, GrabTop = 4, GrabBottom = 8, G
         /* the finger has moved a little before the drag was known, so the drag measures from where the touch came down */
         _startPoint = [self normalized:[pan locationInView:self]];
         CGPoint translation = [pan translationInView:self];
-        CGSize size = self.bounds.size;
+        CGSize size = [self pictureArea].size;
         if (size.width > 1 && size.height > 1) _startPoint = CGPointMake(MAX(0, MIN(1, _startPoint.x - translation.x / size.width)), MAX(0, MIN(1, _startPoint.y - translation.y / size.height)));
     }
     if (pan.state == UIGestureRecognizerStateBegan || pan.state == UIGestureRecognizerStateChanged) {

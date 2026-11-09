@@ -459,7 +459,7 @@
     BOOL show = _cropState != 0 && picture.width > 1 && picture.height > 1 && _preview.bounds.size.width > 1;
     _cropView.hidden = !show;
     if (!show) return;
-    _cropView.frame = AVMakeRectWithAspectRatioInsideRect(picture, _preview.frame);
+    _cropView.frame = CGRectInset(AVMakeRectWithAspectRatioInsideRect(picture, _preview.frame), -ExteriaVideoCropMargin, -ExteriaVideoCropMargin);
     _cropView.pictureSize = picture;
     _cropView.ratio = _cropState >= 2 && _crop.size.height > 0 ? _crop.size.width / _crop.size.height : 0;
     _cropView.crop = _crop;
