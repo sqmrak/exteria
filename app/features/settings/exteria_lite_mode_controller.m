@@ -53,12 +53,15 @@ static NSDictionary *ExteriaLevelDescription(int percent) {
     NSMutableDictionary *info = [NSMutableDictionary dictionary];
     if (percent <= 0) {
         [info setObject:NSLocalizedString(@"lite.battery.always.off", nil) forKey:@"line"];
+        [info setObject:NSLocalizedString(@"lite.battery.off", nil) forKey:@"short"];
         [info setObject:[NSNumber numberWithBool:YES] forKey:@"left"];
     } else if (percent >= 100) {
         [info setObject:NSLocalizedString(@"lite.battery.always.on", nil) forKey:@"line"];
+        [info setObject:NSLocalizedString(@"lite.battery.on", nil) forKey:@"short"];
         [info setObject:[NSNumber numberWithBool:YES] forKey:@"right"];
     } else {
         [info setObject:[NSString stringWithFormat:NSLocalizedString(@"lite.battery.below", nil), ExteriaPercentText(percent)] forKey:@"line"];
+        [info setObject:ExteriaPercentText(percent) forKey:@"short"];
         [info setObject:[NSNumber numberWithFloat:(float)percent / 100.0f] forKey:@"fill"];
         /* the badge says whether the saver is working at this moment, which the battery decides */
         BOOL applied = exteria_lite_power_saver_applied(percent, ExteriaLiteBatteryPercent()) != 0;

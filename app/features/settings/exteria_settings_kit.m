@@ -2059,7 +2059,9 @@ enum { ExteriaFlatHeader, ExteriaFlatRow, ExteriaFlatFooter, ExteriaFlatSpace };
     while (up && ![up isKindOfClass:[UITableViewCell class]]) up = up.superview;
     if (row.hasLevel) {
         int percent = (int)(slider.value + 0.5f);
-        NSString *line = [row.describe(percent) objectForKey:@"line"];
+        /* the long line does not fit beside the bold title of the cell, and ios drops the detail text then; the short one is the number or the end of the scale */
+        NSDictionary *info = row.describe(percent);
+        NSString *line = [info objectForKey:@"short"] ?: [info objectForKey:@"line"];
         row.sliderValue = (float)percent;
         UILabel *label = [(UITableViewCell *)up detailTextLabel];
         if ([label.text isEqualToString:line]) return;
@@ -2195,7 +2197,8 @@ static CGFloat ExteriaClassicRowHeight(ExteriaSettingsRow *row, CGFloat tableWid
     } else if (row.hasSlider) {
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
         if (row.hasLevel) {
-            cell.detailTextLabel.text = [row.describe((int)(row.sliderValue + 0.5f)) objectForKey:@"line"];
+            NSDictionary *info = row.describe((int)(row.sliderValue + 0.5f));
+            cell.detailTextLabel.text = [info objectForKey:@"short"] ?: [info objectForKey:@"line"];
             if (!ExteriaThemeIsDark()) cell.textLabel.textColor = [UIColor colorWithRed:0.22f green:0.33f blue:0.53f alpha:1];
         } else {
             /* the row keeps where the slider stands, so a cell made again shows the value and not the one the row was made with */
