@@ -266,7 +266,8 @@
     CGFloat limit = MAX(120, size.height - insets.top - insets.bottom - headerHeight - footer - 90);
     CGFloat bodyHeight = MIN(contentHeight, limit);
     CGFloat cardHeight = headerHeight + bodyHeight + 14 + footer + insets.bottom;
-    _card.frame = CGRectMake((size.width - width) / 2, size.height - cardHeight - SIDE / 2, width, cardHeight);
+    /* the card is moved by a transform while it comes and goes, and a frame written then shifts it by the size of the move for one frame: it jumped on closing */
+    ExteriaPlaceView(_card, CGRectMake((size.width - width) / 2, size.height - cardHeight - SIDE / 2, width, cardHeight));
     _title.frame = CGRectMake(PAD, 16, inner / 2, 26);
     _language.frame = CGRectMake(PAD + inner / 2, 12, inner / 2, 34);
     _language.contentHorizontalAlignment = UIControlContentHorizontalAlignmentRight;
