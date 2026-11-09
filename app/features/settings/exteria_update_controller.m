@@ -115,6 +115,8 @@
 - (void)rebuild {
     NSString *installed = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
     NSString *latest = [_release objectForKey:@"tag"];
+    /* the release tag carries a leading v that the bundle version does not, so the two rows would read differently for the same build */
+    if (latest.length > 1 && ([latest hasPrefix:@"v"] || [latest hasPrefix:@"V"])) latest = [latest substringFromIndex:1];
     ExteriaWeakReference *weak = _weak;
     NSMutableArray *rows = [NSMutableArray array];
     [rows addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"update.page.installed", nil) value:installed tap:nil]];
