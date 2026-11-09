@@ -78,7 +78,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     CFTimeInterval _holdBeganAt;
     CGFloat _holdStart;
     UIView *_hairline;
-    UIToolbar *_toolbar;
+    UIView *_toolbar;
     UILabel *_note;
     CGFloat _fieldHeight;
     BOOL _writable;
@@ -119,8 +119,18 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     self.backgroundColor = classic ? [UIColor clearColor] : (ExteriaImportedThemeColor("chat.inputPanel.panelBg") ?: ExteriaColorBar());
     if (classic) {
         /* the bar's surface is the system's own toolbar, whatever the system draws a toolbar as */
-        _toolbar = [[UIToolbar alloc] init];
-        ExteriaClassicStyleToolbar(_toolbar);
+        if (ExteriaIsPad()) {
+            /* beside the tab bar of the list the bar of the chat has to be one with it, and a toolbar draws its own gradient, lit edge and height: the tab bar is drawn by the same
+               system and styled the same way, with no items in it */
+            UITabBar *tabs = [[UITabBar alloc] init];
+            ExteriaClassicStyleTabBar(tabs);
+            tabs.userInteractionEnabled = NO;
+            _toolbar = tabs;
+        } else {
+            UIToolbar *toolbar = [[UIToolbar alloc] init];
+            ExteriaClassicStyleToolbar(toolbar);
+            _toolbar = toolbar;
+        }
         _toolbar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         [self addSubview:_toolbar];
     }
