@@ -3332,7 +3332,28 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [_session sendInlineResult:result queryId:queryId toDialog:_dialog randomId:[self newRandomId] replyTo:replyTo completion:^(int32_t messageId, NSString *errorName) {
         (void)messageId;
         ExteriaChatController *chat = weak.target;
-        if (chat && errorName) ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+        if (!chat) return;
+        if (errorName) { ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName)); return; }
+        [chat fetchNewestAfterInlineSend];
+    }];
+}
+
+/* a message that a bot sent for us has no pending copy on this screen, and the answer of the server for it did not bring it into the list: the newest page is asked for, so the
+   message stands in the chat at once and not after the chat is opened again */
+- (void)fetchNewestAfterInlineSend {
+    if (_pinnedList || _window) return;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadHistoryOfDialog:_dialog offsetId:0 addOffset:0 limit:20 completion:^(NSArray *messages, NSDictionary *people, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (!messages) {
+            NSLog(@"exteria: the newest messages of chat %lld were not fetched after an inline send: %@", chat->_dialog.peerId, errorName);
+            return;
+        }
+        [chat->_people addEntriesFromDictionary:people];
+        [chat mergeMessages:messages];
+        chat->_stickToBottom = YES;
+        [chat rebuildItems];
     }];
 }
 
@@ -6255,6 +6276,24 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
                     }
                 };
                 [shown setHeaderText:[NSString stringWithFormat:NSLocalizedString(@"chat.msg.readers.count", nil), (unsigned long)readers.count] read:YES];
+                /* the first three of them: whoever of them the chat does not know yet comes from what the store holds */
+                NSMutableArray *firstIds = [NSMutableArray array];
+                for (NSDictionary *reader in readers) { if (firstIds.count < 3) [firstIds addObject:[reader objectForKey:@"user"]]; }
+                void (^showFaces)(void) = ^{
+                    ExteriaChatController *chat = weak.target;
+                    if (!chat) return;
+                    NSMutableArray *faces = [NSMutableArray array];
+                    for (NSNumber *key in firstIds) { ExteriaPerson *person = [chat->_people objectForKey:key]; if (person) [faces addObject:person]; }
+                    [shown setHeaderPeople:faces cache:chat->_avatars];
+                };
+                showFaces();
+                ExteriaChatController *host = weak.target;
+                if (host) [host->_session loadCachedPeopleWithIds:firstIds completion:^(NSDictionary *people) {
+                    ExteriaChatController *again = weak.target;
+                    if (!again) return;
+                    for (NSNumber *key in people) if (![again->_people objectForKey:key]) [again->_people setObject:[people objectForKey:key] forKey:key];
+                    showFaces();
+                }];
             }
         }];
     }
