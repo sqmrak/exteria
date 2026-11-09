@@ -174,7 +174,9 @@ NSUInteger ExteriaCustomEmojiAnimatedDraws(void) { return sAnimatedDraws; }
     if (_link) return;
     _link = [[CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)] retain];
     ExteriaSetFrameRate(_link, ANIMATION_FPS);
-    [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    /* not in the common modes: while a finger drags or a list decelerates the run loop is in the tracking mode, and every row with an animated emoji drawing again fifteen times a second
+       is what an iPhone 5 could not keep up with while scrolling the chat list; the emoji stand still for the scroll and go on after it */
+    [_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
 }
 
 - (void)tick:(CADisplayLink *)link {
