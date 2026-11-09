@@ -27,6 +27,7 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
    title and performer, with the length at the right */
 @interface ExteriaSongCell : UITableViewCell {
     UIImageView *_cover;
+    UIView *_press;
     NSString *_coverKey;
     UIImageView *_icon;
     ExteriaEmojiLabel *_title;
@@ -44,9 +45,12 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
     if (!self) return nil;
     self.backgroundColor = [UIColor clearColor];
     self.contentView.backgroundColor = [UIColor clearColor];
-    UIView *selected = [[[UIView alloc] init] autorelease];
-    selected.backgroundColor = ExteriaColorField();
-    self.selectedBackgroundView = selected;
+    /* the press is a view of the cell's own: the classic theme drew the blue of the system under a selected background of the cell, so the color is laid by hand */
+    self.selectionStyle = UITableViewCellSelectionStyleNone;
+    _press = [[UIView alloc] init];
+    _press.backgroundColor = ExteriaThemeIsClassic() ? [ExteriaColorAccent() colorWithAlphaComponent:0.35f] : ExteriaColorField();
+    _press.alpha = 0;
+    [self insertSubview:_press atIndex:0];
     _cover = [[UIImageView alloc] init];
     _cover.contentMode = UIViewContentModeScaleAspectFill;
     _cover.clipsToBounds = YES;
@@ -80,6 +84,7 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
 
 - (void)dealloc {
     [_cover release];
+    [_press release];
     [_coverKey release];
     [_icon release];
     [_title release];
@@ -127,8 +132,25 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
     [self setNeedsLayout];
 }
 
+- (void)setHighlighted:(BOOL)highlighted animated:(BOOL)animated {
+    [super setHighlighted:highlighted animated:animated];
+    [self showPress:highlighted || self.selected animated:animated];
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+    [self showPress:selected || self.highlighted animated:animated];
+}
+
+- (void)showPress:(BOOL)shown animated:(BOOL)animated {
+    void (^change)(void) = ^{ _press.alpha = shown ? 1 : 0; };
+    if (animated) [UIView animateWithDuration:0.2 animations:change];
+    else change();
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
+    _press.frame = self.bounds;
     CGFloat width = self.contentView.bounds.size.width;
     _icon.frame = CGRectMake(16, (ROW_HEIGHT - ICON_SIDE) / 2, ICON_SIDE, ICON_SIDE);
     _cover.frame = _icon.frame;
