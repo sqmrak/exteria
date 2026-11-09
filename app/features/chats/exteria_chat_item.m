@@ -440,11 +440,27 @@ static NSString *ExteriaCallLength(int32_t seconds) {
 
 static NSString *ExteriaAlbumKey(NSArray *messages) {
     NSMutableString *key = [NSMutableString string];
-    for (ExteriaMessage *message in messages) [key appendFormat:@"%d:%lld;", message.messageId, message.randomId];
+    for (ExteriaMessage *message in messages) [key appendFormat:@"%d:%lld:%lu;", message.messageId, message.randomId, (unsigned long)message.text.hash];
     return key;
 }
 
 + (ExteriaChatItem *)itemForAlbum:(NSArray *)messages group:(BOOL)group people:(NSDictionary *)people role:(NSString *)role {
+    /* pictures with one file, as a post of a channel can carry: the file owns the bubble, so its row, its progress and its taps are the ones of any file, and the
+       pictures are the collage above it. the words may be on a picture, and then the bubble borrows them */
+    NSMutableArray *pictures = [NSMutableArray array];
+    ExteriaMessage *fileMessage = nil;
+    for (ExteriaMessage *message in messages) {
+        exteria_preview_kind kind = message.media.kind;
+        if (kind == EXTERIA_PREVIEW_PHOTO || kind == EXTERIA_PREVIEW_VIDEO) [pictures addObject:message];
+        else if (kind == EXTERIA_PREVIEW_FILE && !fileMessage) fileMessage = message;
+    }
+    if (fileMessage && pictures.count && pictures.count + 1 == messages.count) {
+        ExteriaChatItem *item = [self itemForMessage:fileMessage group:group people:people role:role];
+        item->_albumMessages = [pictures copy];
+        item->_builtAlbumKey = [ExteriaAlbumKey(messages) copy];
+        if (!fileMessage.text.length) for (ExteriaMessage *picture in pictures) if (picture.text.length) { item->_captionMessage = [picture retain]; break; }
+        return item;
+    }
     ExteriaMessage *primary = [messages objectAtIndex:0];
     for (ExteriaMessage *message in messages) if (message.text.length) { primary = message; break; }
     ExteriaChatItem *item = [self itemForMessage:primary group:group people:people role:role];
@@ -457,7 +473,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
 
 - (BOOL)reflectsAlbum:(NSArray *)messages {
     if (!_albumMessages) return messages.count < 2;
-    return messages.count == _albumMessages.count && ExteriaSameString(_builtAlbumKey, ExteriaAlbumKey(messages));
+    return ExteriaSameString(_builtAlbumKey, ExteriaAlbumKey(messages));
 }
 
 - (ExteriaMessage *)albumMessageAtPoint:(CGPoint)point {
@@ -683,6 +699,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_pollFooterText release];
     [_builtPollKey release];
     [_albumMessages release];
+    [_captionMessage release];
     [_albumFrames release];
     [_builtAlbumKey release];
     [_fileTitle release];
@@ -1051,20 +1068,23 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     if (_message.post && !outgoing) maxBubble = floor(MIN(room - 2 * SIDE_MARGIN, ExteriaIsPad() ? BUBBLE_CAP_PAD * 1.5 : room));
     CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _authorWidth + _viewsWidth + _deletedWidth;
     /* a voice message has no words of its own, so what the server heard in it takes their place */
-    BOOL ownText = _message.text.length > 0;
-    NSString *bodyText = ownText ? _message.text : _transcript;
+    ExteriaMessage *textSource = _captionMessage ? _captionMessage : _message;
+    BOOL ownText = textSource.text.length > 0;
+    NSString *bodyText = ownText ? textSource.text : _transcript;
     BOOL hasText = bodyText.length > 0;
     BOOL picture = _content == ExteriaChatItemContentPicture;
     BOOL file = _content == ExteriaChatItemContentFile;
     BOOL poll = _content == ExteriaChatItemContentPoll;
+    /* the collage of pictures over a file: the content is the file's, and the pictures come above its row */
+    BOOL albumed = file && _albumMessages.count > 0;
     CGSize pictureSize = CGSizeZero;
-    if (picture && _albumMessages.count > 1) {
+    if ((picture && _albumMessages.count > 1) || albumed) {
         CGFloat albumWidth = MIN(maxBubble - 2 * PICTURE_INSET, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : ALBUM_WIDTH_MAX);
         pictureSize = CGSizeMake(albumWidth, ExteriaAlbumLayout([self albumRatios], albumWidth, [NSMutableArray array]));
     } else if (picture) {
         pictureSize = ExteriaPictureSize(media, maxBubble - 2 * PICTURE_INSET);
     }
-    CGFloat textMax = (picture ? pictureSize.width + 2 * PICTURE_INSET : maxBubble) - 2 * PAD_X;
+    CGFloat textMax = (picture || albumed ? pictureSize.width + 2 * PICTURE_INSET : maxBubble) - 2 * PAD_X;
     CGFloat contentWidth = 0;
     CGFloat y = PAD_TOP;
     UIColor *textColor = ExteriaColorBubbleText(outgoing);
@@ -1080,10 +1100,10 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
         static const CGFloat sizes[] = {0, 82, 82, 55, 41, 34, 26, 23, 23, 23};
         if (emojis >= 1 && emojis <= 9 && sizes[emojis] > textSize) textSize = sizes[emojis];
     }
-    _textLayout = hasText ? [[ExteriaTextLayout layoutForText:bodyText entities:ownText ? _message.entities : nil font:ExteriaFontRegular(textSize)
+    _textLayout = hasText ? [[ExteriaTextLayout layoutForText:bodyText entities:ownText ? textSource.entities : nil font:ExteriaFontRegular(textSize)
                                                         color:textColor linkColor:linkColor width:MAX(40, textMax) maxLines:0 flush:0
-                                              dropsUndrawable:NO expandedQuotes:_message.expandedQuotes] retain] : nil;
-    _textLayout.spoilersRevealed = _message.spoilersRevealed;
+                                              dropsUndrawable:NO expandedQuotes:textSource.expandedQuotes] retain] : nil;
+    _textLayout.spoilersRevealed = textSource.spoilersRevealed;
     _textLayout.highlight = _highlightQuery;
 
     /* a run of messages from one person names them once, on the first bubble, and the picture stands under the last */
@@ -1142,6 +1162,18 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
         contentWidth = MAX(contentWidth, _textLayout.size.width);
         y += _textLayout.size.height + 4;
     }
+    BOOL textPlaced = NO;
+    if (albumed) {
+        pictureTop = y == PAD_TOP ? PICTURE_INSET : y;
+        y = pictureTop + pictureSize.height + 5;
+        contentWidth = MAX(contentWidth, pictureSize.width + 2 * PICTURE_INSET - 2 * PAD_X);
+        if (hasText) {
+            _textOrigin = CGPointMake(PAD_X, y);
+            contentWidth = MAX(contentWidth, _textLayout.size.width);
+            y += _textLayout.size.height + 4;
+            textPlaced = YES;
+        }
+    }
     if (picture) {
         /* a picture runs edge to edge, so the lines above it need the text padding and it needs none */
         pictureTop = y == PAD_TOP ? PICTURE_INSET : y;
@@ -1190,7 +1222,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
             y += META_HEIGHT;
         }
     }
-    if (hasText && !_captionAbove) {
+    if (hasText && !_captionAbove && !textPlaced) {
         _textOrigin = CGPointMake(PAD_X, y);
         contentWidth = MAX(contentWidth, _textLayout.size.width);
         y += _textLayout.size.height;
@@ -1224,8 +1256,8 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
             contentWidth = MAX(contentWidth, metaWidth);
         }
     }
-    CGFloat bubbleWidth = picture ? pictureSize.width + 2 * PICTURE_INSET : contentWidth + 2 * PAD_X;
-    if (picture && contentWidth + 2 * PAD_X > bubbleWidth) bubbleWidth = contentWidth + 2 * PAD_X;
+    CGFloat bubbleWidth = picture || albumed ? pictureSize.width + 2 * PICTURE_INSET : contentWidth + 2 * PAD_X;
+    if ((picture || albumed) && contentWidth + 2 * PAD_X > bubbleWidth) bubbleWidth = contentWidth + 2 * PAD_X;
     bubbleWidth = MAX(bubbleWidth, 56);
     if (!CGRectIsEmpty(_replyFrame)) _replyFrame.size.width = bubbleWidth - 2 * PAD_X;
     if (_commentsText.length) bubbleWidth = MAX(bubbleWidth, MIN([self commentsRowWidth], maxBubble));
@@ -1236,10 +1268,10 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     CGFloat top = _joinsPrevious ? SPACING_NEAR : SPACING_FAR;
     CGFloat x = outgoing ? width - SIDE_MARGIN - bubbleWidth : [self incomingLeft];
     _bubbleFrame = CGRectMake(x, top, bubbleWidth, bubbleHeight);
-    if (picture) _pictureFrame = CGRectMake(PICTURE_INSET, pictureTop, bubbleWidth - 2 * PICTURE_INSET, pictureSize.height);
+    if (picture || albumed) _pictureFrame = CGRectMake(PICTURE_INSET, pictureTop, bubbleWidth - 2 * PICTURE_INSET, pictureSize.height);
     [_albumFrames release];
     _albumFrames = nil;
-    if (picture && _albumMessages.count > 1) {
+    if ((picture && _albumMessages.count > 1) || albumed) {
         NSMutableArray *frames = [NSMutableArray array];
         ExteriaAlbumLayout([self albumRatios], _pictureFrame.size.width, frames);
         for (NSUInteger i = 0; i < frames.count; ++i) {

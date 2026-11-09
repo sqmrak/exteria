@@ -4224,6 +4224,11 @@ static void ExteriaRedrawTree(UIView *view) {
     return !message.service && (kind == EXTERIA_PREVIEW_PHOTO || kind == EXTERIA_PREVIEW_VIDEO);
 }
 
+/* a file that may stand in a collage as the one under it */
+- (BOOL)isAlbumMember:(ExteriaMessage *)message {
+    return [self isAlbumPicture:message] || (!message.service && message.media.kind == EXTERIA_PREVIEW_FILE && !message.media.viewOnce);
+}
+
 - (BOOL)replyIsInThisChat:(ExteriaMessage *)message {
     return !message.replyPeerKind || (message.replyPeerKind == _dialog.peerKind && message.replyPeerId == _dialog.peerId);
 }
@@ -4328,16 +4333,24 @@ static void ExteriaRedrawTree(UIView *view) {
         if (message.messageId > 0 && [_openedOnce containsObject:[NSNumber numberWithInt:message.messageId]]) message.viewOnceOpened = YES;
         /* photos and videos sent together are one item: the run of messages that share an album number, from one sender on one day */
         NSMutableArray *album = nil;
-        if (message.groupedId && [self isAlbumPicture:message]) {
-            album = [NSMutableArray arrayWithObject:message];
-            while (at + 1 < messages.count) {
-                ExteriaMessage *next = [messages objectAtIndex:at + 1];
-                if (next.groupedId != message.groupedId || next.senderKey != message.senderKey || next.outgoing != message.outgoing || ![self isAlbumPicture:next] ||
-                    ExteriaDayKey(calendar, next.date, &nextSpan) != ExteriaDayKey(calendar, message.date, &daySpan) || album.count >= 10) break;
-                [album addObject:next];
-                ++at;
+        if (message.groupedId && [self isAlbumMember:message]) {
+            NSMutableArray *run = [NSMutableArray arrayWithObject:message];
+            NSUInteger last = at, pictures = [self isAlbumPicture:message] ? 1 : 0, files = 1 - pictures;
+            while (last + 1 < messages.count) {
+                ExteriaMessage *next = [messages objectAtIndex:last + 1];
+                BOOL picture = [self isAlbumPicture:next];
+                if (next.groupedId != message.groupedId || next.senderKey != message.senderKey || next.outgoing != message.outgoing || ![self isAlbumMember:next] ||
+                    ExteriaDayKey(calendar, next.date, &nextSpan) != ExteriaDayKey(calendar, message.date, &daySpan) || (picture ? pictures >= 10 : files >= 1)) break;
+                [run addObject:next];
+                if (picture) ++pictures; else ++files;
+                ++last;
             }
-            if (album.count < 2) album = nil;
+            /* pictures alone make a collage; pictures with one file make a collage over the file, which owns the bubble. files alone stay messages of their own */
+            if (pictures >= 1 && (pictures >= 2 || files == 1)) {
+                album = run;
+                at = last;
+                if (files) for (ExteriaMessage *part in run) if (![self isAlbumPicture:part]) { message = part; break; }
+            }
         }
         NSInteger day = ExteriaDayKey(calendar, message.date, &daySpan);
         if (!previous || day != previousDay) {

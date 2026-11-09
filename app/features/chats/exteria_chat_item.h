@@ -97,6 +97,8 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     NSString *_builtPollKey;
     /* an album: the photos and videos sent together, in order, which the one bubble shows as a collage, and where each picture stands in the bubble */
     NSArray *_albumMessages;
+    /* the message of a group whose words the bubble shows when the file that owns the bubble has none */
+    ExteriaMessage *_captionMessage;
     NSArray *_albumFrames;
     NSString *_builtAlbumKey;
     /* the grouping and read flags the table last drew */

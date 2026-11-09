@@ -1,5 +1,6 @@
 #import "exteria_custom_emoji.h"
 #import "exteria_message_cell.h"
+#import "exteria_plural.h"
 #import "exteria_map_view.h"
 
 #import <QuartzCore/QuartzCore.h>
@@ -1911,7 +1912,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         collageTop = MIN(collageTop, box.origin.y);
         collageBottom = MAX(collageBottom, CGRectGetMaxY(box));
     }
-    BOOL captioned = item.textLayout.length > 0 && !item.captionAbove;
+    BOOL captioned = (item.textLayout.length > 0 && !item.captionAbove) || item.content == ExteriaChatItemContentFile;
     for (NSUInteger i = 0; i < shown; ++i) {
         while (_albumViews.count <= i) {
             UIImageView *view = [[[UIImageView alloc] init] autorelease];
