@@ -914,6 +914,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         _input.readOnlyNote = NSLocalizedString(@"chat.saved.readonly", nil);
     }
     [self applySendBanOfDialog:_dialog];
+    [self applyClosedTopic];
     [root addSubview:_input];
     _context = [[ExteriaComposeContext alloc] init];
     _context.hidden = YES;
@@ -1705,6 +1706,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             [chat.view setNeedsLayout];
         }
         [chat applySendBanOfDialog:channel.dialog];
+        [chat applyClosedTopic];
         [chat loadSendAsOptions];
         if (chat->_dialog.topicId > 0) return;
         if (channel.pinnedMessage > 0 && !chat->_pinnedList) {
@@ -1739,6 +1741,21 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
             note = [NSString stringWithFormat:NSLocalizedString(@"chat.send.banned.until", nil), [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:until]]];
         }
     }
+    _input.writable = NO;
+    _input.readOnlyNote = note;
+    [self.view setNeedsLayout];
+}
+
+/* a topic the admins closed takes no messages from anyone but them, so it says so where the field would be, as the official clients do; an admin is known only once the
+   full channel is, and gets the field back then */
+- (void)applyClosedTopic {
+    if (!_dialog.topicClosed || _dialog.topicId <= 0 || _dialog.discussion || _pinnedList) return;
+    NSString *note = NSLocalizedString(@"chat.topic.closed", nil);
+    if (_channelFull.isAdmin) {
+        if ([_input.readOnlyNote isEqualToString:note]) { _input.writable = YES; _input.readOnlyNote = nil; [self.view setNeedsLayout]; }
+        return;
+    }
+    if (!_input.writable) return;
     _input.writable = NO;
     _input.readOnlyNote = note;
     [self.view setNeedsLayout];

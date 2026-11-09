@@ -175,6 +175,7 @@
 "chat.placeholder" = "сообщение";
 "chat.readonly" = "сообщения в этом канале только для чтения";
 "chat.send.banned.group" = "в этой группе запрещено писать сообщения";
+"chat.topic.closed" = "тема закрыта";
 "chat.send.banned.forever" = "администраторы запретили вам писать в этой группе";
 "chat.send.banned.until" = "администраторы запретили вам писать до %@";
 "chat.send" = "отправить";
