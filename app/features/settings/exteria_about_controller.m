@@ -446,13 +446,18 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     [pill sizeToFit];
     CGFloat versionWidth = ceil(versionLabel.frame.size.width) + 2;
     CGFloat pillWidth = MAX(ceil(pill.frame.size.width), ceil(ExteriaStringSize(pill.text, pill.font).width)) + 18;
-    CGFloat gap = 10, x = floor((width - versionWidth - gap - pillWidth) / 2);
+    CGFloat gap = 10;
     CGFloat y = CGRectGetMaxY(name.frame) + 4;
-    versionLabel.frame = CGRectMake(x, y, versionWidth, PILL_HEIGHT);
-    pill.frame = CGRectMake(x + versionWidth + gap, y, pillWidth, PILL_HEIGHT);
-    versionLabel.autoresizingMask = pill.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
-    [header addSubview:versionLabel];
-    [header addSubview:pill];
+    /* the two stand in one view, which is the one that keeps to the middle: with a flexible margin on each, the header changing its width (a tablet turned upright) moved the version and
+       the pill by different amounts, and the pill came to stand on the last letters of the version */
+    CGFloat lineWidth = versionWidth + gap + pillWidth;
+    UIView *line = [[[UIView alloc] initWithFrame:CGRectMake(floor((width - lineWidth) / 2), y, lineWidth, PILL_HEIGHT)] autorelease];
+    line.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+    versionLabel.frame = CGRectMake(0, 0, versionWidth, PILL_HEIGHT);
+    pill.frame = CGRectMake(versionWidth + gap, 0, pillWidth, PILL_HEIGHT);
+    [line addSubview:versionLabel];
+    [line addSubview:pill];
+    [header addSubview:line];
     return header;
 }
 
