@@ -102,15 +102,16 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     switch (kind) {
     case EXTERIA_PREVIEW_NONE: return @"";
     case EXTERIA_PREVIEW_TEXT: return text;
-    case EXTERIA_PREVIEW_PHOTO: return NSLocalizedString(@"preview.photo", nil);
-    case EXTERIA_PREVIEW_VIDEO: return NSLocalizedString(@"preview.video", nil);
+    /* a picture with words in the caption shows the words, with the small picture of it before them, as the other clients do; without words it is named */
+    case EXTERIA_PREVIEW_PHOTO: return text.length ? text : NSLocalizedString(@"preview.photo", nil);
+    case EXTERIA_PREVIEW_VIDEO: return text.length ? text : NSLocalizedString(@"preview.video", nil);
     case EXTERIA_PREVIEW_VIDEO_MESSAGE: return NSLocalizedString(@"preview.videomessage", nil);
     case EXTERIA_PREVIEW_VOICE: return NSLocalizedString(@"preview.voice", nil);
     case EXTERIA_PREVIEW_AUDIO: return NSLocalizedString(@"preview.audio", nil);
     case EXTERIA_PREVIEW_STICKER:
         return text.length ? [text stringByAppendingFormat:@" %@", NSLocalizedString(@"preview.sticker", nil)]
                            : NSLocalizedString(@"preview.sticker", nil);
-    case EXTERIA_PREVIEW_GIF: return NSLocalizedString(@"preview.gif", nil);
+    case EXTERIA_PREVIEW_GIF: return text.length ? text : NSLocalizedString(@"preview.gif", nil);
     case EXTERIA_PREVIEW_FILE: return text.length ? text : NSLocalizedString(@"preview.file", nil);
     case EXTERIA_PREVIEW_LOCATION: return NSLocalizedString(@"preview.location", nil);
     case EXTERIA_PREVIEW_CONTACT: return NSLocalizedString(@"preview.contact", nil);
@@ -202,7 +203,8 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
     }
     _preview = [body copy];
     /* the emoji positions belong to the message text as the core cut it, so they hold only while the line still carries that text unchanged */
-    if (row->emoji_count && row->preview == EXTERIA_PREVIEW_TEXT && [body hasSuffix:ExteriaUtf8(row->text)]) {
+    BOOL captioned = row->preview == EXTERIA_PREVIEW_PHOTO || row->preview == EXTERIA_PREVIEW_VIDEO || row->preview == EXTERIA_PREVIEW_GIF;
+    if (row->emoji_count && (row->preview == EXTERIA_PREVIEW_TEXT || (captioned && row->text[0])) && [body hasSuffix:ExteriaUtf8(row->text)]) {
         NSString *own = ExteriaUtf8(row->text);
         NSUInteger shift = body.length - own.length;
         NSMutableArray *entities = [NSMutableArray arrayWithCapacity:row->emoji_count];
