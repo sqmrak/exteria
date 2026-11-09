@@ -242,6 +242,7 @@ static ExteriaSettingsRow *ExteriaFlagRow(NSString *titleKey, NSString *infoKey,
     [rows addObject:ExteriaFlagRow(@"chatset.notail", @"chatset.notail.info", ExteriaChatFlagRemoveTail)];
     [rows addObject:ExteriaFlagRow(@"chatset.pollresults", @"chatset.pollresults.info", ExteriaChatFlagPollResultsFirst)];
     [rows addObject:ExteriaFlagRow(@"chatset.forwarddate", nil, ExteriaChatFlagForwardDate)];
+    [rows addObject:ExteriaFlagRow(@"chatset.forwardauthor", @"chatset.forwardauthor.info", ExteriaChatFlagForwardAuthor)];
     [rows addObject:ExteriaFlagRow(@"chatset.hideshare", nil, ExteriaChatFlagHideShare)];
     [rows addObject:ExteriaFlagRow(@"chatset.hidesendas", @"chatset.hidesendas.info", ExteriaChatFlagHideSendAs)];
     [rows addObject:ExteriaFlagRow(@"chatset.noreactions.private", nil, ExteriaChatFlagHideReactionsPrivate)];

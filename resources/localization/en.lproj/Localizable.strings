@@ -1213,6 +1213,8 @@
 "poll.failed" = "The vote was not taken";
 "chat.select.range" = "Select everything between";
 "chatset.forwarddate" = "Date in the header of a forwarded message";
+"chatset.forwardauthor" = "Author line in forwards without quote";
+"chatset.forwardauthor.info" = "A message forwarded without its author goes as a copy that opens with the name and @username of whoever wrote it.";
 "chatset.menu.remind" = "Remind me";
 "chatset.menu.replyprivate" = "Reply in private";
 "chatset.confirm.header" = "Questions and links";

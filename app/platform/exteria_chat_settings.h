@@ -203,6 +203,7 @@ typedef enum {
     ExteriaChatFlagShowMessageEmojiStatus,
     ExteriaChatFlagShowReplyCustomEmoji,
     ExteriaChatFlagAyuCopyProtected,
+    ExteriaChatFlagForwardAuthor,               /* a message forwarded without its author goes as a copy that opens with the name and @username of whoever wrote it */
     ExteriaChatFlagCount
 } ExteriaChatFlag;
 /* the archive entry of the chat list is hidden on this device, and a pull on the list shows it; the server keeps no such state */

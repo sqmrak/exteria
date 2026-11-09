@@ -246,6 +246,7 @@ static const struct { NSString *key; BOOL fallback; } ExteriaChatFlagTable[Exter
     [ExteriaChatFlagEditedIcon] = {@"exteria.chat.editedicon", NO},
     [ExteriaChatFlagPollResultsFirst] = {@"exteria.chat.pollresultsfirst", NO},
     [ExteriaChatFlagForwardDate] = {@"exteria.chat.forwarddate", NO},
+    [ExteriaChatFlagForwardAuthor] = {@"exteria.chat.forwardauthor", NO},
     [ExteriaChatFlagHideShare] = {@"exteria.chat.hideshare", NO},
     [ExteriaChatFlagHideSendAs] = {@"exteria.chat.hidesendas", NO},
     [ExteriaChatFlagHideStickerTime] = {@"exteria.chat.hidestickertime", NO},

@@ -1219,6 +1219,8 @@
 "poll.failed" = "голос не принят";
 "chat.select.range" = "выбрать всё между";
 "chatset.forwarddate" = "дата в шапке пересланного сообщения";
+"chatset.forwardauthor" = "строка с автором при пересылке без цитаты";
+"chatset.forwardauthor.info" = "сообщение, пересланное без автора, уходит копией, которая начинается с имени и @username того, кто его написал.";
 "chatset.menu.remind" = "напомнить";
 "chatset.menu.replyprivate" = "ответить в личку";
 "chatset.confirm.header" = "вопросы и ссылки";
