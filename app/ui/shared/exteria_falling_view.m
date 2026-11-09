@@ -192,8 +192,20 @@ static CGFloat ExteriaSnowRandom(CGFloat low, CGFloat high) {
 - (void)layoutSubviews {
     [super layoutSubviews];
     if (CGSizeEqualToSize(_laid, self.bounds.size) || self.bounds.size.width <= 1 || self.bounds.size.height <= 1) return;
+    BOOL first = _laid.width <= 1 || _laid.height <= 1;
     _laid = self.bounds.size;
-    for (int i = 0; i < _count; ++i) [self resetFlake:&_flakes[i] scatter:YES];
+    if (first || !_sprite) {
+        for (int i = 0; i < _count; ++i) [self resetFlake:&_flakes[i] scatter:YES];
+        return;
+    }
+    /* a re-scatter on every resize (the classic list changes height when edit mode swaps the bars) makes the opaque pictures jump, only snow hides it by fading */
+    CGFloat width = self.bounds.size.width;
+    for (int i = 0; i < _count; ++i) {
+        snow_flake *f = &_flakes[i];
+        CGFloat r = f->size * 0.36f;
+        if (f->x > width - r) f->x = MAX(r, width - r);
+        if (f->y > self.bounds.size.height + f->size) f->y = -f->size;
+    }
 }
 
 #define GRAVITY_SECONDS 7.0
