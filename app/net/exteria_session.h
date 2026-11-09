@@ -329,6 +329,8 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo completion:(ExteriaSendCompletion)completion;
 /* an answer that quotes words of the message it answers */
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset completion:(ExteriaSendCompletion)completion;
+/* silent sets the silent flag, so the people of the chat get no sound */
+- (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent completion:(ExteriaSendCompletion)completion;
 - (void)sendSticker:(ExteriaMedia *)sticker toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId completion:(ExteriaSendCompletion)completion;
 /* sends a recorded file as a voice note or a round video: the file goes up in parts, then the message names it */
 - (void)sendVoiceAtPath:(NSString *)path durationMs:(int32_t)durationMs waveform:(NSData *)waveform toDialog:(ExteriaDialog *)dialog

@@ -6619,7 +6619,8 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
     }];
 }
 
-- (void)scheduleReminder:(NSString *)line choice:(NSUInteger)choice {
+/* the times the sheets offer: an hour, three hours, the next 9:00 and a week from now */
+static NSDate *ExteriaReminderDate(NSUInteger choice) {
     NSDate *now = [NSDate date], *when = nil;
     switch (choice) {
     case 0: when = [now dateByAddingTimeInterval:3600]; break;
@@ -6634,6 +6635,11 @@ static NSString *ExteriaEntitySignature(NSArray *entities) {
     }
     default: when = [now dateByAddingTimeInterval:7 * 86400]; break;
     }
+    return when;
+}
+
+- (void)scheduleReminder:(NSString *)line choice:(NSUInteger)choice {
+    NSDate *when = ExteriaReminderDate(choice);
     if (!when) return;
     ExteriaWeakReference *weak = _weak;
     [_session loadSelf:^(NSArray *items, NSString *errorName) {
@@ -7637,6 +7643,58 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)inputBarDidTapSend:(ExteriaInputBar *)bar {
+    [self sendComposedFromBar:bar silent:NO];
+}
+
+/* the hold on the send button with words in the field: send without a sound, or send later; an edit in progress has neither */
+- (void)inputBarDidHoldSend:(ExteriaInputBar *)bar {
+    if (_editingId || ![[bar trimmedText] length]) return;
+    ExteriaWeakReference *weak = _weak;
+    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"chat.send.silent", nil), NSLocalizedString(@"chat.send.later", nil), nil];
+    [ExteriaSheet presentInView:self.view title:nil message:nil options:titles destructive:nil
+                    cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:^(NSUInteger index) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (index == 0) [chat sendComposedFromBar:bar silent:YES];
+        else [chat chooseTimeToSendFromBar:bar];
+    }];
+}
+
+- (void)chooseTimeToSendFromBar:(ExteriaInputBar *)bar {
+    ExteriaWeakReference *weak = _weak;
+    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"chat.remind.hour", nil), NSLocalizedString(@"chat.remind.three", nil),
+                       NSLocalizedString(@"chat.remind.tomorrow", nil), NSLocalizedString(@"chat.remind.week", nil), nil];
+    [ExteriaSheet presentInView:self.view title:NSLocalizedString(@"chat.send.later", nil) message:nil options:titles destructive:nil
+                    cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:^(NSUInteger index) {
+        ExteriaChatController *chat = weak.target;
+        if (chat) [chat scheduleComposedFromBar:bar at:ExteriaReminderDate(index)];
+    }];
+}
+
+/* the server keeps the message and sends it at the time; it is not in the chat until then, so there is no pending copy to draw */
+- (void)scheduleComposedFromBar:(ExteriaInputBar *)bar at:(NSDate *)when {
+    NSString *text = [bar trimmedText];
+    if (!text.length || !when) return;
+    NSArray *entities = [bar sendEntities];
+    int32_t replyTo = _replyToId ? _replyToId : [_bots replyTargetForText];
+    ExteriaWeakReference *weak = _weak;
+    [_session scheduleText:text entities:entities atDate:(int32_t)[when timeIntervalSince1970] toDialog:_dialog replyTo:replyTo completion:^(NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) {
+            NSLog(@"exteria: the message was not scheduled: %@", errorName);
+            ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+            return;
+        }
+        [chat toast:NSLocalizedString(@"chat.send.scheduled", nil)];
+    }];
+    [bar clear];
+    [_bots didSendText];
+    [self cancelCompose];
+    [self saveDraftNow];
+}
+
+- (void)sendComposedFromBar:(ExteriaInputBar *)bar silent:(BOOL)silent {
     NSString *text = [bar trimmedText];
     if (!text.length) return;
     if (_editingId) {
@@ -7650,7 +7708,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     [bar clear];
     [_bots didSendText];
     [self cancelCompose];
-    [self sendText:text entities:entities replyTo:replyTo quote:quote quoteOffset:quoteOffset];
+    [self sendText:text entities:entities replyTo:replyTo quote:quote quoteOffset:quoteOffset silent:silent];
     /* the message is on its way, and the draft that held its words goes at once instead of after the pause */
     [self saveDraftNow];
 }
@@ -7679,6 +7737,10 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)sendText:(NSString *)text entities:(NSArray *)entities replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset {
+    [self sendText:text entities:entities replyTo:replyTo quote:quote quoteOffset:quoteOffset silent:NO];
+}
+
+- (void)sendText:(NSString *)text entities:(NSArray *)entities replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent {
     NSString *planned = text;
     NSString *plannedQuote = quote;
     int32_t plannedOffset = quoteOffset;
@@ -7693,11 +7755,11 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         text = planned;
         entities = nil;
     }
-    [self appendPendingText:text entities:entities replyTo:replyTo quote:plannedQuote quoteOffset:plannedOffset];
+    [self appendPendingText:text entities:entities replyTo:replyTo quote:plannedQuote quoteOffset:plannedOffset silent:silent];
 }
 
 /* the server refuses a text over 4096 units (8192 with Premium), so a longer one goes as several messages cut at the same places as the Android client; the plugin hooks have run already */
-- (void)appendPendingText:(NSString *)text entities:(NSArray *)entities replyTo:(int32_t)replyTo quote:(NSString *)plannedQuote quoteOffset:(int32_t)plannedOffset {
+- (void)appendPendingText:(NSString *)text entities:(NSArray *)entities replyTo:(int32_t)replyTo quote:(NSString *)plannedQuote quoteOffset:(int32_t)plannedOffset silent:(BOOL)silent {
     NSArray *parts = ExteriaTextPartsForLimit(text, entities, [_session ownPerson].premium ? EXTERIA_MESSAGE_LIMIT_PREMIUM : EXTERIA_MESSAGE_LIMIT);
     if (!parts) {
         ExteriaShowNotice(nil, NSLocalizedString(@"chat.send.toolong", nil));
@@ -7708,6 +7770,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     for (ExteriaTextPart *part in parts) {
         ExteriaMessage *message = [ExteriaMessage pendingText:part.text entities:part.entities randomId:[self newRandomId] date:(int32_t)[[NSDate date] timeIntervalSince1970]];
         message.sendReplyTo = replyTo;
+        message.sendSilent = silent;
         /* the quote belongs to the first message only, the others answer the same message */
         message.sendQuote = first ? plannedQuote : nil;
         message.sendQuoteOffset = first ? plannedOffset : -1;
@@ -7728,7 +7791,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 }
 
 - (void)sendPluginText:(NSString *)text replyTo:(int32_t)replyTo {
-    [self appendPendingText:text entities:nil replyTo:replyTo quote:nil quoteOffset:-1];
+    [self appendPendingText:text entities:nil replyTo:replyTo quote:nil quoteOffset:-1 silent:NO];
 }
 
 - (NSString *)sendPluginPhotoAtPath:(NSString *)path caption:(NSString *)caption replyTo:(int32_t)replyTo {
@@ -7797,7 +7860,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     if (out) {
         [_session sendOutgoing:out toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo completion:done];
     } else if (message.media.kind == EXTERIA_PREVIEW_STICKER || message.media.kind == EXTERIA_PREVIEW_GIF) [_session sendSticker:message.media toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo completion:done];
-    else [_session sendText:message.text entities:message.entities toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo quote:message.sendQuote quoteOffset:message.sendQuoteOffset completion:done];
+    else [_session sendText:message.text entities:message.entities toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo quote:message.sendQuote quoteOffset:message.sendQuoteOffset silent:message.sendSilent completion:done];
 }
 
 - (void)didSend:(ExteriaMessage *)message messageId:(int32_t)messageId error:(NSString *)errorName {
@@ -8280,6 +8343,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     again.sendReplyTo = message.sendReplyTo;
     again.sendQuote = message.sendQuote;
     again.sendQuoteOffset = message.sendQuoteOffset;
+    again.sendSilent = message.sendSilent;
     [_local removeObject:message];
     [self afterAppendingLocal:again];
     [self dispatchLocal:again];

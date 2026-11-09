@@ -1557,6 +1557,11 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
 
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo
            quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset completion:(ExteriaSendCompletion)completion {
+    [self sendText:text entities:entities toDialog:dialog randomId:randomId replyTo:replyTo quote:quote quoteOffset:quoteOffset silent:NO completion:completion];
+}
+
+- (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo
+           quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent completion:(ExteriaSendCompletion)completion {
     ExteriaSendCompletion done = [completion copy];
     NSString *quoted = [quote copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
@@ -1571,6 +1576,7 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
         (void)strings;
         if (status == EXTERIA_OK && quoted.length && replyTo > 0) status = exteria_set_reply_quote(arena, *request, &peer, replyTo, quoted.UTF8String, quoteOffset);
         if (status == EXTERIA_OK && noPreview) status = exteria_tl_set_flag(*request, "no_webpage");
+        if (status == EXTERIA_OK && silent) status = exteria_tl_set_flag(*request, "silent");
         return status == EXTERIA_OK ? ExteriaApplySendAs(self, &peer, arena, *request) : status;
     } handler:^(const exteria_mt_rpc_result *result) {
         [self finishSend:result randomId:randomId completion:done];

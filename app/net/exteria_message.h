@@ -253,6 +253,7 @@ typedef enum {
     int32_t _sentAfterId;
     NSString *_sendQuote;
     int32_t _sendQuoteOffset;
+    BOOL _sendSilent;
     ExteriaMarkup *_markup;
     BOOL _reactionsPossible;
     BOOL _hasReactions;
@@ -372,6 +373,8 @@ typedef enum {
 /* the words of the answered message that this reply quotes, and where they start in it; empty for a plain reply */
 @property (nonatomic, copy) NSString *sendQuote;
 @property (nonatomic, assign) int32_t sendQuoteOffset;
+/* the message goes without a sound for the people who get it (silent in messages.sendMessage) */
+@property (nonatomic, assign) BOOL sendSilent;
 /* the bot whose inline result the message is, zero for any other */
 @property (nonatomic, readonly) long long viaBotId;
 /* the buttons under the message, or the keyboard it brought; nil without any */

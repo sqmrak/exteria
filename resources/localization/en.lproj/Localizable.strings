@@ -1234,6 +1234,9 @@
 "chat.remind.week" = "In a week";
 "chat.remind.set" = "The reminder is in Favorites";
 "chat.remind.text" = "Reminder: %@";
+"chat.send.silent" = "Send without sound";
+"chat.send.later" = "Send later";
+"chat.send.scheduled" = "Message scheduled";
 "chat.ask.call" = "Call %@?";
 "chat.ask.call.action" = "Call";
 "chat.ask.repeat" = "Send this message again?";

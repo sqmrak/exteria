@@ -24,6 +24,8 @@
 /* a text that the server sends at the given time (unix seconds, in the future); the chat is usually the favorites,
    where it works as a reminder */
 - (void)scheduleText:(NSString *)text atDate:(int32_t)date toDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
+/* with the formatting runs of the text, as an answer to replyTo (zero for none) */
+- (void)scheduleText:(NSString *)text entities:(NSArray *)entities atDate:(int32_t)date toDialog:(ExteriaDialog *)dialog replyTo:(int32_t)replyTo completion:(void (^)(NSString *errorName))completion;
 /* the link that opens a message of a channel or supergroup, public or private; the completion gets it, or nil and the rpc error name */
 - (void)exportLinkOfMessageId:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *link, NSString *errorName))completion;
 /* votes in the poll of a message: options are NSData tokens of the answers (see ExteriaPollAnswer), none takes the

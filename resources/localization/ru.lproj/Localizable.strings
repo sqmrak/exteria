@@ -1239,6 +1239,9 @@
 "chat.remind.week" = "Через неделю";
 "chat.remind.set" = "Напоминание в Избранном";
 "chat.remind.text" = "Напоминание: %@";
+"chat.send.silent" = "Отправить без звука";
+"chat.send.later" = "Отправить позже";
+"chat.send.scheduled" = "Сообщение запланировано";
 "chat.ask.call" = "Позвонить: %@?";
 "chat.ask.call.action" = "Позвонить";
 "chat.ask.repeat" = "Отправить это сообщение ещё раз?";

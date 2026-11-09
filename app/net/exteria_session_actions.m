@@ -248,15 +248,24 @@ static int32_t ExteriaCachedSharingPeriod(ExteriaSession *session) {
 }
 
 - (void)scheduleText:(NSString *)text atDate:(int32_t)date toDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    [self scheduleText:text entities:nil atDate:date toDialog:dialog replyTo:0 completion:completion];
+}
+
+- (void)scheduleText:(NSString *)text entities:(NSArray *)entities atDate:(int32_t)date toDialog:(ExteriaDialog *)dialog replyTo:(int32_t)replyTo completion:(void (^)(NSString *))completion {
     void (^done)(NSString *) = [completion copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     NSString *body = [text copy];
+    NSMutableData *strings = nil;
+    size_t count = 0;
+    NSMutableData *packed = ExteriaPackSendEntities(entities, &strings, &count);
     int64_t randomId;
     do {
         randomId = (int64_t)((((uint64_t)arc4random() << 32) | arc4random()) & 0x7fffffffffffffffULL);
     } while (randomId == 0);
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
-        exteria_status status = exteria_send_text_request(arena, &peer, body.UTF8String, NULL, 0, randomId, request);
+        /* the block keeps the data objects, not only the pointers into them */
+        exteria_status status = exteria_send_text_reply_request(arena, &peer, body.UTF8String, packed.bytes, count, randomId, replyTo, request);
+        (void)strings;
         return status == EXTERIA_OK ? exteria_set_schedule(arena, *request, date) : status;
     } handler:^(const exteria_mt_rpc_result *result) {
         [body release];

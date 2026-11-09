@@ -943,6 +943,11 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     CGFloat x = [hold locationInView:self].x;
     switch (hold.state) {
     case UIGestureRecognizerStateBegan:
+        /* the round button is a send button while the field has words, and a hold on it offers the ways to send instead of starting the recorder */
+        if (!_lockedRecording && [[self trimmedText] length]) {
+            if ([_delegate respondsToSelector:@selector(inputBarDidHoldSend:)]) [_delegate inputBarDidHoldSend:self];
+            return;
+        }
         if (![_delegate inputBar:self didBeginRecording:_mode]) {
             /* a recognizer that is switched off and on again drops the touch that began it */
             hold.enabled = NO;

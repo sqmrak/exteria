@@ -27,6 +27,8 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 /* the finger came up; cancelled is set when it had slid away to the left */
 - (void)inputBar:(ExteriaInputBar *)bar didFinishRecordingCancelled:(BOOL)cancelled;
 @optional
+/* the send button was held with words in the field: the screen offers to send without a sound or later */
+- (void)inputBarDidHoldSend:(ExteriaInputBar *)bar;
 /* the pill left of the field, the bot's menu or its web app */
 - (void)inputBarDidTapMenu:(ExteriaInputBar *)bar;
 - (void)inputBarDidTapBotKeyboard:(ExteriaInputBar *)bar;

@@ -299,6 +299,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize sentAfterId = _sentAfterId;
 @synthesize sendQuote = _sendQuote;
 @synthesize sendQuoteOffset = _sendQuoteOffset;
+@synthesize sendSilent = _sendSilent;
 @synthesize markup = _markup;
 @synthesize hasMarkup = _hasMarkup;
 
