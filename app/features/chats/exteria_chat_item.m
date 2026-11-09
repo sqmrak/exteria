@@ -925,7 +925,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     ExteriaPoll *poll = _message.poll;
     CGFloat rowWidth = MAX(150, width);
     [_pollQuestionLayout release];
-    _pollQuestionLayout = [[ExteriaTextLayout layoutForText:poll.question entities:nil font:ExteriaFontSemibold(16) color:textColor linkColor:textColor
+    _pollQuestionLayout = [[ExteriaTextLayout layoutForText:poll.question entities:poll.questionEntities font:ExteriaFontSemibold(16) color:textColor linkColor:textColor
                                                       width:rowWidth maxLines:0 flush:0] retain];
     _pollQuestionOrigin = CGPointMake(PAD_X, y);
     y += _pollQuestionLayout.size.height + 3;
@@ -942,7 +942,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     _pollAnswerFrames = [[NSMutableArray alloc] initWithCapacity:poll.answers.count];
     CGFloat textWidth = rowWidth - POLL_MARK - 8 - (_pollShowsResults ? POLL_PERCENT_WIDTH : 0);
     for (ExteriaPollAnswer *answer in poll.answers) {
-        ExteriaTextLayout *layout = [ExteriaTextLayout layoutForText:answer.text entities:nil font:ExteriaFontRegular(15) color:textColor linkColor:textColor
+        ExteriaTextLayout *layout = [ExteriaTextLayout layoutForText:answer.text entities:answer.entities font:ExteriaFontRegular(15) color:textColor linkColor:textColor
                                                                width:MAX(40, textWidth) maxLines:3 flush:0];
         CGFloat height = MAX(POLL_MARK, layout.size.height) + (_pollShowsResults ? POLL_BAR_HEIGHT + 4 : 0) + 2 * POLL_ROW_PAD;
         [_pollAnswerLayouts addObject:layout];

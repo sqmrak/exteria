@@ -1,4 +1,22 @@
 #import "exteria_poll_model.h"
+#import "exteria_message.h"
+
+/* the entities of a question or an answer as the text layouts read them */
+static NSArray *ExteriaPollEntities(NSString *text, const exteria_poll_entity *rows, uint8_t count) {
+    if (!count) return nil;
+    exteria_entity entities[EXTERIA_POLL_ENTITIES_MAX];
+    if (count > EXTERIA_POLL_ENTITIES_MAX) count = EXTERIA_POLL_ENTITIES_MAX;
+    for (uint8_t i = 0; i < count; ++i) {
+        memset(&entities[i], 0, sizeof(entities[i]));
+        entities[i].kind = rows[i].kind;
+        entities[i].flags = rows[i].flags;
+        entities[i].offset = rows[i].offset;
+        entities[i].length = rows[i].length;
+        entities[i].url_offset = -1;
+        entities[i].document_id = rows[i].document_id;
+    }
+    return ExteriaTextEntities(text, entities, count, NULL);
+}
 
 static NSString *ExteriaPollText(const char *bytes) {
     NSString *text = bytes ? [NSString stringWithUTF8String:bytes] : nil;
@@ -7,6 +25,7 @@ static NSString *ExteriaPollText(const char *bytes) {
 
 @implementation ExteriaPollAnswer
 @synthesize text = _text;
+@synthesize entities = _entities;
 @synthesize option = _option;
 @synthesize voters = _voters;
 @synthesize chosen = _chosen;
@@ -16,6 +35,7 @@ static NSString *ExteriaPollText(const char *bytes) {
     self = [super init];
     if (!self) return nil;
     _text = [ExteriaPollText(row->text) copy];
+    _entities = [ExteriaPollEntities(_text, row->entities, row->entity_count) retain];
     _option = [[NSData alloc] initWithBytes:row->option length:row->option_len];
     _voters = row->voters;
     _chosen = row->chosen != 0;
@@ -25,6 +45,7 @@ static NSString *ExteriaPollText(const char *bytes) {
 
 - (void)dealloc {
     [_text release];
+    [_entities release];
     [_option release];
     [super dealloc];
 }
@@ -32,6 +53,7 @@ static NSString *ExteriaPollText(const char *bytes) {
 
 @implementation ExteriaPoll
 @synthesize question = _question;
+@synthesize questionEntities = _questionEntities;
 @synthesize answers = _answers;
 @synthesize pollId = _pollId;
 @synthesize closed = _closed;
@@ -49,6 +71,7 @@ static NSString *ExteriaPollText(const char *bytes) {
     if (!row->present) return nil;
     ExteriaPoll *poll = [[[ExteriaPoll alloc] init] autorelease];
     poll->_question = [ExteriaPollText(row->question) copy];
+    poll->_questionEntities = [ExteriaPollEntities(poll->_question, row->question_entities, row->question_entity_count) retain];
     NSMutableArray *answers = [NSMutableArray arrayWithCapacity:row->answer_count];
     for (uint8_t i = 0; i < row->answer_count; ++i) [answers addObject:[[[ExteriaPollAnswer alloc] initWithRow:&row->answers[i]] autorelease]];
     poll->_answers = [answers copy];
@@ -70,6 +93,7 @@ static NSString *ExteriaPollText(const char *bytes) {
 
 - (void)dealloc {
     [_question release];
+    [_questionEntities release];
     [_answers release];
     [_recentVoters release];
     [_picked release];

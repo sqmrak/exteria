@@ -15,8 +15,20 @@
 /* the server names the last few who voted of a public poll, and the clients show three of them */
 #define EXTERIA_POLL_RECENT_MAX 3
 
+/* the custom emoji and styles of a question or an answer; links are left out, since a poll has no room for their addresses */
+#define EXTERIA_POLL_ENTITIES_MAX 12
+typedef struct exteria_poll_entity {
+    uint8_t kind;           /* exteria_entity_kind */
+    uint8_t flags;
+    int32_t offset;         /* UTF-16 units into the text */
+    int32_t length;
+    int64_t document_id;    /* custom emoji only */
+} exteria_poll_entity;
+
 typedef struct exteria_poll_answer {
     char text[EXTERIA_POLL_ANSWER_MAX];
+    uint8_t entity_count;
+    exteria_poll_entity entities[EXTERIA_POLL_ENTITIES_MAX];
     uint8_t option[EXTERIA_POLL_OPTION_MAX];
     uint8_t option_len;
     int32_t voters;         /* zero when the server did not count them for this account */
@@ -39,6 +51,8 @@ typedef struct exteria_poll {
     uint8_t recent_voter_count;
     int64_t recent_voters[EXTERIA_POLL_RECENT_MAX];  /* user ids, the newest first; a voter that is not a user is left out */
     char question[EXTERIA_POLL_QUESTION_MAX];
+    uint8_t question_entity_count;
+    exteria_poll_entity question_entities[EXTERIA_POLL_ENTITIES_MAX];
     exteria_poll_answer answers[EXTERIA_POLL_ANSWERS_MAX];
 } exteria_poll;
 

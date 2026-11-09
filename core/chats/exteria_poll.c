@@ -17,12 +17,28 @@ static void copy_text(char *dst, size_t cap, const uint8_t *data, size_t len) {
 }
 
 /* the words of a TextWithEntities field, whose entities this reader does not use */
-static int read_words(const exteria_tl_value *owner, const char *field, char *dst, size_t cap) {
+static int read_words(const exteria_tl_value *owner, const char *field, char *dst, size_t cap, uint8_t *entity_count, exteria_poll_entity *entities) {
     const exteria_tl_value *words = exteria_tl_get(owner, field);
     const uint8_t *data;
     size_t len;
     if (!exteria_tl_is(words, EXTERIA_TL_ID_textWithEntities) || exteria_tl_get_bytes(words, "text", &data, &len) != EXTERIA_OK || !len) return 0;
     copy_text(dst, cap, data, len);
+    if (entity_count && entities) {
+        exteria_entity read[EXTERIA_POLL_ENTITIES_MAX];
+        char urls[64];
+        uint8_t count = 0, i;
+        *entity_count = 0;
+        exteria_entities_read(words, read, EXTERIA_POLL_ENTITIES_MAX, urls, sizeof(urls), &count);
+        for (i = 0; i < count; ++i) {
+            if (read[i].url_offset >= 0) continue;
+            entities[*entity_count].kind = read[i].kind;
+            entities[*entity_count].flags = read[i].flags;
+            entities[*entity_count].offset = read[i].offset;
+            entities[*entity_count].length = read[i].length;
+            entities[*entity_count].document_id = read[i].document_id;
+            ++*entity_count;
+        }
+    }
     return 1;
 }
 
@@ -34,7 +50,7 @@ int exteria_poll_read(const exteria_tl_value *media, exteria_poll *out) {
     if (!exteria_tl_is(media, EXTERIA_TL_ID_messageMediaPoll)) return 0;
     poll = exteria_tl_get(media, "poll");
     if (!exteria_tl_is(poll, EXTERIA_TL_ID_poll) || exteria_tl_get_i64(poll, "id", &out->id) != EXTERIA_OK ||
-        !read_words(poll, "question", out->question, sizeof(out->question)) || exteria_tl_get_vec(poll, "answers", &answers) != EXTERIA_OK) {
+        !read_words(poll, "question", out->question, sizeof(out->question), &out->question_entity_count, out->question_entities) || exteria_tl_get_vec(poll, "answers", &answers) != EXTERIA_OK) {
         memset(out, 0, sizeof(*out));
         return 0;
     }
@@ -49,7 +65,7 @@ int exteria_poll_read(const exteria_tl_value *media, exteria_poll *out) {
         const uint8_t *token;
         size_t token_len;
         exteria_poll_answer *answer = &out->answers[out->answer_count];
-        if (!exteria_tl_is(item, EXTERIA_TL_ID_pollAnswer) || !read_words(item, "text", answer->text, sizeof(answer->text)) ||
+        if (!exteria_tl_is(item, EXTERIA_TL_ID_pollAnswer) || !read_words(item, "text", answer->text, sizeof(answer->text), &answer->entity_count, answer->entities) ||
             exteria_tl_get_bytes(item, "option", &token, &token_len) != EXTERIA_OK || !token_len || token_len > EXTERIA_POLL_OPTION_MAX) continue;
         memcpy(answer->option, token, token_len);
         answer->option_len = (uint8_t)token_len;

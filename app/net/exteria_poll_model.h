@@ -5,12 +5,15 @@
 /* one answer of a poll */
 @interface ExteriaPollAnswer : NSObject {
     NSString *_text;
+    NSArray *_entities;
     NSData *_option;
     int32_t _voters;
     BOOL _chosen;
     BOOL _correct;
 }
 @property (nonatomic, readonly, copy) NSString *text;
+/* the custom emoji and styles of the text (ExteriaTextEntity), nil for none */
+@property (nonatomic, readonly, retain) NSArray *entities;
 /* the token the server names the answer by, which a vote sends back */
 @property (nonatomic, readonly, retain) NSData *option;
 @property (nonatomic, readonly) int32_t voters;
@@ -21,6 +24,7 @@
 /* the poll of a message: what the server said and, for a poll with several answers, the ones picked here and not sent yet */
 @interface ExteriaPoll : NSObject {
     NSString *_question;
+    NSArray *_questionEntities;
     NSArray *_answers;
     long long _pollId;
     BOOL _closed;
@@ -36,6 +40,7 @@
 }
 + (ExteriaPoll *)pollWithRow:(const exteria_poll *)row;
 @property (nonatomic, readonly, copy) NSString *question;
+@property (nonatomic, readonly, retain) NSArray *questionEntities;
 @property (nonatomic, readonly, retain) NSArray *answers;
 @property (nonatomic, readonly) long long pollId;
 @property (nonatomic, readonly) BOOL closed;
