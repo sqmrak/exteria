@@ -5,7 +5,10 @@
 @implementation ExteriaSlider
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
-    if (self && !ExteriaThemeIsClassic()) [self setTrackColor:ExteriaColorAccent()];
+    if (!self) return nil;
+    if (!ExteriaThemeIsClassic()) [self setTrackColor:ExteriaColorAccent()];
+    /* the stock slider of the classic theme keeps its own look, and only the filled part of the track takes the accent, which it showed in the system blue */
+    else self.minimumTrackTintColor = ExteriaColorAccent();
     return self;
 }
 
