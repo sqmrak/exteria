@@ -12,6 +12,8 @@
 - (void)countSavedMessages:(void (^)(NSInteger count, NSString *errorName))completion;
 - (void)deleteSavedMessage:(int32_t)messageId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 - (void)clearSavedMessages:(void (^)(NSString *errorName))completion;
+/* every kept deleted message of one chat; the kept versions of edits stay */
+- (void)clearSavedDeletedOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *errorName))completion;
 /* the kept deleted messages of a chat with ids from low to high, as ExteriaMessage items with deletedLocally set */
 - (void)loadSavedDeletedOfDialog:(ExteriaDialog *)dialog from:(int32_t)low to:(int32_t)high completion:(void (^)(NSArray *messages))completion;
 /* what a message said before its edits, the oldest version first, as ExteriaMessage items */

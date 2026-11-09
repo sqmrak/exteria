@@ -88,6 +88,27 @@ static exteria_status ExteriaCollectSaved(void *ctx, int64_t id, const exteria_t
     }];
 }
 
+- (void)clearSavedDeletedOfDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *))completion {
+    void (^done)(NSString *) = [completion copy];
+    exteria_peer peer = {dialog.peerKind, dialog.peerId};
+    [self post:^{
+        exteria_store *store = [self workerStore];
+        exteria_status status = store ? EXTERIA_OK : EXTERIA_E_STATE;
+        /* a page holds at most two hundred of them, newest first, so the pages are taken until none is left */
+        while (status == EXTERIA_OK) {
+            NSArray *page = ExteriaSavedDeletedOfPeer(store, peer, 0, INT32_MAX);
+            if (!page.count) break;
+            for (ExteriaMessage *message in page) {
+                status = exteria_store_delete(store, EXTERIA_RECORD_DELETED_MESSAGE, peer, message.messageId);
+                if (status != EXTERIA_OK) break;
+            }
+        }
+        [self storeChanged];
+        NSString *error = status == EXTERIA_OK ? nil : @"STORAGE";
+        [self deliverMain:^{ if (done) done(error); [done release]; }];
+    }];
+}
+
 NSMutableArray *ExteriaSavedDeletedOfPeer(exteria_store *store, exteria_peer peer, int32_t low, int32_t high) {
     NSMutableArray *found = [NSMutableArray array];
     ExteriaSavedRead read = {found, YES, low, high, 1, 0};

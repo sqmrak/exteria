@@ -2208,8 +2208,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 
 #pragma mark menu
 
-typedef enum { ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete } ExteriaChatMenuEntry;
-enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDeleteMessage, ExteriaChatAlertSearch, ExteriaChatAlertDeleteSelected, ExteriaChatAlertStartVoice };
+typedef enum { ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete, ExteriaChatMenuClearSaved } ExteriaChatMenuEntry;
+enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDeleteMessage, ExteriaChatAlertSearch, ExteriaChatAlertDeleteSelected, ExteriaChatAlertStartVoice, ExteriaChatAlertClearSaved };
 
 /* asks the question first when the person wants it asked (the setting), then runs the block; declined runs when the answer is no */
 - (void)askFirst:(ExteriaChatFlag)flag message:(NSString *)message action:(NSString *)action then:(void (^)(void))go declined:(void (^)(void))declined {
@@ -2250,6 +2250,8 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
     if (!_dialog.saved) MENU_ROW(ExteriaSymbolBell, @"notif.chat.header", ExteriaChatMenuNotifications);
     MENU_ROW(ExteriaSymbolBackground, @"chat.menu.wallpaper", ExteriaChatMenuWallpaper);
     if (!channelLike && _server.count) MENU_ROW(ExteriaSymbolClearHistory, @"chat.menu.clear", ExteriaChatMenuClear);
+    /* messages deleted by the other side are kept on the phone while AyuMoments holds them, and this row sweeps the ones of this chat */
+    if (ExteriaChatFlagGet(ExteriaChatFlagAyuSaveDeleted) && !_pinnedList) MENU_ROW(ExteriaSymbolBroom, @"chat.menu.clearsaved", ExteriaChatMenuClearSaved);
     /* the saved messages are listed once the person has marked any is shown only then */
     if ([[ExteriaBookmarks bookmarksForSession:_session] entries].count) MENU_ROW(ExteriaSymbolFave, @"bookmarks.title", ExteriaChatMenuBookmarks);
     if (bot) {
@@ -2280,6 +2282,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
             break;
         case ExteriaChatMenuWallpaper: [chat.navigationController pushViewController:[[[ExteriaWallpaperController alloc] init] autorelease] animated:YES]; break;
         case ExteriaChatMenuClear: [chat askWithMessage:NSLocalizedString(@"chat.clear.confirm", nil) action:NSLocalizedString(@"chat.menu.clear", nil) tag:ExteriaChatAlertClear]; break;
+        case ExteriaChatMenuClearSaved: [chat askWithMessage:NSLocalizedString(@"chat.clearsaved.confirm", nil) action:NSLocalizedString(@"chat.menu.clearsaved", nil) tag:ExteriaChatAlertClearSaved]; break;
         case ExteriaChatMenuBookmarks:
             [chat.navigationController pushViewController:[[[ExteriaBookmarksController alloc] initWithSession:chat->_session avatars:chat->_avatars media:chat->_media
                                                                                                        stickers:chat->_stickers] autorelease] animated:YES];
@@ -2575,9 +2578,33 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     ExteriaConfirmAction(self, message, action, ^{ [(ExteriaChatController *)weak.target confirmedTag:tag]; });
 }
 
+/* the kept deleted messages of this chat go from the phone, and from the list with them */
+- (void)clearSavedDeleted {
+    ExteriaWeakReference *weak = _weak;
+    [_session clearSavedDeletedOfDialog:_dialog completion:^(NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) {
+            ExteriaGiftAlert(nil, ExteriaGiftErrorText(errorName));
+            return;
+        }
+        for (NSNumber *key in [chat->_server allKeys]) {
+            if ([[chat->_server objectForKey:key] deletedLocally]) [chat->_server removeObjectForKey:key];
+        }
+        for (ExteriaMessage *local in [[chat->_local copy] autorelease]) if (local.deletedLocally) [chat->_local removeObject:local];
+        if (chat->_replyToId > 0 && ![chat storedMessageWithId:chat->_replyToId]) [chat cancelCompose];
+        [chat rebuildItems];
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
+    }];
+}
+
 - (void)confirmedTag:(NSInteger)tag {
     if (tag == ExteriaChatAlertStartVoice) {
         [_session.groupCalls startVoiceChatInDialog:_dialog title:nil];
+        return;
+    }
+    if (tag == ExteriaChatAlertClearSaved) {
+        [self clearSavedDeleted];
         return;
     }
     if (tag == ExteriaChatAlertDeleteSelected) {

@@ -314,6 +314,8 @@
 "chat.menu.clear" = "Clear history";
 "chat.menu.delete" = "Delete chat";
 "chat.clear.confirm" = "Clear the history of this chat? The messages go for you only.";
+"chat.menu.clearsaved" = "Clear deleted";
+"chat.clearsaved.confirm" = "Delete the saved deleted messages of this chat from this device?";
 "chat.delete.confirm" = "Delete this chat? Its messages go for you only.";
 "chat.pinned.all" = "All pinned messages";
 "chat.pinned.list" = "Pinned messages";
