@@ -91,6 +91,8 @@ GIFT_ANONYMOUS_SOURCE = os.path.join(ROOT, "resources/icons/source/gift_anonymou
 # transparent corners. the 76, 83.5 and 180 pixel files stay opaque squares
 LEGACY_ICON_SIDES = (57, 114, 120, 72, 144)
 LEGACY_ICON_RADIUS = 0.18
+# the ipad takes 72 and 144 on ios 5 and 6 and draws the transparent corners of an icon black, so these two stay opaque squares
+OPAQUE_ICON_SIDES = (72, 144)
 
 # share of the master edge dropped on every side, about the corner radius of the source artwork
 ICON_BLEED = 0.08
@@ -269,7 +271,7 @@ def resize_rgba(image, side):
 
 def legacy_icon(square, side, force=False):
     """the icon at side pixels, with transparent corners for legacy sizes or when forced"""
-    if not force and side not in LEGACY_ICON_SIDES:
+    if side in OPAQUE_ICON_SIDES or (not force and side not in LEGACY_ICON_SIDES):
         return square.convert("RGB").resize((side, side), Image.LANCZOS)
     from PIL import ImageDraw
     big = square.convert("RGBA")
@@ -383,7 +385,9 @@ def glossed_icon(icon, side):
     base = legacy_icon(icon, side, force=True)
     with Image.open(ICON_GLOSS) as gloss:
         veil = gloss.convert("RGBA").resize((side, side), Image.LANCZOS)
-    glossed = Image.alpha_composite(base, veil)
+    glossed = Image.alpha_composite(base.convert("RGBA"), veil)
+    if side in OPAQUE_ICON_SIDES:
+        return glossed.convert("RGB")
     glossed.putalpha(base.getchannel("A"))
     return glossed
 
