@@ -1952,7 +1952,9 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     ++_pinnedThumbToken;
     NSUInteger token = _pinnedThumbToken;
     ExteriaMedia *media = message.media;
-    ExteriaRemoteFile *file = media.kind == EXTERIA_PREVIEW_PHOTO ? media.file : ((media.kind == EXTERIA_PREVIEW_VIDEO || media.kind == EXTERIA_PREVIEW_GIF || media.kind == EXTERIA_PREVIEW_STICKER) ? media.previewFile : nil);
+    ExteriaRemoteFile *file = media.kind == EXTERIA_PREVIEW_PHOTO ? media.file : ((media.kind == EXTERIA_PREVIEW_VIDEO || media.kind == EXTERIA_PREVIEW_GIF || media.kind == EXTERIA_PREVIEW_STICKER || media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE) ? media.previewFile : nil);
+    /* a round video keeps its shape in the bar */
+    _pinnedThumb.layer.cornerRadius = media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE ? 17 : 6;
     _pinnedThumb.image = nil;
     _pinnedThumb.hidden = file == nil;
     if (!file) return;
