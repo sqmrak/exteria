@@ -815,6 +815,11 @@ static NSInteger sUnreadTotal;
 NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 
 - (void)refreshCounts {
+    /* the tabs count the main list, which this screen holds only while the tab of all chats is the one shown */
+    if (!_folderId) {
+        if (!_folders.selectedFolder.folderId && _dialogs.count) ExteriaSetMainDialogsSnapshot(_dialogs);
+        [_folders updateCountsFromDialogs:ExteriaMainDialogsSnapshot()];
+    }
     if (_folders.selectedFolder.folderId) return;
     NSInteger total = 0;
     for (ExteriaDialog *dialog in _dialogs) {

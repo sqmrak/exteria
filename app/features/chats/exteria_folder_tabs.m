@@ -18,6 +18,7 @@
     NSInteger _slideDirection;
     void (^_changed)(void);
     NSArray *_pagingRecognizers;
+    NSArray *_countedDialogs;
 }
 @end
 
@@ -47,6 +48,7 @@
     [_media release];
     [_emojiDocuments release];
     [_folders release];
+    [_countedDialogs release];
     [_bar release];
     [_changed release];
     [super dealloc];
@@ -115,10 +117,29 @@
     /* folders that arrive or go replace the list where it is, with no slide */
     _slideDirection = 0;
     [self addSubview:_bar];
+    [self applyCounts];
     self.hidden = self.height == 0;
     [self setNeedsLayout];
     if (_changed)
         _changed();
+}
+- (void)updateCountsFromDialogs:(NSArray *)dialogs {
+    if (dialogs != _countedDialogs) {
+        [_countedDialogs release];
+        _countedDialogs = [dialogs retain];
+    }
+    [self applyCounts];
+}
+- (void)applyCounts {
+    for (NSUInteger i = 0; i < _folders.count; ++i) {
+        ExteriaChatFolder *folder = [_folders objectAtIndex:i];
+        NSInteger count = 0;
+        for (ExteriaDialog *dialog in _countedDialogs) {
+            if (dialog.folder || dialog.community || !dialog.unread || dialog.muted || (dialog.peerKind == 3 && dialog.left)) continue;
+            if ([folder containsDialog:dialog]) ++count;
+        }
+        [_bar setCount:count forIndex:(NSInteger)i];
+    }
 }
 - (void)emojiLoaded:(NSNotification *)notification {
     if ([_emojiDocuments containsObject:notification.object]) [_bar redrawTitles];
