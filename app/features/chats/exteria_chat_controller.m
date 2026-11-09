@@ -1856,6 +1856,16 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if (newline.location != NSNotFound) line = [line substringToIndex:newline.location];
     _pinnedId = message.messageId;
     _pinnedText.text = line;
+    /* the bar shows the first line, so the custom emoji of that line come with it as their own pictures and not as the plain emoji they stand for */
+    NSMutableArray *lineEntities = nil;
+    if (message.text.length && [line isEqualToString:[message.text substringToIndex:MIN(line.length, message.text.length)]]) {
+        for (ExteriaTextEntity *entity in message.entities) {
+            if (entity.style != ExteriaTextStyleCustomEmoji || NSMaxRange(entity.range) > line.length) continue;
+            if (!lineEntities) lineEntities = [NSMutableArray array];
+            [lineEntities addObject:entity];
+        }
+    }
+    _pinnedText.entities = lineEntities;
     [self updatePinnedMarker];
     [self showPinnedThumbOf:message];
     [self setPinnedBarHidden:line.length == 0];
