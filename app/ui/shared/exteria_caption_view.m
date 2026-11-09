@@ -13,6 +13,8 @@
     self.contentInset = UIEdgeInsetsZero;
     self.showsHorizontalScrollIndicator = NO;
     self.alwaysBounceHorizontal = NO;
+    self.alwaysBounceVertical = NO;
+    self.bounces = NO;
     /* ios 7 and later put 8 points above and below the words and 5 at the sides; the measure and the hint assume the ios 5 and 6 padding (the 6.1 sdk has no declaration, so the setter is reached by key), so the words sat 4 points low in a pill */
     if ([self respondsToSelector:NSSelectorFromString(@"setTextContainerInset:")]) [self setValue:[NSValue valueWithUIEdgeInsets:UIEdgeInsetsMake(TOP_PAD, SIDE_PAD - 5, TOP_PAD, SIDE_PAD - 5)] forKey:@"textContainerInset"];
     self.autocorrectionType = UITextAutocorrectionTypeDefault;
@@ -29,6 +31,24 @@
     [_hint release];
     [_placeholder release];
     [super dealloc];
+}
+
+/* the words of a field that holds them all stand still, and those of a longer one scroll only between their first and last line: a finger on the field dragged a one line caption off
+   its pill, half of it out of sight */
+- (void)setContentOffset:(CGPoint)offset {
+    CGFloat room = self.bounds.size.height - self.contentInset.top - self.contentInset.bottom;
+    CGFloat most = MAX(0, self.contentSize.height - room);
+    offset.y = most <= 0.5 ? -self.contentInset.top : MAX(-self.contentInset.top, MIN(most - self.contentInset.top, offset.y));
+    offset.x = 0;
+    [super setContentOffset:offset];
+}
+
+- (void)setContentOffset:(CGPoint)offset animated:(BOOL)animated {
+    CGFloat room = self.bounds.size.height - self.contentInset.top - self.contentInset.bottom;
+    CGFloat most = MAX(0, self.contentSize.height - room);
+    offset.y = most <= 0.5 ? -self.contentInset.top : MAX(-self.contentInset.top, MIN(most - self.contentInset.top, offset.y));
+    offset.x = 0;
+    [super setContentOffset:offset animated:animated];
 }
 
 - (void)setPlaceholder:(NSString *)placeholder {
