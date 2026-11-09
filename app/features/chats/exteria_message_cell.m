@@ -545,9 +545,14 @@ static void ExteriaDrawPollMark(CGContextRef context, CGRect mark, UIColor *fill
         ExteriaDrawStringIn(percent, ExteriaFontSemibold(13), CGRectMake(CGRectGetMaxX(row) - 38, row.origin.y + 8, 38, 20), ExteriaStringClip, ExteriaTextAlignmentRight);
         /* the bar is as long as the answer's share of the longest, so a poll of one answer still reads as a full bar */
         CGFloat barWidth = row.size.width - 20 - 8 - 38;
-        CGFloat barY = CGRectGetMaxY(row) - 8 - 4;
+        CGFloat barY = CGRectGetMaxY(row) - 8 - 4 - (poll.hasCounts ? EXTERIA_POLL_VOTES_LINE : 0);
         CGFloat fraction = most > 0 ? (CGFloat)answer.voters / (CGFloat)most : 0;
         UIColor *barColor = poll.quiz && show && answer.correct ? good : (poll.quiz && show && answer.chosen ? bad : accent);
+        if (poll.hasCounts) {
+            NSString *votes = [NSString stringWithFormat:NSLocalizedString([@"poll.votes." stringByAppendingString:ExteriaPluralForm(answer.voters)], nil), (int)answer.voters];
+            [quiet set];
+            ExteriaDrawStringIn(votes, ExteriaFontRegular(12), CGRectMake(textX, barY + 4 + 2, row.size.width - 20 - 8, 14), ExteriaStringTailTruncate, ExteriaTextAlignmentLeft);
+        }
         [[barColor colorWithAlphaComponent:0.25f] setFill];
         ExteriaAddCorners(context, CGRectMake(textX, barY, barWidth, 4), 2, 2, 2, 2);
         CGContextFillPath(context);

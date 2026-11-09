@@ -27,6 +27,8 @@ typedef enum {
 /* one row of the chat: the message and everything the cell needs to draw it, worked out for a width; built and
    laid out on the main thread, since the fonts and the text layout come from UIKit */
 /* the pictures of the last voters of a public poll, small circles that overlap them before the count of votes */
+/* the line of an answer that says how many voted for it, under its bar */
+#define EXTERIA_POLL_VOTES_LINE 15.0
 #define EXTERIA_POLL_VOTER_SIDE 18.0
 #define EXTERIA_POLL_VOTER_STEP 12.0
 CGFloat ExteriaPollVotersWidth(NSUInteger count);

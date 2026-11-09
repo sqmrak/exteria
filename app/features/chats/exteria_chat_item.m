@@ -944,7 +944,7 @@ static NSString *ExteriaPollKindLine(ExteriaPoll *poll) {
     for (ExteriaPollAnswer *answer in poll.answers) {
         ExteriaTextLayout *layout = [ExteriaTextLayout layoutForText:answer.text entities:answer.entities font:ExteriaFontRegular(15) color:textColor linkColor:textColor
                                                                width:MAX(40, textWidth) maxLines:3 flush:0];
-        CGFloat height = MAX(POLL_MARK, layout.size.height) + (_pollShowsResults ? POLL_BAR_HEIGHT + 4 : 0) + 2 * POLL_ROW_PAD;
+        CGFloat height = MAX(POLL_MARK, layout.size.height) + (_pollShowsResults ? POLL_BAR_HEIGHT + 4 + (poll.hasCounts ? EXTERIA_POLL_VOTES_LINE : 0) : 0) + 2 * POLL_ROW_PAD;
         [_pollAnswerLayouts addObject:layout];
         [_pollAnswerFrames addObject:[NSValue valueWithCGRect:CGRectMake(PAD_X, y, rowWidth, height)]];
         y += height;
