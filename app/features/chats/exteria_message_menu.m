@@ -3,6 +3,8 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_animation.h"
+#import "exteria_avatar_view.h"
+#import "exteria_person.h"
 #import "exteria_dismiss_pan.h"
 #import "exteria_blur.h"
 #import "exteria_classic_chrome.h"
@@ -81,6 +83,8 @@
     void (^_moreReactionsHandler)(void);
     void (^_dismissHandler)(void);
     void (^_headerHandler)(void);
+    NSArray *_headerPeople;
+    ExteriaAvatarCache *_headerCache;
 }
 @end
 
@@ -116,6 +120,8 @@
     [_moreReactionsHandler release];
     [_dismissHandler release];
     [_headerHandler release];
+    [_headerPeople release];
+    [_headerCache release];
     [super dealloc];
 }
 
@@ -169,6 +175,15 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         }
         return;
     }
+    [self rebuildAnimated:NO];
+}
+
+- (void)setHeaderPeople:(NSArray *)people cache:(ExteriaAvatarCache *)cache {
+    [_headerPeople release];
+    _headerPeople = [people copy];
+    [_headerCache release];
+    _headerCache = [cache retain];
+    if (!_card || !_headerText.length) return;
     [self rebuildAnimated:NO];
 }
 
@@ -256,7 +271,23 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         _headerMark = [mark retain];
         [header addSubview:mark];
         CGFloat textX = CGRectGetMaxX(mark.frame) + 10;
-        UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(textX, 0, width - textX - 12, HEADER_HEIGHT)] autorelease];
+        /* the first three readers stand at the right end, each over the edge of the one before, as in the other clients */
+        NSUInteger faces = MIN(_headerPeople.count, (NSUInteger)3);
+        CGFloat faceSide = 24, faceStep = 16;
+        CGFloat facesWidth = faces ? faceSide + (CGFloat)(faces - 1) * faceStep : 0;
+        CGFloat textRoom = width - textX - 12 - (faces ? facesWidth + 8 : 0);
+        for (NSUInteger i = 0; i < faces; ++i) {
+            ExteriaPerson *person = [_headerPeople objectAtIndex:i];
+            ExteriaAvatarView *face = [[[ExteriaAvatarView alloc] initWithFrame:CGRectMake(width - 14 - facesWidth + (CGFloat)i * faceStep, (HEADER_HEIGHT - faceSide) / 2, faceSide, faceSide)] autorelease];
+            face.circular = YES;
+            face.seed = (NSUInteger)(person.userId % 1000003);
+            face.initials = person.initials;
+            face.deleted = person.deleted;
+            face.userInteractionEnabled = NO;
+            [face setPhoto:person.photo cache:_headerCache];
+            [header addSubview:face];
+        }
+        UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(textX, 0, textRoom, HEADER_HEIGHT)] autorelease];
         label.backgroundColor = [UIColor clearColor];
         label.font = ExteriaMenuClassic() ? [UIFont boldSystemFontOfSize:15] : ExteriaFontMedium(15.5);
         label.textColor = ExteriaMenuText();

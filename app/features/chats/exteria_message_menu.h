@@ -3,6 +3,7 @@
 #import "exteria_media_cache.h"
 #import "exteria_message.h"
 #import "exteria_symbol.h"
+@class ExteriaAvatarCache;
 
 /* one entry of the menu: a title, a glyph and the number the owner knows the action by */
 @interface ExteriaMenuItem : NSObject
@@ -27,6 +28,8 @@
 /* the menu was closed without a pick */
 @property (nonatomic, copy) void (^dismissHandler)(void);
 @property (nonatomic, copy) void (^headerHandler)(void);
+/* the first of those who read the message (ExteriaPerson), shown as small pictures at the right end of the header; the cache gives their photos */
+- (void)setHeaderPeople:(NSArray *)people cache:(ExteriaAvatarCache *)cache;
 /* the cache the pill takes the lottie of each reaction from; without it the reactions stay still pictures */
 @property (nonatomic, retain) ExteriaMediaCache *media;
 
