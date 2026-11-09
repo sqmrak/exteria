@@ -31,7 +31,27 @@ static CGFloat ExteriaInputIdleHeight(void) {
 }
 
 static CGFloat ExteriaInputVerticalMargin(void) {
-    return ExteriaIsPad() ? (ExteriaInputIdleHeight() - FIELD_MIN) / 2 : MARGIN;
+    /* a half point puts the bitmap of the round button between two pixels of a screen without retina, which drew its top and bottom row cut */
+    return ExteriaIsPad() ? floor((ExteriaInputIdleHeight() - FIELD_MIN) / 2) : MARGIN;
+}
+
+/* the round button of the classic theme with a point of clear room all round: the circle of the bitmap touches its edge, and whatever cuts the picture at the edge of the button (the
+   image view, a half pixel of the frame on a screen without retina) took a sliver off its top and bottom */
+static UIImage *ExteriaInputPaddedCircle(UIImage *circle) {
+    static NSMutableDictionary *cache;
+    if (!cache) cache = [[NSMutableDictionary alloc] init];
+    NSValue *key = [NSValue valueWithPointer:circle];
+    /* the entry keeps the source bitmap too, so its address cannot be handed to another image while the entry stands */
+    NSArray *entry = [cache objectForKey:key];
+    if (entry) return [entry objectAtIndex:1];
+    UIImage *made;
+    CGFloat side = circle.size.width, pad = 1.5;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    [circle drawInRect:CGRectMake(pad, pad, side - 2 * pad, side - 2 * pad)];
+    made = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    [cache setObject:[NSArray arrayWithObjects:circle, made, nil] forKey:key];
+    return made;
 }
 
 static void ExteriaInputSetImage(UIButton *button, UIImage *image, UIControlState state) {
@@ -463,8 +483,10 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     BOOL plane = !empty || _lockedRecording;
     ExteriaSymbol symbol = plane ? ExteriaSymbolSendArrow : (_mode == ExteriaRecordRound ? ExteriaSymbolVideoCamera : ExteriaSymbolMicrophone);
     if (ExteriaThemeIsClassic()) {
-        ExteriaInputSetImage(_send, ExteriaClassicRoundButtonImage(symbol, BUTTON, NO), UIControlStateNormal);
-        ExteriaInputSetImage(_send, ExteriaClassicRoundButtonImage(symbol, BUTTON, YES), UIControlStateHighlighted);
+        ExteriaInputSetImage(_send, ExteriaInputPaddedCircle(ExteriaClassicRoundButtonImage(symbol, BUTTON, NO)), UIControlStateNormal);
+        ExteriaInputSetImage(_send, ExteriaInputPaddedCircle(ExteriaClassicRoundButtonImage(symbol, BUTTON, YES)), UIControlStateHighlighted);
+        _send.clipsToBounds = NO;
+        _send.imageView.clipsToBounds = NO;
     } else {
         ExteriaInputSetImage(_send, ExteriaSymbolImage(symbol, !empty ? 18 : 20, [UIColor whiteColor]), UIControlStateNormal);
     }
@@ -1038,7 +1060,8 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     /* a scaled button keeps its frame, so a transform in flight is set aside while the frame is set */
     CGAffineTransform held = _send.transform;
     _send.transform = CGAffineTransformIdentity;
-    _send.frame = CGRectMake(size.width - MARGIN - sendWidth, ExteriaInputVerticalMargin() + _fieldHeight - sendHeight, sendWidth, sendHeight);
+    CGFloat pixel = 1.0 / ExteriaScreenScale();
+    _send.frame = CGRectMake(round((size.width - MARGIN - sendWidth) / pixel) * pixel, round((ExteriaInputVerticalMargin() + _fieldHeight - sendHeight) / pixel) * pixel, sendWidth, sendHeight);
     _send.transform = held;
     CGFloat pillWidth = _menuPill.hidden ? 0 : ceil([_menuTitle sizeWithFont:_menuPill.titleLabel.font].width) + 28;
     CGFloat senderRoom = _senderButton.hidden ? 0 : FIELD_MIN + MARGIN;
