@@ -8219,6 +8219,11 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     }
     ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithMessages:messages selected:selected media:_media
         senderNames:senderNames chatTitle:_dialog.title] autorelease];
+    ExteriaWeakReference *weakChat = [ExteriaWeakReference referenceTo:self];
+    viewer.showInChatHandler = ^(ExteriaMessage *shown) {
+        ExteriaChatController *me = (ExteriaChatController *)weakChat.target;
+        if (me) [me jumpToMessageId:shown.messageId];
+    };
     [self presentViewController:viewer animated:YES completion:nil];
 }
 

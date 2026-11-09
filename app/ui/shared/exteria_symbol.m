@@ -104,6 +104,7 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolQrMini: return @"symbol_qrmini";
     case ExteriaSymbolGlobe: return @"symbol_globe";
     case ExteriaSymbolTranslate: return @"symbol_translate";
+    case ExteriaSymbolMessage: return @"symbol_message";
     case ExteriaSymbolAppDevices: return @"symbol_appdevices";
     case ExteriaSymbolDeviceAndroid: return @"symbol_deviceandroid";
     case ExteriaSymbolDeviceAndroidTablet: return @"symbol_deviceandroidtablet";

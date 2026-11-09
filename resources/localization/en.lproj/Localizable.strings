@@ -604,6 +604,7 @@
 "bots.error.unknown" = "Request failed: %@";
 
 "media.save" = "Save to Gallery";
+"media.showinchat" = "Show in Chat";
 "media.share" = "Share";
 "media.previous" = "Previous";
 "media.next" = "Next";

@@ -500,7 +500,7 @@ SYMBOL_ICONS = (
     ("share", "msg_share", 0, True), ("bellmuted", "msg_mute", 0, True), ("pinnedlist", "msg_pinnedlist", 0, True),
     ("broom", "msg_clearcache", 0, True), ("back", "ic_ab_back", 0, True), ("externallink", "mini_external_link", 0, True),
     ("apps", "input_bot2", 0, True), ("copy", "msg_copy", 0, True), ("fingerprint", "fingerprint", 0, True),
-    ("stars", "star", 0, True),
+    ("stars", "star", 0, True), ("message", "msg_message", 0, True),
     ("filehq", "msg_filehq", 0, True), ("spoiler", "msg_spoiler", 0, True),
     ("qualitysd", "menu_quality_sd", 0, True), ("qualityhd", "menu_quality_hd", 0, True),
     ("callback", "msg_callback", 0, True), ("videocall", "msg_videocall", 0, True), ("background", "msg_background", 0, True), ("groupsmenu", "msg_groups", 0, True), ("clearhistory", "msg_clear", 0, True), ("help", "msg_help", 0, True), ("settingsold", "msg_settings_old", 0, True), ("fave", "msg_fave", 0, True), ("pinline", "msg_pin", 0, True), ("ghost", "ghost", 0, False),

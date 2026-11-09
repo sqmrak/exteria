@@ -52,6 +52,7 @@ static char ExteriaMediaPlayerStatusContext;
     void (^_sendPhoto)(UIImage *, NSString *);
     void (^_sendVideo)(NSString *);
     void (^_cancelHandler)(void);
+    void (^_showInChatHandler)(ExteriaMessage *);
     UIDocumentInteractionController *_document;
     NSString *_sharePath;
     BOOL _observingStatus;
@@ -117,6 +118,7 @@ static char ExteriaMediaPlayerStatusContext;
 
 @implementation ExteriaMediaViewer
 @synthesize cancelHandler = _cancelHandler;
+@synthesize showInChatHandler = _showInChatHandler;
 
 - (id)init {
     self = [super init];
@@ -208,7 +210,7 @@ static char ExteriaMediaPlayerStatusContext;
     [_senderNames release]; [_chatTitle release];
     [_messages release]; [_media release]; [_weak release];
     [_localImage release]; [_localURL release]; [_loadedPath release];
-    [_sendPhoto release]; [_sendVideo release]; [_cancelHandler release]; [_openedHandler release];
+    [_sendPhoto release]; [_sendVideo release]; [_cancelHandler release]; [_showInChatHandler release]; [_openedHandler release];
     _document.delegate = nil; [_document dismissMenuAnimated:NO]; [_document release];
     if (_sharePath) [[NSFileManager defaultManager] removeItemAtPath:_sharePath error:NULL];
     [_sharePath release];
@@ -897,14 +899,17 @@ static NSString *ExteriaVideoTime(double seconds) {
 - (void)next { [self pageToIndex:_index + 1]; }
 - (void)showMenu {
     if (!_more.enabled) return;
-    ExteriaSymbol symbols[] = {ExteriaSymbolArrowDown};
-    ExteriaWeakReference *weak = _weak;
     /* sharing has its own button in the bar, so the menu holds what the bar has no button for */
-    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:[NSArray arrayWithObject:NSLocalizedString(@"media.save", nil)]
+    BOOL canShow = _showInChatHandler && self.message;
+    NSMutableArray *titles = [NSMutableArray arrayWithObject:NSLocalizedString(@"media.save", nil)];
+    ExteriaSymbol symbols[] = {ExteriaSymbolGallery, ExteriaSymbolMessage};
+    if (canShow) [titles addObject:NSLocalizedString(@"media.showinchat", nil)];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles
         symbols:symbols handler:^(NSUInteger index) {
-            (void)index;
             ExteriaMediaViewer *viewer = weak.target;
-            if (viewer && !viewer->_closed) [viewer save];
+            if (!viewer || viewer->_closed) return;
+            if (index == 0) [viewer save]; else [viewer showInChat];
         }] autorelease];
     [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(_more.frame) - 8, CGRectGetMaxY(_more.frame))];
 }
@@ -971,14 +976,23 @@ static NSString *ExteriaVideoTime(double seconds) {
 }
 
 - (void)closeNow { [self closeAnimated:YES]; }
-- (void)closeAnimated:(BOOL)animated {
+- (void)closeAnimated:(BOOL)animated { [self closeAnimated:animated then:nil]; }
+- (void)closeAnimated:(BOOL)animated then:(void (^)(void))after {
     [self cancelPaging];
     if (_closed) return;
     _closed = YES; ++_generation;
     [_media cancelPathRequest:_request]; _request = 0;
     [self releasePlayer]; [self.view endEditing:YES];
     void (^cancel)(void) = [[_cancelHandler copy] autorelease];
-    [self dismissViewControllerAnimated:animated completion:^{ if (cancel) cancel(); }];
+    [self dismissViewControllerAnimated:animated completion:^{ if (cancel) cancel(); if (after) after(); }];
+}
+/* the chat at the message that holds this picture: the viewer goes first, and then the owner of the handler takes the screen */
+- (void)showInChat {
+    ExteriaMessage *message = self.message;
+    void (^handler)(ExteriaMessage *) = [[_showInChatHandler copy] autorelease];
+    if (!message || !handler) return;
+    [message retain];
+    [self closeAnimated:YES then:^{ handler(message); [message release]; }];
 }
 - (void)edit {
     if (!_image.image || self.isVideo || (!self.isSending && !_photoReady)) return;

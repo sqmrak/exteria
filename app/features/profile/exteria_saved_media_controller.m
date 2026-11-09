@@ -125,6 +125,11 @@
     (void)tabs;
     ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithMessages:messages selected:message media:self.media
                                                                      senderNames:nil chatTitle:NSLocalizedString(@"chats.saved", nil)] autorelease];
+    ExteriaWeakReference *weakScreen = [ExteriaWeakReference referenceTo:self];
+    viewer.showInChatHandler = ^(ExteriaMessage *shown) {
+        id me = weakScreen.target;
+        if (me) [me groupTabs:nil didOpenMessage:shown];
+    };
     [self presentViewController:viewer animated:YES completion:nil];
 }
 @end

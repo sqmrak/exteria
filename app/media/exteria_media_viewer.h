@@ -14,4 +14,6 @@
    still going up is read from the copy on this phone */
 - (id)initWithOneTimePreviewOfMessage:(ExteriaMessage *)message media:(ExteriaMediaCache *)media;
 @property (nonatomic, copy) void (^cancelHandler)(void);
+/* when set, the menu gets "show in chat"; it runs after the viewer is gone, with the message that was on the screen */
+@property (nonatomic, copy) void (^showInChatHandler)(ExteriaMessage *message);
 @end

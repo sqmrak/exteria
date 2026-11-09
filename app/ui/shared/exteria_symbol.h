@@ -104,6 +104,7 @@ typedef enum {
     ExteriaSymbolQrMini,
     ExteriaSymbolGlobe,
     ExteriaSymbolTranslate,
+    ExteriaSymbolMessage,
     ExteriaSymbolAppDevices,
     ExteriaSymbolDeviceAndroid,
     ExteriaSymbolDeviceAndroidTablet,

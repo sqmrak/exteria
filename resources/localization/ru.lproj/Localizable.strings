@@ -605,6 +605,7 @@
 "bots.error.unknown" = "Запрос не выполнен: %@";
 
 "media.save" = "Сохранить в галерею";
+"media.showinchat" = "Показать в чате";
 "media.share" = "Поделиться";
 "media.previous" = "Предыдущее";
 "media.next" = "Следующее";
