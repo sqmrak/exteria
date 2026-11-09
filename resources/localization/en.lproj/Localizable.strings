@@ -1889,9 +1889,7 @@
 "look.cards.radius" = "Section radius";
 "look.senderavatars" = "Sender mini avatars";
 "look.snow" = "Snowflakes";
-"look.snow.info" = "Snowflakes fall over the chat list and the background of a chat. They stop under the power saver and with Reduce Motion on.";
 "look.foxes" = "Senko";
-"look.foxes.info" = "The foxes of Senko fall in the list of chats and behind a chat. They do not fall with the power saver and with “Reduce Motion” on.";
 "look.hidewaves" = "Hide background waves";
 "look.hidewaves.info" = "The purple waves in the corners of the modern look are not drawn.";
 "chat.msg.edithistory" = "Edit history";
@@ -1952,7 +1950,6 @@
 "more.localpremium.info" = "The client shows the Premium features that need no server: the panel and reactions with premium emoji, the full animations. The account stays as it is, and Telegram decides what can be sent.";
 "more.other" = "Other";
 "more.boykisser" = "Boykissers";
-"more.boykisser.info" = "Replace the background effects with Boykissers";
 "more.reset" = "Reset settings";
 "more.reset.info" = "All the settings of Exteria go back to their defaults. Accounts and chats are not touched.";
 "more.reset.footer" = "The reset does not touch accounts, messages or files.";

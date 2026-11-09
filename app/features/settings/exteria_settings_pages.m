@@ -201,15 +201,15 @@
 - (ExteriaSettingsSection *)effectsSection {
     ExteriaWeakReference *weak = _weak;
     NSMutableArray *rows = [NSMutableArray array];
-    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.snow", nil) subtitle:NSLocalizedString(@"look.snow.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagSnow) toggle:^(BOOL on) {
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.snow", nil) subtitle:nil on:ExteriaChatFlagGet(ExteriaChatFlagSnow) toggle:^(BOOL on) {
         ExteriaChatFlagSet(ExteriaChatFlagSnow, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
-    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.foxes", nil) subtitle:NSLocalizedString(@"look.foxes.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagFoxes) toggle:^(BOOL on) {
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"look.foxes", nil) subtitle:nil on:ExteriaChatFlagGet(ExteriaChatFlagFoxes) toggle:^(BOOL on) {
         ExteriaChatFlagSet(ExteriaChatFlagFoxes, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
-    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"more.boykisser", nil) subtitle:NSLocalizedString(@"more.boykisser.info", nil) on:ExteriaChatFlagGet(ExteriaChatFlagBoykisser) toggle:^(BOOL on) {
+    [rows addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"more.boykisser", nil) subtitle:nil on:ExteriaChatFlagGet(ExteriaChatFlagBoykisser) toggle:^(BOOL on) {
         ExteriaChatFlagSet(ExteriaChatFlagBoykisser, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }]];
