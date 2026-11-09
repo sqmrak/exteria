@@ -427,8 +427,10 @@ static NSMutableDictionary *ExteriaRatingRow(ExteriaSymbol symbol, NSString *tit
     _pill.frame = CGRectMake(MAX(20, MIN(20 + inner - pill.width, 20 + filled - pill.width / 2)), 20, pill.width, pill.height);
     CGFloat y = trackY + 40 + 26;
     if (_user.hasPendingRating) {
-        _pending.frame = CGRectMake(20, y, inner, 34);
-        y += 34;
+        /* the line wraps, so it has the height its words need: a fixed 34 points cut the date off with dots */
+        CGFloat pendingHeight = MAX(34, ceil([_pending sizeThatFits:CGSizeMake(inner, 1000)].height));
+        _pending.frame = CGRectMake(20, y, inner, pendingHeight);
+        y += pendingHeight;
         _preview.frame = CGRectMake(20, y, inner, 30);
         y += 38;
     }
