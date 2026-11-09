@@ -132,6 +132,10 @@ typedef enum {
     BOOL keepDetails;
     exteria_peer_ref peer;
     NSString *note;
+    /* the runs of the note packed for the request (custom emoji), the string pool they point into, and how many there are */
+    NSMutableData *noteRuns;
+    NSMutableData *noteStrings;
+    size_t noteRunCount;
 }
 @property (nonatomic, readonly) long long stars;
 @end
@@ -152,6 +156,9 @@ typedef void (^ExteriaSavedGiftsCompletion)(NSArray *gifts, NSInteger total, NSS
 
 /* asks the server what a send, an upgrade or a hand over costs */
 - (void)quoteSendingGift:(ExteriaStarGift *)gift toDialog:(ExteriaDialog *)dialog note:(NSString *)note hideName:(BOOL)hideName
+          includeUpgrade:(BOOL)includeUpgrade completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;
+/* the same with the ExteriaTextEntity runs of the note, as the custom emoji a Premium sender put in it */
+- (void)quoteSendingGift:(ExteriaStarGift *)gift toDialog:(ExteriaDialog *)dialog note:(NSString *)note entities:(NSArray *)entities hideName:(BOOL)hideName
           includeUpgrade:(BOOL)includeUpgrade completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;
 - (void)quoteUpgradingGift:(ExteriaSavedGift *)gift keepDetails:(BOOL)keepDetails
                 completion:(void (^)(ExteriaPaymentQuote *quote, NSString *errorName))completion;

@@ -385,6 +385,7 @@
 "gifts.gift" = "Gift";
 "gifts.to" = "To: %@";
 "gifts.note" = "Add a note";
+"gifts.note.emoji" = "Emoji";
 "gifts.hide" = "Hide my name and note";
 "gifts.upgrade.include" = "Make it unique for %@";
 "gifts.send.for" = "Send for";

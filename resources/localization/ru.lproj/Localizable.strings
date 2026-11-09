@@ -385,6 +385,7 @@
 "gifts.gift" = "Подарок";
 "gifts.to" = "Кому: %@";
 "gifts.note" = "Добавить подпись";
+"gifts.note.emoji" = "Эмодзи";
 "gifts.hide" = "Скрыть моё имя и подпись";
 "gifts.upgrade.include" = "Сделать уникальным за %@";
 "gifts.send.for" = "Отправить за";

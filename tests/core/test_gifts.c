@@ -370,7 +370,7 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_stars_balance_request(&arena, &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_payments_getStarsStatus);
 
-    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, "hi", 1, 1, &invoice), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, "hi", NULL, 0, 1, 1, &invoice), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_has(invoice, "hide_name"), 1);
     CHECK_EQ_INT(exteria_tl_has(invoice, "include_upgrade"), 1);
     CHECK_EQ_INT(exteria_tl_has(invoice, "message"), 1);
@@ -378,15 +378,28 @@ static void test_requests(void) {
     roundtrip(request, EXTERIA_TL_ID_payments_getPaymentForm);
     CHECK_EQ_INT(exteria_payment_send_request(&arena, 4444, invoice, &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_payments_sendStarsForm);
-    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, "", 0, 0, &invoice), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, "", NULL, 0, 0, 0, &invoice), EXTERIA_OK);
+    {
+        exteria_send_entity emoji;
+        memset(&emoji, 0, sizeof(emoji));
+        emoji.kind = EXTERIA_ENTITY_CUSTOM_EMOJI;
+        emoji.length = 1;
+        emoji.id = 5000;
+        CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, "\xe2\xad\x90 hi", &emoji, 1, 0, 0, &invoice), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_payment_form_request(&arena, invoice, &request), EXTERIA_OK);
+        roundtrip(request, EXTERIA_TL_ID_payments_getPaymentForm);
+        /* a run past the end of the note is refused before it reaches the server */
+        emoji.offset = 20;
+        CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, "hi", &emoji, 1, 0, 0, &invoice), EXTERIA_E_ARG);
+    }
     CHECK_EQ_INT(exteria_tl_has(invoice, "message"), 0);
-    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 0, "", 0, 0, &invoice), EXTERIA_E_ARG);
-    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, NULL, 0, 0, &invoice), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 0, "", NULL, 0, 0, 0, &invoice), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, NULL, NULL, 0, 0, 0, &invoice), EXTERIA_E_ARG);
     {
         char big[EXTERIA_GIFT_NOTE_MAX + 1];
         memset(big, 'a', sizeof(big));
         big[sizeof(big) - 1] = 0;
-        CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, big, 0, 0, &invoice), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_gift_invoice_send(&arena, &user, 10, big, NULL, 0, 0, 0, &invoice), EXTERIA_E_ARG);
     }
     CHECK_EQ_INT(exteria_gift_invoice_upgrade(&arena, 8, 1, &invoice), EXTERIA_OK);
     CHECK_EQ_INT(exteria_payment_form_request(&arena, invoice, &request), EXTERIA_OK);

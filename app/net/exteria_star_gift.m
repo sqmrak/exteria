@@ -152,6 +152,8 @@ static NSString *ExteriaUtf8(const char *bytes) {
 
 - (void)dealloc {
     [note release];
+    [noteRuns release];
+    [noteStrings release];
     [super dealloc];
 }
 

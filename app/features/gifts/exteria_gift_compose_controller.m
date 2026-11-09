@@ -3,14 +3,23 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_custom_emoji_loader.h"
+#import "exteria_custom_emoji_picker.h"
+#import "exteria_emoji_text_view.h"
 #import "exteria_lottie_view.h"
+#import "exteria_message.h"
 #import "exteria_platform.h"
+#import "exteria_symbol.h"
 #import "exteria_theme.h"
 
+#include "exteria_folders.h"
+
 #define NOTE_LIMIT 255
+#define NOTE_ROW 64.0
+#define PICKER_HEIGHT 260.0
 #define STICKER_SIDE 132.0
 
-@interface ExteriaGiftComposeController () <UITextFieldDelegate, UIAlertViewDelegate> {
+@interface ExteriaGiftComposeController () <UITextViewDelegate, UIAlertViewDelegate, ExteriaCustomEmojiPickerDelegate> {
     ExteriaDialog *_dialog;
     ExteriaStarGift *_gift;
     UIScrollView *_scroll;
@@ -21,7 +30,13 @@
     UIImageView *_price;
     UILabel *_to;
     UIView *_card;
-    UITextField *_note;
+    ExteriaEmojiTextView *_note;
+    UILabel *_notePlaceholder;
+    /* the custom emoji of the note: the button and the grid that stands in for the keyboard exist for a Premium account only */
+    UIButton *_emojiButton;
+    ExteriaCustomEmojiPicker *_picker;
+    NSMutableArray *_noteEmoji;
+    BOOL _emojiOpen;
     UILabel *_hideLabel;
     UISwitch *_hide;
     UILabel *_upgradeLabel;
@@ -52,6 +67,7 @@
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     _note.delegate = nil;
+    _picker.delegate = nil;
     [_dialog release];
     [_gift release];
     [_scroll release];
@@ -63,6 +79,10 @@
     [_to release];
     [_card release];
     [_note release];
+    [_notePlaceholder release];
+    [_emojiButton release];
+    [_picker release];
+    [_noteEmoji release];
     [_hideLabel release];
     [_hide release];
     [_upgradeLabel release];
@@ -109,16 +129,29 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
     _card.backgroundColor = ExteriaColorCard();
     _card.layer.cornerRadius = 12;
     [_scroll addSubview:_card];
-    _note = [[UITextField alloc] init];
-    _note.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
+    _noteEmoji = [[NSMutableArray alloc] init];
+    _note = [[ExteriaEmojiTextView alloc] initWithFrame:CGRectZero];
+    _note.backgroundColor = [UIColor clearColor];
+    _note.emojiBackgroundColor = ExteriaColorCard();
     _note.delegate = self;
-    _note.placeholder = NSLocalizedString(@"gifts.note", nil);
     _note.font = ExteriaFontRegular(16);
     _note.textColor = ExteriaColorTitle();
     _note.returnKeyType = UIReturnKeyDone;
-    _note.clearButtonMode = UITextFieldViewModeWhileEditing;
+    _note.scrollsToTop = NO;
     _note.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     [_card addSubview:_note];
+    /* a text view draws no placeholder of its own */
+    _notePlaceholder = ExteriaComposeLabel(ExteriaColorMuted(), 16, NO);
+    _notePlaceholder.text = NSLocalizedString(@"gifts.note", nil);
+    _notePlaceholder.userInteractionEnabled = NO;
+    [_card addSubview:_notePlaceholder];
+    _emojiButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    [_emojiButton setImage:ExteriaSymbolImage(ExteriaSymbolSmiley, 24, ExteriaColorAccent()) forState:UIControlStateNormal];
+    [_emojiButton addTarget:self action:@selector(emojiTapped) forControlEvents:UIControlEventTouchUpInside];
+    _emojiButton.accessibilityLabel = NSLocalizedString(@"gifts.note.emoji", nil);
+    _emojiButton.hidden = YES;
+    [_card addSubview:_emojiButton];
+    [self enableCustomEmojiForPremium];
     _hideLabel = ExteriaComposeLabel(ExteriaColorTitle(), 16, NO);
     _hideLabel.text = NSLocalizedString(@"gifts.hide", nil);
     _hideLabel.numberOfLines = 0;
@@ -192,15 +225,18 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
     _to.frame = CGRectMake(x, y, inner, 20);
     y += 34;
     CGFloat rows = _upgrade ? 3 : 2;
-    _card.frame = CGRectMake(x, y, inner, rows * 52);
-    _note.frame = CGRectMake(14, 0, inner - 28, 52);
-    _hideLabel.frame = CGRectMake(14, 52, inner - 14 - 70, 52);
-    _hide.center = CGPointMake(inner - 14 - _hide.bounds.size.width / 2, 78);
+    _card.frame = CGRectMake(x, y, inner, NOTE_ROW + (rows - 1) * 52);
+    CGFloat emojiSide = _emojiButton.hidden ? 0 : 40;
+    _note.frame = CGRectMake(8, 6, inner - 16 - emojiSide, NOTE_ROW - 12);
+    _notePlaceholder.frame = CGRectMake(14, 0, inner - 28 - emojiSide, NOTE_ROW);
+    _emojiButton.frame = CGRectMake(inner - 8 - emojiSide, (NOTE_ROW - 40) / 2, emojiSide, 40);
+    _hideLabel.frame = CGRectMake(14, NOTE_ROW, inner - 14 - 70, 52);
+    _hide.center = CGPointMake(inner - 14 - _hide.bounds.size.width / 2, NOTE_ROW + 26);
     if (_upgrade) {
-        _upgradeLabel.frame = CGRectMake(14, 104, inner - 14 - 70, 52);
-        _upgrade.center = CGPointMake(inner - 14 - _upgrade.bounds.size.width / 2, 130);
+        _upgradeLabel.frame = CGRectMake(14, NOTE_ROW + 52, inner - 14 - 70, 52);
+        _upgrade.center = CGPointMake(inner - 14 - _upgrade.bounds.size.width / 2, NOTE_ROW + 78);
     }
-    y += rows * 52 + 22;
+    y += NOTE_ROW + (rows - 1) * 52 + 22;
     _send.frame = CGRectMake(x, y, inner, 50);
     _spinner.center = CGPointMake(CGRectGetMaxX(_send.frame) - 28, CGRectGetMidY(_send.frame));
     y += 50 + 24;
@@ -216,14 +252,81 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
     [self.view setNeedsLayout];
 }
 
-- (BOOL)textFieldShouldReturn:(UITextField *)field {
-    [field resignFirstResponder];
-    return NO;
+/* custom emoji are the right of a Premium account, so the button waits for the account to say so; the server refuses a note with them from anyone else */
+- (void)enableCustomEmojiForPremium {
+    [self retain];
+    [self.session loadSelf:^(NSArray *items, NSString *errorName) {
+        [self autorelease];
+        ExteriaPerson *me = items.count ? [items objectAtIndex:0] : nil;
+        if (!me) {
+            NSLog(@"exteria: premium state unknown for the gift note: %@", errorName);
+            return;
+        }
+        if (!me.premium || _picker) return;
+        _picker = [[ExteriaCustomEmojiPicker alloc] initWithSession:self.session media:self.media];
+        _picker.delegate = self;
+        _picker.frame = CGRectMake(0, 0, self.view.bounds.size.width, PICKER_HEIGHT);
+        _picker.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        _emojiButton.hidden = NO;
+        [self.view setNeedsLayout];
+    }];
 }
 
-- (BOOL)textField:(UITextField *)field shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
-    NSString *next = [field.text stringByReplacingCharactersInRange:range withString:string];
-    return [next lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= NOTE_LIMIT;
+/* the grid takes the place of the keyboard under the field, and the button brings the keyboard back */
+- (void)emojiTapped {
+    if (!_picker) return;
+    _emojiOpen = !_emojiOpen;
+    if (_emojiOpen) [_picker prepare];
+    _note.inputView = _emojiOpen ? _picker : nil;
+    [_emojiButton setImage:ExteriaSymbolImage(_emojiOpen ? ExteriaSymbolKeyboard : ExteriaSymbolSmiley, 24, ExteriaColorAccent()) forState:UIControlStateNormal];
+    if ([_note isFirstResponder]) [_note reloadInputViews];
+    else [_note becomeFirstResponder];
+}
+
+- (void)shiftNoteEmojiForRange:(NSRange)range replacementLength:(NSUInteger)length {
+    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:_noteEmoji.count];
+    for (ExteriaTextEntity *entity in _noteEmoji) {
+        size_t offset = entity.range.location;
+        if (!exteria_folder_shift_emoji(&offset, entity.range.length, range.location, range.length, length)) continue;
+        ExteriaTextEntity *moved = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji range:NSMakeRange(offset, entity.range.length) url:nil] autorelease];
+        moved.documentId = entity.documentId;
+        [kept addObject:moved];
+    }
+    [_noteEmoji setArray:kept];
+}
+
+- (BOOL)textView:(UITextView *)view shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)replacement {
+    if ([replacement isEqualToString:@"\n"]) {
+        [view resignFirstResponder];
+        return NO;
+    }
+    if (range.location > view.text.length || range.length > view.text.length - range.location) return NO;
+    NSString *next = [view.text stringByReplacingCharactersInRange:range withString:replacement];
+    if ([next lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > NOTE_LIMIT) return NO;
+    [self shiftNoteEmojiForRange:range replacementLength:replacement.length];
+    return YES;
+}
+
+- (void)textViewDidChange:(UITextView *)view {
+    (void)view;
+    _note.customEmojiEntities = _noteEmoji;
+    _notePlaceholder.hidden = _note.text.length > 0;
+}
+
+- (void)customEmojiPicker:(ExteriaCustomEmojiPicker *)picker didPickEmoji:(ExteriaCustomEmojiDocument *)emoji {
+    (void)picker;
+    NSRange range = _note.selectedRange;
+    NSString *text = _note.text;
+    if (emoji.documentId <= 0 || !emoji.alt.length || range.location > text.length || range.length > text.length - range.location) return;
+    NSString *next = [text stringByReplacingCharactersInRange:range withString:emoji.alt];
+    if ([next lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > NOTE_LIMIT) return;
+    [self shiftNoteEmojiForRange:range replacementLength:emoji.alt.length];
+    _note.text = next;
+    ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji range:NSMakeRange(range.location, emoji.alt.length) url:nil] autorelease];
+    entity.documentId = emoji.documentId;
+    [_noteEmoji addObject:entity];
+    _note.selectedRange = NSMakeRange(range.location + emoji.alt.length, 0);
+    [self textViewDidChange:_note];
 }
 
 #pragma mark paying
@@ -240,9 +343,22 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
     if (_working) return;
     [_note resignFirstResponder];
     [self setWorking:YES];
-    NSString *note = [_note.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSString *raw = _note.text;
+    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger lead = 0, end = raw.length;
+    while (lead < end && [space characterIsMember:[raw characterAtIndex:lead]]) ++lead;
+    while (end > lead && [space characterIsMember:[raw characterAtIndex:end - 1]]) --end;
+    NSString *note = [raw substringWithRange:NSMakeRange(lead, end - lead)];
+    /* the runs count from the start of the trimmed note, and a run the trim cut is not sent */
+    NSMutableArray *entities = [NSMutableArray array];
+    for (ExteriaTextEntity *run in _noteEmoji) {
+        if (run.range.location < lead || NSMaxRange(run.range) > end) continue;
+        ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji range:NSMakeRange(run.range.location - lead, run.range.length) url:nil] autorelease];
+        entity.documentId = run.documentId;
+        [entities addObject:entity];
+    }
     [self retain];
-    [self.session quoteSendingGift:_gift toDialog:_dialog note:note hideName:_hide.on includeUpgrade:_upgrade.on completion:^(ExteriaPaymentQuote *quote, NSString *errorName) {
+    [self.session quoteSendingGift:_gift toDialog:_dialog note:note entities:entities hideName:_hide.on includeUpgrade:_upgrade.on completion:^(ExteriaPaymentQuote *quote, NSString *errorName) {
         [self autorelease];
         if (!quote) {
             [self setWorking:NO];

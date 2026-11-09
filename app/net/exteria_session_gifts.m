@@ -115,7 +115,7 @@
 static exteria_status ExteriaBuildInvoice(exteria_arena *arena, ExteriaPaymentQuote *quote, exteria_tl_value **invoice) {
     switch (quote->kind) {
     case ExteriaPaymentGiftSend:
-        return exteria_gift_invoice_send(arena, &quote->peer, quote->giftId, quote->note.UTF8String, quote->hideName, quote->includeUpgrade, invoice);
+        return exteria_gift_invoice_send(arena, &quote->peer, quote->giftId, quote->note.UTF8String, quote->noteRuns.bytes, quote->noteRunCount, quote->hideName, quote->includeUpgrade, invoice);
     case ExteriaPaymentGiftUpgrade:
         return exteria_gift_invoice_upgrade(arena, quote->messageId, quote->keepDetails, invoice);
     case ExteriaPaymentGiftTransfer:
@@ -162,6 +162,11 @@ static exteria_status ExteriaBuildInvoice(exteria_arena *arena, ExteriaPaymentQu
 
 - (void)quoteSendingGift:(ExteriaStarGift *)gift toDialog:(ExteriaDialog *)dialog note:(NSString *)note hideName:(BOOL)hideName
           includeUpgrade:(BOOL)includeUpgrade completion:(void (^)(ExteriaPaymentQuote *, NSString *))completion {
+    [self quoteSendingGift:gift toDialog:dialog note:note entities:nil hideName:hideName includeUpgrade:includeUpgrade completion:completion];
+}
+
+- (void)quoteSendingGift:(ExteriaStarGift *)gift toDialog:(ExteriaDialog *)dialog note:(NSString *)note entities:(NSArray *)entities hideName:(BOOL)hideName
+          includeUpgrade:(BOOL)includeUpgrade completion:(void (^)(ExteriaPaymentQuote *, NSString *))completion {
     ExteriaPaymentQuote *quote = [[[ExteriaPaymentQuote alloc] init] autorelease];
     quote->kind = ExteriaPaymentGiftSend;
     quote->giftId = gift.giftId;
@@ -169,6 +174,12 @@ static exteria_status ExteriaBuildInvoice(exteria_arena *arena, ExteriaPaymentQu
     quote->note = [(note ? note : @"") copy];
     quote->hideName = hideName;
     quote->includeUpgrade = includeUpgrade;
+    NSMutableData *strings = nil;
+    size_t runs = 0;
+    NSMutableData *packed = ExteriaPackSendEntities(entities, &strings, &runs);
+    quote->noteRuns = [packed retain];
+    quote->noteStrings = [strings retain];
+    quote->noteRunCount = runs;
     [self askForm:quote completion:completion];
 }
 

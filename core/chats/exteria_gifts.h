@@ -100,8 +100,10 @@ exteria_status exteria_gift_collection_update_request(exteria_arena *arena, cons
 exteria_status exteria_gift_collection_delete_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t collection_id, exteria_tl_value **out);
 
 /* the three invoices of a gift: buying one for a user, upgrading a received one, handing one on */
+/* entities are the runs of note (custom emoji for Premium senders), offsets in UTF-16 units; none for plain text */
 exteria_status exteria_gift_invoice_send(exteria_arena *arena, const exteria_peer_ref *peer, int64_t gift_id, const char *note,
-                                         int hide_name, int include_upgrade, exteria_tl_value **out);
+                                         const exteria_send_entity *entities, size_t entity_count, int hide_name, int include_upgrade,
+                                         exteria_tl_value **out);
 exteria_status exteria_gift_invoice_upgrade(exteria_arena *arena, int32_t msg_id, int keep_details, exteria_tl_value **out);
 exteria_status exteria_gift_invoice_transfer(exteria_arena *arena, int32_t msg_id, const exteria_peer_ref *to, exteria_tl_value **out);
 /* the invoice that unlocks the paid media of one message */

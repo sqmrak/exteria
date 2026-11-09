@@ -377,12 +377,15 @@ static exteria_status saved_input(exteria_arena *arena, int32_t msg_id, exteria_
 }
 
 exteria_status exteria_gift_invoice_send(exteria_arena *arena, const exteria_peer_ref *peer, int64_t gift_id, const char *note,
-                                         int hide_name, int include_upgrade, exteria_tl_value **out) {
-    exteria_tl_value *invoice, *input, *text;
+                                         const exteria_send_entity *entities, size_t entity_count, int hide_name, int include_upgrade,
+                                         exteria_tl_value **out) {
+    exteria_tl_value *invoice, *input, *text, *list = NULL;
     exteria_status status;
     if (!out) return EXTERIA_E_ARG;
     *out = NULL;
     if (!arena || gift_id <= 0 || !note || strlen(note) >= EXTERIA_GIFT_NOTE_MAX) return EXTERIA_E_ARG;
+    status = exteria_send_entities_build(arena, note, entities, entity_count, &list);
+    if (status != EXTERIA_OK) return status;
     status = exteria_input_peer(arena, peer, &input);
     if (status != EXTERIA_OK) return status;
     invoice = exteria_tl_new_obj(arena, "inputInvoiceStarGift");
@@ -395,7 +398,7 @@ exteria_status exteria_gift_invoice_send(exteria_arena *arena, const exteria_pee
         text = exteria_tl_new_obj(arena, "textWithEntities");
         if (!text) return EXTERIA_E_NOMEM;
         status = exteria_tl_set_str(arena, text, "text", note);
-        if (status == EXTERIA_OK) status = exteria_tl_set(text, "entities", exteria_tl_new_vec(arena, 0));
+        if (status == EXTERIA_OK) status = exteria_tl_set(text, "entities", list ? list : exteria_tl_new_vec(arena, 0));
         if (status == EXTERIA_OK) status = exteria_tl_set(invoice, "message", text);
     }
     if (status == EXTERIA_OK) *out = invoice;
