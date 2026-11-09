@@ -329,6 +329,8 @@ exteria_status exteria_forward_messages_request(exteria_arena *arena, const exte
     if (status == EXTERIA_OK) status = exteria_tl_set_i32_vec(arena, request, "id", ids, (uint32_t)count);
     if (status == EXTERIA_OK) status = exteria_tl_set_i64_vec(arena, request, "random_id", random_ids, (uint32_t)count);
     if (status == EXTERIA_OK) status = exteria_tl_set(request, "to_peer", target);
+    /* into a topic of a forum, which the General topic (1) is not: it is the chat itself */
+    if (status == EXTERIA_OK && to->topic_id > 1) status = exteria_tl_set_i32(arena, request, "top_msg_id", to->topic_id);
     if (status == EXTERIA_OK) *out = request;
     return status;
 }

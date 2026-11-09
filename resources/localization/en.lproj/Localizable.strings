@@ -713,6 +713,7 @@
 "chat.msg.reply.title" = "Reply to %@";
 "chat.msg.edit.title" = "Edit message";
 "chat.msg.forwarded" = "Forwarded";
+"chat.forward.topic" = "Choose a topic";
 "chat.msg.pinned" = "Pinned";
 "chat.msg.unpinned" = "Unpinned";
 "chat.msg.details.id" = "ID: %d";

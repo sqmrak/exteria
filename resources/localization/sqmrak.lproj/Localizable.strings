@@ -716,6 +716,7 @@
 "chat.msg.reply.title" = "ответ для %@";
 "chat.msg.edit.title" = "изменение сообщения";
 "chat.msg.forwarded" = "переслано";
+"chat.forward.topic" = "выберите тему";
 "chat.msg.pinned" = "закреплено";
 "chat.msg.unpinned" = "откреплено";
 "chat.msg.details.id" = "id: %d";

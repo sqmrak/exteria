@@ -1,4 +1,5 @@
 #import "exteria_forward.h"
+#import <objc/runtime.h>
 
 #include "exteria_message_actions.h"
 
@@ -7,6 +8,7 @@
 #import "exteria_message.h"
 #import "exteria_person.h"
 #import "exteria_session_actions.h"
+#import "exteria_settings_kit.h"
 
 static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
     ExteriaMedia *media = message.media;
@@ -150,10 +152,30 @@ static void ExteriaChooseForwardTopic(ExteriaSession *session, ExteriaDialog *ta
                 [navigation dismissViewControllerAnimated:YES completion:^{ answer(topic); [answer release]; }];
             }]];
         }
+        if (!rows.count) { answer(target); [answer release]; return; }
+        page.sections = [NSArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:rows]];
+        ExteriaForwardCancel *cancel = [[[ExteriaForwardCancel alloc] initWithBlock:^{
+            if (chosen) return;
+            chosen = YES;
+            [navigation dismissViewControllerAnimated:YES completion:^{ answer(nil); [answer release]; }];
+        }] autorelease];
+        objc_setAssociatedObject(page, "exteria.forward.cancel", cancel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        page.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"picker.cancel", nil) style:UIBarButtonItemStyleBordered target:cancel action:@selector(fire)] autorelease];
+        [front presentViewController:navigation animated:YES completion:nil];
     }];
 }
 
 void ExteriaForwardMessages(ExteriaSession *session, ExteriaMediaCache *cache, ExteriaDialog *from, BOOL chatRestricted, NSArray *messages, ExteriaDialog *target, BOOL hideAuthor, void (^completion)(NSString *message)) {
+    void (^finish)(NSString *) = [completion copy];
+    ExteriaChooseForwardTopic(session, target, ^(ExteriaDialog *chosen) {
+        /* nothing was chosen: the list was cancelled, and nothing goes */
+        if (!chosen) { [finish release]; return; }
+        ExteriaForwardMessagesNow(session, cache, from, chatRestricted, messages, chosen, hideAuthor, finish);
+        [finish release];
+    });
+}
+
+static void ExteriaForwardMessagesNow(ExteriaSession *session, ExteriaMediaCache *cache, ExteriaDialog *from, BOOL chatRestricted, NSArray *messages, ExteriaDialog *target, BOOL hideAuthor, void (^completion)(NSString *message)) {
     NSMutableArray *ids = [NSMutableArray arrayWithCapacity:messages.count];
     BOOL restricted = chatRestricted;
     for (ExteriaMessage *message in messages) {
