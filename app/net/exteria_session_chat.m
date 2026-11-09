@@ -1150,6 +1150,13 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
         ExteriaPerson *person = [self storedPersonWithKey:message.senderKey];
         if (person) [people setObject:person forKey:key];
     }
+    /* whoever wrote a forwarded message names it ("forwarded from ..."), so the people of the originals come with the senders */
+    for (ExteriaMessage *message in messages) {
+        NSNumber *key = [NSNumber numberWithLongLong:message.forwardKey];
+        if (!message.forwardKey || [people objectForKey:key]) continue;
+        ExteriaPerson *person = [self storedPersonWithKey:message.forwardKey];
+        if (person) [people setObject:person forKey:key];
+    }
     return people;
 }
 
