@@ -1,4 +1,5 @@
 #import "exteria_main_controller.h"
+#import "exteria_back_swipe.h"
 #import "exteria_plugin_account.h"
 #import "exteria_plugin_ui.h"
 #import "exteria_accounts.h"
@@ -94,6 +95,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     UITabBarController *_classicTabs;
     /* the tab that wears the profile photo in the classic bar; the tab controller owns it */
     UITabBarItem *_classicProfileItem;
+    /* the swipe back of each classic tab: the tabs push into their own navigation controllers, which the one on the window never sees */
+    NSMutableArray *_classicBackSwipes;
     /* the strip of the song for the screens of the modern tabs, over the tab bar; the chat list and the chat have their own under the header, in both styles */
     ExteriaMiniPlayer *_dock;
     /* the classic strip stands on the system tab bar, and the table of the screen under it is given the room of the strip at its foot so the last rows can be reached: the table that has
@@ -169,6 +172,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         if ([root respondsToSelector:@selector(setSignOutHandler:)]) [root setSignOutHandler:nil];
         if (navigation.delegate == (id)self) navigation.delegate = nil;
     }
+    [_classicBackSwipes release];
+    _classicBackSwipes = nil;
     [self releaseDockInset];
     _dockShown = NO;
     [_classicTabs willMoveToParentViewController:nil];
@@ -377,6 +382,10 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         ExteriaClassicStyleNavigationBar(navigation.navigationBar);
         /* the strip of the song comes and goes with the screens a tab pushes */
         navigation.delegate = self;
+        ExteriaBackSwipe *backSwipe = [[ExteriaBackSwipe alloc] initWithNavigationController:navigation];
+        if (!_classicBackSwipes) _classicBackSwipes = [[NSMutableArray alloc] init];
+        [_classicBackSwipes addObject:backSwipe];
+        [backSwipe release];
         navigation.tabBarItem = [[[UITabBarItem alloc] initWithTitle:ExteriaTabTitle(_kinds[i]) image:ExteriaClassicTabImage(symbol) tag:(NSInteger)i] autorelease];
         ExteriaClassicStyleTabItem(navigation.tabBarItem, symbol);
         [navigations addObject:navigation];
