@@ -1149,6 +1149,8 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
 
 - (void)openStories {
     if (!_storyPeer) return;
+    /* a second tap while a viewer is up or rising would stack another viewer on the first, and both would play the same story's sound */
+    if (self.presentedViewController) return;
     ExteriaStoryViewerController *viewer = [[[ExteriaStoryViewerController alloc] initWithSession:self.session peers:[NSArray arrayWithObject:_storyPeer] index:0
                                                                                           avatars:self.avatars media:self.media] autorelease];
     [self presentViewController:viewer animated:YES completion:nil];

@@ -710,6 +710,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         return;
     }
     ExteriaDialog *own = [ExteriaDialog savedMessagesWithPerson:_person];
+    /* a second tap while a viewer is up or rising would stack another viewer on the first, and both would play the same story's sound */
+    if (self.presentedViewController) return;
     ExteriaStoryViewerController *viewer = [[[ExteriaStoryViewerController alloc] initWithSession:_session owner:own stories:feed.items index:index
                                                                                           avatars:_avatars media:_media] autorelease];
     [self presentViewController:viewer animated:YES completion:nil];
