@@ -95,7 +95,7 @@
     about.backgroundColor = [UIColor clearColor];
     about.textColor = ExteriaColorTitle();
     about.font = ExteriaFontMedium(15);
-    about.textAlignment = ExteriaTextAlignmentCenter;
+    about.textAlignment = ExteriaTextAlignmentLeft;
     about.numberOfLines = 0;
     about.text = NSLocalizedString(@"plugins.about", nil);
     CGSize aboutFit = [about sizeThatFits:CGSizeMake(cardWidth - 40, 400)];
@@ -237,7 +237,6 @@ static NSString *failure_text(NSDictionary *why) {
     if (![classes isKindOfClass:[NSArray class]]) classes = [NSArray array];
     NSArray *shown = classes.count > 3 ? [classes subarrayWithRange:NSMakeRange(0, 3)] : classes;
     NSString *names = [shown componentsJoinedByString:@", "];
-    if ([kind isEqualToString:@"java"]) return [NSString stringWithFormat:NSLocalizedString(@"plugins.fail.java", nil), names];
     if ([kind isEqualToString:@"android"]) {
         long missing = [[why objectForKey:@"missing"] longValue];
         long total = [[why objectForKey:@"total"] longValue];
@@ -250,6 +249,18 @@ static NSString *failure_text(NSDictionary *why) {
     detail = [detail stringByReplacingOccurrencesOfString:[ExteriaPluginsDirectory() stringByAppendingString:@"/"] withString:@""];
     if (detail.length > 200) detail = [[detail substringToIndex:200] stringByAppendingString:@"…"];
     return [NSString stringWithFormat:NSLocalizedString(@"plugins.fail.other", nil), detail];
+}
+
+/* the line under the switch of a plugin that runs but names classes of the android client that the app does not have: it did not fail, and a hook on such a class is not set */
+static NSString *notice_text(NSDictionary *notice) {
+    NSArray *classes = [notice objectForKey:@"classes"];
+    if (![classes isKindOfClass:[NSArray class]] || !classes.count) return nil;
+    NSMutableArray *names = [NSMutableArray array];
+    for (id name in classes.count > 3 ? [classes subarrayWithRange:NSMakeRange(0, 3)] : classes) {
+        /* the class, not its package: the line is short */
+        if ([name isKindOfClass:[NSString class]]) [names addObject:[name substringFromIndex:[name rangeOfString:@"." options:NSBackwardsSearch].location + 1]];
+    }
+    return [NSString stringWithFormat:NSLocalizedString(@"plugins.notice.android", nil), (long)[[notice objectForKey:@"missing"] longValue], [names componentsJoinedByString:@", "]];
 }
 
 /* the list is made again with a short cross fade, so a plugin that starts or stops changes in front of the person and not in a jump */
@@ -369,6 +380,7 @@ static NSString *failure_text(NSDictionary *why) {
         else if (entry.changed) [lines addObject:NSLocalizedString(@"plugins.changed", nil)];
         if (!permissions.count) [lines addObject:NSLocalizedString(@"plugins.perm.none", nil)];
         if (entry.enabled && entry.hasSettings) [lines addObject:NSLocalizedString(@"plugins.settings.hint", nil)];
+        if (entry.enabled && entry.notice && notice_text(entry.notice)) [lines addObject:notice_text(entry.notice)];
         if (!entry.enabled && !starting) {
             NSMutableArray *found = [NSMutableArray array];
             if (entry.fault) [found addObject:friendly_fault(entry.fault)];

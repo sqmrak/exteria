@@ -872,7 +872,7 @@
 "about.chats" = "Chats";
 "about.more" = "More";
 "plugins.title" = "Plugins";
-"plugins.about" = "Extra modules written in Python that extend the standard features of Exteria.";
+"plugins.about" = "Backward compatibility with exteraGram plugins, including Python and hooks of Java methods.";
 "plugins.empty" = "No plugins yet. Tap Import plugin, or copy .plugin files into the Plugins folder with file sharing.";
 "plugins.import.title" = "Import plugin";
 "plugins.import.pick" = "Choose a plugin";
@@ -891,7 +891,7 @@
 "plugins.settings.hint" = "Tap for settings";
 "plugins.settings.unsupported" = "This kind of setting is not available here yet";
 "plugins.sheet.loading" = "Loading…";
-"plugins.footer" = "Long press a plugin, or swipe it in the classic theme, to remove it.";
+"plugins.footer" = "Long press a plugin, or swipe it in the skeuomorphic theme, to remove it.";
 "plugins.perm.none" = "no permissions";
 "plugins.import.notplugin" = "This is not a .plugin or .py file.";
 "plugins.perm.messages.read" = "reads chats and messages";
@@ -901,7 +901,7 @@
 "plugins.perm.intents" = "intercepts links and intents";
 "plugins.perm.settings" = "reads and writes settings of the app";
 "plugins.perm.hooks" = "hooks into the code of the app";
-"plugins.perm.native" = "loads native code";
+"plugins.perm.native" = "loads native code or starts programs";
 "plugins.err.script" = "not a valid plugin";
 "plugins.err.limit" = "the file is too large";
 "plugins.err.time" = "ran too long while loading";
@@ -932,8 +932,8 @@
 "plugins.fault.unsupported" = "Uses something Exteria does not support: %@";
 "plugins.fault.generic" = "Error: %@%@";
 "plugins.fail.title" = "%@ did not start";
-"plugins.fail.java" = "It contains Java code (%@). Java does not run on iOS, so this plugin cannot start here.";
 "plugins.fail.android" = "It calls Android classes that this app does not have: %@.";
+"plugins.notice.android" = "Part of it may not work: Exteria lacks classes of the Android client (%ld): %@.";
 "plugins.fail.android.many" = "It makes too many Android calls: %ld of the %ld Android classes it uses are missing here, for example %@. Only a small part of the Android interface is rebuilt, so it cannot start.";
 "plugins.fail.library" = "It needs another plugin or library, “%@”, that is missing or switched off. Turn that one on first.";
 "plugins.fail.feature" = "It uses something this app does not offer: %@.";

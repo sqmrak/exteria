@@ -6,6 +6,7 @@
 #import "exteria_plugin_ui.h"
 #import "exteria_language.h"
 #include "exteria_pyhost.h"
+#include "exteria_dexnative_module.h"
 
 NSString *const ExteriaPluginsDidChangeNotification = @"ExteriaPluginsDidChange";
 
@@ -40,13 +41,14 @@ static NSString *const ExteriaPluginsSettingsKey = @"exteria.plugins.settings";
 @property (nonatomic, copy) NSString *error;
 @property (nonatomic, copy) NSString *fault;
 @property (nonatomic, retain) NSDictionary *failure;
+@property (nonatomic, retain) NSDictionary *notice;
 @property (nonatomic, retain) NSArray *permissions;
 @property (nonatomic, assign) BOOL hasSettings;
 @end
 
 @implementation ExteriaPluginEntry
 @synthesize file = _file, pluginId = _pluginId, name = _name, author = _author, version = _version, status = _status, error = _error,
-            permissions = _permissions, enabled = _enabled, changed = _changed, fault = _fault, failure = _failure, hasSettings = _hasSettings;
+            permissions = _permissions, enabled = _enabled, changed = _changed, fault = _fault, failure = _failure, notice = _notice, hasSettings = _hasSettings;
 
 - (id)initWithFile:(NSString *)file {
     self = [super init];
@@ -63,6 +65,7 @@ static NSString *const ExteriaPluginsSettingsKey = @"exteria.plugins.settings";
     [_error release];
     [_fault release];
     [_failure release];
+    [_notice release];
     [_permissions release];
     [super dealloc];
 }
@@ -353,7 +356,7 @@ static exteria_status plugin_service(void *ctx, const char *name_c, const char *
     if (![NSThread isMainThread] && ![name isEqualToString:@"ui.run"]) {
         return reply_text("the app is served on its main thread only", EXTERIA_E_STATE, out, cap, out_len);
     }
-    if ([name hasPrefix:@"ui."] || [name hasPrefix:@"sensor."] || [name hasPrefix:@"theme."] || [name hasPrefix:@"app."] || [name hasPrefix:@"chat."] || [name hasPrefix:@"sheet."] || [name hasPrefix:@"audio."] || [name hasPrefix:@"music."] || [name hasPrefix:@"bitmap."] || [name hasPrefix:@"page."] || [name hasPrefix:@"account."] || [name hasPrefix:@"story."]) {
+    if ([name hasPrefix:@"ui."] || [name hasPrefix:@"sensor."] || [name hasPrefix:@"theme."] || [name hasPrefix:@"app."] || [name hasPrefix:@"chat."] || [name hasPrefix:@"sheet."] || [name hasPrefix:@"audio."] || [name hasPrefix:@"music."] || [name hasPrefix:@"bitmap."] || [name hasPrefix:@"page."] || [name hasPrefix:@"account."] || [name hasPrefix:@"story."] || [name hasPrefix:@"tabs."] || [name hasPrefix:@"progress."] || [name hasPrefix:@"peer."]) {
         NSDictionary *answer = nil;
         NSString *failure = nil;
         exteria_status result = ExteriaPluginUIService(name, request, &answer, &failure);
@@ -487,6 +490,9 @@ static BOOL ensure_python(void) {
     /* mutagen and yt-dlp, the libraries the bundle carries for plugins (see third_party/python/wheels.sha256) */
     config.paths[2] = [lib fileSystemRepresentation];
     config.service = plugin_service;
+    /* the register machine the dex runtime runs integer-only static methods on (python/shim/dexvm/native.py) */
+    config.modules[0].name = "_exteria_dexnative";
+    config.modules[0].init = exteria_dexnative_module_init;
     NSTimeInterval began = [NSDate timeIntervalSinceReferenceDate];
     exteria_status status = exteria_pyhost_init(&config);
     if (status != EXTERIA_OK) {
@@ -536,6 +542,7 @@ static BOOL load_slot(ExteriaPluginSlot *slot) {
         slot->entry.fault = [why isKindOfClass:[NSString class]] ? why : @"plugin failed";
         id explained = [result isKindOfClass:[NSDictionary class]] ? [result objectForKey:@"why"] : nil;
         slot->entry.failure = [explained isKindOfClass:[NSDictionary class]] ? explained : [NSDictionary dictionaryWithObjectsAndKeys:@"other", @"kind", slot->entry.fault, @"detail", nil];
+        slot->entry.notice = nil;
         /* the sdk drops a plugin whose on_plugin_load raised, so there is nothing to unload here */
         slot->sendHook = NO;
         slot->updateHook = NO;
@@ -544,6 +551,8 @@ static BOOL load_slot(ExteriaPluginSlot *slot) {
         return NO;
     }
     slot->entry.failure = nil;
+    id notice = [result objectForKey:@"notice"];
+    slot->entry.notice = [notice isKindOfClass:[NSDictionary class]] ? notice : nil;
     NSDictionary *handles = [result objectForKey:@"handles"];
     slot->updateHook = [[handles objectForKey:@"update"] boolValue];
     slot->entry.hasSettings = [[result objectForKey:@"has_settings"] boolValue];
@@ -1025,6 +1034,15 @@ NSArray *ExteriaPluginsActions(void) {
         ExteriaPluginsLog(@"exteria: the plugins page lists %lu actions of %lu plugins", (unsigned long)actions.count, (unsigned long)g_slots.count);
     }
     return actions;
+}
+
+NSArray *ExteriaPluginsChatActions(void) {
+    NSMutableArray *found = [NSMutableArray array];
+    for (NSDictionary *action in ExteriaPluginsActions()) {
+        ExteriaPluginSlot *slot = slot_for_id([action objectForKey:@"pluginId"]);
+        if (slot && [[[slot->menu objectForKey:[action objectForKey:@"item"]] objectForKey:@"menu_type"] isEqualToString:@"CHAT_ACTION_MENU"]) [found addObject:action];
+    }
+    return found;
 }
 
 NSArray *ExteriaPluginsMessageMenuItems(void) {

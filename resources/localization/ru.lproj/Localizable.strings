@@ -877,7 +877,7 @@
 "about.chats" = "Чаты";
 "about.more" = "Ещё";
 "plugins.title" = "Плагины";
-"plugins.about" = "Дополнительные модули, написанные на Python, которые расширяют стандартные возможности Exteria.";
+"plugins.about" = "Обратная совместимость с плагинами exteraGram, включая Python и хуки Java-методов.";
 "plugins.empty" = "Плагинов пока нет. Нажмите «Импорт плагина» или скопируйте файлы .plugin в папку Plugins через общий доступ к файлам.";
 "plugins.import.title" = "Импорт плагина";
 "plugins.import.pick" = "Выберите плагин";
@@ -896,7 +896,7 @@
 "plugins.settings.hint" = "Нажмите, чтобы открыть настройки";
 "plugins.settings.unsupported" = "Такой вид настройки здесь пока недоступен";
 "plugins.sheet.loading" = "Загрузка…";
-"plugins.footer" = "Чтобы удалить плагин, зажмите его строку (в классической теме смахните влево).";
+"plugins.footer" = "Чтобы удалить плагин, зажмите его строку (в скевоморфической теме смахните влево).";
 "plugins.perm.none" = "без разрешений";
 "plugins.import.notplugin" = "Это не файл .plugin или .py.";
 "plugins.perm.messages.read" = "читает чаты и сообщения";
@@ -906,7 +906,7 @@
 "plugins.perm.intents" = "перехватывает ссылки и интенты";
 "plugins.perm.settings" = "читает и меняет настройки приложения";
 "plugins.perm.hooks" = "встраивается в код приложения";
-"plugins.perm.native" = "загружает нативный код";
+"plugins.perm.native" = "загружает нативный код или запускает программы";
 "plugins.err.script" = "это не плагин";
 "plugins.err.limit" = "файл слишком большой";
 "plugins.err.time" = "слишком долго работал при загрузке";
@@ -937,8 +937,8 @@
 "plugins.fault.unsupported" = "Использует то, что Exteria не поддерживает: %@";
 "plugins.fault.generic" = "Ошибка: %@%@";
 "plugins.fail.title" = "%@ не запустился";
-"plugins.fail.java" = "В нём есть код на Java (%@). Java на iOS не работает, поэтому плагин здесь не запустится.";
 "plugins.fail.android" = "Он вызывает классы Android, которых в этом приложении нет: %@.";
+"plugins.notice.android" = "Часть возможностей может не работать: в Exteria нет экранов или классов Android-клиента (%ld): %@.";
 "plugins.fail.android.many" = "Слишком много вызовов Android: из %2$ld классов Android, которые он использует, здесь нет %1$ld, например %3$@. Воссоздана только небольшая часть интерфейса Android, поэтому плагин не запустится.";
 "plugins.fail.library" = "Ему нужен другой плагин или библиотека «%@», которых нет или они выключены. Сначала включите их.";
 "plugins.fail.feature" = "Он использует то, чего в этом приложении нет: %@.";

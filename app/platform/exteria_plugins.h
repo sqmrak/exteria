@@ -22,6 +22,7 @@ extern NSString *const ExteriaPluginsDidChangeNotification;
     NSString *_error;
     NSString *_fault;
     NSDictionary *_failure;
+    NSDictionary *_notice;
     NSArray *_permissions;
     BOOL _hasSettings;
     int _status;
@@ -50,6 +51,8 @@ extern NSString *const ExteriaPluginsDidChangeNotification;
 @property (nonatomic, readonly, copy) NSString *fault;
 /* why the plugin did not load, as the plain values of python/shim/exteria_diagnose.py (kind, classes, missing, total, detail), nil when it loaded or was not tried */
 @property (nonatomic, readonly, retain) NSDictionary *failure;
+/* what a plugin that loaded names and the app lacks (the same plain values, kind android), nil when it needs nothing the app lacks or was not checked: some of what it does may not happen */
+@property (nonatomic, readonly, retain) NSDictionary *notice;
 @end
 
 /* the folder the plugins live in; made when missing */
@@ -115,6 +118,8 @@ void ExteriaPluginsLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
    pluginId, item (the id of the item) and text. the plugins page lists them, since the app has no menu for them yet */
 NSArray *ExteriaPluginsActions(void);
 void ExteriaPluginsRunAction(NSString *pluginId, NSString *itemId);
+/* the items plugins added to the menu of a chat (CHAT_ACTION_MENU), the ones the three dots of an open chat lists: the same dictionaries as ExteriaPluginsActions */
+NSArray *ExteriaPluginsChatActions(void);
 
 /* the items plugins added to the menu of a message (MESSAGE_CONTEXT_MENU), highest priority first: dictionaries with pluginId,
    item and text. a plugin that is not running has none */

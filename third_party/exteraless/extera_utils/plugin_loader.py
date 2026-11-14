@@ -348,8 +348,8 @@ _MAX_FRAMES = 60
 # это чистый разбор строк и им пользуется половина каталога.
 # Значение None — не выдаётся никогда, ни при каком разрешении.
 _IMPORT_RULES = {
-    "subprocess": None,
-    "_posixsubprocess": None,
+    "subprocess": PERM_NATIVE,
+    "_posixsubprocess": PERM_NATIVE,
     "ctypes": PERM_NATIVE,
     "_ctypes": PERM_NATIVE,
     "multiprocessing": None,

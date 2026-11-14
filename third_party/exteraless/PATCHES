@@ -37,3 +37,13 @@ local changes from the reverse report of 2.2.0 (tests/python/test_sdk_fixes.py):
 - elyx_runtime/settings.py: clear_settings replaces the stored object with {} through the bridge; it used to write null into every key, which stayed listed
 - elyx_runtime/metadata.py: a .py metainfo or locale file is parsed with ast and only literal top-level assignments are taken; nothing in it runs, since it is read before the person agreed to install. a value that is computed (1 + 2, a call) is skipped
 - elyx_runtime/assets.py, elyx_runtime/loader.py: a "." or ".." segment in an asset name, in `main` or in a directory the refmap declares is refused, so an archive names nothing outside its own folder
+
+local change, for subprocess in plugins: the sdk refuses a started program to every plugin (the events os.system, os.spawn, os.posix_spawn and
+subprocess.Popen are in _DENY_ALWAYS), and exteria lets a plugin start one with the native permission, the one that already stands for running
+code outside the interpreter. the app has no fork, so python/shim/_posixsubprocess.py starts the program with posix_spawn.
+- extera_utils/audit_gate.py: the four events move to _PROCESS, are watched, counted in the "process" category and decided by the native permission
+  (allowed and refused attempts are both journaled); os.exec, os.fork and os.startfile stay refused
+- extera_utils/plugin_loader.py: the import rules of subprocess and _posixsubprocess name the native permission in the log instead of "never"
+
+local change for dex plugins:
+- elyx_runtime/namespace.py: _WrappingLoader.exec_module sets __file__ from the spec origin when the import system left it out. exteraGram runs the code from a file and audiovizualizer finds its .dex next to `__file__`; without it the plugin looked in a files directory that does not exist here

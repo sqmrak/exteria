@@ -44,8 +44,8 @@ if [ ! -x "$host_py" ]; then
 fi
 
 # modules the plugin host does not want, or that need a library or a flag set the static link here does not carry:
-# _decimal (python falls back to _pydecimal), _uuid, and _posixsubprocess, which needs fork(), marked unavailable in the arm64 sdk.
-# subprocess is out for the same reason on both slices. _bz2, _lzma, pyexpat, _elementtree and _sqlite3 are dropped from the list of the
+# _decimal (python falls back to _pydecimal), _uuid, and _posixsubprocess, which needs fork(), marked unavailable in the arm64 sdk: python/shim/_posixsubprocess.py
+# starts the programs of subprocess with posix_spawn instead. _bz2, _lzma, pyexpat, _elementtree and _sqlite3 are dropped from the list of the
 # configure step and given back below, with the flags and the libraries of this build
 drop='^(_testbuffer|_testinternalcapi|_testcapi|_testclinic|_xxtestfuzz|_testimportmultiple|_testmultiphase|_ctypes_test|xxlimited|xxlimited_35|nis|_scproxy|_xxsubinterpreters|audioop|_bz2|_lzma|termios|_posixshmem|_multiprocessing|syslog|_posixsubprocess|_decimal|pyexpat|_elementtree|_uuid|_sqlite3) '
 

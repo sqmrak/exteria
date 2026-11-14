@@ -59,18 +59,24 @@ _local = threading.local()
 # Никогда и никому: обход всей модели (нативный код, свой процесс, подмена
 # наблюдения). Совпадает с правилами None в plugin_loader._IMPORT_RULES.
 _DENY_ALWAYS = {
-    "os.system": "run a shell command",
     "os.exec": "replace the process image",
-    "os.spawn": "spawn a process",
-    "os.posix_spawn": "spawn a process",
     "os.startfile": "spawn a process",
     "os.fork": "fork the process",
     "os.forkpty": "fork the process",
-    "subprocess.Popen": "start a subprocess",
     "sys.addaudithook": "install an audit hook",
     "sys.settrace": "trace other code",
     "sys.setprofile": "profile other code",
     "sys._current_frames": "read other threads' stacks",
+}
+
+# local change for exteria (third_party/exteraless/PATCHES): starting a program is allowed with the native permission, the one that already
+# stands for running code of the device outside the interpreter. the app has no fork, so the programs are started with posix_spawn
+# (python/shim/_posixsubprocess.py); os.exec stays refused, since it would replace the app itself
+_PROCESS = {
+    "os.system": "run a shell command",
+    "os.spawn": "spawn a process",
+    "os.posix_spawn": "spawn a process",
+    "subprocess.Popen": "start a subprocess",
 }
 
 # Разрешение native: загрузка .so и работа с его памятью.
@@ -172,7 +178,7 @@ _JOURNAL_ONLY = frozenset({
     "code.__new__", "builtins.input",
 })
 
-_WATCHED = frozenset(set(_DENY_ALWAYS) | set(_NATIVE) | set(_NETWORK) | set(_FILES)
+_WATCHED = frozenset(set(_DENY_ALWAYS) | set(_NATIVE) | set(_PROCESS) | set(_NETWORK) | set(_FILES)
                      | set(_DATABASE) | set(_JOURNAL_ONLY))
 
 # Категория для профиля плагина (что он вообще делал).
@@ -181,6 +187,8 @@ for _e in _DENY_ALWAYS:
     _CATEGORY[_e] = "process" if _e.startswith(("os.", "subprocess")) else "introspection"
 for _e in _NATIVE:
     _CATEGORY[_e] = "native"
+for _e in _PROCESS:
+    _CATEGORY[_e] = "process"
 for _e in _NETWORK:
     _CATEGORY[_e] = "network"
 for _e in _FILES:
@@ -541,6 +549,15 @@ def _check(event, args, loader):
         detail = _as_text(_arg(args, 0))
         if _is_runtime_file(detail):
             return  # рантайм грузит зависимость своего же модуля, а не плагин лезет в FFI
+        allowed = loader.has_permission(loader.PERM_NATIVE, plugin_id)
+        _record(plugin_id, event, detail, allowed)
+        loader.require_permission(loader.PERM_NATIVE, what,
+                                   detail=detail, plugin_id=plugin_id)
+        return
+
+    what = _PROCESS.get(event)
+    if what is not None:
+        detail = _as_text(_arg(args, 0)) or _as_text(_arg(args, 1))
         allowed = loader.has_permission(loader.PERM_NATIVE, plugin_id)
         _record(plugin_id, event, detail, allowed)
         loader.require_permission(loader.PERM_NATIVE, what,

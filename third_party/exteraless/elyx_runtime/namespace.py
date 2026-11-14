@@ -195,6 +195,9 @@ class _WrappingLoader(importlib.abc.Loader):
         # injected through a __builtins__ dict carrying the patched function.
         import builtins as _builtins
 
+        spec = module.__spec__
+        if spec is not None and spec.origin and not getattr(module, "__file__", None):
+            module.__file__ = spec.origin
         patched_import = _make_plugin_import(self._namespace)
         module.__dict__["__builtins__"] = {
             **vars(_builtins), "__import__": patched_import,
