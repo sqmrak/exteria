@@ -6,13 +6,16 @@
 #include "exteria_theme_link.h"
 
 @implementation ExteriaThemeLink
-@synthesize title = _title, file = _file;
+@synthesize title = _title, file = _file, hasColors = _hasColors, dark = _dark, accent = _accent;
 
 - (id)initWithInfo:(const exteria_theme_link_info *)info {
     self = [super init];
     if (!self) return nil;
     _title = [[NSString stringWithUTF8String:info->title] copy];
     if (info->has_file) _file = [[ExteriaMedia mediaWithInfo:&info->file] retain];
+    _hasColors = info->has_colors != 0;
+    _dark = info->dark != 0;
+    _accent = info->accent;
     /* a title that was not valid utf-8 comes back as nil, and the theme cannot be shown without one */
     if (!_title.length || (info->has_file && !_file)) {
         [self release];

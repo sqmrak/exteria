@@ -7,10 +7,17 @@
 @interface ExteriaThemeLink : NSObject {
     NSString *_title;
     ExteriaMedia *_file;
+    BOOL _hasColors;
+    BOOL _dark;
+    uint32_t _accent;
 }
 @property (nonatomic, readonly, copy) NSString *title;
-/* the .tgios-theme file, nil for a theme that only carries accent colors, which this client cannot apply */
+/* the .tgios-theme file, nil for a theme that only carries accent colors */
 @property (nonatomic, readonly, retain) ExteriaMedia *file;
+/* a theme of colors says whether its base look is dark and what its accent is (0xRRGGBB); NO when it has none */
+@property (nonatomic, readonly) BOOL hasColors;
+@property (nonatomic, readonly) BOOL dark;
+@property (nonatomic, readonly) uint32_t accent;
 @end
 
 @interface ExteriaSession (Theme)

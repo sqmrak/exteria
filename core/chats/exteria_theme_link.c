@@ -31,6 +31,24 @@ exteria_status exteria_theme_link_request(exteria_arena *arena, const char *slug
     return status;
 }
 
+/* a theme made in an app with accent colors carries them as a list of settings, one for each base look it was made for; the first one stands for the theme. A list that does
+   not read is no colors, and the theme is then judged by its file alone */
+static void read_colors(const exteria_tl_value *theme, exteria_theme_link_info *out) {
+    const exteria_tl_value *list, *settings, *base;
+    int32_t accent = 0;
+    uint32_t id;
+    if (exteria_tl_get_vec(theme, "settings", &list) != EXTERIA_OK || list->u.vec.count == 0) return;
+    settings = list->u.vec.items[0];
+    if (!exteria_tl_is(settings, EXTERIA_TL_ID_themeSettings) || exteria_tl_get_i32(settings, "accent_color", &accent) != EXTERIA_OK) return;
+    base = exteria_tl_get(settings, "base_theme");
+    id = exteria_tl_id(base);
+    if (id != EXTERIA_TL_ID_baseThemeClassic && id != EXTERIA_TL_ID_baseThemeDay && id != EXTERIA_TL_ID_baseThemeNight && id != EXTERIA_TL_ID_baseThemeTinted &&
+        id != EXTERIA_TL_ID_baseThemeArctic) return;
+    out->has_colors = 1;
+    out->dark = id == EXTERIA_TL_ID_baseThemeNight || id == EXTERIA_TL_ID_baseThemeTinted;
+    out->accent = (uint32_t)accent & 0xFFFFFFu;
+}
+
 exteria_status exteria_theme_link_parse(const exteria_tl_value *answer, exteria_theme_link_info *out) {
     const uint8_t *data;
     size_t len;
@@ -45,6 +63,7 @@ exteria_status exteria_theme_link_parse(const exteria_tl_value *answer, exteria_
     }
     if (len) memcpy(out->title, data, len);
     out->title[len] = 0;
+    read_colors(answer, out);
     if (!exteria_tl_has(answer, "document")) return EXTERIA_OK;
     if (exteria_tl_get_obj(answer, "document", &document) != EXTERIA_OK) goto malformed;
     exteria_document_read(document, &out->file);

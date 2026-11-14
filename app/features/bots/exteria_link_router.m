@@ -18,6 +18,7 @@
 #import "exteria_language_pack.h"
 #import "exteria_session_language.h"
 #import "exteria_session_theme.h"
+#import "exteria_imported_theme.h"
 #import "exteria_imported_theme_preview_controller.h"
 #import "exteria_translate_config.h"
 #import "exteria_theme.h"
@@ -240,6 +241,26 @@ static NSString *ExteriaCloudThemePath(void) {
     return [NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-cloud-theme.tgios-theme"];
 }
 
+/* the accent goes to the color of one's own that the app keeps (hue, saturation and a brightness against the accent of the palette, whose value is 0.745), and the base look
+   to the dark or light palette; the rest of a theme made elsewhere (message colors, wallpaper) has no place here */
+- (void)offerColorsOfTheme:(ExteriaThemeLink *)theme {
+    BOOL dark = theme.dark;
+    uint32_t accent = theme.accent;
+    NSString *message = [NSString stringWithFormat:NSLocalizedString(@"theme.link.colors", nil), theme.title];
+    ExteriaShowAlert(NSLocalizedString(@"theme.import.title", nil), message,
+                     [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"theme.link.apply", nil), nil], 0, NO,
+                     ^(NSInteger index, NSString *text) {
+        (void)text;
+        if (index != 1) return;
+        CGFloat hue, saturation, value;
+        ExteriaRGBToHSV(((accent >> 16) & 0xFF) / 255.0, ((accent >> 8) & 0xFF) / 255.0, (accent & 0xFF) / 255.0, &hue, &saturation, &value);
+        ExteriaImportedThemeUseBuiltin(dark);
+        ExteriaThemeStoreDark(dark);
+        ExteriaThemeStoreCustomTint((float)hue, (float)saturation, (float)MIN(1, value / 0.745));
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil];
+    });
+}
+
 - (void)openThemeOfSlug:(NSString *)slug {
     NSUInteger token = [self beginBusy];
     [self retain];
@@ -251,10 +272,11 @@ static NSString *ExteriaCloudThemePath(void) {
             [self autorelease];
             return;
         }
-        /* a theme with accent colors only has no file, and the server sends no .tgios-theme for it */
+        /* a theme made in another app has no .tgios-theme, and the server sends only its colors: the base look and the accent */
         if (!theme.file) {
             [self endBusy:token];
-            ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), NSLocalizedString(@"theme.link.unsupported", nil));
+            if (theme.hasColors) [self offerColorsOfTheme:theme];
+            else ExteriaShowNotice(NSLocalizedString(@"theme.import.title", nil), NSLocalizedString(@"theme.link.unsupported", nil));
             [self autorelease];
             return;
         }

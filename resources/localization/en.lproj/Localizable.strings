@@ -2312,6 +2312,8 @@
 "theme.import.save" = "The theme could not be saved.";
 "theme.link.notfound" = "This theme does not exist.";
 "theme.link.unsupported" = "This theme is only a set of colors and has no file for iOS.";
+"theme.link.colors" = "The theme "%@" is only a set of colors. Apply its main color and its light or dark look? The wallpaper and the message colors stay as they are.";
+"theme.link.apply" = "Apply";
 "theme.link.download" = "The theme file could not be downloaded.";
 "theme.import.preview.day" = "Day theme. Apply it to preview its colors in chats and settings?";
 "theme.import.preview.night" = "Night theme. Apply it to preview its colors in chats and settings?";

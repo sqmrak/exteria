@@ -31,6 +31,16 @@ static exteria_tl_value *theme_of(const char *title, exteria_tl_value *document)
     return t;
 }
 
+static exteria_tl_value *colors_of(const char *title, const char *base, int32_t accent) {
+    exteria_tl_value *t = theme_of(title, NULL), *settings = exteria_tl_new_obj(&arena, "themeSettings"), *list = exteria_tl_new_vec(&arena, 1);
+    CHECK(settings != NULL && list != NULL);
+    if (base) CHECK_EQ_INT(exteria_tl_set(settings, "base_theme", exteria_tl_new_obj(&arena, base)), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, settings, "accent_color", accent), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_vec_set(list, 0, settings), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_set(t, "settings", list), EXTERIA_OK);
+    return t;
+}
+
 static void test_request(void) {
     exteria_tl_value *request = NULL, *decoded = NULL;
     exteria_writer writer;
@@ -74,6 +84,21 @@ static void test_parse(void) {
     CHECK_EQ_INT(exteria_theme_link_parse(theme_of("Accent", NULL), &info), EXTERIA_OK);
     CHECK_EQ_INT(info.has_file, 0);
     CHECK(!strcmp(info.title, "Accent"));
+    CHECK_EQ_INT(info.has_colors, 0);
+    /* a theme of colors: the base look and the accent, with the alpha byte a signed value carries cut off */
+    CHECK_EQ_INT(exteria_theme_link_parse(colors_of("Moon", "baseThemeNight", (int32_t)0xFF3A7BD5u), &info), EXTERIA_OK);
+    CHECK_EQ_INT(info.has_file, 0);
+    CHECK_EQ_INT(info.has_colors, 1);
+    CHECK_EQ_INT(info.dark, 1);
+    CHECK_EQ_INT(info.accent, 0x3A7BD5u);
+    CHECK_EQ_INT(exteria_theme_link_parse(colors_of("Sun", "baseThemeDay", 0x112233), &info), EXTERIA_OK);
+    CHECK_EQ_INT(info.dark, 0);
+    CHECK_EQ_INT(info.accent, 0x112233u);
+    CHECK_EQ_INT(exteria_theme_link_parse(colors_of("Dusk", "baseThemeTinted", 0x445566), &info), EXTERIA_OK);
+    CHECK_EQ_INT(info.dark, 1);
+    /* settings with no base look are no colors */
+    CHECK_EQ_INT(exteria_theme_link_parse(colors_of("Odd", NULL, 0x445566), &info), EXTERIA_OK);
+    CHECK_EQ_INT(info.has_colors, 0);
     /* a document that is not a fetchable file */
     CHECK_EQ_INT(exteria_theme_link_parse(theme_of("Gone", exteria_tl_new_obj(&arena, "documentEmpty")), &info), EXTERIA_E_MALFORMED);
     CHECK_EQ_INT(info.has_file, 0);
