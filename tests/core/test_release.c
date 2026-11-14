@@ -11,7 +11,11 @@ static void versions(void) {
         {"1.0.0", "1.0.1-canary", 0},
         {"v2.0", "1.99.0", 1},
         {"1.0.0", "1.0", 0},
-        {"1.0.0-canary", "1.0.0-stable", 0}
+        {"1.0.0-canary", "1.0.0-stable", 0},
+        {"1.0.0-stable", "1.0.0-nightly", 1},
+        {"1.0.0-nightly", "1.0.0-stable", 0},
+        {"1.0.1-nightly", "1.0.0-stable", 1},
+        {"1.0.0-nightly", "1.0.0-nightly", 0}
     };
     size_t i;
     for (i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {

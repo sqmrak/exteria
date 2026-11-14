@@ -26,7 +26,8 @@ static exteria_status parse_version(const char *text, release_version *out) {
     } while (1);
     if (count < 2) return EXTERIA_E_MALFORMED;
     if (!*p || strcmp(p, "-stable") == 0) out->stable = 1;
-    else if (strcmp(p, "-canary") != 0) return EXTERIA_E_UNSUPPORTED;
+    /* the builds that come before a stable one carry -canary or -nightly, and rank the same: below the stable build of the same number */
+    else if (strcmp(p, "-canary") != 0 && strcmp(p, "-nightly") != 0) return EXTERIA_E_UNSUPPORTED;
     return EXTERIA_OK;
 }
 
