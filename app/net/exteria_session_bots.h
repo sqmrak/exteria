@@ -14,6 +14,8 @@ typedef void (^ExteriaCallbackCompletion)(ExteriaCallbackAnswer *answer, NSStrin
 
 /* the user, bot, group or channel behind @name (without the @) */
 - (void)resolveUsername:(NSString *)name completion:(ExteriaResolveCompletion)completion;
+/* the inline bots the signed in person used most lately, the most used first, as ExteriaPerson items; only bots with a public name */
+- (void)loadRecentInlineBots:(void (^)(NSArray *bots, NSString *errorName))completion;
 /* the person this account already has under the user id, with the photo the chats gave it, nil when it has none; the completion runs on the main thread. the id is
    what stays when a username changes */
 - (void)loadStoredPersonOfUserId:(long long)userId completion:(void (^)(ExteriaPerson *person))completion;

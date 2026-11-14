@@ -56,6 +56,33 @@ static NSString *ExteriaParseFailure(const char *method, exteria_status status) 
     [username release];
 }
 
+- (void)loadRecentInlineBots:(void (^)(NSArray *, NSString *))completion {
+    void (^done)(NSArray *, NSString *) = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_top_inline_bots_request(arena, EXTERIA_TOP_BOTS_MAX, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSMutableArray *bots = nil;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) {
+            error = ExteriaRpcErrorName(result);
+        } else {
+            exteria_person_row rows[EXTERIA_TOP_BOTS_MAX];
+            size_t count = 0;
+            exteria_status status = exteria_top_inline_bots_parse(result->value, rows, EXTERIA_TOP_BOTS_MAX, &count);
+            if (status == EXTERIA_OK) {
+                bots = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) [bots addObject:[[[ExteriaPerson alloc] initWithRow:&rows[i]] autorelease]];
+            } else {
+                error = ExteriaParseFailure("contacts.getTopPeers", status);
+            }
+        }
+        [self noteRpcError:error];
+        NSString *deliveredError = [[error copy] autorelease];
+        NSArray *deliveredBots = [[bots copy] autorelease];
+        [self deliverMain:^{ done(deliveredBots, deliveredError); [done release]; }];
+    }];
+}
+
 - (void)loadStoredPersonOfUserId:(long long)userId completion:(void (^)(ExteriaPerson *))completion {
     void (^done)(ExteriaPerson *) = [completion copy];
     [self post:^{

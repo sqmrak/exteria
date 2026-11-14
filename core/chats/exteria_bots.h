@@ -31,6 +31,14 @@ exteria_status exteria_resolve_request(exteria_arena *arena, const char *usernam
 /* the contacts.resolvedPeer answer */
 exteria_status exteria_resolve_parse(const exteria_tl_value *answer, int64_t self_id, exteria_resolved *out);
 
+/* the inline bots the account used most lately */
+#define EXTERIA_TOP_BOTS_MAX 20
+/* contacts.getTopPeers for the inline bots only, at most limit of them (1 to EXTERIA_TOP_BOTS_MAX) */
+exteria_status exteria_top_inline_bots_request(exteria_arena *arena, int32_t limit, exteria_tl_value **out);
+/* the bots of a contacts.topPeers answer, the most used first: only users that are bots and have a public name, since a mention is that name. A disabled or unchanged answer
+   holds none and is not an error; anything else that is not a topPeers answer is EXTERIA_E_MALFORMED */
+exteria_status exteria_top_inline_bots_parse(const exteria_tl_value *answer, exteria_person_row *rows, size_t cap, size_t *count);
+
 /* an invite link to a private group or channel */
 #define EXTERIA_INVITE_ABOUT_MAX 512
 typedef struct exteria_invite {

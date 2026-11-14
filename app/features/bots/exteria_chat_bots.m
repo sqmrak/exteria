@@ -75,6 +75,9 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     BOOL _inlineGeoDenied;
     /* the members of a supergroup the server named for the name typed after an @, and which search they answer */
     NSArray *_mentionRemote;
+    /* the inline bots the account used lately, for the names offered after an @ in a private chat or a channel; nil until the server has answered */
+    NSArray *_recentBots;
+    BOOL _recentBotsLoading;
     NSUInteger _mentionToken;
 
     ExteriaMarkupButton *_busyButton;
@@ -135,6 +138,7 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     [_panel release];
     [_inlineBots release];
     [_mentionRemote release];
+    [_recentBots release];
     [_inlineBot release];
     [_resolvingInlineName release];
     [_inlineQuery release];
@@ -554,8 +558,14 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     NSString *needle = query.lowercaseString;
     NSMutableArray *named = [NSMutableArray array], *byName = [NSMutableArray array];
     NSMutableSet *seen = [NSMutableSet set];
-    NSMutableArray *pool = [NSMutableArray arrayWithArray:[_host botsMentionCandidates]];
-    [pool addObjectsFromArray:_mentionRemote];
+    /* a group offers the people in it; a private chat or a channel has nobody to mention, and offers the inline bots that can be used there */
+    NSMutableArray *pool = [NSMutableArray array];
+    if (_dialog.kind == EXTERIA_DIALOG_GROUP) {
+        [pool addObjectsFromArray:[_host botsMentionCandidates]];
+        [pool addObjectsFromArray:_mentionRemote];
+    } else {
+        [pool addObjectsFromArray:_recentBots];
+    }
     for (ExteriaPerson *person in pool) {
         NSNumber *key = [NSNumber numberWithLongLong:person.userId];
         if (!person.username.length || [seen containsObject:key]) continue;
@@ -600,9 +610,33 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     [_host botsRelayout];
 }
 
-/* YES while the caret ends a name typed after an @ in a group, whether or not anyone matched */
+/* the bots a private chat or a channel offers after an @: asked from the server once and kept, since the list is the same for the whole life of the screen */
+- (void)loadRecentBots {
+    if (_recentBots || _recentBotsLoading) return;
+    _recentBotsLoading = YES;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadRecentInlineBots:^(NSArray *bots, NSString *errorName) {
+        ExteriaChatBots *chatBots = weak.target;
+        if (!chatBots) return;
+        chatBots->_recentBotsLoading = NO;
+        if (!bots) {
+            NSLog(@"exteria: the recent inline bots did not load: %@", errorName);
+            return;
+        }
+        chatBots->_recentBots = [bots retain];
+        /* the field may have moved on while the server thought */
+        exteria_mention_token current;
+        NSRange range;
+        if (![chatBots mentionTokenInField:&current range:&range]) return;
+        [chatBots showMentionRowsMatching:[NSString stringWithUTF8String:current.query]];
+    }];
+}
+
+/* YES while the caret ends a name typed after an @ in a chat that offers names, whether or not anyone matched: the people of a group, the recent inline bots of a private chat
+   or a channel */
 - (BOOL)updateMentions {
-    if (_dialog.kind != EXTERIA_DIALOG_GROUP) return NO;
+    BOOL group = _dialog.kind == EXTERIA_DIALOG_GROUP;
+    if (!group && _dialog.kind != EXTERIA_DIALOG_USER && _dialog.kind != EXTERIA_DIALOG_BOT && _dialog.kind != EXTERIA_DIALOG_CHANNEL) return NO;
     exteria_mention_token token;
     NSRange range;
     if (![self mentionTokenInField:&token range:&range]) {
@@ -613,6 +647,10 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     }
     NSString *query = [NSString stringWithUTF8String:token.query];
     [self showMentionRowsMatching:query];
+    if (!group) {
+        [self loadRecentBots];
+        return YES;
+    }
     /* a supergroup knows more people than the history shows, and the server searches them */
     if (_dialog.peerKind == 3) {
         [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(searchMentionMembers:) object:nil];
@@ -656,8 +694,8 @@ typedef enum { ExteriaPanelNone, ExteriaPanelCommands, ExteriaPanelInline, Exter
     NSString *text = [self bar].textView.text;
     if (NSMaxRange(range) < text.length && [text characterAtIndex:NSMaxRange(range)] == ' ') ++range.length;
     [self hidePanel];
-    /* at the start of a message the name addresses the one who reads it, which a comma after it says */
-    BOOL comma = range.location == 0 && ExteriaChatFlagGet(ExteriaChatFlagCommaAfterMention);
+    /* at the start of a message the name addresses the one who reads it, which a comma after it says; a bot's name there starts an inline query, and a comma would break it */
+    BOOL comma = range.location == 0 && !person.bot && ExteriaChatFlagGet(ExteriaChatFlagCommaAfterMention);
     [[self bar] replaceRange:range withText:[NSString stringWithFormat:comma ? @"@%@, " : @"@%@ ", person.username]];
 }
 

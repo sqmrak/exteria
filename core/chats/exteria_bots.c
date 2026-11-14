@@ -208,6 +208,53 @@ exteria_status exteria_resolve_parse(const exteria_tl_value *answer, int64_t sel
     return EXTERIA_OK;
 }
 
+exteria_status exteria_top_inline_bots_request(exteria_arena *arena, int32_t limit, exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out || limit < 1 || limit > EXTERIA_TOP_BOTS_MAX) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "contacts.getTopPeers");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_flag(request, "bots_inline");
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "offset", 0);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "limit", limit);
+    /* a zero hash always gets the list itself, never "not modified" */
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "hash", 0);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_top_inline_bots_parse(const exteria_tl_value *answer, exteria_person_row *rows, size_t cap, size_t *count) {
+    const exteria_tl_value *categories, *users;
+    uint32_t i, j;
+    size_t n = 0;
+    if (count) *count = 0;
+    if (!rows || !count || !cap) return EXTERIA_E_ARG;
+    if (exteria_tl_is(answer, EXTERIA_TL_ID_contacts_topPeersDisabled) || exteria_tl_is(answer, EXTERIA_TL_ID_contacts_topPeersNotModified)) return EXTERIA_OK;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_contacts_topPeers)) return EXTERIA_E_MALFORMED;
+    categories = exteria_tl_get(answer, "categories");
+    users = exteria_tl_get(answer, "users");
+    if (!is_vec(categories) || !is_vec(users)) return EXTERIA_E_MALFORMED;
+    if (categories->u.vec.count > 32 || users->u.vec.count > 1000) return EXTERIA_E_LIMIT;
+    for (i = 0; i < categories->u.vec.count; ++i) {
+        const exteria_tl_value *category = categories->u.vec.items[i], *peers;
+        if (!exteria_tl_is(category, EXTERIA_TL_ID_topPeerCategoryPeers) || !exteria_tl_is(exteria_tl_get(category, "category"), EXTERIA_TL_ID_topPeerCategoryBotsInline)) continue;
+        peers = exteria_tl_get(category, "peers");
+        if (!is_vec(peers)) return EXTERIA_E_MALFORMED;
+        for (j = 0; j < peers->u.vec.count && n < cap; ++j) {
+            exteria_peer peer;
+            const exteria_tl_value *user;
+            exteria_person_row row;
+            if (exteria_peer_from_tl(exteria_tl_get(peers->u.vec.items[j], "peer"), &peer) != EXTERIA_OK || peer.kind != 1) continue;
+            user = find_by_id(users, peer.id);
+            if (!user || exteria_person_parse(user, &row) != EXTERIA_OK || !row.bot || row.deleted || !row.username[0]) continue;
+            rows[n++] = row;
+        }
+    }
+    *count = n;
+    return EXTERIA_OK;
+}
+
 /* invite links */
 
 #define INVITE_HASH_MAX 128

@@ -735,6 +735,57 @@ static void test_answers(void) {
     CHECK_EQ_INT(exteria_requested_peers_request(&arena, &chat, 12, 3, picked, 2, &request), EXTERIA_E_ARG);
 }
 
+/* the inline bots of the most used list: only bots with a public name, in the order of the rating, from the inline category alone */
+static void test_top_inline_bots(void) {
+    exteria_tl_value *request = NULL, *answer = obj("contacts.topPeers"), *users[4], *categories[2], *pics[3], *others[1];
+    exteria_tl_value *inline_category = obj("topPeerCategoryPeers"), *pm_category = obj("topPeerCategoryPeers");
+    exteria_person_row rows[4];
+    size_t count = 9, i;
+    CHECK_EQ_INT(exteria_top_inline_bots_request(&arena, 20, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(request, "bots_inline"), 1);
+    roundtrip(request, EXTERIA_TL_ID_contacts_getTopPeers);
+    CHECK_EQ_INT(exteria_top_inline_bots_request(&arena, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_top_inline_bots_request(&arena, EXTERIA_TOP_BOTS_MAX + 1, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_top_inline_bots_request(NULL, 5, &request), EXTERIA_E_ARG);
+    users[0] = user(11, "pic", 1);
+    users[1] = user(12, "loadit", 1);
+    users[2] = user(13, "human", 0);
+    users[3] = user(14, "gone", 1);
+    flag(users[3], "deleted");
+    for (i = 0; i < 3; ++i) {
+        pics[i] = obj("topPeer");
+        set(pics[i], "peer", obj("peerUser"));
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, (exteria_tl_value *)exteria_tl_get(pics[i], "peer"), "user_id", i == 0 ? 12 : (i == 1 ? 13 : 14)), EXTERIA_OK);
+    }
+    /* the order of the list is the order of the rows: loadit, then the person who is no bot, then the deleted bot, and pic only in the other category */
+    set(inline_category, "category", obj("topPeerCategoryBotsInline"));
+    i32(inline_category, "count", 3);
+    set(inline_category, "peers", vec_of(pics, 3));
+    others[0] = obj("topPeer");
+    set(others[0], "peer", obj("peerUser"));
+    CHECK_EQ_INT(exteria_tl_set_i64(&arena, (exteria_tl_value *)exteria_tl_get(others[0], "peer"), "user_id", 11), EXTERIA_OK);
+    set(pm_category, "category", obj("topPeerCategoryBotsPM"));
+    i32(pm_category, "count", 1);
+    set(pm_category, "peers", vec_of(others, 1));
+    categories[0] = pm_category;
+    categories[1] = inline_category;
+    set(answer, "categories", vec_of(categories, 2));
+    set(answer, "chats", vec_of(users, 0));
+    set(answer, "users", vec_of(users, 4));
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(answer, rows, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(count, 1);
+    CHECK_EQ_INT(rows[0].id, 12);
+    CHECK(!strcmp(rows[0].username, "loadit"));
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(answer, rows, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(obj("contacts.topPeersDisabled"), rows, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(count, 0);
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(obj("contacts.topPeersNotModified"), rows, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(count, 0);
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(obj("boolTrue"), rows, 4, &count), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(answer, NULL, 4, &count), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_top_inline_bots_parse(answer, rows, 0, &count), EXTERIA_E_ARG);
+}
+
 int main(void) {
     char inline_name[EXTERIA_LINK_NAME_MAX];
     const char *inline_query = NULL;
@@ -747,6 +798,7 @@ int main(void) {
     CHECK(!exteria_inline_address_parse("@bad-name x", inline_name, sizeof(inline_name), &inline_query));
     exteria_arena_init(&arena, 64u * 1024u * 1024u);
     test_resolve();
+    test_top_inline_bots();
     test_invite();
     test_bot_info();
     test_start();
