@@ -146,7 +146,8 @@ static NSMutableAttributedString *ExteriaStyledString(NSString *text, NSArray *e
         case ExteriaTextStyleMentionName:
         case ExteriaTextStyleMention: {
             [string addAttribute:(id)kCTFontAttributeName value:(id)bold range:range];
-            [string addAttribute:(id)kCTForegroundColorAttributeName value:(id)ExteriaColorAccent().CGColor range:range];
+            /* the accent is the fill of an outgoing bubble and of its quote plate, so a mention in the caller's accent vanished there; every other link takes the caller's color */
+            [string addAttribute:(id)kCTForegroundColorAttributeName value:(id)linkColor.CGColor range:range];
             NSString *target = ExteriaLinkTarget(entity, text);
             if (target) [string addAttribute:ExteriaLinkAttribute value:target range:range];
             break;
