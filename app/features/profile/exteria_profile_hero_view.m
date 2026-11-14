@@ -388,11 +388,12 @@
     [self refreshSwitch];
 }
 
-/* a tap anywhere on the photo goes to the next one, and after the last one comes the first; the photo is taken away by a pull down, not by a tap */
+/* a tap on the left third of the photo goes back to the previous one, a tap anywhere else to the next; both wrap round at the ends. the photo is taken away by a pull down, not by a tap */
 - (void)tapped:(UITapGestureRecognizer *)tap {
-    (void)tap;
     if (_moving || _pages.count < 2) return;
-    [self goToIndex:(_index + 1) % (NSInteger)_pages.count];
+    NSInteger count = (NSInteger)_pages.count;
+    BOOL back = [tap locationInView:self].x < self.bounds.size.width / 3;
+    [self goToIndex:back ? (_index + count - 1) % count : (_index + 1) % count];
 }
 
 /* the swipe runs beside the scrolling of the list, which also sees the finger */
