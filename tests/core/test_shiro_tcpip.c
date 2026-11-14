@@ -592,7 +592,44 @@ static void bad_arguments(void) {
     exteria_tcpip_input(NULL, NULL, 0, 0);
 }
 
+static void answer_expectation(void) {
+    uint8_t packet[80];
+    memset(packet, 0, sizeof(packet));
+    packet[0] = 0x45;
+    packet[9] = 6;
+    packet[32] = 0x50;
+    /* a bare acknowledgement, a reset and a window update are answered by nobody */
+    packet[33] = 0x10;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 40), 0);
+    packet[33] = 0x04;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 40), 0);
+    /* data, a SYN and a FIN are */
+    packet[33] = 0x10;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 41), 1);
+    packet[33] = 0x12;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 40), 1);
+    packet[33] = 0x11;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 40), 1);
+    /* a header with options: 24 bytes of TCP leave a 44 byte packet without data */
+    packet[33] = 0x10;
+    packet[32] = 0x60;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 44), 0);
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 45), 1);
+    /* what cannot be read counts as before: short, other version, other protocol, a header that runs past the end */
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 39), 1);
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(NULL, 40), 1);
+    packet[0] = 0x65;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 44), 1);
+    packet[0] = 0x45;
+    packet[9] = 17;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 44), 1);
+    packet[9] = 6;
+    packet[32] = 0xF0;
+    CHECK_EQ_INT(exteria_tcpip_packet_expects_answer(packet, 44), 1);
+}
+
 int main(void) {
+    answer_expectation();
     handshake_on_the_wire();
     small_exchange_and_delayed_ack();
     upload(0, 0, 150000, 0);

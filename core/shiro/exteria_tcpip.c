@@ -407,6 +407,17 @@ exteria_status exteria_tcpip_info_get(const exteria_tcpip *s, uint32_t id, exter
     return EXTERIA_OK;
 }
 
+int exteria_tcpip_packet_expects_answer(const uint8_t *packet, size_t len) {
+    size_t ip, tcp;
+    if (!packet || len < 40u || (packet[0] >> 4) != 4u) return 1;
+    ip = (size_t)(packet[0] & 15u) * 4u;
+    if (ip < 20u || len < ip + 20u || packet[9] != 6u) return 1;
+    tcp = (size_t)(packet[ip + 12u] >> 4) * 4u;
+    if (tcp < 20u || ip + tcp > len) return 1;
+    if (packet[ip + 13u] & 0x03u) return 1;
+    return len > ip + tcp;
+}
+
 exteria_status exteria_tcpip_send(exteria_tcpip *s, uint32_t id, const uint8_t *data, size_t len, uint64_t now_ms, size_t *accepted) {
     conn *c;
     size_t room, at, first;

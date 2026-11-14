@@ -28,6 +28,10 @@ void exteria_tcpip_input(exteria_tcpip *stack, const uint8_t *packet, size_t len
 /* timers: retransmission, delayed acknowledgements, giving up */
 void exteria_tcpip_tick(exteria_tcpip *stack, uint64_t now_ms);
 
+/* whether the peer has to answer this packet of the stack: a segment that carries data, a SYN or a FIN. A bare acknowledgement, a reset and anything that is not an IPv4 TCP
+   packet of a known shape are answered by nobody, except that a packet this reader cannot parse counts as one that is (the caller then keeps its older, stricter reading) */
+int exteria_tcpip_packet_expects_answer(const uint8_t *packet, size_t len);
+
 /* the connection id stays valid until released; EXTERIA_E_LIMIT when all slots are taken, EXTERIA_E_NOMEM,
    EXTERIA_E_ARG for port 0 or address 0 */
 exteria_status exteria_tcpip_connect(exteria_tcpip *stack, uint32_t remote_ip, uint16_t remote_port, uint64_t now_ms, uint32_t *id);

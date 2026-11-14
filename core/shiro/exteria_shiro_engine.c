@@ -166,7 +166,9 @@ static void send_datagram(exteria_shiro_engine *e, const uint8_t *plain, size_t 
 
 static void stack_emit(void *context, const uint8_t *packet, size_t len) {
     exteria_shiro_engine *e = (exteria_shiro_engine *)context;
-    send_datagram(e, packet, len, now_ms());
+    /* the last acknowledgements of an upload are answered by nobody, and counted as unanswered data they started a new handshake after the transfer, which a server that rations
+       them left unanswered until the tunnel was declared dead */
+    send_datagram_as(e, packet, len, now_ms(), exteria_tcpip_packet_expects_answer(packet, len));
 }
 
 static void begin_handshake(exteria_shiro_engine *e, uint64_t now) {
@@ -462,7 +464,11 @@ static void pump_relay(exteria_shiro_engine *e, relay *r, uint64_t now) {
         ssize_t n = recv(r->fd, chunk, want, 0);
         if (n > 0) {
             size_t taken = 0;
-            exteria_tcpip_send(e->stack, r->conn, chunk, (size_t)n, now, &taken);
+            /* the bytes are read off the socket already, so a send that took less than they are would cut the stream the caller sees */
+            if (exteria_tcpip_send(e->stack, r->conn, chunk, (size_t)n, now, &taken) != EXTERIA_OK || taken != (size_t)n) {
+                drop_relay(e, r, now);
+                return;
+            }
         } else if (n == 0) {
             r->fd_eof = 1;
             exteria_tcpip_close(e->stack, r->conn, now);
