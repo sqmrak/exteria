@@ -309,6 +309,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _scrollTargetKnown;
     CGFloat _scrollTargetOffset;
     CGFloat _preparedOffset;
+    BOOL _scrollReadPending;
     BOOL _interacting;
     BOOL _updatingItems;
     BOOL _layingOutChat;
@@ -5054,9 +5055,21 @@ static void ExteriaRedrawTree(UIView *view) {
     [self refreshPinnedForVisible];
     [self prepareAhead:NO];
     [self refreshAnimationsIfRowsChanged];
+    [self scheduleScrollReadCheck];
+}
+
+/* a scroll reports every frame, and each report used to cancel and start two run loop timers; one check at most every quarter second sees the rows the finger
+   has reached, and the last report of a scroll always leaves one pending or just run, so the rows where it stopped are never missed */
+- (void)scheduleScrollReadCheck {
+    if (_scrollReadPending) return;
+    _scrollReadPending = YES;
+    [self performSelector:@selector(runScrollReadCheck) withObject:nil afterDelay:0.25];
+}
+
+- (void)runScrollReadCheck {
+    _scrollReadPending = NO;
     [self scheduleVisibleMentionsRead];
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markReadIfNeeded) object:nil];
-    [self performSelector:@selector(markReadIfNeeded) withObject:nil afterDelay:0];
+    [self markReadIfNeeded];
 }
 
 /* pulling past the end of a channel offers the next channel with unread posts; letting go far enough opens it */
