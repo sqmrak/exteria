@@ -3,6 +3,9 @@
 
 #import <sys/stat.h>
 #import <unistd.h>
+#import <dirent.h>
+#import <errno.h>
+#import <string.h>
 
 #import "exteria_chat_item.h"
 #import "exteria_classic_chrome.h"
@@ -98,19 +101,41 @@
                     [entries addObject:[NSDictionary dictionaryWithObjectsAndKeys:path, @"path", [titles objectAtIndex:i], @"name", [NSNumber numberWithBool:YES], @"directory", nil]];
             }
         } else {
-            NSArray *names = [files contentsOfDirectoryAtPath:directory error:&error];
-            for (NSString *name in names) {
-                NSString *path = [directory stringByAppendingPathComponent:name];
-                struct stat info;
-                if (stat(path.fileSystemRepresentation, &info) != 0 || (!S_ISDIR(info.st_mode) && !S_ISREG(info.st_mode))) continue;
-                if (extensions.count && S_ISREG(info.st_mode)) {
-                    BOOL wanted = NO;
-                    for (NSString *extension in extensions) if ([[name pathExtension] caseInsensitiveCompare:extension] == NSOrderedSame) wanted = YES;
-                    if (!wanted) continue;
+            /* the directory is read entry by entry: an entry the process may not stat, which the system keeps from a program outside the sandbox of its owner, is still a name in the
+               folder, and leaving it out made folders that exist look missing. the kind comes from the directory record when stat will not say */
+            DIR *handle = opendir(directory.fileSystemRepresentation);
+            if (!handle) {
+                error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithUTF8String:strerror(errno)] forKey:NSLocalizedDescriptionKey]];
+            } else {
+                struct dirent *record;
+                while ((record = readdir(handle))) {
+                    if (!strcmp(record->d_name, ".") || !strcmp(record->d_name, "..")) continue;
+                    NSString *name = [NSString stringWithUTF8String:record->d_name];
+                    if (!name) continue;
+                    NSString *path = [directory stringByAppendingPathComponent:name];
+                    struct stat info;
+                    BOOL isDirectory, isFile;
+                    long long size = 0;
+                    if (stat(path.fileSystemRepresentation, &info) == 0) {
+                        isDirectory = S_ISDIR(info.st_mode);
+                        isFile = S_ISREG(info.st_mode);
+                        size = (long long)info.st_size;
+                    } else {
+                        isDirectory = record->d_type == DT_DIR;
+                        isFile = record->d_type == DT_REG;
+                        struct stat link;
+                        if (isFile && lstat(path.fileSystemRepresentation, &link) == 0) size = (long long)link.st_size;
+                    }
+                    if (!isDirectory && !isFile) continue;
+                    if (extensions.count && isFile) {
+                        BOOL wanted = NO;
+                        for (NSString *extension in extensions) if ([[name pathExtension] caseInsensitiveCompare:extension] == NSOrderedSame) wanted = YES;
+                        if (!wanted) continue;
+                    }
+                    [entries addObject:[NSDictionary dictionaryWithObjectsAndKeys:path, @"path", name, @"name",
+                                        [NSNumber numberWithBool:isDirectory], @"directory", [NSNumber numberWithLongLong:size], @"size", nil]];
                 }
-                [entries addObject:[NSDictionary dictionaryWithObjectsAndKeys:path, @"path", name, @"name",
-                                    [NSNumber numberWithBool:S_ISDIR(info.st_mode)], @"directory",
-                                    [NSNumber numberWithLongLong:(long long)info.st_size], @"size", nil]];
+                closedir(handle);
             }
             [entries sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
                 BOOL ad = [[a objectForKey:@"directory"] boolValue], bd = [[b objectForKey:@"directory"] boolValue];
@@ -183,7 +208,11 @@
     NSDictionary *entry = [_shown objectAtIndex:(NSUInteger)indexPath.row];
     NSString *path = [entry objectForKey:@"path"];
     struct stat info;
-    if (stat(path.fileSystemRepresentation, &info) != 0 || (!S_ISDIR(info.st_mode) && !S_ISREG(info.st_mode)) || access(path.fileSystemRepresentation, R_OK) != 0) {
+    BOOL listed = [[entry objectForKey:@"directory"] boolValue];
+    /* a folder is opened and says itself why it cannot be read; the check here took away every folder that stat or access refused, though opendir may well read it */
+    if (listed && (stat(path.fileSystemRepresentation, &info) != 0)) {
+        info.st_mode = S_IFDIR;
+    } else if (stat(path.fileSystemRepresentation, &info) != 0 || (!S_ISDIR(info.st_mode) && !S_ISREG(info.st_mode)) || (!S_ISDIR(info.st_mode) && access(path.fileSystemRepresentation, R_OK) != 0)) {
         UIAlertView *alert = [[ExteriaAlertClass() alloc] initWithTitle:nil message:NSLocalizedString(@"attach.file.unavailable", nil) delegate:nil cancelButtonTitle:NSLocalizedString(@"notice.ok", nil) otherButtonTitles:nil];
         [alert show]; [alert release]; return;
     }
