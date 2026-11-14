@@ -5,6 +5,7 @@
 #import <AssetsLibrary/AssetsLibrary.h>
 #import <QuartzCore/QuartzCore.h>
 #import "exteria_attach_options.h"
+#import "exteria_blur.h"
 #import "exteria_centered_hint_field.h"
 #import "exteria_platform.h"
 #import "exteria_plural.h"
@@ -83,18 +84,18 @@
 }
 @end
 
-/* a picture picked to go under a spoiler shows as the receiver will see it: shrunk to a few points and drawn large again with smoothing, a blur that costs nothing in a scrolling grid */
+/* a picture picked to go under a spoiler shows as the receiver will see it: shrunk to a few dozen points and box blurred, a blur that costs little in a scrolling grid; the shrunk picture alone shows as blocks when it is stretched */
 static UIImage *ExteriaAttachBlurred(UIImage *image) {
     CGSize size = image.size;
     if (size.width < 1 || size.height < 1) return image;
-    CGFloat scale = MIN(1, 12.0 / MAX(size.width, size.height));
+    CGFloat scale = MIN(1, 28.0 / MAX(size.width, size.height));
     CGSize small = CGSizeMake(MAX(2, floor(size.width * scale)), MAX(2, floor(size.height * scale)));
     UIGraphicsBeginImageContextWithOptions(small, YES, 1);
     CGContextSetInterpolationQuality(UIGraphicsGetCurrentContext(), kCGInterpolationHigh);
     [image drawInRect:CGRectMake(0, 0, small.width, small.height)];
     UIImage *made = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
-    return made ? made : image;
+    return made ? ExteriaBoxBlurredImage(made, 2, 2) : image;
 }
 
 @implementation ExteriaAttachSheet
@@ -275,6 +276,36 @@ static UIImageView *ExteriaAttachClassicBackdrop(UIView *strip) {
     _grid.backgroundView = text.length ? label : nil;
 }
 
+/* the grid cannot be filled when the library refuses the app (ios 5 fails the enumeration while location services are off for the app, ios 6 on while photos are), and the sheet
+   then showed an empty page; the button of galleryDenied opens the system picker, which answers for itself */
+- (void)openSystemPicker {
+    if (_leaving) return;
+    if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypePhotoLibrary]) {
+        [self galleryMessage:NSLocalizedString(@"attach.gallery.unavailable", nil)];
+        return;
+    }
+    [self choose:ExteriaAttachGallery];
+}
+
+/* the library refused the app: the sheet stays as it is, with a line of why and a button for the system's own picker. opening that at once, as this once did, put a page of albums
+   over the sheet every time, and the files, the place and the contacts under it could be reached only by being quicker than the picker */
+- (void)galleryDenied {
+    if (_leaving) return;
+    if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypePhotoLibrary]) {
+        [self galleryMessage:NSLocalizedString(@"attach.gallery.unavailable", nil)];
+        return;
+    }
+    [self galleryMessage:NSLocalizedString(@"attach.gallery.denied", nil)];
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    button.frame = CGRectMake(0, 0, _grid.bounds.size.width, 52);
+    button.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    button.titleLabel.font = ExteriaFontSemibold(16);
+    [button setTitle:NSLocalizedString(@"attach.gallery.system", nil) forState:UIControlStateNormal];
+    [button setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
+    [button addTarget:self action:@selector(openSystemPicker) forControlEvents:UIControlEventTouchUpInside];
+    _grid.tableHeaderView = button;
+}
+
 - (void)loadGallery {
     [self galleryMessage:NSLocalizedString(@"attach.gallery.loading", nil)];
     _photos = ExteriaPhotosAvailable();
@@ -285,14 +316,14 @@ static UIImageView *ExteriaAttachClassicBackdrop(UIView *strip) {
                 [_assets addObjectsFromArray:assets]; [_grid reloadData];
                 [self galleryMessage:assets.count ? @"" : NSLocalizedString(@"attach.gallery.empty", nil)];
             } else {
-                [self galleryMessage:NSLocalizedString(@"attach.gallery.unavailable", nil)];
                 NSLog(@"exteria: attachment gallery not loaded: %@", error);
+                [self galleryDenied];
             }
         });
         return;
     }
     Class libraryClass = NSClassFromString(@"ALAssetsLibrary");
-    if (!libraryClass) { [self galleryMessage:NSLocalizedString(@"attach.gallery.unavailable", nil)]; return; }
+    if (!libraryClass) { [self galleryDenied]; return; }
     _library = [[libraryClass alloc] init];
     [_library enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos usingBlock:^(ALAssetsGroup *group, BOOL *stop) {
         (void)stop;
@@ -319,7 +350,7 @@ static UIImageView *ExteriaAttachClassicBackdrop(UIView *strip) {
         [pool drain];
     } failureBlock:^(NSError *error) {
         NSLog(@"exteria: attachment gallery not available: %@", error);
-        dispatch_async(dispatch_get_main_queue(), ^{ if (!_leaving) [self galleryMessage:NSLocalizedString(@"attach.gallery.unavailable", nil)]; });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self galleryDenied]; });
     }];
 }
 

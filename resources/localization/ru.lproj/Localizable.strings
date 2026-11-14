@@ -263,6 +263,8 @@
 "attach.location.failed" = "Не удалось определить местоположение";
 "attach.location.denied" = "Доступ к геопозиции выключен";
 "attach.gallery.unavailable" = "Галерея недоступна";
+"attach.gallery.denied" = "Нет доступа к фото. Для ios 5 включите службы геолокации для Exteria в настройках.";
+"attach.gallery.system" = "Выбрать в системной галерее";
 "attach.failed" = "Не удалось подготовить файл";
 "menu.day" = "Дневной режим";
 "menu.night" = "Ночной режим";

@@ -263,6 +263,8 @@
 "attach.location.failed" = "Could not send: no location";
 "attach.location.denied" = "Location access is off";
 "attach.gallery.unavailable" = "The photo library is not available";
+"attach.gallery.denied" = "No access to the photos. On ios 5, turn location services on for Exteria in the settings.";
+"attach.gallery.system" = "Choose in the system gallery";
 "attach.failed" = "The file could not be prepared";
 "menu.day" = "Day mode";
 "menu.night" = "Night mode";
