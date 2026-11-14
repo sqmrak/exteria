@@ -13,6 +13,7 @@
     NSMutableSet *_asked;
     ExteriaWeakReference *_weak;
     void (^_changed)(void);
+    BOOL _changePending;
 }
 @end
 
@@ -30,6 +31,7 @@
 }
 
 - (void)dealloc {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(fireChanged) object:nil];
     [_weak clear];
     [_weak release];
     [_cache release];
@@ -39,7 +41,16 @@
     [super dealloc];
 }
 
+/* the pictures land one by one, and each used to rebuild the whole list at once: with a few hundred chats that is as many rebuilds of as many rows, which held the main thread
+   for seconds on a slow phone (the page of forwarding hung for it). the landings of a moment are told as one */
+- (void)fireChanged {
+    _changePending = NO;
+    if (_changed) _changed();
+}
+
 - (void)invalidate {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(fireChanged) object:nil];
+    _changePending = NO;
     [_weak clear];
     [_changed release];
     _changed = nil;
@@ -95,7 +106,10 @@ static UIImage *ExteriaRoundImage(UIImage *photo, NSUInteger seed) {
             ExteriaPeopleAvatars *me = weak.target;
             if (!me || !loaded) return;
             [me->_images setObject:ExteriaRoundImage(loaded, seed) forKey:key];
-            if (!inCall && me->_changed) me->_changed();
+            if (!inCall && me->_changed && !me->_changePending) {
+                me->_changePending = YES;
+                [me performSelector:@selector(fireChanged) withObject:nil afterDelay:0.25];
+            }
         }];
         inCall = NO;
         UIImage *current = [_images objectForKey:key];
