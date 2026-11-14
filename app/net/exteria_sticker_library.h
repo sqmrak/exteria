@@ -24,4 +24,8 @@
 /* nil without an error means Telegram has no supported animation for this emoji */
 - (void)loadAnimationForEmoji:(NSString *)emoji completion:(void (^)(ExteriaSticker *sticker, NSString *errorName))completion;
 
+/* the animations of a game emoji (dice, darts, basketball, football, bowling, slots) in set order, see ExteriaSession loadDiceStickersForEmoji:; kept for the life of the app once they
+   came, and a failed request is not repeated for half a minute so a screenful of throws does not ask for each */
+- (void)loadDiceForEmoji:(NSString *)emoji completion:(void (^)(NSArray *stickers, NSString *errorName))completion;
+
 @end

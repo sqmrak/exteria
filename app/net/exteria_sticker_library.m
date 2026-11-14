@@ -12,6 +12,9 @@
     NSMutableArray *_animatedEmojiWaiters;
     NSString *_animatedEmojiError;
     NSTimeInterval _animatedEmojiRetryAfter;
+    NSMutableDictionary *_dice;
+    NSMutableDictionary *_diceWaiters;
+    NSMutableDictionary *_diceRetryAfter;
 }
 @end
 
@@ -43,6 +46,9 @@
     [_animatedEmoji release];
     [_animatedEmojiWaiters release];
     [_animatedEmojiError release];
+    [_dice release];
+    [_diceWaiters release];
+    [_diceRetryAfter release];
     [super dealloc];
 }
 
@@ -110,6 +116,40 @@
 
 - (void)clearRecent:(void (^)(NSString *))completion {
     [_session clearRecentStickers:completion];
+}
+
+- (void)loadDiceForEmoji:(NSString *)emoji completion:(void (^)(NSArray *, NSString *))completion {
+    /* the set is named by the emoji without U+FE0F, which is how the server keeps it */
+    NSString *key = [emoji stringByReplacingOccurrencesOfString:@"\uFE0F" withString:@""];
+    NSArray *kept = [_dice objectForKey:key];
+    if (kept) {
+        completion(kept, nil);
+        return;
+    }
+    if ([NSDate timeIntervalSinceReferenceDate] < [[_diceRetryAfter objectForKey:key] doubleValue]) {
+        completion(nil, @"UNAVAILABLE");
+        return;
+    }
+    if (!_diceWaiters) _diceWaiters = [[NSMutableDictionary alloc] init];
+    NSMutableArray *waiting = [_diceWaiters objectForKey:key];
+    if (waiting) {
+        [waiting addObject:[[completion copy] autorelease]];
+        return;
+    }
+    [_diceWaiters setObject:[NSMutableArray arrayWithObject:[[completion copy] autorelease]] forKey:key];
+    [_session loadDiceStickersForEmoji:key completion:^(NSArray *stickers, NSString *error) {
+        if (stickers) {
+            if (!_dice) _dice = [[NSMutableDictionary alloc] init];
+            [_dice setObject:stickers forKey:key];
+        } else {
+            NSLog(@"exteria: dice animations of %@ did not load: %@", key, error);
+            if (!_diceRetryAfter) _diceRetryAfter = [[NSMutableDictionary alloc] init];
+            [_diceRetryAfter setObject:[NSNumber numberWithDouble:[NSDate timeIntervalSinceReferenceDate] + 30] forKey:key];
+        }
+        NSArray *waiters = [[[_diceWaiters objectForKey:key] retain] autorelease];
+        [_diceWaiters removeObjectForKey:key];
+        for (void (^done)(NSArray *, NSString *) in waiters) done(stickers, stickers ? nil : (error ? error : @"INTERNAL"));
+    }];
 }
 
 - (void)loadAnimationForEmoji:(NSString *)emoji completion:(void (^)(ExteriaSticker *, NSString *))completion {

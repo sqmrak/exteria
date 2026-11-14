@@ -37,6 +37,8 @@
 @property (nonatomic, readonly) BOOL viewOnce;
 /* the price in stars of paid media, zero for ordinary media; the media is locked while its kind is EXTERIA_PREVIEW_PAID */
 @property (nonatomic, readonly) long long paidStars;
+/* a game emoji thrown into the chat: the result, zero while the server has not said (a message that is still being sent); its emoji is alt */
+@property (nonatomic, readonly) int32_t diceValue;
 @property (nonatomic, readonly) int32_t width;
 @property (nonatomic, readonly) int32_t height;
 @property (nonatomic, readonly) int32_t duration;

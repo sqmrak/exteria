@@ -41,6 +41,7 @@ typedef struct exteria_media_info {
     char alt[EXTERIA_MEDIA_ALT_MAX];    /* the emoji a sticker stands for */
     int64_t sticker_set_id;         /* the set a sticker belongs to, zero when the document names none by id */
     int64_t sticker_set_hash;
+    int32_t dice_value;             /* a dice media: the result the server threw, zero while it is not known; slots count 1 to 64 */
     int64_t paid_stars;             /* the price in stars of paid media, locked or already bought; zero for ordinary media */
     uint8_t spoiler;                /* a photo or a video the sender asked to show blurred until it is tapped */
     int32_t date;                   /* unix seconds a photo was set, when the photo says so (a profile photo does), zero otherwise */
@@ -51,6 +52,13 @@ typedef struct exteria_media_info {
     uint16_t waveform_len;                  /* bytes of waveform in use, zero when the note has none */
     uint8_t waveform[EXTERIA_MEDIA_WAVEFORM_MAX];
 } exteria_media_info;
+
+/* the largest result a game emoji throws: slots show one of 64 combinations, the others up to 6 */
+#define EXTERIA_DICE_VALUE_MAX 64
+
+/* 1 when text is exactly one game emoji the server throws as an animation (dice, darts, basketball, football, bowling, slots), with or without the variation selector U+FE0F
+   after it; 0 for anything else, including text with a second character */
+int exteria_dice_emoticon(const char *text);
 
 /* playable videos and animations keep their picture area even when telegram supplies no thumbnail */
 int exteria_media_uses_picture(exteria_preview_kind kind, int has_file, int has_preview, int has_local_preview);

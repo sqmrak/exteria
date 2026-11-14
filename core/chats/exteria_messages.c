@@ -308,6 +308,25 @@ void exteria_media_classify_sized(const exteria_tl_value *media, int32_t photo_t
             if (exteria_tl_has(first, "video_duration")) exteria_tl_get_i32(first, "video_duration", &out->duration);
         }
         out->paid_stars = stars;
+    } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaDice)) {
+        const uint8_t *emoticon = NULL;
+        size_t length = 0;
+        int32_t value = 0;
+        out->kind = EXTERIA_PREVIEW_DICE;
+        /* the emoji comes from the server, so it is kept only when it is one of the games the client draws; anything else stays an unknown media */
+        if (exteria_tl_get_bytes(media, "emoticon", &emoticon, &length) != EXTERIA_OK || !length || length >= sizeof(out->alt) || memchr(emoticon, 0, length)) {
+            out->kind = EXTERIA_PREVIEW_OTHER;
+            return;
+        }
+        memcpy(out->alt, emoticon, length);
+        if (!exteria_dice_emoticon(out->alt)) {
+            memset(out->alt, 0, sizeof(out->alt));
+            out->kind = EXTERIA_PREVIEW_OTHER;
+            return;
+        }
+        if (exteria_tl_get_i32(media, "value", &value) == EXTERIA_OK && value > 0 && value <= EXTERIA_DICE_VALUE_MAX) out->dice_value = value;
+        out->width = 512;
+        out->height = 512;
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaStory)) {
         out->kind = EXTERIA_PREVIEW_STORY;
     } else if (exteria_tl_is(media, EXTERIA_TL_ID_messageMediaContact)) {
@@ -1742,6 +1761,71 @@ exteria_status exteria_clear_recent_stickers_request(exteria_arena *arena, exter
     request = exteria_tl_new_obj(arena, "messages.clearRecentStickers");
     if (!request) return EXTERIA_E_NOMEM;
     *out = request;
+    return EXTERIA_OK;
+}
+
+/* the six games of messages.sendMedia with inputMediaDice, as the client of the server's config names them */
+static const char *const dice_games[] = {"\xf0\x9f\x8e\xb2", "\xf0\x9f\x8e\xaf", "\xf0\x9f\x8f\x80", "\xe2\x9a\xbd", "\xf0\x9f\x8e\xb3", "\xf0\x9f\x8e\xb0"};
+
+int exteria_dice_emoticon(const char *text) {
+    size_t length;
+    if (!text) return 0;
+    length = strlen(text);
+    /* U+FE0F asks for the emoji look of a character that also has a text look, as the football does */
+    if (length >= 3 && !memcmp(text + length - 3, "\xef\xb8\x8f", 3)) length -= 3;
+    for (size_t i = 0; i < sizeof(dice_games) / sizeof(dice_games[0]); ++i) {
+        if (strlen(dice_games[i]) == length && !memcmp(text, dice_games[i], length)) return 1;
+    }
+    return 0;
+}
+
+exteria_status exteria_send_dice_request(exteria_arena *arena, const exteria_peer_ref *peer, const char *text, int64_t random_id, exteria_tl_value **out) {
+    exteria_tl_value *request, *input, *media;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !peer || !out || random_id == 0 || !exteria_dice_emoticon(text)) return EXTERIA_E_ARG;
+    status = exteria_input_peer(arena, peer, &input);
+    if (status != EXTERIA_OK) return status;
+    media = exteria_tl_new_obj(arena, "inputMediaDice");
+    request = exteria_tl_new_obj(arena, "messages.sendMedia");
+    if (!media || !request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_str(arena, media, "emoticon", text);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "peer", input);
+    if (status == EXTERIA_OK) status = exteria_set_topic_reply(arena, request, peer);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "media", media);
+    if (status == EXTERIA_OK) status = exteria_tl_set_str(arena, request, "message", "");
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "random_id", random_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_dice_set_request(exteria_arena *arena, const char *emoticon, exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out || !exteria_dice_emoticon(emoticon)) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "messages.getStickerSet");
+    input = exteria_tl_new_obj(arena, "inputStickerSetDice");
+    if (!request || !input) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_str(arena, input, "emoticon", emoticon);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "stickerset", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "hash", 0);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_dice_set_parse(const exteria_tl_value *answer, exteria_sticker_row *rows, size_t cap, size_t *count) {
+    const exteria_tl_value *documents;
+    if (count) *count = 0;
+    if (!answer || !rows || !count || cap == 0) return EXTERIA_E_ARG;
+    if (exteria_tl_is(answer, EXTERIA_TL_ID_messages_stickerSetNotModified)) return EXTERIA_E_NOTFOUND;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_stickerSet) || exteria_tl_get_vec(answer, "documents", &documents) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    if (documents->u.vec.count > EXTERIA_DICE_STICKERS_MAX || documents->u.vec.count > cap) return EXTERIA_E_LIMIT;
+    for (uint32_t i = 0; i < documents->u.vec.count; ++i) {
+        memset(&rows[i], 0, sizeof(rows[i]));
+        if (exteria_sticker_read(documents->u.vec.items[i], &rows[i]) != EXTERIA_OK) memset(&rows[i], 0, sizeof(rows[i]));
+    }
+    *count = documents->u.vec.count;
     return EXTERIA_OK;
 }
 

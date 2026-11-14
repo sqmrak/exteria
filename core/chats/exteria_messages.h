@@ -408,6 +408,15 @@ exteria_status exteria_set_reply(exteria_arena *arena, exteria_tl_value *request
 /* with the words of the answered message the reply is about; the offset is in UTF-16 units, negative when unknown */
 exteria_status exteria_set_reply_quote(exteria_arena *arena, exteria_tl_value *request, const exteria_peer_ref *peer, int32_t reply_to,
                                        const char *quote, int32_t offset);
+/* messages.sendMedia with inputMediaDice: the server throws the result and answers with the message; text must pass exteria_dice_emoticon and goes out as it was typed */
+exteria_status exteria_send_dice_request(exteria_arena *arena, const exteria_peer_ref *peer, const char *text, int64_t random_id, exteria_tl_value **out);
+/* messages.getStickerSet of the set that animates one game emoji; the emoji must pass exteria_dice_emoticon */
+exteria_status exteria_dice_set_request(exteria_arena *arena, const char *emoticon, exteria_tl_value **out);
+/* the documents of that set in set order, one row each: the first is the animation that loops while the result is unknown and the one after it, at index value, is the throw that ends
+   on that result. a document that is not a usable sticker keeps its place as a row with a source of none, so an index stays the value it stands for; slots have more than one
+   animation per result and are read by the app from the same rows */
+#define EXTERIA_DICE_STICKERS_MAX 96
+exteria_status exteria_dice_set_parse(const exteria_tl_value *answer, exteria_sticker_row *rows, size_t cap, size_t *count);
 exteria_status exteria_send_sticker_request(exteria_arena *arena, const exteria_peer_ref *peer, const exteria_media_ref *sticker,
                                            int64_t random_id, exteria_tl_value **out);
 typedef enum exteria_upload_kind {

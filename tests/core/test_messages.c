@@ -1838,6 +1838,103 @@ static exteria_tl_value *emoji_pack(const char *emoticon, int64_t id) {
     return pack;
 }
 
+static void test_dice(void) {
+    const char *dice = "\xf0\x9f\x8e\xb2", *football = "\xe2\x9a\xbd", *football_look = "\xe2\x9a\xbd\xef\xb8\x8f";
+    CHECK(exteria_dice_emoticon(dice));
+    CHECK(exteria_dice_emoticon("\xf0\x9f\x8e\xaf"));
+    CHECK(exteria_dice_emoticon("\xf0\x9f\x8f\x80"));
+    CHECK(exteria_dice_emoticon(football));
+    CHECK(exteria_dice_emoticon(football_look));
+    CHECK(exteria_dice_emoticon("\xf0\x9f\x8e\xb3"));
+    CHECK(exteria_dice_emoticon("\xf0\x9f\x8e\xb0"));
+    CHECK(!exteria_dice_emoticon(NULL));
+    CHECK(!exteria_dice_emoticon(""));
+    CHECK(!exteria_dice_emoticon("\xef\xb8\x8f"));
+    CHECK(!exteria_dice_emoticon("\xf0\x9f\x98\x80"));
+    CHECK(!exteria_dice_emoticon("\xf0\x9f\x8e\xb2\xf0\x9f\x8e\xb2"));
+    CHECK(!exteria_dice_emoticon("\xf0\x9f\x8e\xb2 "));
+    CHECK(!exteria_dice_emoticon("a\xf0\x9f\x8e\xb2"));
+    CHECK(!exteria_dice_emoticon("\xf0\x9f\x8e"));
+
+    exteria_media_info info;
+    exteria_tl_value *media = obj("messageMediaDice");
+    set_i32(media, "value", 5);
+    set_str(media, "emoticon", dice);
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_DICE);
+    CHECK(!strcmp(info.alt, dice));
+    CHECK_EQ_INT(info.dice_value, 5);
+    CHECK_EQ_INT(info.width, 512);
+    set_i32(media, "value", 0);
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_DICE);
+    CHECK_EQ_INT(info.dice_value, 0);
+    set_i32(media, "value", EXTERIA_DICE_VALUE_MAX);
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.dice_value, EXTERIA_DICE_VALUE_MAX);
+    set_i32(media, "value", EXTERIA_DICE_VALUE_MAX + 1);
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.dice_value, 0);
+    set_i32(media, "value", -3);
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.dice_value, 0);
+    /* an emoji that is no game is not drawn as one */
+    set_str(media, "emoticon", "\xf0\x9f\x98\x80");
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_OTHER);
+    CHECK(!info.alt[0]);
+    set_str(media, "emoticon", "");
+    exteria_media_classify(media, &info);
+    CHECK_EQ_INT(info.kind, EXTERIA_PREVIEW_OTHER);
+
+    exteria_peer_ref peer;
+    memset(&peer, 0, sizeof(peer));
+    peer.kind = 1;
+    peer.id = 77;
+    peer.access_hash = 5;
+    exteria_tl_value *request = NULL;
+    CHECK_EQ_INT(exteria_send_dice_request(&arena, &peer, football_look, 9, &request), EXTERIA_OK);
+    check_encodes(request, EXTERIA_TL_ID_messages_sendMedia);
+    CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "media")), EXTERIA_TL_ID_inputMediaDice);
+    CHECK_EQ_INT(exteria_send_dice_request(&arena, &peer, "hello", 9, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_send_dice_request(&arena, &peer, dice, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_send_dice_request(&arena, NULL, dice, 9, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_send_dice_request(NULL, &peer, dice, 9, &request), EXTERIA_E_ARG);
+
+    CHECK_EQ_INT(exteria_dice_set_request(&arena, dice, &request), EXTERIA_OK);
+    check_encodes(request, EXTERIA_TL_ID_messages_getStickerSet);
+    CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "stickerset")), EXTERIA_TL_ID_inputStickerSetDice);
+    CHECK_EQ_INT(exteria_dice_set_request(&arena, "x", &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_dice_set_request(&arena, NULL, &request), EXTERIA_E_ARG);
+
+    /* the row of a document that is no sticker keeps its place, so the index of a row stays the value it shows */
+    exteria_tl_value *attributes[1] = {sticker_attribute(dice)};
+    exteria_tl_value *docs[3];
+    docs[0] = document(701, "application/x-tgsticker", attributes, 1);
+    docs[1] = document(702, "image/jpeg", NULL, 0);
+    docs[2] = document(703, "application/x-tgsticker", attributes, 1);
+    exteria_tl_value *reply = obj("messages.stickerSet");
+    set(reply, "set", sticker_set(1, "Dice", 0));
+    set(reply, "documents", vec_of(docs, 3));
+    exteria_sticker_row rows[4];
+    size_t count = 99;
+    CHECK_EQ_INT(exteria_dice_set_parse(reply, rows, 4, &count), EXTERIA_OK);
+    CHECK_EQ_INT(count, 3);
+    CHECK_EQ_INT(rows[0].media.ref.id, 701);
+    CHECK_EQ_INT(rows[1].media.ref.source, EXTERIA_MEDIA_SOURCE_NONE);
+    CHECK_EQ_INT(rows[2].media.ref.id, 703);
+    CHECK_EQ_INT(exteria_dice_set_parse(reply, rows, 2, &count), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(count, 0);
+    set(reply, "documents", exteria_tl_new_vec(&arena, EXTERIA_DICE_STICKERS_MAX + 1));
+    CHECK_EQ_INT(exteria_dice_set_parse(reply, rows, 4, &count), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(exteria_dice_set_parse(obj("messages.stickerSet"), rows, 4, &count), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dice_set_parse(obj("messages.stickerSetNotModified"), rows, 4, &count), EXTERIA_E_NOTFOUND);
+    CHECK_EQ_INT(exteria_dice_set_parse(NULL, rows, 4, &count), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_dice_set_parse(reply, rows, 0, &count), EXTERIA_E_ARG);
+}
+
 static void test_animated_emoji(void) {
     exteria_tl_value *request = NULL;
     CHECK_EQ_INT(exteria_animated_emoji_request(&arena, &request), EXTERIA_OK);
@@ -2222,6 +2319,7 @@ int main(void) {
     test_dropped_messages();
     test_sticker_sets();
     test_animated_emoji();
+    test_dice();
     test_emoji_sets();
     test_sent_parse();
     test_requests();

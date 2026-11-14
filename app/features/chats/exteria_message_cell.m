@@ -11,6 +11,7 @@
 #import "exteria_developers.h"
 #import "exteria_emoji_store.h"
 #import "exteria_sticker_library.h"
+#import "exteria_slots_view.h"
 #import "exteria_force_touch.h"
 #import "exteria_music_player.h"
 #import "exteria_round_playback.h"
@@ -944,6 +945,8 @@ static float ExteriaSpoilerRandom(void) {
     BOOL _playWhenLoaded;
     BOOL _photoLoadShown;
     ExteriaLottieView *_lottie;
+    /* the slot machine of a 🎰 message, in the place of the single animation */
+    ExteriaSlotsView *_slots;
     ExteriaGiftCardView *_giftCardView;
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickerLibrary;
@@ -1207,6 +1210,7 @@ static float ExteriaSpoilerRandom(void) {
     [_loadedPath release];
     [_giftCardView release];
     [_lottie release];
+    [_slots release];
     [_pendingLottie release];
     [_pendingLottieKey release];
     [_media release];
@@ -1429,8 +1433,105 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _lottie.backgroundColor = plate;
 }
 
+/* a game emoji: the set of the game holds one throw for each result, and the first of them loops while the result is not known. the slot machine is five layers, not one throw, so
+   it stays the picture of its emoji */
+- (void)loadDiceAnimation {
+    ExteriaMedia *media = _item.message.media;
+    if ([media.alt isEqualToString:@"\U0001F3B0"]) {
+        [self loadSlotsAnimation];
+    } else {
+        _animationLoading = YES;
+        NSUInteger token = _token;
+        ExteriaWeakReference *weak = _weak;
+        NSUInteger index = media.diceValue > 0 ? (NSUInteger)media.diceValue : 0;
+        [_stickerLibrary loadDiceForEmoji:media.alt completion:^(NSArray *stickers, NSString *error) {
+            ExteriaMessageCell *cell = weak.target;
+            if (!cell || token != cell->_token) return;
+            cell->_animationLoading = NO;
+            if (index >= stickers.count) {
+                NSLog(@"exteria: the %@ set has no throw %lu (%@)", media.alt, (unsigned long)index, error ?: @"short set");
+                return;
+            }
+            ExteriaSticker *sticker = [stickers objectAtIndex:index];
+            if (sticker.media.file) [cell loadLottieFile:sticker.media.file];
+        }];
+    }
+}
+
+/* the five layers of the machine are five documents of the set, which the plan of the throw names, so all five are fetched before the machine is built */
+- (void)loadSlotsAnimation {
+    ExteriaMedia *media = _item.message.media;
+    int32_t result = media.diceValue;
+    NSArray *indexes = [ExteriaSlotsView documentIndexesForResult:result];
+    if (!indexes) {
+        result = 0;
+        indexes = [ExteriaSlotsView documentIndexesForResult:0];
+    }
+    _animationLoading = YES;
+    NSUInteger token = _token;
+    ExteriaWeakReference *weak = _weak;
+    [_stickerLibrary loadDiceForEmoji:media.alt completion:^(NSArray *stickers, NSString *error) {
+        ExteriaMessageCell *cell = weak.target;
+        if (!cell || token != cell->_token) return;
+        NSMutableArray *files = [NSMutableArray arrayWithCapacity:indexes.count];
+        for (NSNumber *index in indexes) {
+            NSUInteger at = index.unsignedIntegerValue;
+            ExteriaSticker *sticker = at < stickers.count ? [stickers objectAtIndex:at] : nil;
+            if (!sticker.media.file) {
+                NSLog(@"exteria: the slot machine lacks its document %lu (%@)", (unsigned long)at, error ?: @"short set");
+                cell->_animationLoading = NO;
+                return;
+            }
+            [files addObject:sticker.media.file];
+        }
+        __block NSUInteger waiting = files.count;
+        NSMutableArray *data = [NSMutableArray arrayWithCapacity:files.count];
+        for (NSUInteger i = 0; i < files.count; ++i) [data addObject:[NSNull null]];
+        for (NSUInteger i = 0; i < files.count; ++i) {
+            [cell->_media loadDataForFile:[files objectAtIndex:i] completion:^(NSData *bytes) {
+                ExteriaMessageCell *again = weak.target;
+                if (!again || token != again->_token) return;
+                if (bytes) [data replaceObjectAtIndex:i withObject:bytes];
+                if (--waiting) return;
+                again->_animationLoading = NO;
+                for (id item in data) {
+                    if (![item isKindOfClass:[NSData class]]) {
+                        NSLog(@"exteria: a layer of the slot machine did not load");
+                        return;
+                    }
+                }
+                [again showSlotsWithData:data result:result];
+            }];
+        }
+    }];
+}
+
+- (void)showSlotsWithData:(NSArray *)data result:(int32_t)result {
+    if (_slots || _lottie) return;
+    ExteriaSlotsView *slots = [[ExteriaSlotsView alloc] initWithLayers:data result:result keyBase:@"slots"];
+    if (!slots) return;
+    _slots = slots;
+    NSUInteger token = _token;
+    ExteriaWeakReference *weak = _weak;
+    slots.firstFrameHandler = ^{
+        ExteriaMessageCell *cell = weak.target;
+        if (cell && token == cell->_token) cell->_picture.hidden = YES;
+    };
+    slots.frame = _picture.frame;
+    [self.contentView insertSubview:slots aboveSubview:_picture];
+    if (_replayRequested) {
+        _replayRequested = NO;
+        _emojiPlayed = YES;
+        [self replayAnimation];
+    } else [self setAnimating:_animating];
+}
+
 - (void)loadEmojiAnimation {
-    if (!_stickerLibrary || _animationLoading || _lottie) return;
+    if (!_stickerLibrary || _animationLoading || _lottie || _slots) return;
+    if (_item.message.media.kind == EXTERIA_PREVIEW_DICE) {
+        [self loadDiceAnimation];
+        return;
+    }
     _animationLoading = YES;
     NSUInteger token = _token;
     ExteriaWeakReference *weak = _weak;
@@ -1493,6 +1594,10 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_lottie setPlaying:NO];
     [_lottie release];
     _lottie = nil;
+    [_slots removeFromSuperview];
+    [_slots setActive:NO];
+    [_slots release];
+    _slots = nil;
 }
 
 /* the sender's picture stands at the left edge, level with the bottom of the last bubble of a run */
@@ -2486,7 +2591,9 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 /* a tap on an animation starts it from the beginning: a sticker that plays on its own goes on looping as it did, anything else (an emoji, or a sticker that stands still under the
    power saving settings) plays once */
 - (void)replayAnimation {
-    if (_item.kind == ExteriaChatItemSticker && [self playsOnItsOwn]) {
+    if (_slots) {
+        [_slots playThrow];
+    } else if (_item.kind == ExteriaChatItemSticker && [self playsOnItsOwn]) {
         [_lottie setPlaying:NO];
         [_lottie setPlaying:YES];
     } else {
@@ -2513,9 +2620,24 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         if (!animating && _lottie) { [self discardLottie]; _picture.hidden = NO; }
         else if (animating && !_lottie && !_pendingLottie) [self loadLottieFile:_item.message.media.file];
     }
-    if (_item.kind == ExteriaChatItemEmoji) {
+    if (_slots) {
+        /* the machine throws once when it comes into view and rests on the result; one that waits for its result spins */
+        if (animating && _item.message.media.diceValue > 0 && !_emojiPlayed) {
+            _emojiPlayed = YES;
+            [_slots playThrow];
+        } else if (animating && _item.message.media.diceValue == 0) {
+            [_slots setActive:YES];
+        } else {
+            [_slots setActive:NO];
+            if (animating) [_slots showRest];
+        }
+    } else if (_item.kind == ExteriaChatItemEmoji) {
         /* an emoji plays once when it comes into view, a tap plays it again */
-        if (animating && _lottie && !_emojiPlayed) {
+        BOOL waitingDice = _item.message.media.kind == EXTERIA_PREVIEW_DICE && _item.message.media.diceValue == 0;
+        if (waitingDice) {
+            /* a game emoji whose result has not come back loops until it does */
+            [_lottie setPlaying:animating];
+        } else if (animating && _lottie && !_emojiPlayed) {
             _emojiPlayed = YES;
             [_lottie playOnce];
         } else if (!animating) [_lottie setPlaying:NO];
@@ -3240,7 +3362,7 @@ static void ExteriaSwipeTick(void) {
     BOOL animatedKind = _item.kind == ExteriaChatItemEmoji ||
         (_item.kind == ExteriaChatItemSticker && (_item.message.media.stickerFormat == EXTERIA_STICKER_ANIMATED || _item.message.media.stickerFormat == EXTERIA_STICKER_VIDEO));
     if (animatedKind && CGRectContainsPoint(_picture.frame, [tap locationInView:self.contentView])) {
-        if (_lottie) {
+        if (_lottie || _slots) {
             _emojiPlayed = YES;
             [self replayAnimation];
         } else {

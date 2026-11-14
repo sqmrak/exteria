@@ -321,6 +321,11 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
     else if (media.kind == EXTERIA_PREVIEW_PHOTO) row->thumb = media.ref;
     else if (media.kind == EXTERIA_PREVIEW_VIDEO || media.kind == EXTERIA_PREVIEW_GIF || media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE) row->thumb = media.preview;
     /* a caption wins over the sticker emoji or file name that would stand in for it */
+    /* a thrown game emoji reads in the list as its emoji */
+    if (media.kind == EXTERIA_PREVIEW_DICE && !row->text[0]) {
+        snprintf(row->text, sizeof(row->text), "%s", media.alt);
+        row->preview = EXTERIA_PREVIEW_TEXT;
+    }
     if (!row->text[0]) {
         const char *detail = media.kind == EXTERIA_PREVIEW_STICKER ? media.alt : (media.kind == EXTERIA_PREVIEW_FILE ? media.name : "");
         snprintf(row->text, sizeof(row->text), "%s", detail);

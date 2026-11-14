@@ -433,6 +433,9 @@ typedef enum { ExteriaChatCommandPin, ExteriaChatCommandUnpin, ExteriaChatComman
 /* ExteriaStickerSet items of the installed sets, ExteriaSticker items of one set, and of the recently used ones */
 - (void)loadStickerSets:(ExteriaListCompletion)completion;
 - (void)loadAnimatedEmojiStickers:(ExteriaListCompletion)completion;
+/* the animations of one game emoji in set order, as ExteriaSticker; the one at index n is the throw that ends on the result n, and the first loops while the result is unknown.
+   a document that cannot be used keeps its index with a sticker that has no file */
+- (void)loadDiceStickersForEmoji:(NSString *)emoji completion:(ExteriaListCompletion)completion;
 - (void)loadStickersOfSet:(ExteriaStickerSet *)set completion:(ExteriaListCompletion)completion;
 /* the stickers of a set the server names by its short name, in set order, whether or not the person has installed it */
 - (void)loadStickersOfSetNamed:(NSString *)shortName completion:(ExteriaListCompletion)completion;

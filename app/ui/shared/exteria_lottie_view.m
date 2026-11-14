@@ -24,6 +24,8 @@
     BOOL _once;
     BOOL _finishPending;
     NSUInteger _lastFrame;
+    /* the frame showFrame: asked for, NSUIntegerMax when the view shows its first frame */
+    NSUInteger _manualFrame;
     BOOL _needsPoster;
     BOOL _posterRequested;
     BOOL _loadFailed;
@@ -100,6 +102,7 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
     self.isAccessibilityElement = NO;
     _name = [name copy];
     _requestedFrame = NSUIntegerMax;
+    _manualFrame = NSUIntegerMax;
     return self;
 }
 
@@ -176,7 +179,7 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
 
 - (void)setPlaying:(BOOL)playing {
     /* asked to play, the view loops: the stop on the last frame belongs to playOnce alone, and left set it made an animation that was played once by a tap play once on every later start */
-    if (playing) { _once = NO; _finishPending = NO; }
+    if (playing) { _once = NO; _finishPending = NO; _manualFrame = NSUIntegerMax; }
     playing = playing && !ExteriaReduceMotionEnabled();
     if (playing) [self setLoaded:YES];
     playing = playing && _animation;
@@ -188,6 +191,7 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
 }
 
 - (void)playOnce {
+    _manualFrame = NSUIntegerMax;
     if (ExteriaReduceMotionEnabled()) {
         [self rewind];
         return;
@@ -198,7 +202,27 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
     _once = YES;
 }
 
+- (NSUInteger)frameCount {
+    return _animation && _animation.ready ? _animation.frameCount : 0;
+}
+
+- (double)framesPerSecond {
+    return _animation && _animation.ready ? _animation.framesPerSecond : 0;
+}
+
+- (void)showFrame:(NSUInteger)frame {
+    _once = NO;
+    _finishPending = NO;
+    _playing = NO;
+    _manualFrame = frame;
+    [self setLoaded:YES];
+    _needsPoster = _animation != nil;
+    _posterRequested = NO;
+    [self updateLink];
+}
+
 - (void)rewind {
+    _manualFrame = NSUIntegerMax;
     _once = NO;
     _finishPending = NO;
     _playing = NO;
@@ -270,7 +294,9 @@ static NSMutableDictionary *ExteriaPosterMemory(void) {
     if (!_needsPoster) {
         [self updateLink];
     } else if (!_posterRequested) {
-        _posterRequested = [_animation requestFrame:0 side:_side];
+        NSUInteger frame = _manualFrame;
+        if (frame != NSUIntegerMax && _animation.frameCount && frame >= _animation.frameCount) frame = _animation.frameCount - 1;
+        _posterRequested = [_animation requestFrame:frame == NSUIntegerMax ? 0 : frame side:_side];
         _posterFrameInFlight = _posterRequested;
     }
 }

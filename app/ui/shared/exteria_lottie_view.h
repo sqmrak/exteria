@@ -30,4 +30,10 @@
 /* back to the first frame, not playing */
 - (void)rewind;
 
+/* the frames of the animation and its rate, zero until it has been parsed; a caller that drives several layers by its own clock waits for them */
+@property (nonatomic, readonly) NSUInteger frameCount;
+@property (nonatomic, readonly) double framesPerSecond;
+/* stands still on one frame of the animation, which is rendered when the view is on a screen; a later call changes the frame, and setPlaying: or playOnce leave this mode */
+- (void)showFrame:(NSUInteger)frame;
+
 @end

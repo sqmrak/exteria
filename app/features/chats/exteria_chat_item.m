@@ -536,6 +536,17 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
             item->_singleEmoji = entry;
         }
     }
+    /* a game emoji the server threw (a dice, darts, a ball, bowling, slots) has no text: it is drawn as a large emoji, animated when its set arrives, so the message shows from the
+       moment it is sent. an emoji the picture pack does not draw falls to the line of the case below */
+    if (media.kind == EXTERIA_PREVIEW_DICE && media.alt.length && media.alt.length <= 16) {
+        uint16_t units[16];
+        size_t entry = 0;
+        [media.alt getCharacters:units range:NSMakeRange(0, media.alt.length)];
+        if (exteria_emoji_single(units, media.alt.length, &entry)) {
+            item->_kind = ExteriaChatItemEmoji;
+            item->_singleEmoji = entry;
+        }
+    }
     /* anonymous admin messages use the group identity stored at key zero */
     if (group && !message.outgoing && !message.post) {
         ExteriaPerson *person = [people objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
@@ -630,6 +641,12 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
         } else {
             item->_content = ExteriaChatItemContentFile;
             item->_fileTitle = [NSLocalizedString(@"preview.poll", nil) copy];
+        }
+        break;
+    case EXTERIA_PREVIEW_DICE:
+        if (item->_kind != ExteriaChatItemEmoji) {
+            item->_content = ExteriaChatItemContentFile;
+            item->_fileTitle = [(media.alt.length ? media.alt : NSLocalizedString(@"chat.unsupported", nil)) copy];
         }
         break;
     case EXTERIA_PREVIEW_STICKER:

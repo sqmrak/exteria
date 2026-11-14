@@ -1586,10 +1586,14 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
     NSMutableData *packed = ExteriaPackSendEntities(entities, &strings, &count);
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         /* the block keeps the data object, not only the pointer into it */
-        exteria_status status = exteria_send_text_reply_request(arena, &peer, body.UTF8String, packed.bytes, count, randomId, replyTo, request);
+        /* a game emoji alone is thrown by the server, as the other clients send it; with words, entities or a quote it stays text */
+        BOOL thrown = !count && !quoted.length && exteria_dice_emoticon(body.UTF8String);
+        exteria_status status = thrown ? exteria_send_dice_request(arena, &peer, body.UTF8String, randomId, request)
+                                       : exteria_send_text_reply_request(arena, &peer, body.UTF8String, packed.bytes, count, randomId, replyTo, request);
         (void)strings;
+        if (thrown && status == EXTERIA_OK) status = exteria_set_reply(arena, *request, &peer, replyTo);
         if (status == EXTERIA_OK && quoted.length && replyTo > 0) status = exteria_set_reply_quote(arena, *request, &peer, replyTo, quoted.UTF8String, quoteOffset);
-        if (status == EXTERIA_OK && noPreview) status = exteria_tl_set_flag(*request, "no_webpage");
+        if (status == EXTERIA_OK && noPreview && !thrown) status = exteria_tl_set_flag(*request, "no_webpage");
         if (status == EXTERIA_OK && silent) status = exteria_tl_set_flag(*request, "silent");
         return status == EXTERIA_OK ? ExteriaApplySendAs(self, &peer, arena, *request) : status;
     } handler:^(const exteria_mt_rpc_result *result) {
@@ -2222,6 +2226,35 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
         }
         [self finishLoad:stickers error:error completion:done];
         [done release];
+    }];
+}
+
+- (void)loadDiceStickersForEmoji:(NSString *)emoji completion:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    NSString *asked = [emoji copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_dice_set_request(arena, asked.UTF8String, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSMutableArray *stickers = nil;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) {
+            error = ExteriaRpcErrorName(result);
+        } else {
+            exteria_sticker_row *rows = calloc(EXTERIA_DICE_STICKERS_MAX, sizeof(*rows));
+            size_t count = 0;
+            exteria_status status = rows ? exteria_dice_set_parse(result->value, rows, EXTERIA_DICE_STICKERS_MAX, &count) : EXTERIA_E_NOMEM;
+            if (status == EXTERIA_OK && count > 0) {
+                stickers = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) [stickers addObject:[ExteriaSticker stickerWithRow:&rows[i]]];
+            } else {
+                NSLog(@"exteria: dice set of %@ rejected: %s", asked, exteria_status_name(status));
+                error = @"INTERNAL";
+            }
+            free(rows);
+        }
+        [self finishLoad:stickers error:error completion:done];
+        [done release];
+        [asked release];
     }];
 }
 

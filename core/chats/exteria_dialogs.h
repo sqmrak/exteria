@@ -40,7 +40,8 @@ typedef enum exteria_preview_kind {
     EXTERIA_PREVIEW_SERVICE,
     EXTERIA_PREVIEW_OTHER,
     EXTERIA_PREVIEW_PAID,   /* paid media that is still locked: only the size is known, the file comes with the payment */
-    EXTERIA_PREVIEW_STORY   /* a story sent into the chat: the message only names it */
+    EXTERIA_PREVIEW_STORY,  /* a story sent into the chat: the message only names it */
+    EXTERIA_PREVIEW_DICE    /* an animated game emoji (dice, darts, basketball, football, bowling, slots) thrown into the chat; alt is the emoji and dice_value the result */
 } exteria_preview_kind;
 
 /* one chat list row; text is UTF-8 cut at a character boundary with line breaks turned into spaces */

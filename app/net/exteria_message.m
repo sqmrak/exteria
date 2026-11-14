@@ -48,6 +48,7 @@ static NSString *ExteriaUtf8(const char *bytes) {
 - (exteria_preview_kind)kind { return _info.kind; }
 - (exteria_geo_point)location { return _info.location; }
 - (exteria_sticker_format)stickerFormat { return _info.sticker; }
+- (int32_t)diceValue { return _info.dice_value; }
 - (long long)stickerSetId { return _info.sticker_set_id; }
 - (long long)stickerSetHash { return _info.sticker_set_hash; }
 - (BOOL)spoiler { return _info.spoiler != 0; }
