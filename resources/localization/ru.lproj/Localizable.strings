@@ -267,8 +267,8 @@
 "attach.gallery.denied" = "Нет доступа к фото. Для ios 5 включите службы геолокации для Exteria в настройках.";
 "attach.gallery.system" = "Выбрать в системной галерее";
 "attach.failed" = "Не удалось подготовить файл";
-"menu.day" = "Дневной режим";
-"menu.night" = "Ночной режим";
+"menu.day" = "Светлая тема";
+"menu.night" = "Тёмная тема";
 "menu.group" = "Создать группу";
 "menu.channel" = "Создать канал";
 "menu.saved" = "Избранное";
@@ -511,8 +511,8 @@
 "profile.channel.followers" = "Подписчиков: %d";
 "profile.qr.nousername" = "Задайте имя пользователя в профиле, чтобы получить QR-код.";
 "profile.qr.copy" = "Скопировать ссылку";
-"profile.qr.day" = "День";
-"profile.qr.night" = "Ночь";
+"profile.qr.day" = "Светлая";
+"profile.qr.night" = "Тёмная";
 "emoji.premium.loading" = "Загрузка эмодзи…";
 "emoji.premium.failed" = "Не удалось загрузить эмодзи. Откройте вкладку ещё раз.";
 "emoji.premium.none" = "В этом наборе нет эмодзи.";
