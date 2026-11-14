@@ -12,6 +12,7 @@
 #import "exteria_weak_reference.h"
 #import "exteria_platform.h"
 #import "exteria_symbol.h"
+#import "exteria_shape.h"
 #import "exteria_theme.h"
 #import "exteria_imported_theme.h"
 
@@ -57,7 +58,8 @@ static UIImage *ExteriaInputPaddedCircle(UIImage *circle) {
 static void ExteriaInputSetImage(UIButton *button, UIImage *image, UIControlState state) {
     if ([button imageForState:state] != image) [button setImage:image forState:state];
 }
-#define FIELD_MAX 112.0
+/* the field grows to this many lines of its font, as the Android client's input does, and scrolls after that */
+#define FIELD_MAX_LINES 6
 #define BUTTON 36.0
 #define PANEL_BUTTON_WIDTH 36.0
 /* how far the finger slides left before the recording counts as thrown away */
@@ -676,13 +678,38 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     /* a restored draft is measured before the view has its width, at a width of two hundred; a view that has some, but too little to lay words out in, says nothing worth taking */
     if (_text.bounds.size.width > 0 && _text.bounds.size.width < TEXT_MEASURE_MIN_WIDTH) return 0;
     CGFloat width = _text.bounds.size.width > 0 ? _text.bounds.size.width : 200;
-    if ([_text respondsToSelector:@selector(textContainer)]) return ceil([_text sizeThatFits:CGSizeMake(width, CGFLOAT_MAX)].height);
+    if ([_text respondsToSelector:@selector(textContainer)]) {
+        /* a view that has a width is measured by where the caret of the end of the text stands, which depends on the words and the width alone, and not by sizeThatFits, which is
+           what the field was sized by when it stretched down the panel on ios 9 with its buttons out of sight; a view with no width yet keeps the old measure */
+        if (_text.bounds.size.width > 0) {
+            /* the line a new line break opens is laid out lazily on ios 7 and later, so the caret of the end of the text still stood on the line before it when the change was reported, and
+               the field did not grow for the break */
+            /* reached by key, the 6.1 sdk of the armv7 slice has no declaration of them */
+            id manager = [_text valueForKey:@"layoutManager"];
+            SEL ensure = NSSelectorFromString(@"ensureLayoutForTextContainer:");
+            if ([manager respondsToSelector:ensure]) [manager performSelector:ensure withObject:[_text valueForKey:@"textContainer"]];
+            CGRect caret = [_text caretRectForPosition:_text.endOfDocument];
+            UIEdgeInsets inset = [[_text valueForKey:@"textContainerInset"] UIEdgeInsetsValue];
+            if (!CGRectIsNull(caret) && !CGRectIsInfinite(caret) && caret.size.height > 0) return ceil(CGRectGetMaxY(caret) + inset.bottom);
+        }
+        return ceil([_text sizeThatFits:CGSizeMake(width, CGFLOAT_MAX)].height);
+    }
     return ceil(_text.contentSize.height);
+}
+
+/* six lines of text and the field's own insets: ios 7 keeps the insets in the text container, before that the view pads its content */
+- (CGFloat)fieldMax {
+    CGFloat insets = 16;
+    if ([_text respondsToSelector:@selector(textContainer)]) {
+        UIEdgeInsets inset = [[_text valueForKey:@"textContainerInset"] UIEdgeInsetsValue];
+        insets = inset.top + inset.bottom;
+    }
+    return MAX(FIELD_MIN, ceil(FIELD_MAX_LINES * _text.font.lineHeight + insets));
 }
 
 - (CGFloat)preferredHeight {
     if (!_writable || _actionTitle.length) return ExteriaInputIdleHeight();
-    CGFloat height = MIN(FIELD_MAX, MAX(FIELD_MIN, [self textHeight] + 1));
+    CGFloat height = MIN([self fieldMax], MAX(FIELD_MIN, [self textHeight] + 1));
     return height + 2 * ExteriaInputVerticalMargin();
 }
 
@@ -707,10 +734,11 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 
 - (void)updateTextHeight {
     CGFloat height = [self textHeight];
-    CGFloat want = MIN(FIELD_MAX, MAX(FIELD_MIN, height + 1));
-    BOOL overflows = height > FIELD_MAX;
+    CGFloat want = MIN([self fieldMax], MAX(FIELD_MIN, height + 1));
+    BOOL overflows = height > [self fieldMax];
     _text.scrollEnabled = overflows;
     _text.bounces = overflows;
+    if (overflows) [self scrollCaretIntoView];
     if (want != _fieldHeight) {
         _fieldHeight = want;
         [_delegate inputBarDidChangeHeight:self];
@@ -720,6 +748,15 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
 - (void)textViewDidChangeSelection:(UITextView *)view {
     (void)view;
     [_text refreshEmoji];
+    [self scrollCaretIntoView];
+}
+
+/* a field that holds more than it shows does not follow the caret by itself when a drag or the arrow keys of the magnifier move it, so the caret's line is brought into view */
+- (void)scrollCaretIntoView {
+    if (!_text.scrollEnabled || !_text.selectedTextRange) return;
+    CGRect caret = [_text caretRectForPosition:_text.selectedTextRange.end];
+    if (CGRectIsNull(caret) || CGRectIsInfinite(caret) || caret.size.height <= 0) return;
+    [_text scrollRectToVisible:CGRectInset(caret, 0, -4) animated:NO];
 }
 
 - (void)textViewDidBeginEditing:(UITextView *)view {
@@ -1069,13 +1106,15 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
         _note.frame = CGRectMake(MARGIN, 0, size.width - 2 * MARGIN, ExteriaInputIdleHeight());
         return;
     }
+    /* the buttons stand on the bottom edge of the field, so a field taller than the panel it is in would put them below its edge, out of sight */
+    CGFloat fieldHeight = MAX(FIELD_MIN, MIN(_fieldHeight, size.height - 2 * ExteriaInputVerticalMargin()));
     CGFloat sendWidth = BUTTON;
     CGFloat sendHeight = BUTTON;
     /* a scaled button keeps its frame, so a transform in flight is set aside while the frame is set */
     CGAffineTransform held = _send.transform;
     _send.transform = CGAffineTransformIdentity;
     CGFloat pixel = 1.0 / ExteriaScreenScale();
-    _send.frame = CGRectMake(round((size.width - MARGIN - sendWidth) / pixel) * pixel, round((ExteriaInputVerticalMargin() + _fieldHeight - sendHeight) / pixel) * pixel, sendWidth, sendHeight);
+    _send.frame = CGRectMake(round((size.width - MARGIN - sendWidth) / pixel) * pixel, round((ExteriaInputVerticalMargin() + fieldHeight - sendHeight) / pixel) * pixel, sendWidth, sendHeight);
     _send.transform = held;
     CGFloat pillWidth = _menuPill.hidden ? 0 : ceil([_menuTitle sizeWithFont:_menuPill.titleLabel.font].width) + 28;
     CGFloat senderRoom = _senderButton.hidden ? 0 : FIELD_MIN + MARGIN;
@@ -1084,22 +1123,22 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     if (pillWidth) pillWidth = MIN(pillWidth, MAX(56, size.width - 4 * MARGIN - sendWidth - senderRoom - FIELD_MIN_WIDTH));
     CGFloat menuRoom = (pillWidth ? pillWidth + MARGIN : 0) + senderRoom;
     CGFloat fieldWidth = size.width - 3 * MARGIN - sendWidth - menuRoom;
-    _senderButton.frame = CGRectMake(MARGIN, ExteriaInputVerticalMargin() + _fieldHeight - FIELD_MIN, FIELD_MIN, FIELD_MIN);
-    _menuPill.frame = CGRectMake(MARGIN + senderRoom, ExteriaInputVerticalMargin() + _fieldHeight - FIELD_MIN, pillWidth, FIELD_MIN);
-    _field.frame = CGRectMake(MARGIN + menuRoom, ExteriaInputVerticalMargin(), fieldWidth, _fieldHeight);
+    _senderButton.frame = CGRectMake(MARGIN, ExteriaInputVerticalMargin() + fieldHeight - FIELD_MIN, FIELD_MIN, FIELD_MIN);
+    _menuPill.frame = CGRectMake(MARGIN + senderRoom, ExteriaInputVerticalMargin() + fieldHeight - FIELD_MIN, pillWidth, FIELD_MIN);
+    _field.frame = CGRectMake(MARGIN + menuRoom, ExteriaInputVerticalMargin(), fieldWidth, fieldHeight);
     _recording.frame = _field.frame;
     _recording.layer.cornerRadius = _field.layer.cornerRadius;
-    _dot.frame = CGRectMake(14, (_fieldHeight - 10) / 2, 10, 10);
-    _timer.frame = CGRectMake(32, 0, 80, _fieldHeight);
+    _dot.frame = CGRectMake(14, (fieldHeight - 10) / 2, 10, 10);
+    _timer.frame = CGRectMake(32, 0, 80, fieldHeight);
     CGFloat onceX = MAX(0, fieldWidth - 36);
-    _onceChip.frame = CGRectMake(onceX, (_fieldHeight - 32) / 2, 32, 32);
-    _slide.frame = CGRectMake(112, 0, MAX(0, onceX - 116), _fieldHeight);
+    _onceChip.frame = CGRectMake(onceX, (fieldHeight - 32) / 2, 32, 32);
+    _slide.frame = CGRectMake(112, 0, MAX(0, onceX - 116), fieldHeight);
     CGFloat cancelX = MAX(112, onceX - 104);
-    _cancelLocked.frame = CGRectMake(cancelX, 0, MAX(0, onceX - cancelX - 4), _fieldHeight);
-    _field.layer.cornerRadius = MIN(_fieldHeight / 2, FIELD_MIN / 2);
+    _cancelLocked.frame = CGRectMake(cancelX, 0, MAX(0, onceX - cancelX - 4), fieldHeight);
+    _field.layer.cornerRadius = MIN(fieldHeight / 2, FIELD_MIN / 2);
     /* the smiley stands at the left edge of the field and the clip at the right, with the text between them */
-    _panelButton.frame = CGRectMake(2, _fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
-    _attachButton.frame = CGRectMake(fieldWidth - PANEL_BUTTON_WIDTH - 2, _fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
+    _panelButton.frame = CGRectMake(2, fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
+    _attachButton.frame = CGRectMake(fieldWidth - PANEL_BUTTON_WIDTH - 2, fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
     /* the images are assigned before the buttons have their first nonzero bounds */
     if (fieldWidth > 0 && size.width > 0) {
         [_attachButton setNeedsLayout];
@@ -1110,15 +1149,15 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     /* a bot's keyboard button stands between the text and the clip */
     CGFloat botRoom = _botButton.hidden ? 0 : PANEL_BUTTON_WIDTH;
     CGFloat attachRoom = _attachButton.hidden ? 0 : PANEL_BUTTON_WIDTH;
-    _botButton.frame = CGRectMake(fieldWidth - PANEL_BUTTON_WIDTH - attachRoom - 2, _fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
+    _botButton.frame = CGRectMake(fieldWidth - PANEL_BUTTON_WIDTH - attachRoom - 2, fieldHeight - FIELD_MIN, PANEL_BUTTON_WIDTH, FIELD_MIN);
     CGFloat oldTextWidth = _text.bounds.size.width;
-    _text.frame = CGRectMake(PANEL_BUTTON_WIDTH + 2, 0, fieldWidth - PANEL_BUTTON_WIDTH - attachRoom - 4 - botRoom, _fieldHeight);
+    _text.frame = CGRectMake(PANEL_BUTTON_WIDTH + 2, 0, fieldWidth - PANEL_BUTTON_WIDTH - attachRoom - 4 - botRoom, fieldHeight);
     if (_text.bounds.size.width > 0 && oldTextWidth != _text.bounds.size.width) {
         /* a restored draft can be measured before the text view has its real width */
         [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(updateTextHeight) object:nil];
         [self performSelector:@selector(updateTextHeight) withObject:nil afterDelay:0];
     }
-    _placeholder.frame = CGRectMake(_text.frame.origin.x + 8, (FIELD_MIN - 20) / 2 + (_fieldHeight - FIELD_MIN), fieldWidth - 2 * PANEL_BUTTON_WIDTH - 20 - botRoom, 20);
+    _placeholder.frame = CGRectMake(_text.frame.origin.x + 8, (FIELD_MIN - 20) / 2 + (fieldHeight - FIELD_MIN), fieldWidth - 2 * PANEL_BUTTON_WIDTH - 20 - botRoom, 20);
     /* ios 7 puts five points of padding in front of the first character, earlier systems eight */
     if ([_text respondsToSelector:@selector(textContainer)]) _placeholder.frame = CGRectOffset(_placeholder.frame, -3, 0);
 }
