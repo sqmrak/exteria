@@ -129,6 +129,8 @@
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    /* a layout while the window fades reassigns the texts and the picture, and the labels redraw under the fading card */
+    if (_leaving) return;
     CGFloat width = MIN(self.bounds.size.width - 2 * SIDE_MARGIN, CARD_MAX_WIDTH);
     CGFloat inner = width - 2 * CARD_PAD;
     if (_pictureName.length) {
@@ -158,15 +160,12 @@
     y += ceil(message.height) + 16;
     _button.frame = CGRectMake(CARD_PAD, y, inner, BUTTON_HEIGHT);
     y += BUTTON_HEIGHT + CARD_PAD;
-    /* the card is kept at its size while it springs, so only a fresh layout moves it */
-    if (!_leaving) {
-        CGAffineTransform held = _card.transform;
-        _card.transform = CGAffineTransformIdentity;
-        _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - y) / 2), width, y);
-        if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(_card, 0);
-        else _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:22].CGPath;
-        _card.transform = held;
-    }
+    CGAffineTransform held = _card.transform;
+    _card.transform = CGAffineTransformIdentity;
+    _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - y) / 2), width, y);
+    if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(_card, 0);
+    else _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:22].CGPath;
+    _card.transform = held;
 }
 
 - (void)showInView:(UIView *)host {
@@ -186,6 +185,7 @@
 - (void)dismiss {
     if (!_shown || _leaving) return;
     _leaving = YES;
+    self.userInteractionEnabled = NO;
     [self retain];
     void (^finish)(void) = ^{
         [self removeFromSuperview];
@@ -199,8 +199,9 @@
         finish();
         return;
     }
-    ExteriaAnimateView(self, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 1, ExteriaPopupCurve(NO), ^(BOOL done) {
+    /* the window leaves when its own fade ends: the card runs the same curve, but its end can come a frame earlier and take the dim away before the fade reaches zero */
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 1, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(self, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), ^(BOOL done) {
         (void)done;
         finish();
     });
