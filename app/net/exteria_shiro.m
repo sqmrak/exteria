@@ -37,7 +37,7 @@ static NSString *const ExteriaShiroAccountFile = @"shiro.account";
 #define REGISTRATION_PORT 443
 #define REGISTRATION_PATH "/v0a4471/reg"
 #define REGISTRATION_VERSION "CF-Client-Version: a-6.38-4471"
-#define REGISTRATION_TIMEOUT_MS 15000
+#define REGISTRATION_TIMEOUT_MS 12000
 /* the call failed at once, which a device does at launch while its radio or wifi is still coming up (getaddrinfo answers at once with nothing): the round is tried again after
    a pause, three more times, and a failure that took longer than this is a dead path and is not waited on */
 #define REGISTRATION_ROUNDS 4
@@ -535,11 +535,20 @@ static void ExteriaShiroTimestamp(char out[32]) {
             }
         }
         CFAbsoluteTime began = CFAbsoluteTimeGetCurrent();
-        /* a network that reads the SNI of one segment drops the plain hello; only a dead path is worth a second try */
-        for (int split = 0; split < 2; ++split) {
-            request.split_hello = split;
+        /* the byebyedpi layer: a network that reads the SNI of one record or one segment drops the plain hello, so the account call starts with the hello cut inside the
+           name (the tlsrec strategy), then cut at the middle, then in small pieces, and only then whole. a cut hello keeps the handshake as it was, so the first one that
+           gets through is the one that is used; only a path that does not answer is worth the next */
+        static const struct { int mode; const char *name; } hellos[] = {
+            {EXTERIA_HELLO_RECORD, "cut in the SNI"}, {EXTERIA_HELLO_RECORD_MIDDLE, "cut in the middle of the SNI"},
+            {EXTERIA_HELLO_PIECES, "in pieces"}, {EXTERIA_HELLO_WHOLE, "whole"}};
+        for (size_t attempt = 0; attempt < sizeof(hellos) / sizeof(hellos[0]); ++attempt) {
+            if (![self runIsLive:run]) {
+                status = EXTERIA_E_STATE;
+                goto done;
+            }
+            request.split_hello = hellos[attempt].mode;
             status = exteria_https_post(&request, &response);
-            [self log:@"registration: call to %s, hello %s: %s", REGISTRATION_HOST, split ? "in pieces" : "whole", exteria_status_name(status)];
+            [self log:@"registration: call to %s, hello %s: %s", REGISTRATION_HOST, hellos[attempt].name, exteria_status_name(status)];
             if (status == EXTERIA_OK || (status != EXTERIA_E_IO && status != EXTERIA_E_TIMEOUT)) break;
         }
         if (status != EXTERIA_E_IO || (CFAbsoluteTimeGetCurrent() - began) * 1000.0 > REGISTRATION_QUICK_FAIL_MS) break;

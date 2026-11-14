@@ -1,5 +1,7 @@
 #include "exteria_https.h"
 
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +17,7 @@
 
 #include "exteria_bytes.h"
 #include "exteria_clock.h"
+#include "exteria_hello.h"
 #include "exteria_http.h"
 #include "exteria_mt_socket.h"
 
@@ -55,7 +58,29 @@ static exteria_status flush(io *c) {
         got = BIO_read(c->wbio, buf, (int)n);
         if (got <= 0) return EXTERIA_E_IO;
         n = (size_t)got;
-        if (c->split && n > SPLIT_PIECE) {
+        if (c->split >= EXTERIA_HELLO_RECORD && c->split <= EXTERIA_HELLO_RECORD_MIDDLE) {
+            /* the hello is one record, cut into two inside the name, and the stream is cut at the same place and after the first byte, so a filter that reads one
+               record or one segment never has the whole name. a flight that is not one hello record goes out whole */
+            uint8_t cut_out[sizeof(buf) + EXTERIA_HELLO_GROWTH];
+            size_t out_len = 0, cut = 0;
+            int one = 1;
+            int middle = c->split == EXTERIA_HELLO_RECORD_MIDDLE;
+            c->split = 0;
+            if (pending <= sizeof(buf) && exteria_hello_split(buf, n, cut_out, sizeof(cut_out), &out_len, &cut, middle) == EXTERIA_OK) {
+                (void)setsockopt(c->socket.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+                if (time_left(c) == 0) return EXTERIA_E_TIMEOUT;
+                if (exteria_mt_socket_write_all(&c->socket, cut_out, 1, time_left(c)) != EXTERIA_OK) return EXTERIA_E_IO;
+                if (time_left(c) == 0) return EXTERIA_E_TIMEOUT;
+                if (exteria_mt_socket_write_all(&c->socket, cut_out + 1, cut - 1, time_left(c)) != EXTERIA_OK) return EXTERIA_E_IO;
+                if (time_left(c) == 0) return EXTERIA_E_TIMEOUT;
+                if (exteria_mt_socket_write_all(&c->socket, cut_out + cut, out_len - cut, time_left(c)) != EXTERIA_OK) return EXTERIA_E_IO;
+            } else {
+                exteria_status s;
+                if (time_left(c) == 0) return EXTERIA_E_TIMEOUT;
+                s = exteria_mt_socket_write_all(&c->socket, buf, n, time_left(c));
+                if (s != EXTERIA_OK) return s == EXTERIA_E_TIMEOUT ? s : EXTERIA_E_IO;
+            }
+        } else if (c->split == EXTERIA_HELLO_PIECES && n > SPLIT_PIECE) {
             size_t piece, pieces = 0;
             c->split = 0;
             while (sent < n) {

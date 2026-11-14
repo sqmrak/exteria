@@ -619,6 +619,23 @@ static void split_hello(pki *p) {
     /* the first thing that reached the server was a piece of a few bytes, not the whole hello */
     CHECK(s.first_peek > 0 && s.first_peek <= 24);
     exteria_https_response_free(&r);
+    /* the byebyedpi cuts of the hello inside the SNI: the server still reads one handshake out of the two records and the three segments, and the exchange completes */
+    for (int mode = EXTERIA_HELLO_RECORD; mode <= EXTERIA_HELLO_RECORD_MIDDLE; ++mode) {
+        server_start(&s, p->leaf, p->leaf_key, BEHAVE_ANSWER, (const uint8_t *)ok_reply, strlen(ok_reply));
+        server_run(&s);
+        CHECK_EQ_INT(post(p, &s, "api.test.invalid", mode, 5000, &r, NULL, 0), EXTERIA_OK);
+        server_stop(&s);
+        CHECK_EQ_INT(r.status, 200);
+        CHECK_EQ_INT(r.body_len, 11);
+        exteria_https_response_free(&r);
+    }
+    /* the name is still checked on a cut hello: a certificate for another host is refused before a request byte is sent */
+    server_start(&s, p->wrong_name, p->leaf_key, BEHAVE_ANSWER, (const uint8_t *)ok_reply, strlen(ok_reply));
+    server_run(&s);
+    CHECK_EQ_INT(post(p, &s, "api.test.invalid", EXTERIA_HELLO_RECORD, 5000, &r, NULL, 0), EXTERIA_E_SECURITY);
+    server_stop(&s);
+    CHECK_EQ_INT(s.request_len, 0);
+    exteria_https_response_free(&r);
 }
 
 static void bad_requests(pki *p) {

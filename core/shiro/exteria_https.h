@@ -13,6 +13,15 @@
 /* the most a caller may ask for with max_response: a page of an article with its pictures, and no more */
 #define EXTERIA_HTTPS_MAX_RESPONSE_LIMIT (6u * 1024u * 1024u)
 
+/* the ways the first flight of the handshake can leave, for a network that reads the name of the server from the hello. the first is the plain one */
+#define EXTERIA_HELLO_WHOLE 0
+/* the first bytes in small pieces with a short pause between them */
+#define EXTERIA_HELLO_PIECES 1
+/* the byebyedpi tlsrec strategy: the hello record is cut in two records inside the SNI, one byte into the name, and the stream is cut there too (three segments) */
+#define EXTERIA_HELLO_RECORD 2
+/* the same cut at the middle of the name */
+#define EXTERIA_HELLO_RECORD_MIDDLE 3
+
 typedef struct exteria_https_request {
     const char *host;                   /* the name asked for in the SNI and required in the certificate */
     const char *connect_ip;             /* a dotted IPv4 address to dial instead of resolving host, or NULL */
@@ -23,7 +32,7 @@ typedef struct exteria_https_request {
     size_t body_len;
     const char *roots_pem;              /* the trusted roots, PEM, at least one */
     size_t roots_len;
-    int split_hello;                    /* write the first bytes of the TLS hello in small pieces with a short pause */
+    int split_hello;                    /* how the TLS hello goes out, one of EXTERIA_HELLO_*: whole, in small pieces, or cut inside the SNI */
     int timeout_ms;                     /* the whole call */
     size_t max_response;                /* the most the reply (head and body) may take: zero for EXTERIA_HTTPS_MAX_RESPONSE, else up to EXTERIA_HTTPS_MAX_RESPONSE_LIMIT */
     int (*is_cancelled)(void *ctx);
