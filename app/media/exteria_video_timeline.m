@@ -179,8 +179,8 @@ NSString *ExteriaVideoTimeText(double seconds) {
 }
 - (void)holdBubble:(UILabel *)bubble handle:(UIView *)handle shown:(BOOL)shown {
     CGAffineTransform away = CGAffineTransformMakeScale(0.7, 0.7);
-    ExteriaAnimateView(bubble, shown ? CGAffineTransformIdentity : away, shown ? 1 : 0, shown ? EXTERIA_MOTION_SPRING : EXTERIA_MOTION_DISMISS, nil);
-    if (handle) ExteriaAnimateView(handle, shown ? CGAffineTransformMakeScale(1.15, 1.06) : CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
+    ExteriaAnimateView(bubble, shown ? CGAffineTransformIdentity : away, shown ? 1 : 0, shown ? EXTERIA_MOTION_WOBBLE : EXTERIA_MOTION_DISMISS, nil);
+    if (handle) ExteriaAnimateView(handle, shown ? CGAffineTransformMakeScale(1.15, 1.06) : CGAffineTransformIdentity, 1, EXTERIA_MOTION_WOBBLE, nil);
 }
 - (void)grab:(NSInteger)which shown:(BOOL)shown {
     if (which == 1) [self holdBubble:_startBubble handle:_startHandle shown:shown];

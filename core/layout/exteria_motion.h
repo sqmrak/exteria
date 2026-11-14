@@ -17,7 +17,9 @@ typedef enum exteria_motion_curve {
     EXTERIA_MOTION_POPUP_MODERN_EXIT,
     /* and in the classic theme: the ease out and the ease in of the system of the time, a little quicker and with no overshoot anywhere */
     EXTERIA_MOTION_POPUP_CLASSIC_ENTER,
-    EXTERIA_MOTION_POPUP_CLASSIC_EXIT
+    EXTERIA_MOTION_POPUP_CLASSIC_EXIT,
+    /* the loose spring of the media editors: it overshoots by about a sixth and swings back twice, where SPRING overshoots by a tenth and settles in one swing */
+    EXTERIA_MOTION_WOBBLE
 } exteria_motion_curve;
 
 double exteria_motion_duration(exteria_motion_curve curve);

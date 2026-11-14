@@ -189,16 +189,16 @@
     _hasSymbol = YES;
     [self refreshAnimated:NO];
     if (old) {
-        ExteriaAnimateEnter(_icon, CGAffineTransformMakeScale(0.4, 0.4), 0, EXTERIA_MOTION_SPRING);
+        ExteriaAnimateEnter(_icon, CGAffineTransformMakeScale(0.4, 0.4), 0, EXTERIA_MOTION_WOBBLE);
         ExteriaAnimateView(old, CGAffineTransformMakeScale(0.4, 0.4), 0, EXTERIA_MOTION_DISMISS, ^(BOOL finished) { [old removeFromSuperview]; });
         [old release];
     }
 }
 - (void)playQuarterTurn {
-    if (self.window) ExteriaAnimateEnter(_icon, CGAffineTransformMakeRotation((CGFloat)(-M_PI_2)), 1, EXTERIA_MOTION_SPRING);
+    if (self.window) ExteriaAnimateEnter(_icon, CGAffineTransformMakeRotation((CGFloat)(-M_PI_2)), 1, EXTERIA_MOTION_WOBBLE);
 }
 - (void)playFlip {
-    if (self.window) ExteriaAnimateEnter(_icon, CGAffineTransformMakeScale(-1, 1), 1, EXTERIA_MOTION_SPRING);
+    if (self.window) ExteriaAnimateEnter(_icon, CGAffineTransformMakeScale(-1, 1), 1, EXTERIA_MOTION_WOBBLE);
 }
 /* the parts dim, not the button, so a card that fades its buttons in and out and a button that is disabled do not fight over one alpha */
 - (void)refreshDim {
@@ -252,7 +252,7 @@ void ExteriaEditorPresent(UIView *view, BOOL shown, CGFloat distance) {
     view.userInteractionEnabled = shown;
     view.accessibilityElementsHidden = !shown;
     CGAffineTransform away = CGAffineTransformConcat(CGAffineTransformMakeScale(0.97, 0.97), CGAffineTransformMakeTranslation(0, distance));
-    ExteriaAnimateView(view, shown ? CGAffineTransformIdentity : away, shown ? 1 : 0, shown ? EXTERIA_MOTION_SPRING : EXTERIA_MOTION_DISMISS, nil);
+    ExteriaAnimateView(view, shown ? CGAffineTransformIdentity : away, shown ? 1 : 0, shown ? EXTERIA_MOTION_WOBBLE : EXTERIA_MOTION_DISMISS, nil);
 }
 
 void ExteriaEditorRise(NSArray *views, CGFloat distance, NSTimeInterval step) {
@@ -261,11 +261,11 @@ void ExteriaEditorRise(NSArray *views, CGFloat distance, NSTimeInterval step) {
         CGAffineTransform from = CGAffineTransformMakeTranslation(0, distance);
         view.transform = from;
         view.alpha = 0;
-        ExteriaAnimateViewAfter(view, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, delay, nil);
+        ExteriaAnimateViewAfter(view, CGAffineTransformIdentity, 1, EXTERIA_MOTION_WOBBLE, delay, nil);
         delay += step;
     }
 }
 
 void ExteriaEditorPop(UIView *view) {
-    ExteriaAnimateEnter(view, CGAffineTransformMakeScale(0.82, 0.82), 1, EXTERIA_MOTION_SPRING);
+    ExteriaAnimateEnter(view, CGAffineTransformMakeScale(0.82, 0.82), 1, EXTERIA_MOTION_WOBBLE);
 }

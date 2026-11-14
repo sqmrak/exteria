@@ -31,13 +31,13 @@ double exteria_motion_duration(exteria_motion_curve curve) {
     case EXTERIA_MOTION_POPUP_MODERN_EXIT: return 0.2;
     case EXTERIA_MOTION_POPUP_CLASSIC_ENTER: return 0.25;
     case EXTERIA_MOTION_POPUP_CLASSIC_EXIT: return 0.2;
+    case EXTERIA_MOTION_WOBBLE: return 0.6;
     }
     return 0.0;
 }
 
-static double spring(double seconds) {
-    /* ActionBarLayout preview: stiffness 650, damping ratio 0.6, unit mass */
-    double frequency = sqrt(650.0), damping = 0.6;
+static double spring(double seconds, double stiffness, double damping) {
+    double frequency = sqrt(stiffness);
     double decay = frequency * damping;
     double oscillation = frequency * sqrt(1.0 - damping * damping);
     return 1.0 - exp(-decay * seconds) *
@@ -53,7 +53,10 @@ double exteria_motion_progress(exteria_motion_curve curve, double time) {
     case EXTERIA_MOTION_ENTER: return bezier(time, 0.23, 1.0, 0.32, 1.0);
     case EXTERIA_MOTION_EXIT: return bezier(time, 0.42, 0.0, 1.0, 1.0);
     case EXTERIA_MOTION_SPRING:
-        return spring(time * exteria_motion_duration(curve)) / spring(exteria_motion_duration(curve));
+        /* ActionBarLayout preview: stiffness 650, damping ratio 0.6, unit mass */
+        return spring(time * exteria_motion_duration(curve), 650.0, 0.6) / spring(exteria_motion_duration(curve), 650.0, 0.6);
+    case EXTERIA_MOTION_WOBBLE:
+        return spring(time * exteria_motion_duration(curve), 420.0, 0.5) / spring(exteria_motion_duration(curve), 420.0, 0.5);
     case EXTERIA_MOTION_NAVIGATION: {
         /* uses DecelerateInterpolator(1.5) for opening and closing screens */
         double remaining = 1.0 - time;

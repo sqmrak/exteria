@@ -351,7 +351,7 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     _marked = marked;
     self.accessibilityTraits = UIAccessibilityTraitButton | (marked ? UIAccessibilityTraitSelected : 0);
     _ring.alpha = marked ? 1 : 0;
-    if (animated && marked) ExteriaAnimateEnter(_ring, CGAffineTransformMakeScale(0.6, 0.6), 0, EXTERIA_MOTION_SPRING);
+    if (animated && marked) ExteriaAnimateEnter(_ring, CGAffineTransformMakeScale(0.6, 0.6), 0, EXTERIA_MOTION_WOBBLE);
 }
 @end
 

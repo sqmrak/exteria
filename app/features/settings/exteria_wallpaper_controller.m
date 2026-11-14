@@ -111,9 +111,40 @@
         [me rebuild];
     };
     _grid.chooseHandler = ^(NSUInteger index) {
-        ExteriaWallpaperSetting preset = ExteriaWallpaperPreset(index);
-        ExteriaWallpaperStore(preset);
-        [(ExteriaWallpaperController *)weak.target rebuild];
+        ExteriaWallpaperController *me = weak.target;
+        if (!me) return;
+        [me store:ExteriaWallpaperPreset(index)];
+        [me rebuild];
+    };    [self buildCustomizationViews];
+}
+
+/* the rows under the tabs come in from the side the new tab lies on: with a wobble, a spring that overshoots and settles back, in the modern style, and with a plain ease in the
+   skeuomorphic one. the tabs themselves stay where they are */
+- (void)animateTabChangeFrom:(NSUInteger)previous {
+    if (previous == _tab || !self.isViewLoaded) return;
+    [self.table layoutIfNeeded];
+    CGFloat direction = _tab > previous ? 1 : -1;
+    BOOL modern = !ExteriaThemeIsClassic();
+    for (UITableViewCell *cell in self.table.visibleCells) {
+        if ([_tabs isDescendantOfView:cell]) continue;
+        if (modern) ExteriaAnimateEnter(cell, CGAffineTransformConcat(CGAffineTransformMakeScale(0.94f, 0.94f), CGAffineTransformMakeTranslation(direction * 56, 0)), 0, EXTERIA_MOTION_WOBBLE);
+        else ExteriaAnimateEnter(cell, CGAffineTransformMakeTranslation(direction * 24, 0), 0, EXTERIA_MOTION_ENTER);
+    }
+}
+
+/* the tabs and the views of the customization, made again with the colors of a new theme */
+- (void)buildCustomizationViews {
+    [_tabs release];
+    _tabs = [[ExteriaPillTabsView alloc] initWithTitles:[NSArray arrayWithObjects:NSLocalizedString(@"custom.tab.wallpapers", nil), NSLocalizedString(@"custom.tab.look", nil), nil]];
+    _tabs.selectedIndex = _tab;
+    ExteriaWeakReference *weak = _weak;
+    _tabs.changeHandler = ^(NSUInteger index) {
+        ExteriaWallpaperController *me = weak.target;
+        if (!me) return;
+        NSUInteger previous = me->_tab;
+        me->_tab = index;
+        [me rebuild];
+        [me animateTabChangeFrom:previous];
     };
 }
 

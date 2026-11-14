@@ -80,6 +80,22 @@ static void list_move_curve(void) {
     }
 }
 
+static void wobble_swings(void) {
+    double duration = exteria_motion_duration(EXTERIA_MOTION_WOBBLE);
+    CHECK(near(duration, 0.6));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_WOBBLE, 0), 0));
+    CHECK(near(exteria_motion_progress(EXTERIA_MOTION_WOBBLE, 1), 1));
+    double peak = 3.14159265358979323846 / (sqrt(420.0) * sqrt(1 - 0.25));
+    double high = exteria_motion_progress(EXTERIA_MOTION_WOBBLE, peak / duration);
+    CHECK(high > 1.15 && high < 1.2);
+    /* it swings back under one and over it again before it rests */
+    double low = exteria_motion_progress(EXTERIA_MOTION_WOBBLE, 2 * peak / duration);
+    CHECK(low < 1 && low > 0.95);
+    CHECK(exteria_motion_progress(EXTERIA_MOTION_WOBBLE, 3 * peak / duration) > 1);
+    for (int sample = 0; sample <= 1000; ++sample) CHECK(isfinite(exteria_motion_progress(EXTERIA_MOTION_WOBBLE, sample / 1000.0)));
+    CHECK(fabs(exteria_motion_progress(EXTERIA_MOTION_WOBBLE, 0.999999) - 1) < 1e-4);
+}
+
 static void spring_settles(void) {
     double duration = exteria_motion_duration(EXTERIA_MOTION_SPRING);
     double peak = 3.14159265358979323846 / (sqrt(650.0) * 0.8);
@@ -223,6 +239,7 @@ int main(void) {
     popup_curves();
     navigation_decelerates();
     spring_settles();
+    wobble_swings();
     list_move_curve();
     playback_uses_elapsed_time();
     outgoing_screen_memory();
