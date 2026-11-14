@@ -2,6 +2,7 @@
 #import "exteria_person.h"
 
 #import "exteria_platform.h"
+#import "exteria_shape.h"
 #import "exteria_theme.h"
 #include "exteria_reactions.h"
 
@@ -22,6 +23,18 @@ static NSString *const ExteriaChatLargeEmojiKey = @"exteria.chat.largeemoji";
 static NSString *const ExteriaChatListTitleKey = @"exteria.chatlist.title";
 static NSString *const ExteriaChatListCustomTitleKey = @"exteria.chatlist.customtitle";
 static NSString *const ExteriaAvatarCornerKey = @"exteria.avatar.corner";
+static NSString *const ExteriaAvatarShapeKey = @"exteria.avatar.shape";
+static NSString *const ExteriaSendShapeKey = @"exteria.send.shape";
+static NSString *const ExteriaListDensityKey = @"exteria.list.density";
+static NSString *const ExteriaTabIndicatorKey = @"exteria.tab.indicator";
+static NSString *const ExteriaClassicGlossKey = @"exteria.classic.gloss";
+static NSString *const ExteriaClassicMaterialKey = @"exteria.classic.material";
+static NSString *const ExteriaClassicTextureStyleKey = @"exteria.classic.texture";
+static NSString *const ExteriaClassicTextureStrengthKey = @"exteria.classic.texturestrength";
+static NSString *const ExteriaClassicTextureHueKey = @"exteria.classic.texturehue";
+static NSString *const ExteriaClassicAvatarGlossKey = @"exteria.classic.avatargloss";
+static NSString *const ExteriaClassicAvatarShadowKey = @"exteria.classic.avatarshadow";
+static NSString *const ExteriaClassicSeparatorsKey = @"exteria.classic.separators";
 static NSString *const ExteriaSectionRadiusKey = @"exteria.section.radius";
 static NSString *const ExteriaTabLayoutKey = @"exteria.tablayout";
 static NSString *const ExteriaTabOrderKey = @"exteria.taborder";
@@ -172,6 +185,75 @@ NSInteger ExteriaAvatarCornerPercent(void) {
 void ExteriaAvatarCornerStore(NSInteger percent) {
     ExteriaAvatarCornerCurrent = MAX(0, MIN(100, percent));
     ExteriaStoreNumber(ExteriaAvatarCornerKey, ExteriaAvatarCornerCurrent);
+}
+/* the avatar views read the shape at every draw, so it is kept in memory and changed with the stored value */
+static NSInteger ExteriaAvatarShapeCurrent = -1;
+NSInteger ExteriaAvatarShapeStored(void) {
+    if (ExteriaAvatarShapeCurrent == -1) {
+        NSNumber *stored = ExteriaStoredNumber(ExteriaAvatarShapeKey);
+        ExteriaAvatarShapeCurrent = stored && stored.integerValue >= 0 && stored.integerValue < ExteriaShapeCount ? stored.integerValue : 0;
+    }
+    return ExteriaAvatarShapeCurrent;
+}
+void ExteriaAvatarShapeStore(NSInteger shape) {
+    ExteriaAvatarShapeCurrent = MAX(0, MIN(ExteriaShapeCount - 1, shape));
+    ExteriaStoreNumber(ExteriaAvatarShapeKey, ExteriaAvatarShapeCurrent);
+}
+NSInteger ExteriaSendShapeStored(void) {
+    NSNumber *stored = ExteriaStoredNumber(ExteriaSendShapeKey);
+    return stored ? ExteriaClamped(stored.integerValue, 0, EXTERIA_SEND_SHAPE_COUNT - 1) : 0;
+}
+void ExteriaSendShapeStore(NSInteger shape) {
+    ExteriaStoreNumber(ExteriaSendShapeKey, ExteriaClamped(shape, 0, EXTERIA_SEND_SHAPE_COUNT - 1));
+}
+NSInteger ExteriaListDensityStored(void) {
+    NSNumber *stored = ExteriaStoredNumber(ExteriaListDensityKey);
+    return stored ? ExteriaClamped(stored.integerValue, 0, 1) : 0;
+}
+void ExteriaListDensityStore(NSInteger density) {
+    ExteriaStoreNumber(ExteriaListDensityKey, ExteriaClamped(density, 0, 1));
+}
+BOOL ExteriaTabIndicatorOn(void) {
+    return [ExteriaStoredNumber(ExteriaTabIndicatorKey) boolValue];
+}
+void ExteriaTabIndicatorStore(BOOL on) {
+    ExteriaStoreNumber(ExteriaTabIndicatorKey, on ? 1 : 0);
+}
+/* the classic pictures read these at every draw and every lookup, so each is kept in memory and changed with the stored value */
+static NSInteger ExteriaClassicLook[7] = {-1, -1, -1, -1, -1, -1, -1};
+static NSInteger ExteriaClassicRead(int slot, NSString *key, NSInteger low, NSInteger high, NSInteger fallback) {
+    if (ExteriaClassicLook[slot] == -1) {
+        NSNumber *stored = ExteriaStoredNumber(key);
+        ExteriaClassicLook[slot] = stored ? ExteriaClamped(stored.integerValue, low, high) : fallback;
+    }
+    return ExteriaClassicLook[slot];
+}
+static void ExteriaClassicWrite(int slot, NSString *key, NSInteger low, NSInteger high, NSInteger value) {
+    ExteriaClassicLook[slot] = ExteriaClamped(value, low, high);
+    ExteriaStoreNumber(key, ExteriaClassicLook[slot]);
+}
+NSInteger ExteriaClassicGlossLevel(void) { return ExteriaClassicRead(0, ExteriaClassicGlossKey, 0, 2, 1); }
+void ExteriaClassicGlossStore(NSInteger level) { ExteriaClassicWrite(0, ExteriaClassicGlossKey, 0, 2, level); }
+NSInteger ExteriaClassicMaterial(void) { return ExteriaClassicRead(1, ExteriaClassicMaterialKey, 0, EXTERIA_CLASSIC_MATERIAL_COUNT - 1, 0); }
+void ExteriaClassicMaterialStore(NSInteger material) { ExteriaClassicWrite(1, ExteriaClassicMaterialKey, 0, EXTERIA_CLASSIC_MATERIAL_COUNT - 1, material); }
+NSInteger ExteriaClassicTextureStyle(void) { return ExteriaClassicRead(2, ExteriaClassicTextureStyleKey, 0, 1, 0); }
+void ExteriaClassicTextureStyleStore(NSInteger style) { ExteriaClassicWrite(2, ExteriaClassicTextureStyleKey, 0, 1, style); }
+NSInteger ExteriaClassicTextureStrength(void) { return ExteriaClassicRead(3, ExteriaClassicTextureStrengthKey, 0, 100, 100); }
+void ExteriaClassicTextureStrengthStore(NSInteger percent) { ExteriaClassicWrite(3, ExteriaClassicTextureStrengthKey, 0, 100, percent); }
+/* stored as the hue plus one so that zero, the unset value, follows the accent */
+NSInteger ExteriaClassicTextureHue(void) { return ExteriaClassicRead(6, ExteriaClassicTextureHueKey, 0, 360, 0) - 1; }
+void ExteriaClassicTextureHueStore(NSInteger hue) { ExteriaClassicWrite(6, ExteriaClassicTextureHueKey, 0, 360, hue < 0 ? 0 : MIN(hue, 359) + 1); }
+BOOL ExteriaClassicAvatarGloss(void) { return ExteriaClassicRead(4, ExteriaClassicAvatarGlossKey, 0, 1, 1) != 0; }
+void ExteriaClassicAvatarGlossStore(BOOL on) { ExteriaClassicWrite(4, ExteriaClassicAvatarGlossKey, 0, 1, on ? 1 : 0); }
+BOOL ExteriaClassicAvatarShadow(void) {
+    NSNumber *stored = ExteriaStoredNumber(ExteriaClassicAvatarShadowKey);
+    return stored && stored.integerValue != 0;
+}
+void ExteriaClassicAvatarShadowStore(BOOL on) { ExteriaStoreNumber(ExteriaClassicAvatarShadowKey, on ? 1 : 0); }
+NSInteger ExteriaClassicSeparators(void) { return ExteriaClassicRead(5, ExteriaClassicSeparatorsKey, 0, 2, 0); }
+void ExteriaClassicSeparatorsStore(NSInteger style) { ExteriaClassicWrite(5, ExteriaClassicSeparatorsKey, 0, 2, style); }
+NSString *ExteriaClassicLookSignature(void) {
+    return [NSString stringWithFormat:@"%ld%ld%d", (long)ExteriaClassicGlossLevel(), (long)ExteriaClassicMaterial(), ExteriaClassicAvatarGloss() ? 1 : 0];
 }
 static NSInteger ExteriaSectionRadiusCurrent = -1;
 CGFloat ExteriaSectionRadius(void) {

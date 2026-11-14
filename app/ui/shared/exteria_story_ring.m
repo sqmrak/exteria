@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_chat_settings.h"
+#import "exteria_shape.h"
 #import "exteria_theme.h"
 
 #define RING_WIDTH 2.5
@@ -137,12 +138,15 @@ static CGFloat ExteriaRingLength(CGRect box, CGFloat radius) {
     _unseenStroke.frame = frame;
     _seenStroke.frame = frame;
     /* the avatar of a list row is cut to the percent the person chose, in avatar sizes; 100 is a circle */
-    CGFloat radius = _followsAvatarShape ? box.size.width * MIN(100, ExteriaAvatarCornerPercent()) / 200.0f : box.size.width / 2;
-    CGPathRef path = ExteriaRingPath(box, radius);
+    ExteriaShape shape = _followsAvatarShape && !ExteriaThemeIsClassic() ? (ExteriaShape)ExteriaAvatarShapeStored() : ExteriaShapeRounded;
+    BOOL outline = ExteriaShapeIsOutline(shape);
+    CGFloat radius = _followsAvatarShape ? box.size.width * (shape == ExteriaShapeCircle ? 100 : MIN(100, ExteriaAvatarCornerPercent())) / 200.0f : box.size.width / 2;
+    /* an outline shape of the avatar is followed by the ring along the same outline */
+    CGPathRef path = outline ? ExteriaShapePath(shape, box, 0).CGPath : ExteriaRingPath(box, radius);
     _seenStroke.path = path;
     _unseenStroke.path = path;
     /* the gap the arcs leave on each side of a joint, in degrees as the Telegram avatar does, turned into a length along the outline at the radius of a circle of this size */
-    CGFloat length = ExteriaRingLength(box, radius);
+    CGFloat length = outline ? ExteriaShapePathLength(shape, box) : ExteriaRingLength(box, radius);
     CGFloat step = length / (CGFloat)_count;
     CGFloat gap = (CGFloat)((_count > 20 ? 6 : 10) * M_PI / 180) * box.size.width / 2;
     if (_count == 1 || gap >= step) gap = 0;

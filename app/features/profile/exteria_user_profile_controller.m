@@ -199,6 +199,7 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     _head = [[UIView alloc] init];
     _head.backgroundColor = [UIColor clearColor];
     _storyRing = [[ExteriaStoryRing alloc] init];
+    _storyRing.followsAvatarShape = !ExteriaThemeIsClassic();
     _storyRing.hidden = YES;
     [_head addSubview:_storyRing];
     _avatar = [[ExteriaAvatarView alloc] init];

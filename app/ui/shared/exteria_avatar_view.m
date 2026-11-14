@@ -4,6 +4,7 @@
 #import "exteria_chat_settings.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
+#import "exteria_shape.h"
 #import "exteria_theme.h"
 #import <QuartzCore/QuartzCore.h>
 #import "exteria_wave.h"
@@ -28,13 +29,16 @@ static UIImage *ExteriaAvatarGlossOverlay(CGSize size, CGFloat radius) {
         cache = [[NSCache alloc] init];
         cache.countLimit = 24;
     });
-    NSString *key = [NSString stringWithFormat:@"%.1f|%.1f|%.1f|%.1f", size.width, size.height, radius, ExteriaScreenScale()];
+    NSString *key = [NSString stringWithFormat:@"%.1f|%.1f|%.1f|%.1f|%ld", size.width, size.height, radius, ExteriaScreenScale(), (long)ExteriaClassicGlossLevel()];
     UIImage *kept = [[[cache objectForKey:key] retain] autorelease];
     if (kept) return kept;
     CGRect bounds = CGRectMake(0, 0, size.width, size.height);
     UIGraphicsBeginImageContextWithOptions(size, NO, 0);
     CGContextRef context = UIGraphicsGetCurrentContext();
-    static const CGFloat gloss[8] = {1, 1, 1, 0.26, 1, 1, 1, 0.02};
+    /* the gloss level of the customization lights the top of the picture: none, as before, or half again as strong */
+    static const CGFloat levels[3] = {0, 1, 1.6f};
+    CGFloat lit = levels[ExteriaClassicGlossLevel()];
+    const CGFloat gloss[8] = {1, 1, 1, MIN(1, 0.26f * lit), 1, 1, 1, MIN(1, 0.02f * lit)};
     CGContextSaveGState(context);
     CGContextAddEllipseInRect(context, CGRectMake(-bounds.size.width * 0.15, -bounds.size.height * 0.52, bounds.size.width * 1.3, bounds.size.height * 1.1));
     CGContextClip(context);
@@ -96,8 +100,25 @@ static UIImage *ExteriaAvatarGlossOverlay(CGSize size, CGFloat radius) {
     [self setNeedsDisplay];
 }
 
+/* the soft shadow of the classic customization falls under the picture, along its outline; a path keeps it from being worked out from the pixels at every frame */
+- (void)applyClassicShadow {
+    BOOL on = ExteriaThemeIsClassic() && ExteriaClassicAvatarShadow() && !CGRectIsEmpty(self.bounds);
+    if (!on) {
+        if (self.layer.shadowOpacity > 0) self.layer.shadowOpacity = 0;
+        return;
+    }
+    CGFloat side = MIN(self.bounds.size.width, self.bounds.size.height);
+    CGFloat radius = side * (_circular || (_image && _imageIsRound) ? 0.5 : (CGFloat)ExteriaAvatarCornerPercent() / 200.0);
+    self.layer.shadowColor = [UIColor blackColor].CGColor;
+    self.layer.shadowOpacity = 0.45f;
+    self.layer.shadowRadius = MAX(1.5f, side * 0.05f);
+    self.layer.shadowOffset = CGSizeMake(0, 1.5f);
+    self.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.bounds cornerRadius:radius].CGPath;
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
+    [self applyClassicShadow];
     /* the text layout uses at least 20 points, so center that width on small avatars */
     CGFloat labelWidth = MAX(20, self.bounds.size.width);
     _label.frame = CGRectMake((self.bounds.size.width - labelWidth) / 2, 0, labelWidth, self.bounds.size.height);
@@ -181,11 +202,19 @@ static void ExteriaAccentGradient(CGFloat out[8]) {
     CGRect bounds = self.bounds;
     CGFloat side = MIN(bounds.size.width, bounds.size.height);
     /* a photo that is a round shape on white or on nothing is cut to its circle in every shape of avatar, or the white of the corners shows */
-    CGFloat radius = side * (_circular || (_image && _imageIsRound) ? 0.5 : (CGFloat)ExteriaAvatarCornerPercent() / 200.0);
+    /* the shape the person chose in the customization; the classic style keeps its rounded squares, and a round picture keeps its circle */
+    ExteriaShape shape = ExteriaThemeIsClassic() ? ExteriaShapeRounded : (ExteriaShape)ExteriaAvatarShapeStored();
+    /* a view that asks to be circular is a circle only in the classic style, which keeps its look; in the others it takes the shape the person chose, so the picture in the profile, in the
+       bar, in the chat and in the profile of another person all change with the list */
+    BOOL forcedRound = (_circular && ExteriaThemeIsClassic()) || (_image && _imageIsRound);
+    BOOL outline = !forcedRound && ExteriaShapeIsOutline(shape);
+    CGFloat radius = side * (forcedRound || shape == ExteriaShapeCircle ? 0.5 : (CGFloat)ExteriaAvatarCornerPercent() / 200.0);
     BOOL classicSymbol = ExteriaThemeIsClassic() && _showsSymbol && !_image &&
                          (_symbol == ExteriaSymbolArchive || _symbol == ExteriaSymbolBookmark || _symbol == ExteriaSymbolReply);
     CGContextSaveGState(context);
-    if (radius >= side * 0.5 && bounds.size.width == bounds.size.height) {
+    if (outline) {
+        CGContextAddPath(context, ExteriaShapePath(shape, bounds, 0).CGPath);
+    } else if (radius >= side * 0.5 && bounds.size.width == bounds.size.height) {
         CGContextAddEllipseInRect(context, bounds);
     } else {
         CGContextMoveToPoint(context, CGRectGetMinX(bounds) + radius, CGRectGetMinY(bounds));
@@ -211,7 +240,7 @@ static void ExteriaAccentGradient(CGFloat out[8]) {
     }
     /* the classic style lights every picture like a glass button: a gloss over the top half and a lit rim. a list has dozens of pictures, and the gloss, the two outlines and their
        clips were worked out again for each at every redraw, so they are drawn once for a size and a corner and the picture is laid over */
-    if (ExteriaThemeIsClassic()) [ExteriaAvatarGlossOverlay(bounds.size, radius) drawInRect:bounds];
+    if (ExteriaThemeIsClassic() && ExteriaClassicAvatarGloss()) [ExteriaAvatarGlossOverlay(bounds.size, radius) drawInRect:bounds];
     CGContextRestoreGState(context);
 
     if (_showsSymbol && !_image) {

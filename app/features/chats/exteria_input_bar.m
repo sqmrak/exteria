@@ -223,8 +223,14 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     /* the bot's menu stands outside the field, as a pill on the bar */
     _menuPill = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     _menuPill.titleLabel.font = ExteriaFontSemibold(15);
-    _menuPill.backgroundColor = ExteriaColorAccent();
-    _menuPill.layer.cornerRadius = FIELD_MIN / 2;
+    if (classic) {
+        /* a flat fill sits beside the glossy send key and breaks the skeuomorphic bar */
+        [_menuPill setBackgroundImage:ExteriaClassicTintedGlossImage(ExteriaColorAccent(), FIELD_MIN / 2, NO) forState:UIControlStateNormal];
+        [_menuPill setBackgroundImage:ExteriaClassicTintedGlossImage(ExteriaColorAccent(), FIELD_MIN / 2, YES) forState:UIControlStateHighlighted];
+    } else {
+        _menuPill.backgroundColor = ExteriaColorAccent();
+        _menuPill.layer.cornerRadius = FIELD_MIN / 2;
+    }
     [_menuPill setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [_menuPill addTarget:self action:@selector(menuTapped) forControlEvents:UIControlEventTouchUpInside];
     _menuPill.hidden = YES;
@@ -254,7 +260,7 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     /* the classic button is a bitmap of its own, see refreshControls */
     if (!classic) {
         _send.backgroundColor = ExteriaColorAccent();
-        _send.layer.cornerRadius = BUTTON / 2;
+        [self applySendShape];
     }
     [_send addTarget:self action:@selector(sendTapped) forControlEvents:UIControlEventTouchUpInside];
     _onceChip = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
@@ -689,6 +695,14 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     [_text refreshEmoji];
     if ([_delegate respondsToSelector:@selector(inputBarDidChangeText:)]) [_delegate inputBarDidChangeText:self];
     [self updateTextHeight];
+}
+
+/* the outline the customization gave the round button: a circle, a rounded square, or the shape of the avatars, which an outline shape cuts with a mask */
+- (void)applySendShape {
+    NSInteger choice = ExteriaSendShapeStored();
+    ExteriaShape shape = choice == 2 ? (ExteriaShape)ExteriaAvatarShapeStored() : (choice == 1 ? ExteriaShapeRounded : ExteriaShapeCircle);
+    /* the rounded square of the avatars follows their corner; the button's own is the one the Material buttons have */
+    ExteriaApplyShapeToLayer(_send.layer, shape, BUTTON, choice == 2 ? ExteriaAvatarCornerPercent() : 33);
 }
 
 - (void)updateTextHeight {

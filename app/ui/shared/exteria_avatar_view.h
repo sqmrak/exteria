@@ -15,7 +15,7 @@
 /* the accent gradient instead of one of the seeded colors; it is made of the accent color of the app, so it follows a change of it */
 @property (nonatomic, assign) BOOL accent;
 @property (nonatomic, assign) NSUInteger seed;
-/* a circle instead of the rounded square */
+/* the classic style draws it as a circle instead of the rounded square; the other styles draw every avatar in the shape chosen in the customization, circular or not */
 @property (nonatomic, assign) BOOL circular;
 /* a transparent photo shows the view behind it */
 @property (nonatomic, assign) BOOL transparentPhoto;

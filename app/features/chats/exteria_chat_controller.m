@@ -1119,6 +1119,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         CGFloat outset = 3;
         UIView *avatarBox = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, 32 + 2 * outset, 32 + 2 * outset)] autorelease];
         _storyRing = [[ExteriaStoryRing alloc] initWithFrame:avatarBox.bounds];
+        _storyRing.followsAvatarShape = !ExteriaThemeIsClassic();
         _storyRing.hidden = YES;
         [avatarBox addSubview:_storyRing];
         mini.frame = CGRectMake(outset, outset, 32, 32);
@@ -1162,6 +1163,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(unreadTotalChanged:) name:ExteriaUnreadTotalDidChangeNotification object:nil];
     [self refreshBackBadge];
     _storyRing = [[ExteriaStoryRing alloc] init];
+    _storyRing.followsAvatarShape = !ExteriaThemeIsClassic();
     _storyRing.hidden = YES;
     [_header addSubview:_storyRing];
     _avatar = [[ExteriaAvatarView alloc] init];

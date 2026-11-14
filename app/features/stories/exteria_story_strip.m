@@ -13,6 +13,7 @@
 #import "exteria_profile_photo_picker.h"
 #import "exteria_story.h"
 #import "exteria_story_camera_controller.h"
+#import "exteria_shape.h"
 #import "exteria_story_ring.h"
 #import "exteria_story_viewer_controller.h"
 #import "exteria_theme.h"
@@ -175,7 +176,9 @@
     CGFloat width = unseen ? RING_WIDTH : SEEN_WIDTH;
     CGFloat inset = width / 2;
     _stroke.lineWidth = width;
-    _stroke.path = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(inset, inset, RING - width, RING - width)].CGPath;
+    /* the ring runs round the photo in the shape the person chose for avatars */
+    ExteriaShape shape = (ExteriaShape)ExteriaAvatarShapeStored();
+    _stroke.path = ExteriaShapePath(shape, CGRectMake(inset, inset, RING - width, RING - width), shape == ExteriaShapeCircle ? 100 : ExteriaAvatarCornerPercent()).CGPath;
     UIColor *from, *to;
     ExteriaStoryRingColors(unseen, peer.closeFriends, &from, &to);
     _gradient.colors = [NSArray arrayWithObjects:(id)from.CGColor, (id)to.CGColor, nil];

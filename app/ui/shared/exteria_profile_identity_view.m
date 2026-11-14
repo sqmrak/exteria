@@ -4,6 +4,8 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_chat_settings.h"
+#import "exteria_shape.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 
@@ -168,6 +170,8 @@
     _avatar.frame = CGRectMake((width - EXTERIA_IDENTITY_AVATAR) / 2, 0, EXTERIA_IDENTITY_AVATAR, EXTERIA_IDENTITY_AVATAR);
     _avatarHit.frame = _avatar.frame;
     _progress.frame = _avatar.frame;
+    /* the dark disc that covers the photo while a new one goes up takes the shape of the avatars; the classic style keeps its circle */
+    if (!ExteriaThemeIsClassic()) ExteriaApplyShapeToLayer(_progress.layer, (ExteriaShape)ExteriaAvatarShapeStored(), EXTERIA_IDENTITY_AVATAR, ExteriaAvatarCornerPercent());
     _spinner.center = CGPointMake(EXTERIA_IDENTITY_AVATAR / 2, EXTERIA_IDENTITY_AVATAR / 2);
     _badge.frame = CGRectMake(CGRectGetMaxX(_avatar.frame) - BADGE + 4, CGRectGetMaxY(_avatar.frame) - BADGE + 2, BADGE, BADGE);
     _name.frame = CGRectMake(24, CGRectGetMaxY(_avatar.frame) + 22, width - 48, 34 + [self extraHeightForWidth:width]);

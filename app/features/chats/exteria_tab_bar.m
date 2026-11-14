@@ -6,6 +6,8 @@
 #import "exteria_animation.h"
 #import "exteria_platform.h"
 #import "exteria_pill_label.h"
+#import "exteria_chat_settings.h"
+#import "exteria_shape.h"
 #import "exteria_theme.h"
 #import "exteria_imported_theme.h"
 
@@ -31,6 +33,9 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
     ExteriaSymbol _symbol;
     ExteriaAvatarView *_avatar;
     UIView *_ring;
+    CAShapeLayer *_ringStroke;
+    /* the pill of the Material navigation bar behind the icon of the selected tab, when the customization asks for it */
+    UIView *_pill;
     BOOL _active;
 }
 /* a nil symbol makes the avatar item */
@@ -50,6 +55,11 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
     self.accessibilityLabel = title;
     self.accessibilityTraits = UIAccessibilityTraitButton;
     if (symbolNumber) {
+        _pill = [[UIView alloc] init];
+        _pill.backgroundColor = [ExteriaTabActiveColor() colorWithAlphaComponent:0.2f];
+        _pill.userInteractionEnabled = NO;
+        _pill.alpha = 0;
+        [self addSubview:_pill];
         _symbol = (ExteriaSymbol)[symbolNumber intValue];
         _idleImage = [ExteriaSymbolImage(_symbol, TAB_ICON_SIZE, ExteriaTabIdleColor()) retain];
         _activeImage = [ExteriaSymbolImage(_symbol, TAB_ICON_SIZE, ExteriaTabActiveColor()) retain];
@@ -60,9 +70,14 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
     } else {
         /* the ring marks the selected tab, the avatar sits inside it */
         _ring = [[UIView alloc] init];
-        _ring.layer.cornerRadius = (TAB_ICON_SIZE + 4) / 2;
-        _ring.layer.borderColor = ExteriaTabActiveColor().CGColor;
         _ring.userInteractionEnabled = NO;
+        /* the mark of the selected tab is a stroke along the shape of the avatars, so it follows the shape the person chose */
+        _ringStroke = [[CAShapeLayer layer] retain];
+        _ringStroke.fillColor = nil;
+        _ringStroke.strokeColor = ExteriaTabActiveColor().CGColor;
+        _ringStroke.lineWidth = 2;
+        _ringStroke.opacity = 0;
+        [_ring.layer addSublayer:_ringStroke];
         [self addSubview:_ring];
         _avatar = [[ExteriaAvatarView alloc] init];
         _avatar.circular = YES;
@@ -89,6 +104,8 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
 }
 
 - (void)dealloc {
+    [_pill release];
+    [_ringStroke release];
     [_ring release];
     [_avatar release];
     [_icon release];
@@ -114,7 +131,13 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
         ExteriaAnimateView(icon, CGAffineTransformIdentity, 1, EXTERIA_MOTION_SPRING, nil);
     }
     if (_icon) _icon.image = active ? _activeImage : _idleImage;
-    _ring.layer.borderWidth = active ? 2 : 0;
+    BOOL pill = active && _pill && !ExteriaThemeIsClassic() && ExteriaTabIndicatorOn();
+    if (changed && self.window) [UIView animateWithDuration:0.2 animations:^{ _pill.alpha = pill ? 1 : 0; }];
+    else _pill.alpha = pill ? 1 : 0;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _ringStroke.opacity = active ? 1 : 0;
+    [CATransaction commit];
     _caption.textColor = active ? (ExteriaImportedThemeColor("root.tabBar.selectedText") ?: ExteriaTabActiveColor()) : (ExteriaImportedThemeColor("root.tabBar.text") ?: ExteriaTabIdleColor());
     self.accessibilityTraits = active ? (UIAccessibilityTraitButton | UIAccessibilityTraitSelected) : UIAccessibilityTraitButton;
 }
@@ -129,10 +152,21 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width;
     _icon.frame = CGRectMake((width - TAB_ICON_SIZE * 1.4) / 2, 5, TAB_ICON_SIZE * 1.4, TAB_ICON_SIZE);
+    CGFloat pillHeight = TAB_ICON_SIZE + 2;
+    _pill.frame = CGRectMake((width - 56) / 2, 5 + (TAB_ICON_SIZE - pillHeight) / 2, 56, pillHeight);
+    _pill.layer.cornerRadius = pillHeight / 2;
     /* the ring keeps its place whether or not it is drawn, so the avatar does not jump on selection */
     CGFloat ringSide = TAB_ICON_SIZE + 4;
     _ring.frame = CGRectMake((width - ringSide) / 2, 3, ringSide, ringSide);
     _avatar.frame = CGRectInset(_ring.bounds, 3, 3);
+    if (_ringStroke) {
+        ExteriaShape shape = ExteriaThemeIsClassic() ? ExteriaShapeCircle : (ExteriaShape)ExteriaAvatarShapeStored();
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        _ringStroke.frame = _ring.bounds;
+        _ringStroke.path = ExteriaShapePath(shape, CGRectInset(_ring.bounds, 1, 1), shape == ExteriaShapeCircle ? 100 : ExteriaAvatarCornerPercent()).CGPath;
+        [CATransaction commit];
+    }
     _caption.frame = CGRectMake(0, 5 + TAB_ICON_SIZE + 1, width, 13);
     [_badge sizeToFit];
     CGFloat badgeWidth = MAX(TAB_BADGE_HEIGHT, _badge.frame.size.width + 10);

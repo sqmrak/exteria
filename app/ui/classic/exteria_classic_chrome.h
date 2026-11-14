@@ -38,6 +38,8 @@ void ExteriaClassicNoteTabBarHeight(CGFloat height);
 
 /* a plain or grouped table in the colors of the theme; the light theme keeps the system's own background */
 void ExteriaClassicStyleTable(UITableView *table);
+/* the separator style the lists of the classic style use, by the choice of the customization: a thin line, an etched double line or none; a list with no rows has none */
+UITableViewCellSeparatorStyle ExteriaClassicListSeparatorStyle(BOOL hasRows);
 /* the background and text colors of a cell, for the dark theme; the light theme is left to the system */
 void ExteriaClassicStyleCell(UITableViewCell *cell);
 UIColor *ExteriaClassicSelectionColor(void);

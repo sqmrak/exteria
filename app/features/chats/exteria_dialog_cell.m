@@ -25,8 +25,12 @@
 /* the interface scale of the chat settings: the row, the picture and the places of the lines in it grow with the fonts */
 #define SCALED(v) ((v) * ExteriaInterfaceScale())
 #define MINI_SIDE 16.0
-#define ROW_HEIGHT SCALED(64.0)
-#define AVATAR_SIZE SCALED(48.0)
+/* the compact density of the customization takes eight points off the row and six off the picture, and keeps the preview to one line */
+static BOOL ExteriaRowCompact(void) {
+    return !ExteriaThemeIsClassic() && ExteriaListDensityStored() == 1;
+}
+#define ROW_HEIGHT (SCALED(64.0) - (ExteriaRowCompact() ? SCALED(8.0) : 0))
+#define AVATAR_SIZE (SCALED(48.0) - (ExteriaRowCompact() ? SCALED(6.0) : 0))
 #define RING_OUTSET 4.0
 #define ONLINE_SIDE 14.0
 #define ONLINE_BORDER 2.0
@@ -731,7 +735,7 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     /* the two line row of the chat settings keeps the preview to one line; the three line row lets it take a second */
     /* the topic line takes the second line of the row, so the preview keeps to one line under it */
     BOOL topicLine = !_forumTopic.hidden;
-    BOOL singleLine = topicLine || ExteriaChatListStyleStored() == ExteriaChatListTwoLines;
+    BOOL singleLine = topicLine || ExteriaRowCompact() || ExteriaChatListStyleStored() == ExteriaChatListTwoLines;
     _preview.numberOfLines = singleLine ? 1 : 2;
     /* the last message of a forum sits in a capsule that has a chevron at its end, so the words start and stop inside it */
     CGFloat previewX = topicLine ? textX + PILL_PAD : textX;
@@ -739,8 +743,10 @@ NSString *ExteriaDialogActionText(ExteriaDialogAction action) {
     CGSize previewSize = [_preview sizeThatFits:CGSizeMake(MAX(0, width - SIDE_MARGIN - previewX - trailing - thumbRoom - chevronRoom), 40)];
     BOOL wraps = !singleLine && previewSize.height > _preview.font.lineHeight * 1.5;
     CGFloat topicY = SCALED(33), pillY = SCALED(33) + PILL_HEIGHT + 2;
-    CGFloat titleY = topicLine ? SCALED(8) : (wraps ? SCALED(6) : SCALED(12));
-    CGFloat previewY = topicLine ? pillY + (PILL_HEIGHT - ceil(_preview.font.lineHeight) - 1) / 2 : (wraps ? SCALED(31) : SCALED(33));
+    /* the lines of a compact row stand half of what the row lost higher, which keeps them in its middle */
+    CGFloat lift = topicLine || !ExteriaRowCompact() ? 0 : SCALED(4);
+    CGFloat titleY = topicLine ? SCALED(8) : (wraps ? SCALED(6) : SCALED(12) - lift);
+    CGFloat previewY = topicLine ? pillY + (PILL_HEIGHT - ceil(_preview.font.lineHeight) - 1) / 2 : (wraps ? SCALED(31) : SCALED(33) - lift);
     CGFloat previewHeight = wraps ? SCALED(34) : ceil(_preview.font.lineHeight) + 1;
 
     CGSize timeSize = [_time sizeThatFits:CGSizeMake(120, SCALED(20))];

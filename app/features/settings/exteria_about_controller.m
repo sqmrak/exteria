@@ -89,42 +89,6 @@ static UIImage *ExteriaShapedPicture(UIImage *source, int lobes, CGFloat depth, 
     return image;
 }
 
-/* the pictures of the people of the credits are kept: in memory for the next time the page opens, and on disk for the next launch, so the page shows them at once and
-   the server only corrects them; a picture was drawn into its wavy outline again at every arrival of a name or a photo, a dozen times for a page */
-static NSMutableDictionary *ExteriaTeamImageMemory(void) {
-    static NSMutableDictionary *images;
-    if (!images) images = [[NSMutableDictionary alloc] init];
-    return images;
-}
-
-static NSString *ExteriaTeamImageDirectory(void) {
-    NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-    return [caches stringByAppendingPathComponent:@"exteria-team"];
-}
-
-static UIImage *ExteriaStoredTeamImage(NSNumber *identifier) {
-    UIImage *image = [ExteriaTeamImageMemory() objectForKey:identifier];
-    if (image) return image;
-    NSString *path = [ExteriaTeamImageDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.png", identifier.longLongValue]];
-    image = [UIImage imageWithContentsOfFile:path];
-    if (image) [ExteriaTeamImageMemory() setObject:image forKey:identifier];
-    return image;
-}
-
-static void ExteriaKeepTeamImage(NSNumber *identifier, UIImage *image) {
-    if (!image) return;
-    [ExteriaTeamImageMemory() setObject:image forKey:identifier];
-    NSString *directory = ExteriaTeamImageDirectory();
-    NSString *path = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.png", identifier.longLongValue]];
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-        @autoreleasepool {
-            [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
-            NSData *data = UIImagePNGRepresentation(image);
-            if (data) [data writeToFile:path atomically:YES];
-        }
-    });
-}
-
 /* the people that were loaded in this run, with the time, so a page opened again does not ask the server for all of them once more */
 static NSMutableDictionary *ExteriaTeamPeopleMemory(void) {
     static NSMutableDictionary *people;
@@ -289,6 +253,80 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     }
     _role.frame = CGRectMake(left, CGRectGetMaxY(_name.frame), MAX(0, right - left), 18);
     _made.frame = CGRectMake(left, CGRectGetMaxY(_role.frame), MAX(0, right - left), 18);
+}
+
+/* the shapes the picture passes through; they are the ones with 240 points, because core animation only interpolates two paths that are built the same way */
+static const ExteriaShape ExteriaMorphShapes[] = {ExteriaShapeCookie, ExteriaShapeFlower, ExteriaShapeClover, ExteriaShapeSunny, ExteriaShapeBurst};
+#define MORPH_COUNT (sizeof(ExteriaMorphShapes) / sizeof(ExteriaMorphShapes[0]))
+#define MORPH_HOLD 1.45
+#define MORPH_MOVE 0.55
+#define MORPH_TURN 14.0
+static NSString *const ExteriaMorphPathKey = @"about.morph";
+static NSString *const ExteriaMorphTurnKey = @"about.turn";
+
+- (CGPathRef)morphOutline:(size_t)index {
+    return ExteriaShapePath(ExteriaMorphShapes[index % MORPH_COUNT], CGRectMake(0, 0, LEAD_TILE, LEAD_TILE), 0).CGPath;
+}
+
+- (void)morphPicture:(UIImage *)picture {
+    _picture.image = picture;
+    _picture.contentMode = UIViewContentModeScaleAspectFill;
+    if (!_morphMask) {
+        _morphMask = [[CAShapeLayer layer] retain];
+        _morphMask.frame = CGRectMake(0, 0, LEAD_TILE, LEAD_TILE);
+        _picture.layer.mask = _morphMask;
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncMorph) name:UIApplicationDidBecomeActiveNotification object:nil];
+    }
+    _morphMask.path = [self morphOutline:0];
+    [self syncMorph];
+}
+
+/* core animation drops running animations while the app is in the background, so they are put back when the view comes on a screen and when the app returns */
+- (void)syncMorph {
+    if (!_morphMask) return;
+    if (!self.window || ExteriaReduceMotionEnabled()) {
+        [_morphMask removeAnimationForKey:ExteriaMorphPathKey];
+        [_morphMask removeAnimationForKey:ExteriaMorphTurnKey];
+        return;
+    }
+    if ([_morphMask animationForKey:ExteriaMorphPathKey]) return;
+    /* one hold and one spring into the next shape for each of the shapes, round to the first again */
+    CFTimeInterval period = MORPH_HOLD + MORPH_MOVE, total = period * MORPH_COUNT;
+    NSMutableArray *values = [NSMutableArray array], *times = [NSMutableArray array], *easing = [NSMutableArray array];
+    CAMediaTimingFunction *spring = [CAMediaTimingFunction functionWithControlPoints:0.34f:1.45f:0.64f:1.0f];
+    CAMediaTimingFunction *linear = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+    for (size_t i = 0; i < MORPH_COUNT; ++i) {
+        [values addObject:(id)[self morphOutline:i]];
+        [times addObject:[NSNumber numberWithDouble:period * i / total]];
+        [values addObject:(id)[self morphOutline:i]];
+        [times addObject:[NSNumber numberWithDouble:(period * i + MORPH_HOLD) / total]];
+        [easing addObject:linear];
+        [easing addObject:spring];
+    }
+    [values addObject:(id)[self morphOutline:0]];
+    [times addObject:[NSNumber numberWithDouble:1]];
+    CAKeyframeAnimation *morph = [CAKeyframeAnimation animationWithKeyPath:@"path"];
+    morph.values = values;
+    morph.keyTimes = times;
+    morph.timingFunctions = easing;
+    morph.duration = total;
+    morph.repeatCount = HUGE_VALF;
+    /* the phase follows the clock, so the page made again at the arrival of a name or a photo carries on where the shape was, and not from the first one */
+    morph.timeOffset = fmod(CACurrentMediaTime(), total);
+    [_morphMask addAnimation:morph forKey:ExteriaMorphPathKey];
+    CABasicAnimation *turn = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
+    turn.fromValue = [NSNumber numberWithDouble:0];
+    turn.toValue = [NSNumber numberWithDouble:M_PI * 2];
+    turn.duration = MORPH_TURN;
+    turn.repeatCount = HUGE_VALF;
+    turn.timingFunction = linear;
+    turn.timeOffset = fmod(CACurrentMediaTime(), MORPH_TURN);
+    [_morphMask addAnimation:turn forKey:ExteriaMorphTurnKey];
+}
+
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    [self syncMorph];
 }
 
 - (void)dealloc {

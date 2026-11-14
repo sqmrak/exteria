@@ -95,6 +95,43 @@ void ExteriaChatListSetCustomTitle(NSString *text);
 #define EXTERIA_AVATAR_CORNER_DEFAULT 64
 NSInteger ExteriaAvatarCornerPercent(void);
 void ExteriaAvatarCornerStore(NSInteger percent);
+/* the outline of the pictures of people and chats, an ExteriaShape; the rounded square of the corner above is the default */
+NSInteger ExteriaAvatarShapeStored(void);
+void ExteriaAvatarShapeStore(NSInteger shape);
+/* the outline of the round button that sends: 0 a circle, 1 a rounded square, 2 the shape of the avatars */
+#define EXTERIA_SEND_SHAPE_COUNT 3
+NSInteger ExteriaSendShapeStored(void);
+void ExteriaSendShapeStore(NSInteger shape);
+/* how much of the screen a row of the chat list takes: 0 as it was drawn before the setting, 1 compact */
+NSInteger ExteriaListDensityStored(void);
+void ExteriaListDensityStore(NSInteger density);
+/* the pill behind the icon of the selected tab of the bottom bar, as the Material navigation bar draws it; off by default */
+BOOL ExteriaTabIndicatorOn(void);
+void ExteriaTabIndicatorStore(BOOL on);
+/* the look of the classic style, chosen on the customization page. gloss: 0 none, 1 as the style was drawn before the setting, 2 strong. material of the bars: 0 the color of the
+   app, 1 steel blue, 2 graphite, 3 black glass. texture of the chat background: 0 linen, 1 a plain color, with its strength in percent (100 is the linen as it was). the
+   separators of the lists: 0 a thin line, 1 an etched double line, 2 none */
+#define EXTERIA_CLASSIC_MATERIAL_COUNT 4
+NSInteger ExteriaClassicGlossLevel(void);
+void ExteriaClassicGlossStore(NSInteger level);
+NSInteger ExteriaClassicMaterial(void);
+void ExteriaClassicMaterialStore(NSInteger material);
+NSInteger ExteriaClassicTextureStyle(void);
+void ExteriaClassicTextureStyleStore(NSInteger style);
+NSInteger ExteriaClassicTextureStrength(void);
+void ExteriaClassicTextureStrengthStore(NSInteger percent);
+/* the hue of the linen in degrees, or -1 while it follows the accent of the app */
+NSInteger ExteriaClassicTextureHue(void);
+void ExteriaClassicTextureHueStore(NSInteger hue);
+/* the lit rim and the gloss of the pictures of people, on by default, and a soft shadow under them, off by default */
+BOOL ExteriaClassicAvatarGloss(void);
+void ExteriaClassicAvatarGlossStore(BOOL on);
+BOOL ExteriaClassicAvatarShadow(void);
+void ExteriaClassicAvatarShadowStore(BOOL on);
+NSInteger ExteriaClassicSeparators(void);
+void ExteriaClassicSeparatorsStore(NSInteger style);
+/* the classic pictures are kept for a palette, so the choices above are part of what a kept picture is looked up by */
+NSString *ExteriaClassicLookSignature(void);
 /* the corner radius of a card of the settings, from 0 to 36 points */
 #define EXTERIA_SECTION_RADIUS_DEFAULT 22
 #define EXTERIA_SECTION_RADIUS_MAX 36

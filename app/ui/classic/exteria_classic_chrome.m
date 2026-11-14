@@ -3,6 +3,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#import "exteria_chat_settings.h"
 #import "exteria_emoji_label.h"
 #import "exteria_platform.h"
 #import "exteria_string_drawing.h"
@@ -22,6 +23,14 @@ BOOL ExteriaClassicIsFlatSystem(void) {
 /* the purple of the bars: deep enough in the dark theme that the gloss of ios 5 and 6 still reads, lighter in the white
    theme where the deep one looks heavy next to white rows; both keep the white text */
 static UIColor *ExteriaClassicBarColor(void) {
+    /* the material of the customization: steel blue, graphite and black glass are fixed colors, and only the first keeps the hue of the app */
+    BOOL dark = ExteriaThemeIsDark();
+    switch (ExteriaClassicMaterial()) {
+    case 1: return dark ? [UIColor colorWithRed:0.22 green:0.34 blue:0.52 alpha:1] : [UIColor colorWithRed:0.31 green:0.47 blue:0.68 alpha:1];
+    case 2: return dark ? [UIColor colorWithRed:0.20 green:0.20 blue:0.22 alpha:1] : [UIColor colorWithRed:0.36 green:0.36 blue:0.39 alpha:1];
+    case 3: return dark ? [UIColor colorWithRed:0.06 green:0.06 blue:0.07 alpha:1] : [UIColor colorWithRed:0.14 green:0.14 blue:0.16 alpha:1];
+    default: break;
+    }
     if (ExteriaThemeIsDark()) return ExteriaThemeTinted([UIColor colorWithRed:0.40 green:0.27 blue:0.56 alpha:1]);
     return ExteriaThemeTinted([UIColor colorWithRed:0.60 green:0.44 blue:0.78 alpha:1]);
 }
@@ -40,12 +49,18 @@ static NSCache *ExteriaClassicImageCache(void) {
 
 static UIImage *ExteriaClassicRemembered(NSString *key, UIImage *(^make)(void)) {
     NSCache *cache = ExteriaClassicImageCache();
-    NSString *full = [NSString stringWithFormat:@"%lu|%.1f|%@", (unsigned long)ExteriaThemeRevision(), ExteriaScreenScale(), key];
+    NSString *full = [NSString stringWithFormat:@"%lu|%.1f|%@|%@", (unsigned long)ExteriaThemeRevision(), ExteriaScreenScale(), ExteriaClassicLookSignature(), key];
     UIImage *image = [[[cache objectForKey:full] retain] autorelease];
     if (image) return image;
     image = make();
     if (image) [cache setObject:image forKey:full];
     return image;
+}
+
+/* how strong the lights of the glossy pictures are: none, as the style was drawn before the setting, or half again as strong */
+static CGFloat ExteriaClassicGlossScale(void) {
+    static const CGFloat scales[3] = {0, 1, 1.6f};
+    return scales[ExteriaClassicGlossLevel()];
 }
 
 static UIImage *ExteriaClassicBarImageMade(void);
@@ -68,16 +83,16 @@ static UIImage *ExteriaClassicBarImageMade(void) {
     /* the light on the upper half fades out by the middle: with a hard edge there, a strip of any height showed a band, and the pinned message, the player and the sheet headers
        are all strips */
     {
-        CGFloat shine[] = {1, 1, 1, 0.12, 1, 1, 1, 0};
+        CGFloat shine[] = {1, 1, 1, MIN(1, 0.12f * ExteriaClassicGlossScale()), 1, 1, 1, 0};
         CGGradientRef lit = CGGradientCreateWithColorComponents(space, shine, NULL, 2);
         CGContextSaveGState(context);
         CGContextClipToRect(context, CGRectMake(0, 0, 2, 22));
-        CGContextDrawLinearGradient(context, lit, CGPointMake(0, 0), CGPointMake(0, 22), 0);
+        if (ExteriaClassicGlossScale() > 0) CGContextDrawLinearGradient(context, lit, CGPointMake(0, 0), CGPointMake(0, 22), 0);
         CGContextRestoreGState(context);
         CGGradientRelease(lit);
     }
     /* a bright line runs along the top and a dark one under the bar */
-    [[UIColor colorWithWhite:1 alpha:0.22] setFill];
+    [[UIColor colorWithWhite:1 alpha:ExteriaClassicGlossScale() > 0 ? 0.22 : 0.08] setFill];
     UIRectFill(CGRectMake(0, 0, 2, 1.0 / ExteriaScreenScale()));
     [[UIColor colorWithWhite:0 alpha:0.35] setFill];
     UIRectFill(CGRectMake(0, 44 - 1.0 / ExteriaScreenScale(), 2, 1.0 / ExteriaScreenScale()));
@@ -394,6 +409,15 @@ void ExteriaClassicStyleTabBar(UITabBar *bar) {
     }
 }
 
+UITableViewCellSeparatorStyle ExteriaClassicListSeparatorStyle(BOOL hasRows) {
+    if (!hasRows) return UITableViewCellSeparatorStyleNone;
+    switch (ExteriaClassicSeparators()) {
+    case 1: return UITableViewCellSeparatorStyleSingleLineEtched;
+    case 2: return UITableViewCellSeparatorStyleNone;
+    default: return UITableViewCellSeparatorStyleSingleLine;
+    }
+}
+
 void ExteriaClassicStyleTable(UITableView *table) {
     if (![table.backgroundView isKindOfClass:[ExteriaWaveBackgroundView class]]) {
         ExteriaWaveBackgroundView *background = [[[ExteriaWaveBackgroundView alloc] initWithFrame:table.bounds] autorelease];
@@ -401,11 +425,13 @@ void ExteriaClassicStyleTable(UITableView *table) {
         background.userInteractionEnabled = YES;
         table.backgroundView = background;
     }
+    /* the lines the person chose in the customization; the thin line is what each page had before, so it is left to the code below */
+    if (ExteriaClassicSeparators() != 0) table.separatorStyle = ExteriaClassicListSeparatorStyle(YES);
     if (!ExteriaThemeIsDark()) return;
     table.backgroundColor = ExteriaColorScreen();
     /* the etched line of a grouped table on ios 5 and 6 adds a white line under the dark one, which glows on the dark cards; a single faint line sits quietly between the rows and
        along the edge of each card */
-    table.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    if (ExteriaClassicSeparators() == 0) table.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
     table.separatorColor = [UIColor colorWithWhite:1 alpha:0.055];
 }
 
@@ -553,7 +579,7 @@ static UIImage *ExteriaClassicRoundImageMade(ExteriaSymbol symbol, CGFloat side,
     CGContextRestoreGState(context);
     /* the pale cap of the dome stands wholly inside the rim and fades towards its foot: an ellipse that ran past the rim was cut by it, and the cut showed as flat corners on the
        top of the circle */
-    CGFloat capAlpha[] = {1, 1, 1, 0.34,  1, 1, 1, 0.02};
+    CGFloat capAlpha[] = {1, 1, 1, MIN(1, 0.34f * ExteriaClassicGlossScale()),  1, 1, 1, MIN(1, 0.02f * ExteriaClassicGlossScale())};
     CGGradientRef cap = CGGradientCreateWithColorComponents(space, capAlpha, NULL, 2);
     CGRect capRect = CGRectMake(side * 0.12, side * 0.06, side * 0.76, side * 0.46);
     CGContextSaveGState(context);
@@ -755,6 +781,8 @@ UILabel *ExteriaClassicBadge(NSString *text, BOOL muted) {
 static UIImage *ExteriaClassicGlossImageMade(const CGFloat *fill, const CGFloat *outline, CGFloat radius, CGFloat gloss, CGFloat lit);
 
 static UIImage *ExteriaClassicGlossImage(const CGFloat *fill, const CGFloat *outline, CGFloat radius, CGFloat gloss, CGFloat lit) {
+    gloss = MIN(1, gloss * ExteriaClassicGlossScale());
+    lit = MIN(1, lit * ExteriaClassicGlossScale());
     NSMutableString *key = [NSMutableString stringWithFormat:@"gloss|%.1f|%.3f|%.3f", radius, gloss, lit];
     for (int i = 0; i < 12; ++i) [key appendFormat:@"|%.3f", fill[i]];
     for (int i = 0; i < 3; ++i) [key appendFormat:@"|%.3f", outline[i]];

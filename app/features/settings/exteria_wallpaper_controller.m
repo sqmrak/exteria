@@ -26,6 +26,12 @@
     ExteriaChatPreviewView *_preview;
     ExteriaWallpaperGridView *_grid;
     UIControl<ExteriaTintControl> *_picker;
+    /* the modern page has two tabs, the wallpapers and the customization of the look of the app; the second is not offered for the wallpaper of one chat */
+    NSUInteger _tab;
+    ExteriaPillTabsView *_tabs;
+    ExteriaShapeGridView *_shapes;
+    ExteriaCustomPreviewView *_customPreview;
+    ExteriaClassicPreviewView *_classicPreview;
     /* the classic style makes every page again after a change of the color, and the new table starts at the top; the offset of the old one is brought back */
     CGFloat _restoreOffset;
     BOOL _restoresOffset;
@@ -197,6 +203,193 @@
         [me rebuild];
         [me animateTabChangeFrom:previous];
     };
+    [_shapes release];
+    _shapes = [[ExteriaShapeGridView alloc] init];
+    _shapes.chooseHandler = ^(NSInteger shape) {
+        ExteriaWallpaperController *me = weak.target;
+        if (!me) return;
+        ExteriaAvatarShapeStore(shape);
+        [me applyLook];
+        [me applyLookNow];
+    };
+    [_customPreview release];
+    _customPreview = [[ExteriaCustomPreviewView alloc] init];
+    [_classicPreview release];
+    _classicPreview = [[ExteriaClassicPreviewView alloc] init];
+    [self showLeadPicture];
+}
+
+/* the previews show the lead developer, sqmrak, with the picture that ships in the bundle, so the row looks the same before the network is up */
+- (void)showLeadPicture {
+    NSString *path = [[NSBundle mainBundle] pathForResource:@"app_sqmrak" ofType:@"png"];
+    UIImage *picture = path ? [UIImage imageWithContentsOfFile:path] : nil;
+    if (!picture) {
+        NSLog(@"exteria: the picture of the lead is missing from the bundle");
+        return;
+    }
+    [_customPreview setPicture:picture];
+    [_classicPreview setPicture:picture];
+}
+
+/* every screen reads its settings when it is built, so the main controller builds them again on this notification; this page stays and is made again */
+- (void)applyLook {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(applyLookNow) object:nil];
+    [self performSelector:@selector(applyLookNow) withObject:nil afterDelay:0.5];
+    [_customPreview refresh];
+    [_classicPreview refresh];
+    _shapes.selectedShape = ExteriaAvatarShapeStored();
+}
+
+/* a tap on a choice starts the duck at once, from the point that was touched; a slider waits until it rests */
+- (void)applyLookNow {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(applyLookNow) object:nil];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
+                                                      userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:self.selectPoint] forKey:ExteriaThemeOriginKey]];
+}
+
+- (ExteriaSettingsSection *)tabsSection {
+    ExteriaPillTabsView *tabs = _tabs;
+    return [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:[ExteriaSettingsRow viewRowWithView:tabs height:^CGFloat(CGFloat width) { (void)width; return 40; }]]];
+}
+
+/* a group of rows of which one is chosen: a tap stores it, starts the duck and makes the page again */
+- (NSArray *)choiceRowsWithKeys:(NSArray *)keys current:(NSInteger)current store:(void (^)(NSInteger))store {
+    ExteriaWeakReference *weak = _weak;
+    void (^keep)(NSInteger) = [[store copy] autorelease];
+    NSMutableArray *rows = [NSMutableArray array];
+    for (NSUInteger i = 0; i < keys.count; ++i) {
+        [rows addObject:[ExteriaSettingsRow checkRowWithTitle:NSLocalizedString([keys objectAtIndex:i], nil) subtitle:nil checked:(NSUInteger)current == i tap:^{
+            ExteriaWallpaperController *me = weak.target;
+            if (!me || (NSInteger)i == current) return;
+            keep((NSInteger)i);
+            [me applyLook];
+            [me applyLookNow];
+        }]];
+    }
+    return rows;
+}
+
+- (NSArray *)classicCustomizationSections {
+    ExteriaWeakReference *weak = _weak;
+    NSMutableArray *sections = [NSMutableArray array];
+    [sections addObject:[self tabsSection]];
+    ExteriaClassicPreviewView *preview = _classicPreview;
+    [preview refresh];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:
+        [ExteriaSettingsRow viewRowWithView:preview height:^CGFloat(CGFloat width) { (void)width; return [ExteriaClassicPreviewView height]; }]]]];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.gloss.header", nil) footer:NSLocalizedString(@"custom.gloss.info", nil)
+        rows:[self choiceRowsWithKeys:[NSArray arrayWithObjects:@"custom.gloss.off", @"custom.gloss.normal", @"custom.gloss.strong", nil] current:ExteriaClassicGlossLevel()
+                                store:^(NSInteger value) { ExteriaClassicGlossStore(value); }]]];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.material.header", nil) footer:NSLocalizedString(@"custom.material.info", nil)
+        rows:[self choiceRowsWithKeys:[NSArray arrayWithObjects:@"custom.material.accent", @"custom.material.steel", @"custom.material.graphite", @"custom.material.black", nil]
+                              current:ExteriaClassicMaterial() store:^(NSInteger value) { ExteriaClassicMaterialStore(value); }]]];
+    NSMutableArray *texture = [NSMutableArray arrayWithArray:[self choiceRowsWithKeys:[NSArray arrayWithObjects:@"custom.texture.linen", @"custom.texture.plain", nil]
+                                                                              current:ExteriaClassicTextureStyle() store:^(NSInteger value) { ExteriaClassicTextureStyleStore(value); }]];
+    if (ExteriaClassicTextureStyle() == 0) {
+        [texture addObject:[ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"custom.texture.strength", nil) format:@"%.0f%%" value:(float)ExteriaClassicTextureStrength()
+                                                          minimum:0 maximum:100 change:^(float value) {
+            ExteriaClassicTextureStrengthStore((NSInteger)(value + 0.5f));
+            [(ExteriaWallpaperController *)weak.target applyLook];
+        }]];
+        /* the linen follows the accent unless a hue of its own is set, which the slider below then moves */
+        BOOL ownHue = ExteriaClassicTextureHue() >= 0;
+        [texture addObjectsFromArray:[self choiceRowsWithKeys:[NSArray arrayWithObjects:@"custom.texture.follow", @"custom.texture.own", nil] current:ownHue ? 1 : 0
+                                                        store:^(NSInteger value) { ExteriaClassicTextureHueStore(value ? 262 : -1); }]];
+        if (ownHue) {
+            [texture addObject:[ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"custom.texture.hue", nil) format:@"%.0f°" value:(float)ExteriaClassicTextureHue()
+                                                              minimum:0 maximum:359 change:^(float value) {
+                ExteriaClassicTextureHueStore((NSInteger)(value + 0.5f));
+                [(ExteriaWallpaperController *)weak.target applyLook];
+            }]];
+        }
+    }
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.texture.header", nil) footer:NSLocalizedString(@"custom.texture.info", nil) rows:texture]];
+    ExteriaSettingsRow *avatarGloss = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"custom.avatar.gloss", nil) subtitle:nil on:ExteriaClassicAvatarGloss() toggle:^(BOOL on) {
+        ExteriaClassicAvatarGlossStore(on);
+        [(ExteriaWallpaperController *)weak.target applyLookNow];
+    }];
+    ExteriaSettingsRow *avatarShadow = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"custom.avatar.shadow", nil) subtitle:nil on:ExteriaClassicAvatarShadow() toggle:^(BOOL on) {
+        ExteriaClassicAvatarShadowStore(on);
+        [(ExteriaWallpaperController *)weak.target applyLookNow];
+    }];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.avatars.header", nil) footer:nil rows:[NSArray arrayWithObjects:avatarGloss, avatarShadow, nil]]];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.separators.header", nil) footer:NSLocalizedString(@"custom.separators.info", nil)
+        rows:[self choiceRowsWithKeys:[NSArray arrayWithObjects:@"custom.separators.thin", @"custom.separators.etched", @"custom.separators.none", nil] current:ExteriaClassicSeparators()
+                                store:^(NSInteger value) { ExteriaClassicSeparatorsStore(value); }]]];
+    return sections;
+}
+
+- (NSArray *)customizationSections {
+    if (ExteriaThemeIsClassic()) return [self classicCustomizationSections];
+    ExteriaWeakReference *weak = _weak;
+    NSMutableArray *sections = [NSMutableArray array];
+    [sections addObject:[self tabsSection]];
+    ExteriaCustomPreviewView *preview = _customPreview;
+    [preview refresh];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:
+        [ExteriaSettingsRow viewRowWithView:preview height:^CGFloat(CGFloat width) { (void)width; return [ExteriaCustomPreviewView height]; }]]]];
+
+    ExteriaShapeGridView *shapes = _shapes;
+    shapes.selectedShape = ExteriaAvatarShapeStored();
+    NSMutableArray *avatarRows = [NSMutableArray array];
+    [avatarRows addObject:[ExteriaSettingsRow viewRowWithView:shapes height:^CGFloat(CGFloat width) { return [ExteriaShapeGridView heightForWidth:width]; }]];
+    if (ExteriaAvatarShapeStored() == ExteriaShapeRounded) {
+        [avatarRows addObject:[ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"look.avatar.corners", nil) format:@"%.0f%%" value:(float)ExteriaAvatarCornerPercent()
+                                                             minimum:0 maximum:100 change:^(float value) {
+            ExteriaAvatarCornerStore((NSInteger)(value + 0.5f));
+            [(ExteriaWallpaperController *)weak.target applyLook];
+        }]];
+    }
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.avatars.header", nil) footer:NSLocalizedString(@"custom.avatars.info", nil) rows:avatarRows]];
+
+    NSMutableArray *sendRows = [NSMutableArray array];
+    NSArray *sendKeys = [NSArray arrayWithObjects:@"custom.send.circle", @"custom.send.rounded", @"custom.send.avatar", nil];
+    for (NSUInteger i = 0; i < sendKeys.count; ++i) {
+        [sendRows addObject:[ExteriaSettingsRow checkRowWithTitle:NSLocalizedString([sendKeys objectAtIndex:i], nil) subtitle:nil checked:(NSUInteger)ExteriaSendShapeStored() == i tap:^{
+            ExteriaWallpaperController *me = weak.target;
+            if (!me || (NSUInteger)ExteriaSendShapeStored() == i) return;
+            ExteriaSendShapeStore((NSInteger)i);
+            [me applyLook];
+            [me applyLookNow];
+        }]];
+    }
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.send.header", nil) footer:nil rows:sendRows]];
+
+    ExteriaSettingsRow *bubbles = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.corners.row", nil) format:@"%.0f" value:(float)ExteriaChatBubbleRadius()
+                                                                 minimum:EXTERIA_CHAT_BUBBLE_RADIUS_MIN maximum:EXTERIA_CHAT_BUBBLE_RADIUS_MAX change:^(float value) {
+        ExteriaChatSetBubbleRadius((NSInteger)(value + 0.5f));
+        [[(ExteriaWallpaperController *)weak.target customPreviewView] refresh];
+    }];
+    ExteriaSettingsRow *cards = [ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"look.cards.radius", nil) format:@"%.0f" value:(float)ExteriaSectionRadius()
+                                                               minimum:0 maximum:EXTERIA_SECTION_RADIUS_MAX change:^(float value) {
+        ExteriaSectionRadiusStore((NSInteger)(value + 0.5f));
+        [(ExteriaWallpaperController *)weak.target applyLook];
+    }];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.corners.header", nil) footer:nil rows:[NSArray arrayWithObjects:bubbles, cards, nil]]];
+
+    NSMutableArray *density = [NSMutableArray array];
+    NSArray *densityKeys = [NSArray arrayWithObjects:@"custom.density.regular", @"custom.density.compact", nil];
+    for (NSUInteger i = 0; i < densityKeys.count; ++i) {
+        [density addObject:[ExteriaSettingsRow checkRowWithTitle:NSLocalizedString([densityKeys objectAtIndex:i], nil) subtitle:nil checked:(NSUInteger)ExteriaListDensityStored() == i tap:^{
+            ExteriaWallpaperController *me = weak.target;
+            if (!me || (NSUInteger)ExteriaListDensityStored() == i) return;
+            ExteriaListDensityStore((NSInteger)i);
+            [me applyLook];
+            [me applyLookNow];
+        }]];
+    }
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"custom.density.header", nil) footer:NSLocalizedString(@"custom.density.info", nil) rows:density]];
+
+    ExteriaSettingsRow *indicator = [ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"custom.indicator", nil) subtitle:nil on:ExteriaTabIndicatorOn() toggle:^(BOOL on) {
+        ExteriaTabIndicatorStore(on);
+        [(ExteriaWallpaperController *)weak.target applyLookNow];
+    }];
+    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.layout.header", nil) footer:nil rows:[NSArray arrayWithObject:indicator]]];
+    return sections;
+}
+
+- (ExteriaCustomPreviewView *)customPreviewView {
+    return _customPreview;
 }
 
 - (void)tintCommitted:(UIControl<ExteriaTintControl> *)picker {
