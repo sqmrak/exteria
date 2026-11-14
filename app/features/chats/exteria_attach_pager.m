@@ -428,7 +428,10 @@ static char ExteriaPlayerStatusContext;
     }
     CGFloat leftReserve = safe.left + buttonSide + 8, rightReserve = size.width - edge + 8;
     CGFloat margin = MAX(leftReserve, rightReserve);
-    _count.frame = CGRectMake(margin, barTop + 2, MAX(0, size.width - 2 * margin), buttonSide);
+    /* on a 320 point screen three buttons leave 16 points between equal margins, which cut "1 / 5" to "1 /"; the counter then takes the room between the close button and the first one on the right */
+    CGFloat needed = ceil([_count.text sizeWithFont:_count.font].width) + 8;
+    if (size.width - 2 * margin >= needed) _count.frame = CGRectMake(margin, barTop + 2, size.width - 2 * margin, buttonSide);
+    else _count.frame = CGRectMake(leftReserve, barTop + 2, MAX(0, size.width - rightReserve - leftReserve), buttonSide);
 }
 
 - (void)layoutAll {
