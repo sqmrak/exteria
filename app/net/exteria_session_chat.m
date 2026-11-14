@@ -935,7 +935,10 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
         } else {
             exteria_message_row *rows = calloc(EXTERIA_MESSAGES_MAX, sizeof(*rows));
             size_t count = 0;
-            if (rows && exteria_history_page_read(result->value, &page) == EXTERIA_OK && exteria_messages_parse(result->value, rows, EXTERIA_MESSAGES_MAX, &count) == EXTERIA_OK) {
+            exteria_messages_dropped dropped;
+            if (rows && exteria_history_page_read(result->value, &page) == EXTERIA_OK && exteria_messages_parse_counted(result->value, rows, EXTERIA_MESSAGES_MAX, &count, &dropped) == EXTERIA_OK) {
+                if (dropped.count) NSLog(@"exteria: history of peer %d:%lld dropped %lu messages that did not read, the first is %d (%s)", peer.kind, (long long)peer.id,
+                                         (unsigned long)dropped.count, dropped.first_id, exteria_status_name(dropped.first_status));
                 messages = [NSMutableArray arrayWithCapacity:count];
                 [self keepMessagesOfAnswer:result->value];
                 for (size_t i = 0; i < count; ++i) {

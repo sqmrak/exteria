@@ -232,6 +232,16 @@ exteria_status exteria_message_read(const exteria_tl_value *message, exteria_mes
 /* a messages.messages, messagesSlice or channelMessages answer in server order (newest first), at most cap rows */
 exteria_status exteria_messages_parse(const exteria_tl_value *answer, exteria_message_row *rows, size_t cap, size_t *count);
 
+/* the messages of an answer that did not read, deleted ones (messageEmpty) apart: how many, and the id and status of the first */
+typedef struct exteria_messages_dropped {
+    size_t count;
+    int32_t first_id;
+    exteria_status first_status;
+} exteria_messages_dropped;
+
+/* exteria_messages_parse that also tells what it left out; dropped may be NULL */
+exteria_status exteria_messages_parse_counted(const exteria_tl_value *answer, exteria_message_row *rows, size_t cap, size_t *count, exteria_messages_dropped *dropped);
+
 typedef struct exteria_history_page {
     uint32_t count;
     int32_t oldest_id;
@@ -351,6 +361,11 @@ typedef enum exteria_shared_kind {
 /* messages.search with the filter of a kind and no text, newest first, a page of limit (1 to EXTERIA_MESSAGES_MAX) older than offset_id (zero for the
    newest); read with exteria_messages_parse */
 exteria_status exteria_shared_request(exteria_arena *arena, const exteria_peer_ref *peer, exteria_shared_kind kind, int32_t offset_id, int32_t limit, exteria_tl_value **out);
+/* messages.search for the messages the account itself wrote in a chat (from_id the account) or in one topic of it, newest first, a page of limit older than offset_id
+   (zero for the newest); read with exteria_messages_parse */
+exteria_status exteria_own_messages_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t limit, exteria_tl_value **out);
+/* the same search for the oldest limit messages of a kind (offset_id 1, add_offset -limit), still newest first inside the page */
+exteria_status exteria_shared_oldest_request(exteria_arena *arena, const exteria_peer_ref *peer, exteria_shared_kind kind, int32_t limit, exteria_tl_value **out);
 
 /* one photo or video of an album, once the server has it: what an inputMediaPhoto or inputMediaDocument needs */
 #define EXTERIA_ALBUM_ITEMS_MAX 10

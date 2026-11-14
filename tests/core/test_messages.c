@@ -1083,6 +1083,27 @@ static void test_answers(void) {
     free(rows);
 }
 
+static void test_dropped_messages(void) {
+    exteria_message_row *rows = calloc(4, sizeof(*rows));
+    exteria_tl_value *list[4], *bad = obj("message");
+    exteria_messages_dropped dropped;
+    size_t count = 99;
+    CHECK(rows != NULL);
+    set_i32(bad, "id", 29);
+    list[0] = message(30, "newest");
+    list[1] = obj("messageEmpty");
+    list[2] = bad;
+    list[3] = message(28, "older");
+    CHECK_EQ_INT(exteria_messages_parse_counted(answer("messages.messages", list, 4), rows, 4, &count, &dropped), EXTERIA_OK);
+    CHECK_EQ_INT(count, 2);
+    CHECK_EQ_INT(dropped.count, 1);
+    CHECK_EQ_INT(dropped.first_id, 29);
+    CHECK_EQ_INT(dropped.first_status, EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_messages_parse_counted(answer("messages.messages", list, 1), rows, 4, &count, &dropped), EXTERIA_OK);
+    CHECK_EQ_INT(dropped.count, 0);
+    free(rows);
+}
+
 static exteria_tl_value *sticker_set(int64_t id, const char *title, int flags_masks) {
     exteria_tl_value *s = obj("stickerSet"), *thumbs[1];
     set_i64(s, "id", id);
@@ -2140,6 +2161,7 @@ int main(void) {
     test_reactions_request();
     test_greeting_stickers();
     test_answers();
+    test_dropped_messages();
     test_sticker_sets();
     test_animated_emoji();
     test_emoji_sets();

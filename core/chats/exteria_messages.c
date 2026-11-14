@@ -851,10 +851,11 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     return EXTERIA_OK;
 }
 
-exteria_status exteria_messages_parse(const exteria_tl_value *answer, exteria_message_row *rows, size_t cap, size_t *count) {
+exteria_status exteria_messages_parse_counted(const exteria_tl_value *answer, exteria_message_row *rows, size_t cap, size_t *count, exteria_messages_dropped *dropped) {
     const exteria_tl_value *messages;
     uint32_t i;
     size_t n = 0;
+    if (dropped) memset(dropped, 0, sizeof(*dropped));
     if (count) *count = 0;
     if (!answer || !rows || !count || cap == 0) return EXTERIA_E_ARG;
     if (exteria_tl_is(answer, EXTERIA_TL_ID_messages_messagesNotModified)) return EXTERIA_E_NOTFOUND;
@@ -862,10 +863,24 @@ exteria_status exteria_messages_parse(const exteria_tl_value *answer, exteria_me
         !exteria_tl_is(answer, EXTERIA_TL_ID_messages_channelMessages)) return EXTERIA_E_MALFORMED;
     if (exteria_tl_get_vec(answer, "messages", &messages) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
     for (i = 0; i < messages->u.vec.count && n < cap; ++i) {
-        if (exteria_message_read(messages->u.vec.items[i], &rows[n]) == EXTERIA_OK) ++n;
+        exteria_status status = exteria_message_read(messages->u.vec.items[i], &rows[n]);
+        if (status == EXTERIA_OK) {
+            ++n;
+        } else if (status != EXTERIA_E_NOTFOUND && dropped) {
+            /* a deleted message (messageEmpty) is no loss; any other message that did not read vanishes from the chat, and an album loses its pictures and files with it */
+            if (!dropped->count) {
+                exteria_tl_get_i32(messages->u.vec.items[i], "id", &dropped->first_id);
+                dropped->first_status = status;
+            }
+            ++dropped->count;
+        }
     }
     *count = n;
     return EXTERIA_OK;
+}
+
+exteria_status exteria_messages_parse(const exteria_tl_value *answer, exteria_message_row *rows, size_t cap, size_t *count) {
+    return exteria_messages_parse_counted(answer, rows, cap, count, NULL);
 }
 
 exteria_status exteria_history_page_read(const exteria_tl_value *answer, exteria_history_page *page) {
@@ -1932,6 +1947,30 @@ exteria_status exteria_shared_request(exteria_arena *arena, const exteria_peer_r
     status = chat_search_request(arena, peer, NULL, "", filters[kind], limit, out);
     if (status == EXTERIA_OK && offset_id) status = exteria_tl_set_i32(arena, *out, "offset_id", offset_id);
     if (status != EXTERIA_OK) *out = NULL;
+    return status;
+}
+
+exteria_status exteria_own_messages_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t offset_id, int32_t limit, exteria_tl_value **out) {
+    exteria_tl_value *request = NULL, *sender;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out || !peer || offset_id < 0) return EXTERIA_E_ARG;
+    /* chat_search_request sends the filter of the kind named; the empty filter lets every message of the account through */
+    status = chat_search_request(arena, peer, NULL, "", "inputMessagesFilterEmpty", limit, &request);
+    sender = status == EXTERIA_OK ? exteria_tl_new_obj(arena, "inputPeerSelf") : NULL;
+    if (status == EXTERIA_OK && !sender) status = EXTERIA_E_NOMEM;
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "from_id", sender);
+    if (status == EXTERIA_OK && offset_id) status = exteria_tl_set_i32(arena, request, "offset_id", offset_id);
+    if (status == EXTERIA_OK && peer->topic_id > 1) status = exteria_tl_set_i32(arena, request, "top_msg_id", peer->topic_id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_shared_oldest_request(exteria_arena *arena, const exteria_peer_ref *peer, exteria_shared_kind kind, int32_t limit, exteria_tl_value **out) {
+    exteria_status status = exteria_shared_request(arena, peer, kind, 1, limit, out);
+    /* offset_id 1 with a negative add_offset reads forward from the first message: the server returns the limit messages after id 1 */
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, *out, "add_offset", -limit);
+    if (status != EXTERIA_OK && out) *out = NULL;
     return status;
 }
 
