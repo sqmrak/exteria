@@ -1,10 +1,12 @@
 #import "exteria_dismiss_pan.h"
 
 #import "exteria_platform.h"
+#import "exteria_weak_reference.h"
 #include <math.h>
 
 @interface ExteriaDismissPan : UIPanGestureRecognizer <UIGestureRecognizerDelegate> {
-    id _owner;
+    /* the card outlives its owner while a slide out or a touch is still in flight, and a bare pointer was messaged after the owner was freed */
+    ExteriaWeakReference *_owner;
     SEL _action;
     UIScrollView *_scroll;
 }
@@ -22,6 +24,7 @@
 }
 
 - (void)dealloc {
+    [_owner release];
     [_scroll release];
     [super dealloc];
 }
@@ -29,7 +32,7 @@
 - (id)initWithOwner:(id)owner action:(SEL)action {
     self = [super initWithTarget:nil action:NULL];
     if (!self) return nil;
-    _owner = owner;
+    _owner = [[ExteriaWeakReference referenceTo:owner] retain];
     _action = action;
     self.delegate = self;
     [self addTarget:self action:@selector(pulled:)];
@@ -51,7 +54,9 @@
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture {
-    if ([_owner respondsToSelector:@selector(exteriaCanDismissByPan)] && ![(id<ExteriaDismissPanGuard>)_owner exteriaCanDismissByPan]) return NO;
+    id owner = _owner.target;
+    if (!owner) return NO;
+    if ([owner respondsToSelector:@selector(exteriaCanDismissByPan)] && ![(id<ExteriaDismissPanGuard>)owner exteriaCanDismissByPan]) return NO;
     CGPoint velocity = [self velocityInView:gesture.view];
     return velocity.y > 0 && velocity.y > fabs(velocity.x) &&
            (!_scroll || _scroll.contentOffset.y <= -_scroll.contentInset.top + 0.5);
@@ -75,10 +80,10 @@
         card.transform = CGAffineTransformMakeTranslation(0, distance);
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
         if (pan.state == UIGestureRecognizerStateEnded && (distance > 80 || [pan velocityInView:card.superview].y > 900)) {
-            id owner = _owner;
+            id owner = [[_owner.target retain] autorelease];
             SEL action = _action;
             [self setScroll:nil];
-            [owner performSelector:action];
+            if (owner) [owner performSelector:action];
             return;
         } else {
             [UIView animateWithDuration:ExteriaReduceMotionEnabled() ? 0 : 0.2 delay:0
