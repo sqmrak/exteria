@@ -9,6 +9,9 @@
 #import "exteria_person.h"
 #import "exteria_session_actions.h"
 #import "exteria_settings_kit.h"
+#import "exteria_topic_icon.h"
+#import "exteria_custom_emoji_loader.h"
+#import "exteria_weak_reference.h"
 
 static BOOL ExteriaCanCopyForward(ExteriaMessage *message) {
     ExteriaMedia *media = message.media;
@@ -127,7 +130,7 @@ static UIViewController *ExteriaForwardFrontController(void) {
 
 /* a forum asks for the topic the messages go to, as the other clients do: the topics of the group in a list over the screen, and the one that is tapped is the target; a forum whose
    topics do not load keeps the answer of the group itself, which the server reads as its General topic */
-static void ExteriaChooseForwardTopic(ExteriaSession *session, ExteriaDialog *target, void (^done)(ExteriaDialog *chosen)) {
+static void ExteriaChooseForwardTopic(ExteriaSession *session, ExteriaMediaCache *cache, ExteriaDialog *target, void (^done)(ExteriaDialog *chosen)) {
     if (!target.forum || target.topicId > 0) { done(target); return; }
     void (^answer)(ExteriaDialog *) = [done copy];
     [session loadTopicsOfDialog:target completion:^(NSArray *topics, NSString *errorName) {
@@ -142,18 +145,34 @@ static void ExteriaChooseForwardTopic(ExteriaSession *session, ExteriaDialog *ta
         page.pageTitle = NSLocalizedString(@"chat.forward.topic", nil);
         UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:page] autorelease];
         navigation.modalPresentationStyle = UIModalPresentationFormSheet;
-        NSMutableArray *rows = [NSMutableArray array];
         __block BOOL chosen = NO;
-        for (ExteriaDialog *topic in topics) {
-            if (topic.topicClosed) continue;
-            [rows addObject:[ExteriaSettingsRow rowWithTitle:topic.title value:nil tap:^{
-                if (chosen) return;
-                chosen = YES;
-                [navigation dismissViewControllerAnimated:YES completion:^{ answer(topic); [answer release]; }];
-            }]];
-        }
+        /* a row carries the icon of its topic, the picture of the custom emoji when it is in memory and the hash in the topic's color until then */
+        NSArray *(^makeRows)(void) = ^NSArray *{
+            NSMutableArray *rows = [NSMutableArray array];
+            for (ExteriaDialog *topic in topics) {
+                if (topic.topicClosed) continue;
+                [rows addObject:[ExteriaSettingsRow rowWithTileImage:ExteriaTopicIconImage(topic) title:topic.title subtitle:nil tap:^{
+                    if (chosen) return;
+                    chosen = YES;
+                    [navigation dismissViewControllerAnimated:YES completion:^{ answer(topic); [answer release]; }];
+                }]];
+            }
+            return rows;
+        };
+        NSArray *rows = makeRows();
         if (!rows.count) { answer(target); [answer release]; return; }
         page.sections = [NSArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:rows]];
+        NSMutableArray *icons = [NSMutableArray array];
+        for (ExteriaDialog *topic in topics) if (topic.topicIconEmoji) [icons addObject:[NSNumber numberWithLongLong:topic.topicIconEmoji]];
+        if (icons.count) {
+            ExteriaWeakReference *weakPage = [ExteriaWeakReference referenceTo:page];
+            [ExteriaCustomEmojiLoader loadDocuments:icons session:session media:cache documents:nil picture:^{
+                ExteriaSettingsPageController *shown = weakPage.target;
+                if (!shown) return;
+                shown.sections = [NSArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:makeRows()]];
+                [shown reloadSettings];
+            }];
+        }
         ExteriaForwardCancel *cancel = [[[ExteriaForwardCancel alloc] initWithBlock:^{
             if (chosen) return;
             chosen = YES;
@@ -167,7 +186,7 @@ static void ExteriaChooseForwardTopic(ExteriaSession *session, ExteriaDialog *ta
 
 void ExteriaForwardMessages(ExteriaSession *session, ExteriaMediaCache *cache, ExteriaDialog *from, BOOL chatRestricted, NSArray *messages, ExteriaDialog *target, BOOL hideAuthor, void (^completion)(NSString *message)) {
     void (^finish)(NSString *) = [completion copy];
-    ExteriaChooseForwardTopic(session, target, ^(ExteriaDialog *chosen) {
+    ExteriaChooseForwardTopic(session, cache, target, ^(ExteriaDialog *chosen) {
         /* nothing was chosen: the list was cancelled, and nothing goes */
         if (!chosen) { [finish release]; return; }
         ExteriaForwardMessagesNow(session, cache, from, chatRestricted, messages, chosen, hideAuthor, finish);
