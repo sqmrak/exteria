@@ -76,6 +76,7 @@ the host is `core/pyhost`, the python side is `python/shim` and `third_party/ext
 
 ## for developers
 
+- [CONTRIBUTORS.md](CONTRIBUTORS.md): build, test, layout, the c core, device install
 - [docs/languages.md](docs/languages.md): add a language, from a `.strings` file or built into the app
 - [docs/plugins.md](docs/plugins.md): write and port a python plugin
 
