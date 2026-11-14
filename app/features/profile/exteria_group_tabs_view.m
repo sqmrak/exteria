@@ -12,8 +12,10 @@
 #import "exteria_music_player.h"
 #import "exteria_dialog_picker_controller.h"
 #import "exteria_gift_screen.h"
+#import "exteria_plural.h"
 #import "exteria_forward.h"
 #import "exteria_session_actions.h"
+#import "exteria_session_profile.h"
 #import "exteria_session_channels.h"
 
 #define TABS_GAP 10.0
@@ -27,7 +29,7 @@
 #define MORE_HEIGHT 48.0
 #define EMPTY_HEIGHT 80.0
 
-typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFiles, ExteriaGroupTabLinks, ExteriaGroupTabAudio, ExteriaGroupTabVoice, ExteriaGroupTabCount } ExteriaGroupTab;
+typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFiles, ExteriaGroupTabLinks, ExteriaGroupTabAudio, ExteriaGroupTabVoice, ExteriaGroupTabCommon, ExteriaGroupTabCount } ExteriaGroupTab;
 
 @interface ExteriaGroupTabsView () {
     ExteriaSession *_session;
@@ -48,6 +50,10 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     BOOL _failed[ExteriaGroupTabCount];
     NSUInteger _tab;
     BOOL _forUser;
+    BOOL _skipFirst;
+    BOOL _hasCommonTab;
+    /* the id the next page of the groups in common starts after */
+    long long _commonLast;
     CGFloat _width;
     CGFloat _bodyHeight;
     NSMutableSet *_selected;
@@ -89,15 +95,12 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     for (int i = 0; i < ExteriaGroupTabCount; ++i) _items[i] = [[NSMutableArray alloc] init];
     NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(forUser ? @"gifts.title" : @"group.tab.members", nil), NSLocalizedString(@"group.tab.media", nil),
                                                 NSLocalizedString(@"group.tab.files", nil), NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil), nil];
-    BOOL skipFirst = dialog.saved || hidesMembers;
-    if (skipFirst) {
+    _skipFirst = dialog.saved || hidesMembers;
+    if (_skipFirst) {
         titles = [titles subarrayWithRange:NSMakeRange(1, titles.count - 1)];
         _tab = ExteriaGroupTabMedia;
     }
-    _tabs = [[ExteriaPillTabsView alloc] initWithTitles:titles];
-    ExteriaWeakReference *me = _weak;
-    _tabs.changeHandler = ^(NSUInteger index) { [(ExteriaGroupTabsView *)me.target chooseTab:skipFirst ? index + 1 : index]; };
-    [self addSubview:_tabs];
+    [self installTabsWithTitles:titles];
     _body = [[UIView alloc] init];
     _body.backgroundColor = ExteriaColorCard();
     _body.layer.cornerRadius = 14;
@@ -110,6 +113,30 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
     _empty.textAlignment = ExteriaTextAlignmentCenter;
     [self load];
     return self;
+}
+
+/* the capsule of tab names; a chosen index is the tab's own number less the one the first tab that is left out takes */
+- (void)installTabsWithTitles:(NSArray *)titles {
+    NSUInteger chosen = _tabs ? _tabs.selectedIndex : 0;
+    [_tabs removeFromSuperview];
+    [_tabs release];
+    _tabs = [[ExteriaPillTabsView alloc] initWithTitles:titles];
+    ExteriaWeakReference *me = _weak;
+    BOOL skipFirst = _skipFirst;
+    _tabs.changeHandler = ^(NSUInteger index) { [(ExteriaGroupTabsView *)me.target chooseTab:skipFirst ? index + 1 : index]; };
+    if (chosen < titles.count) _tabs.selectedIndex = chosen;
+    [self addSubview:_tabs];
+    [self setNeedsLayout];
+}
+
+- (void)setCommonChatsCount:(NSInteger)count {
+    if (!_forUser || count <= 0 || _hasCommonTab) return;
+    _hasCommonTab = YES;
+    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"gifts.title", nil), NSLocalizedString(@"group.tab.media", nil), NSLocalizedString(@"group.tab.files", nil),
+                                                NSLocalizedString(@"group.tab.links", nil), NSLocalizedString(@"group.tab.audio", nil), NSLocalizedString(@"group.tab.voice", nil),
+                                                NSLocalizedString(@"group.tab.common", nil), nil];
+    if (_skipFirst) titles = [titles subarrayWithRange:NSMakeRange(1, titles.count - 1)];
+    [self installTabsWithTitles:titles];
 }
 
 - (void)dealloc {
@@ -143,7 +170,7 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
 }
 
 - (void)chooseTab:(NSUInteger)index {
-    if (index >= ExteriaGroupTabCount || index == _tab) return;
+    if (index >= ExteriaGroupTabCount || index == _tab || (index == ExteriaGroupTabCommon && !_hasCommonTab)) return;
     [_selected removeAllObjects];
     _tab = index;
     [self load];
@@ -187,6 +214,25 @@ typedef enum { ExteriaGroupTabMembers, ExteriaGroupTabMedia, ExteriaGroupTabFile
             [view->_items[tab] addObjectsFromArray:members];
             if (total > 0 && (NSInteger)view->_items[tab].count >= total) view->_finished[tab] = YES;
             [view finishTab:tab added:members.count error:errorName];
+        }];
+        return;
+    }
+    if (tab == ExteriaGroupTabCommon) {
+        [_session loadCommonChatsOfDialog:_dialog beforeId:_commonLast completion:^(NSArray *chats, long long lastId, BOOL finished, NSString *errorName) {
+            [self autorelease];
+            ExteriaGroupTabsView *view = me.target;
+            if (!view) return;
+            NSMutableArray *list = view->_items[tab];
+            for (ExteriaDialog *chat in chats) {
+                BOOL known = NO;
+                for (ExteriaDialog *held in list) if (held.peerKind == chat.peerKind && held.peerId == chat.peerId) { known = YES; break; }
+                if (!known) [list addObject:chat];
+            }
+            if (!errorName) {
+                view->_commonLast = lastId;
+                if (finished) view->_finished[tab] = YES;
+            }
+            [view finishTab:tab added:chats.count error:errorName];
         }];
         return;
     }
@@ -238,7 +284,7 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     UIControl *area = [[[UIControl alloc] initWithFrame:frame] autorelease];
     area.tag = (NSInteger)index;
     [area addTarget:self action:@selector(rowTapped:) forControlEvents:UIControlEventTouchUpInside];
-    if (_tab != ExteriaGroupTabMembers) {
+    if (_tab != ExteriaGroupTabMembers && _tab != ExteriaGroupTabCommon) {
         [area addGestureRecognizer:[[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(rowHeld:)] autorelease]];
         ExteriaMessage *message = [_items[_tab] objectAtIndex:index];
         if ([_selected containsObject:[NSNumber numberWithInt:message.messageId]]) {
@@ -328,16 +374,32 @@ static NSString *ExteriaGroupDateText(int32_t date) {
 
 /* a voice message is named by who sent it, as the file name of a recording says nothing; in saved messages the sender is the account itself, so the author of the forward is shown.
    NO when the history named nobody, and the row keeps the plain title */
+/* the voice list holds voice notes and round videos, and the picture of a row says which: a microphone or a video camera */
+static ExteriaSymbol ExteriaVoiceRowSymbol(ExteriaMessage *message) {
+    return message.media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE ? ExteriaSymbolVideoCamera : ExteriaSymbolMicrophone;
+}
+
 - (BOOL)configureVoiceRow:(ExteriaPersonCell *)cell message:(ExteriaMessage *)message {
     long long key = _dialog.saved && message.forwardKey ? message.forwardKey : message.senderKey;
+    /* a message of a private chat can come without a sender: it is the account's own when it is outgoing and the other person's otherwise; the round videos of a profile lost their name here */
+    if (!key && !_dialog.saved) key = message.outgoing ? [_session ownPerson].userId : (_dialog.peerKind == 1 ? _dialog.peerId : 0);
     ExteriaPerson *person = key ? [_people objectForKey:[NSNumber numberWithLongLong:key]] : nil;
-    NSString *name = person.name.length ? person.name : (_dialog.saved ? message.forwardName : nil);
+    if (!person && key && key == [_session ownPerson].userId) person = [_session ownPerson];
+    NSString *name = person.name;
+    NSString *initials = person.initials;
+    NSUInteger seed = (NSUInteger)(person ? person.userId % 1000003 : message.messageId);
+    if (!name.length && key && key == _dialog.peerId && _dialog.peerKind == 1) {
+        name = _dialog.title;
+        initials = _dialog.initials;
+        seed = _dialog.avatarSeed;
+    }
+    if (!name.length && _dialog.saved) name = message.forwardName;
     if (!name.length) return NO;
     NSString *detail = [NSString stringWithFormat:@"%@, %@", ExteriaGroupSizeText(message.media.size), ExteriaGroupDateText(message.date)];
-    [cell configureWithName:name initials:person.initials.length ? person.initials : [[name substringToIndex:1] uppercaseString]
-                       seed:(NSUInteger)(person ? person.userId % 1000003 : message.messageId)
-                   subtitle:detail subtitleColor:nil trailing:nil symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
-    cell.avatarDeleted = person.deleted;
+    [cell configureWithName:name initials:initials.length ? initials : [[name substringToIndex:1] uppercaseString] seed:seed
+                   subtitle:detail subtitleColor:nil trailing:nil symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:nil avatars:nil];
+    cell.avatarDeleted = NO;
+    [cell showAvatarSymbol:ExteriaVoiceRowSymbol(message)];
     return YES;
 }
 
@@ -371,6 +433,15 @@ static NSString *ExteriaGroupDateText(int32_t date) {
         [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:color
                        trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
         cell.avatarDeleted = person.deleted;
+    } else if (tab == ExteriaGroupTabCommon) {
+        ExteriaDialog *chat = item;
+        NSString *subtitle = nil;
+        if (chat.participantsCount > 0) {
+            NSString *key = [NSString stringWithFormat:@"chat.members.%@", ExteriaPluralForm(chat.participantsCount)];
+            subtitle = [NSString stringWithFormat:NSLocalizedString(key, nil), (long)chat.participantsCount];
+        }
+        [cell configureWithName:chat.title initials:chat.initials seed:chat.avatarSeed subtitle:subtitle subtitleColor:nil trailing:nil symbol:ExteriaSymbolChevronRight
+                    showsSymbol:NO nameColor:nil photo:chat.photo avatars:_avatars];
     } else if (tab == ExteriaGroupTabVoice && [self configureVoiceRow:cell message:item]) {
         return cell;
     } else if (tab == ExteriaGroupTabFiles || tab == ExteriaGroupTabAudio || tab == ExteriaGroupTabVoice) {
@@ -380,6 +451,7 @@ static NSString *ExteriaGroupDateText(int32_t date) {
         NSString *detail = [NSString stringWithFormat:@"%@, %@", ExteriaGroupSizeText(message.media.size), ExteriaGroupDateText(message.date)];
         [cell configureWithName:name initials:extension.length ? [extension substringToIndex:MIN(extension.length, 3)] : @"?" seed:(NSUInteger)message.messageId
                        subtitle:detail subtitleColor:nil trailing:nil symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:nil avatars:nil];
+        if (tab == ExteriaGroupTabVoice) [cell showAvatarSymbol:ExteriaVoiceRowSymbol(message)];
     } else {
         ExteriaMessage *message = item;
         NSURL *url = [self linkOfMessage:message];
@@ -504,7 +576,7 @@ static NSString *ExteriaGroupDateText(int32_t date) {
 }
 
 - (void)rowHeld:(UILongPressGestureRecognizer *)gesture {
-    if (gesture.state != UIGestureRecognizerStateBegan || _tab == ExteriaGroupTabMembers) return;
+    if (gesture.state != UIGestureRecognizerStateBegan || _tab == ExteriaGroupTabMembers || _tab == ExteriaGroupTabCommon) return;
     NSUInteger index = (NSUInteger)gesture.view.tag;
     if (index < _items[_tab].count) [self toggleSelection:[_items[_tab] objectAtIndex:index]];
 }
@@ -529,7 +601,7 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     /* the rows of the tabs that hold messages, in the order the server numbers them */
     NSMutableArray *messages = [NSMutableArray arrayWithCapacity:_selected.count];
     for (int tab = 0; tab < ExteriaGroupTabCount; ++tab) {
-        if (tab == ExteriaGroupTabMembers) continue;
+        if (tab == ExteriaGroupTabMembers || tab == ExteriaGroupTabCommon) continue;
         for (ExteriaMessage *message in _items[tab]) {
             if ([_selected containsObject:[NSNumber numberWithInt:message.messageId]]) [messages addObject:message];
         }
@@ -568,6 +640,10 @@ static NSString *ExteriaGroupDateText(int32_t date) {
     NSArray *items = _items[_tab];
     if ((NSUInteger)area.tag >= items.count) return;
     id item = [items objectAtIndex:(NSUInteger)area.tag];
+    if (_tab == ExteriaGroupTabCommon) {
+        if ([_delegate respondsToSelector:@selector(groupTabs:didOpenDialog:)]) [_delegate groupTabs:self didOpenDialog:item];
+        return;
+    }
     if (_selected.count && _tab != ExteriaGroupTabMembers) {
         [self toggleSelection:item];
         return;

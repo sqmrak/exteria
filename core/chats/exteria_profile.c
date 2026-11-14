@@ -111,6 +111,7 @@ exteria_status exteria_full_user_parse(const exteria_tl_value *answer, exteria_f
         exteria_photo_read(exteria_tl_get(full, "fallback_photo"), EXTERIA_AVATAR_TARGET, &out->public_photo);
         out->has_public_photo = out->public_photo.ref.source == EXTERIA_MEDIA_SOURCE_PHOTO && out->public_photo.ref.id != 0;
     }
+    if (exteria_tl_get_i32(full, "common_chats_count", &out->common_chats) != EXTERIA_OK || out->common_chats < 0) out->common_chats = 0;
     out->require_premium = exteria_tl_has(full, "contact_require_premium") ? 1 : 0;
     out->blocked = exteria_tl_has(full, "blocked") ? 1 : 0;
     out->sharing_restricted = exteria_tl_has(full, "noforwards_my_enabled") || exteria_tl_has(full, "noforwards_peer_enabled");
@@ -467,6 +468,55 @@ static exteria_status contact_input_user(exteria_arena *arena, const exteria_pee
     if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, input, "access_hash", user->access_hash);
     if (status == EXTERIA_OK) *out = input;
     return status;
+}
+
+exteria_status exteria_common_chats_request(exteria_arena *arena, const exteria_peer_ref *user, int64_t max_id, int32_t limit, exteria_tl_value **out) {
+    exteria_tl_value *request, *input;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (!arena || max_id < 0 || limit < 1 || limit > EXTERIA_COMMON_CHATS_PAGE) return EXTERIA_E_ARG;
+    status = contact_input_user(arena, user, &input);
+    if (status != EXTERIA_OK) return status;
+    request = exteria_tl_new_obj(arena, "messages.getCommonChats");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set(request, "user_id", input);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, request, "max_id", max_id);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "limit", limit);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_common_chats_parse(const exteria_tl_value *answer, exteria_dialog_row *rows, size_t cap, size_t *count, int64_t *last_id, size_t *raw) {
+    const exteria_tl_value *chats;
+    uint32_t i;
+    size_t n = 0;
+    if (count) *count = 0;
+    if (last_id) *last_id = 0;
+    if (raw) *raw = 0;
+    if (!rows || !count || !last_id || !raw || !cap) return EXTERIA_E_ARG;
+    if ((!exteria_tl_is(answer, EXTERIA_TL_ID_messages_chats) && !exteria_tl_is(answer, EXTERIA_TL_ID_messages_chatsSlice)) ||
+        exteria_tl_get_vec(answer, "chats", &chats) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    if (chats->u.vec.count > 1000) return EXTERIA_E_LIMIT;
+    for (i = 0; i < chats->u.vec.count; ++i) {
+        const exteria_tl_value *chat = chats->u.vec.items[i];
+        int64_t id;
+        exteria_dialog_row row;
+        if (exteria_tl_get_i64(chat, "id", &id) != EXTERIA_OK || id <= 0) continue;
+        *last_id = id;
+        *raw += 1;
+        if (n >= cap) continue;
+        if (!exteria_tl_is(chat, EXTERIA_TL_ID_chat) && !exteria_tl_is(chat, EXTERIA_TL_ID_channel)) continue;
+        memset(&row, 0, sizeof(row));
+        row.peer_kind = exteria_tl_is(chat, EXTERIA_TL_ID_channel) ? 3 : 2;
+        row.peer_id = id;
+        exteria_dialog_peer_read(&row, chats, chats, 0);
+        /* a channel seen only in part has no usable hash, so it cannot be opened */
+        if (!row.title[0] || (row.peer_kind == 3 && row.peer_hash == 0)) continue;
+        rows[n++] = row;
+    }
+    *count = n;
+    return EXTERIA_OK;
 }
 
 exteria_status exteria_contact_note_request(exteria_arena *arena, const exteria_peer_ref *user, const char *note, exteria_tl_value **out) {

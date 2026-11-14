@@ -56,6 +56,7 @@ typedef struct exteria_full_user {
     int32_t pending_rating_date;
     exteria_star_rating rating;
     exteria_star_rating pending_rating;
+    int32_t common_chats;           /* how many groups the account and this user are both in; zero when the answer does not say */
 } exteria_full_user;
 
 /* the songs saved on a profile, one page at a time */
@@ -86,6 +87,15 @@ exteria_status exteria_personal_channel_request(exteria_arena *arena, const exte
 /* the channels that can be put on the profile, and the rows of the answer (a messages.chats), channels only */
 exteria_status exteria_admined_channels_request(exteria_arena *arena, exteria_tl_value **out);
 exteria_status exteria_admined_channels_parse(const exteria_tl_value *answer, exteria_dialog_row *rows, size_t cap, size_t *count);
+/* the most groups one page of the common chats holds, which is what the server allows */
+#define EXTERIA_COMMON_CHATS_PAGE 100
+/* messages.getCommonChats: the groups the account shares with a user (kind 1, with an access hash), a page of limit (1 to EXTERIA_COMMON_CHATS_PAGE) after the chat id max_id,
+   or from the start when max_id is zero */
+exteria_status exteria_common_chats_request(exteria_arena *arena, const exteria_peer_ref *user, int64_t max_id, int32_t limit, exteria_tl_value **out);
+/* the rows of a messages.chats or messages.chatsSlice answer: groups and supergroups, in the order sent (a channel with no hash and a chat the server only names are left out).
+   last_id is the id of the last chat the answer holds, left-out ones included, which the next page starts after; raw is how many chats it held, so a page of fewer than
+   the limit ends the list */
+exteria_status exteria_common_chats_parse(const exteria_tl_value *answer, exteria_dialog_row *rows, size_t cap, size_t *count, int64_t *last_id, size_t *raw);
 /* channels.getMessages for one message of a channel */
 exteria_status exteria_channel_message_request(exteria_arena *arena, const exteria_peer_ref *channel, int32_t id, exteria_tl_value **out);
 

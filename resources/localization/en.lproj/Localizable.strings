@@ -1484,6 +1484,7 @@
 "group.tab.media" = "Media";
 "group.tab.files" = "Files";
 "group.tab.links" = "Links";
+"group.tab.common" = "Groups";
 "group.tab.empty" = "Nothing here yet";
 "group.tab.loading" = "Loading";
 "group.tab.more" = "Show more";

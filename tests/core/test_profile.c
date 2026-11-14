@@ -38,6 +38,9 @@ static void test_full_user(void) {
     CHECK_EQ_INT(full.require_premium, 0);
     CHECK_EQ_INT(full.sharing_restricted, 0);
     CHECK_EQ_INT(full.has_intro, 0);
+    CHECK_EQ_INT(exteria_tl_set_i32(&arena, inner, "common_chats_count", 4), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_full_user_parse(answer, &full), EXTERIA_OK);
+    CHECK_EQ_INT(full.common_chats, 4);
     {
         exteria_tl_value *other = obj("users.userFull"), *mine = obj("userFull"), *intro = obj("businessIntro");
         set(other, "full_user", mine);
@@ -520,6 +523,54 @@ static void test_birthday_channels(void) {
     CHECK_EQ_INT(rows[0].peer_hash, 55);
     CHECK_EQ_INT(exteria_admined_channels_parse(obj("boolTrue"), rows, 4, &count), EXTERIA_E_MALFORMED);
     CHECK_EQ_INT(exteria_admined_channels_parse(answer, NULL, 4, &count), EXTERIA_E_ARG);
+
+    /* the groups in common with a user: a page after the last chat id, basic groups and supergroups, the left-out ones still count for paging */
+    {
+        exteria_tl_value *group = obj("chat"), *super = channel(8, "Super", 1), *nohash_super = channel(9, "Hidden", 0);
+        exteria_dialog_row common[4];
+        exteria_peer_ref person = {1, 5, 7, 0, 0}, person_nohash = {1, 5, 0, 0, 0};
+        int64_t last = -1;
+        size_t raw = 99;
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &person, 0, 100, &request), EXTERIA_OK);
+        roundtrip(request, EXTERIA_TL_ID_messages_getCommonChats);
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &person, 41, 1, &request), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &person, 0, 101, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &person, 0, 0, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &person, -1, 10, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &person_nohash, 0, 10, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_common_chats_request(&arena, &chan, 0, 10, &request), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_tl_set_i64(&arena, group, "id", 7), EXTERIA_OK);
+        str(group, "title", "Basic");
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, group, "participants_count", 12), EXTERIA_OK);
+        chats[0] = group;
+        chats[1] = super;
+        chats[2] = nohash_super;
+        answer = obj("messages.chatsSlice");
+        CHECK_EQ_INT(exteria_tl_set_i32(&arena, answer, "count", 3), EXTERIA_OK);
+        set(answer, "chats", vec_of(chats, 3));
+        CHECK_EQ_INT(exteria_common_chats_parse(answer, common, 4, &count, &last, &raw), EXTERIA_OK);
+        CHECK_EQ_INT(count, 2);
+        CHECK_EQ_INT(raw, 3);
+        CHECK_EQ_INT(last, 9);
+        CHECK_EQ_INT(common[0].peer_kind, 2);
+        CHECK_EQ_INT(common[0].peer_id, 7);
+        CHECK_EQ_INT(common[0].participants_count, 12);
+        CHECK_EQ_INT(common[1].peer_kind, 3);
+        CHECK_EQ_INT(common[1].peer_hash, 55);
+        /* a full page of the row buffer keeps counting what the answer held */
+        CHECK_EQ_INT(exteria_common_chats_parse(answer, common, 1, &count, &last, &raw), EXTERIA_OK);
+        CHECK_EQ_INT(count, 1);
+        CHECK_EQ_INT(raw, 3);
+        CHECK_EQ_INT(last, 9);
+        answer = obj("messages.chats");
+        set(answer, "chats", vec_of(chats, 0));
+        CHECK_EQ_INT(exteria_common_chats_parse(answer, common, 4, &count, &last, &raw), EXTERIA_OK);
+        CHECK_EQ_INT(count, 0);
+        CHECK_EQ_INT(raw, 0);
+        CHECK_EQ_INT(last, 0);
+        CHECK_EQ_INT(exteria_common_chats_parse(obj("boolTrue"), common, 4, &count, &last, &raw), EXTERIA_E_MALFORMED);
+        CHECK_EQ_INT(exteria_common_chats_parse(answer, NULL, 4, &count, &last, &raw), EXTERIA_E_ARG);
+    }
 
     CHECK_EQ_INT(exteria_channel_message_request(&arena, &chan, 42, &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_channels_getMessages);

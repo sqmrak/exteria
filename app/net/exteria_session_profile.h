@@ -44,8 +44,11 @@
     NSString *_note;
     BOOL _hasPersonalPhoto;
     ExteriaMedia *_publicPhoto;
+    int32_t _commonChats;
 }
 @property (nonatomic, readonly, copy) NSString *about;
+/* how many groups the signed in person and this one are both in, zero when the answer does not say */
+@property (nonatomic, readonly) int32_t commonChats;
 /* the note the signed in person keeps on this contact, empty when there is none */
 @property (nonatomic, readonly, copy) NSString *note;
 /* the signed in person set a photo of their own for this contact, which the server shows in place of the one the contact chose */
@@ -86,6 +89,10 @@
 /* the full profile of the person a chat is with, or of oneself for the chat with oneself; the personal channel comes with its
    newest message when the profile shows one */
 - (void)loadFullUserOfDialog:(ExteriaDialog *)dialog completion:(void (^)(ExteriaFullUser *user, NSString *errorName))completion;
+/* the groups the signed in person shares with the person of a user chat, as ExteriaDialog items: a page after the group id beforeId (zero for the first page).
+   lastId is where the next page starts, and finished says the list has ended */
+- (void)loadCommonChatsOfDialog:(ExteriaDialog *)dialog beforeId:(long long)beforeId
+                     completion:(void (^)(NSArray *chats, long long lastId, BOOL finished, NSString *errorName))completion;
 /* whether the person of a chat accepts messages and story replies only from Premium users while the signed in
    person is not one */
 - (void)loadPremiumGateOfDialog:(ExteriaDialog *)dialog completion:(void (^)(BOOL blocked))completion;

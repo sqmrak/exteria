@@ -1489,6 +1489,7 @@
 "group.tab.media" = "Медиа";
 "group.tab.files" = "Файлы";
 "group.tab.links" = "Ссылки";
+"group.tab.common" = "Группы";
 "group.tab.empty" = "Здесь пока ничего нет";
 "group.tab.loading" = "Загрузка";
 "group.tab.more" = "Показать ещё";

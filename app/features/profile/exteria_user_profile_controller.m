@@ -598,6 +598,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 
 - (void)showFull {
     ExteriaFullUser *user = _fullUser;
+    [_tabs setCommonChatsCount:user.commonChats];
     _ratingBadge.hidden = !user.hasRating;
     _ratingBadge.level = user.rating.level;
     _ratingBadge.accessibilityLabel = [NSString stringWithFormat:NSLocalizedString(@"rating.level", nil), (int)user.rating.level];

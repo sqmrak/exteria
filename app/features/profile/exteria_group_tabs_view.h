@@ -18,6 +18,8 @@
 /* the height of the content changed, so the header that holds the view has to grow */
 - (void)groupTabsDidResize:(ExteriaGroupTabsView *)tabs;
 @optional
+/* a group of the groups-in-common tab was tapped: its chat opens */
+- (void)groupTabs:(ExteriaGroupTabsView *)tabs didOpenDialog:(ExteriaDialog *)dialog;
 /* a tab was chosen; for a user's tabs the gifts tab (selectedTab 0) has no content of its own, the screen shows the gifts */
 - (void)groupTabsDidChooseTab:(ExteriaGroupTabsView *)tabs;
 @end
@@ -39,6 +41,8 @@
 
 /* the members list starts again from the first page, after somebody was added */
 - (void)reloadMembers;
+/* a user's tabs get the groups in common once the profile says there are some, as a last tab; nothing changes for a count of zero or for a group's tabs */
+- (void)setCommonChatsCount:(NSInteger)count;
 - (CGFloat)heightForWidth:(CGFloat)width;
 /* the screen's list scrolled: the bar of the selection stays below the top bar while the list runs under it */
 - (void)hostDidScroll;

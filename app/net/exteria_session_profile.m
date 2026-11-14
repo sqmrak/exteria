@@ -48,6 +48,7 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
 @synthesize channel = _channel;
 @synthesize music = _music;
 @synthesize hasIntro = _hasIntro, introTitle = _introTitle, introText = _introText, introSticker = _introSticker;
+@synthesize commonChats = _commonChats;
 @synthesize hasRating = _hasRating, hasPendingRating = _hasPendingRating, pendingRatingDate = _pendingRatingDate;
 @synthesize rating = _rating, pendingRating = _pendingRating;
 - (id)initWithRow:(const exteria_full_user *)row channel:(ExteriaPersonalChannel *)channel {
@@ -76,6 +77,7 @@ static NSString *ExteriaProfileUtf8(const char *bytes) {
     _pendingRatingDate = row->pending_rating_date;
     _rating = row->rating;
     _pendingRating = row->pending_rating;
+    _commonChats = row->common_chats;
     return self;
 }
 - (void)dealloc {
@@ -301,6 +303,41 @@ static NSNumber *ExteriaSelfPremium;
     [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         return exteria_birthday_clear_request(arena, request);
     } completion:completion];
+}
+
+- (void)loadCommonChatsOfDialog:(ExteriaDialog *)dialog beforeId:(long long)beforeId
+                     completion:(void (^)(NSArray *, long long, BOOL, NSString *))completion {
+    void (^done)(NSArray *, long long, BOOL, NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_common_chats_request(arena, &peer, beforeId, EXTERIA_COMMON_CHATS_PAGE, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSMutableArray *chats = nil;
+        long long last = 0;
+        BOOL finished = NO;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) {
+            error = ExteriaRpcErrorName(result);
+        } else {
+            exteria_dialog_row *rows = calloc(EXTERIA_COMMON_CHATS_PAGE, sizeof(*rows));
+            size_t count = 0, raw = 0;
+            int64_t lastId = 0;
+            exteria_status status = rows ? exteria_common_chats_parse(result->value, rows, EXTERIA_COMMON_CHATS_PAGE, &count, &lastId, &raw) : EXTERIA_E_NOMEM;
+            if (status == EXTERIA_OK) {
+                chats = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) [chats addObject:[[[ExteriaDialog alloc] initWithRow:&rows[i]] autorelease]];
+                last = lastId;
+                finished = raw < EXTERIA_COMMON_CHATS_PAGE;
+            } else {
+                NSLog(@"exteria: messages.getCommonChats answer rejected: %s", exteria_status_name(status));
+                error = @"INTERNAL";
+            }
+            free(rows);
+        }
+        [self noteRpcError:error];
+        NSString *deliveredError = [[error copy] autorelease];
+        [self deliverMain:^{ done(chats, last, finished, deliveredError); [done release]; }];
+    }];
 }
 
 - (void)loadChannelsForProfile:(ExteriaListCompletion)completion {
