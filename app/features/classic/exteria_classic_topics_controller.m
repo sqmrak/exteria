@@ -1,9 +1,11 @@
 #import "exteria_classic_topics_controller.h"
 
 #import "exteria_chat_controller.h"
+#import "exteria_next_chat_hint.h"
 #import "exteria_classic_chrome.h"
 #import "exteria_classic_dialog_cell.h"
 #import "exteria_custom_emoji_loader.h"
+#import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
 
@@ -43,7 +45,18 @@
     self.title = heading;
     /* the bar title is a user's own text, so the emoji in it come from the app's pictures */
     self.navigationItem.titleView = ExteriaClassicTitleView(heading, nil);
+    /* the arrow of the chats above it, instead of the system plate that names the list: after a swipe back from a topic that plate stayed in the bar under the arrow of the next
+       chat, and the two lay over each other. with the same arrow on both screens, whatever the bar leaves behind is the same picture */
+    self.navigationItem.hidesBackButton = YES;
+    UIBarButtonItem *back = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])
+                                                              style:UIBarButtonItemStyleBordered target:self action:@selector(goBack)] autorelease];
+    back.accessibilityLabel = NSLocalizedString(@"phone.back", nil);
+    self.navigationItem.leftBarButtonItem = back;
     return self;
+}
+
+- (void)goBack {
+    [self.navigationController popViewControllerAnimated:YES];
 }
 
 /* a topic was read here: its count goes from its row at once */
