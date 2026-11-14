@@ -25,6 +25,7 @@
 - calls: voice and video (vp8); voice chats of groups and channels, audio only
 - translator: telegram, services and ai
 - passcode lock, several accounts, login by phone or qr
+- session files (`session-N.bin`) are sealed with chacha20-poly1305 under a random device key, kept in the keychain (this device only, after first unlock) or, where the keychain refuses the app, in `Application Support/Exteria/session-key`. files from older builds are sealed on first read. restoring a backup onto another device signs the account out, since the key does not travel
 - keeps deleted and edited messages on the phone, if you ask for it
 - ayumoments: copies of protected messages from chats the account can read
 - two looks: modern, and classic with the glossy ios 5 and 6 style and a hue of your own (ios 5 to 10)

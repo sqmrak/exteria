@@ -35,6 +35,7 @@
 #include "exteria_mt_socket.h"
 #include <sys/socket.h>
 #include "exteria_session_file.h"
+#include "exteria_session_key.h"
 #include "exteria_tl_ids.h"
 
 #define CONNECT_TIMEOUT_MS 10000
@@ -1365,30 +1366,12 @@ static exteria_status ExteriaSend(void *ctx, int32_t dc, const uint8_t *data, si
 
 static exteria_status ExteriaLoadSession(void *ctx, int32_t dc, exteria_mt_session_state *out) {
     ExteriaSession *session = ctx;
-    uint8_t buf[EXTERIA_SESSION_FILE_LEN + 1];
-    size_t len;
-    NSString *path = ExteriaSessionPath(session->_directory, dc);
-    exteria_status status = ExteriaReadFile(path, buf, sizeof(buf), &len);
-    if (status != EXTERIA_OK) return status;
-    status = exteria_session_unpack(buf, len, dc, out);
-    exteria_wipe(buf, sizeof(buf));
-    if (status != EXTERIA_OK) {
-        /* a damaged key cannot be repaired, a new handshake replaces it */
-        NSLog(@"exteria: session file for dc %d is unusable, starting a new session", (int)dc);
-        unlink(path.fileSystemRepresentation);
-        return EXTERIA_E_NOTFOUND;
-    }
-    return EXTERIA_OK;
+    return ExteriaSessionLoad(session->_directory, dc, out);
 }
 
 static exteria_status ExteriaSaveSession(void *ctx, int32_t dc, const exteria_mt_session_state *state) {
     ExteriaSession *session = ctx;
-    uint8_t buf[EXTERIA_SESSION_FILE_LEN];
-    size_t len;
-    exteria_status status = exteria_session_pack(dc, state, buf, sizeof(buf), &len);
-    if (status == EXTERIA_OK) status = ExteriaWriteFile(ExteriaSessionPath(session->_directory, dc), buf, len);
-    exteria_wipe(buf, sizeof(buf));
-    return status;
+    return ExteriaSessionStore(session->_directory, dc, state);
 }
 
 static void ExteriaRpcResult(void *ctx, uint64_t id, const exteria_mt_rpc_result *result) {

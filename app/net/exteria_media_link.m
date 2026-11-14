@@ -10,6 +10,7 @@
 #include "exteria_credentials.h"
 #include "exteria_mt_socket.h"
 #include "exteria_session_file.h"
+#include "exteria_session_key.h"
 
 #import "exteria_files.h"
 #import "exteria_rpc.h"
@@ -354,29 +355,12 @@ static exteria_status ExteriaMediaSend(void *ctx, int32_t dc, const uint8_t *dat
 
 static exteria_status ExteriaMediaLoad(void *ctx, int32_t dc, exteria_mt_session_state *out) {
     ExteriaMediaLink *link = ctx;
-    uint8_t buf[EXTERIA_SESSION_FILE_LEN + 1];
-    size_t len;
-    NSString *path = ExteriaSessionPath(link->_directory, dc);
-    exteria_status status = ExteriaReadFile(path, buf, sizeof(buf), &len);
-    if (status != EXTERIA_OK) return status;
-    status = exteria_session_unpack(buf, len, dc, out);
-    exteria_wipe(buf, sizeof(buf));
-    if (status != EXTERIA_OK) {
-        NSLog(@"exteria: session file for dc %d is unusable, starting a new session", (int)dc);
-        unlink(path.fileSystemRepresentation);
-        return EXTERIA_E_NOTFOUND;
-    }
-    return EXTERIA_OK;
+    return ExteriaSessionLoad(link->_directory, dc, out);
 }
 
 static exteria_status ExteriaMediaSave(void *ctx, int32_t dc, const exteria_mt_session_state *state) {
     ExteriaMediaLink *link = ctx;
-    uint8_t buf[EXTERIA_SESSION_FILE_LEN];
-    size_t len;
-    exteria_status status = exteria_session_pack(dc, state, buf, sizeof(buf), &len);
-    if (status == EXTERIA_OK) status = ExteriaWriteFile(ExteriaSessionPath(link->_directory, dc), buf, len);
-    exteria_wipe(buf, sizeof(buf));
-    return status;
+    return ExteriaSessionStore(link->_directory, dc, state);
 }
 
 static void ExteriaMediaResult(void *ctx, uint64_t id, const exteria_mt_rpc_result *result) {
