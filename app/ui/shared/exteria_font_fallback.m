@@ -32,7 +32,7 @@ static NSString *ExteriaCoveragePath(void) {
 static NSString *ExteriaCoverageSignature(void) {
     id build = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
     /* the revision of the bundled fonts: Unifont lost the ideographs and the rare scripts of the upper planes, and an answer saved before that names glyphs it no longer has */
-    return [NSString stringWithFormat:@"%@|%@|%@|fonts2", build ? build : @"", [[NSProcessInfo processInfo] operatingSystemVersionString],
+    return [NSString stringWithFormat:@"%@|%@|%@|fonts3", build ? build : @"", [[NSProcessInfo processInfo] operatingSystemVersionString],
             [[NSArray arrayWithObjects:ExteriaFallbackFiles count:FALLBACK_COUNT] componentsJoinedByString:@","]];
 }
 
@@ -102,16 +102,26 @@ static CTFontRef ExteriaFallbackProbe(NSUInteger index) {
     return ExteriaFallbackProbes[index];
 }
 
+/* before ios 6 the system had no fonts for the letters of the upper planes (the math alphabets, the fancy names built of them), and its answers for a pair of units were not
+   to be trusted: it named a glyph, which was the box of the missing ones, and the name was drawn in boxes. the answer there is the call's own, and a font is taken to draw such
+   a character only when it says that all of it is mapped */
+static BOOL ExteriaSystemIsOld(void) {
+    return kCFCoreFoundationVersionNumber < 793.0;
+}
+
 static BOOL ExteriaFontHasGlyph(CTFontRef font, const UniChar *chars, CFIndex count) {
     CGGlyph glyphs[2] = {0, 0};
-    CTFontGetGlyphsForCharacters(font, chars, glyphs, count);
+    BOOL mapped = CTFontGetGlyphsForCharacters(font, chars, glyphs, count);
     /* a pair of units maps to one glyph, kept at the first of them */
+    if (count > 1 && ExteriaSystemIsOld() && !mapped) return NO;
     return glyphs[0] != 0;
 }
 
 /* the font the system would substitute is the box font when it has nothing for the character, and the box font maps every code
    point, so its name has to be told apart */
 static BOOL ExteriaSystemDraws(CTFontRef base, const UniChar *chars, CFIndex count) {
+    /* the only letters of the upper planes that the old system draws are the emoji, which the labels have taken out of the text before this */
+    if (count > 1 && ExteriaSystemIsOld()) return NO;
     CFStringRef text = CFStringCreateWithCharacters(NULL, chars, count);
     CTFontRef substitute = text ? CTFontCreateForString(base, text, CFRangeMake(0, count)) : NULL;
     BOOL draws = NO;
@@ -240,6 +250,7 @@ void ExteriaDropUndrawableCharacters(NSMutableAttributedString *string, CTFontRe
     }
     [string.string getCharacters:units range:NSMakeRange(0, length)];
     NSMutableArray *dropped = [NSMutableArray array];
+    NSMutableArray *replacements = [NSMutableArray array];
     @synchronized (ExteriaFallbackLock()) {
         NSMutableDictionary *answers = ExteriaAnswersFor(base);
         static NSMutableSet *logged;
@@ -251,7 +262,21 @@ void ExteriaDropUndrawableCharacters(NSMutableAttributedString *string, CTFontRe
             BOOL invisible = ExteriaIsInvisibleMark(cp);
             BOOL missing = !invisible && exteria_cp_class_of(cp) == EXTERIA_CP_CHECK && ExteriaLookup(cp, base, answers) == FALLBACK_MISSING;
             if (invisible || missing) {
-                [dropped addObject:[NSValue valueWithRange:NSMakeRange(at, used)]];
+                NSRange range = NSMakeRange(at, used);
+                [dropped addObject:[NSValue valueWithRange:range]];
+                /* a letter no font has may still be a styled form of plain ones (the math alphabets, the full width and circled letters), and then those are drawn in its place */
+                NSString *plain = nil;
+                if (missing) {
+                    NSString *one = [NSString stringWithCharacters:units + at length:used];
+                    NSString *folded = [one decomposedStringWithCompatibilityMapping];
+                    BOOL drawable = folded.length && ![folded isEqualToString:one];
+                    for (NSUInteger i = 0; drawable && i < folded.length; ++i) {
+                        unichar unit = [folded characterAtIndex:i];
+                        drawable = unit >= 0x20 && !(unit >= 0xD800 && unit <= 0xDFFF) && ExteriaFontHasGlyph(base, &unit, 1);
+                    }
+                    if (drawable) plain = folded;
+                }
+                [replacements addObject:plain ? (id)plain : (id)[NSNull null]];
                 NSNumber *key = [NSNumber numberWithUnsignedInt:cp];
                 if (![logged containsObject:key]) {
                     [logged addObject:key];
@@ -262,5 +287,10 @@ void ExteriaDropUndrawableCharacters(NSMutableAttributedString *string, CTFontRe
         }
     }
     free(units);
-    for (NSValue *range in [dropped reverseObjectEnumerator]) [string deleteCharactersInRange:[range rangeValue]];
+    for (NSUInteger i = dropped.count; i-- > 0;) {
+        NSRange range = [[dropped objectAtIndex:i] rangeValue];
+        id plain = [replacements objectAtIndex:i];
+        if ([plain isKindOfClass:[NSString class]]) [string replaceCharactersInRange:range withString:plain];
+        else [string deleteCharactersInRange:range];
+    }
 }
