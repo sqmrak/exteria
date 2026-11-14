@@ -104,7 +104,7 @@
         [_entries release];
         _entries = [items retain];
         _status.text = items.count ? @"" : NSLocalizedString(@"calls.empty", nil);
-        self.tableView.separatorStyle = items.count ? UITableViewCellSeparatorStyleSingleLine : UITableViewCellSeparatorStyleNone;
+        self.tableView.separatorStyle = ExteriaClassicListSeparatorStyle(items.count > 0);
         [self.tableView reloadData];
     }];
 }

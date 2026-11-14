@@ -762,7 +762,7 @@
     _retry.hidden = presentation.state != EXTERIA_LIST_FAILED;
     _statusLabel.hidden = presentation.state != EXTERIA_LIST_FAILED && presentation.state != EXTERIA_LIST_EMPTY;
     if (presentation.state == EXTERIA_LIST_EMPTY) _statusLabel.text = _dialogs.count ? NSLocalizedString(@"chats.nothing", nil) : (_folderId > 0 ? NSLocalizedString(@"chats.archive.empty", nil) : NSLocalizedString(@"chats.empty", nil));
-    self.tableView.separatorStyle = _shown.count ? UITableViewCellSeparatorStyleSingleLine : UITableViewCellSeparatorStyleNone;
+    self.tableView.separatorStyle = ExteriaClassicListSeparatorStyle(_shown.count > 0);
 }
 
 - (void)viewWillAppear:(BOOL)animated {

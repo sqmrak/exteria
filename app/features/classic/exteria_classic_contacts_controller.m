@@ -165,7 +165,7 @@
 - (void)applyQuery {
     _list.query = _search.text;
     if (_loaded) _status.text = _list.count ? @"" : (_list.people.count ? NSLocalizedString(@"chats.nothing", nil) : NSLocalizedString(@"contacts.empty", nil));
-    self.tableView.separatorStyle = _list.count ? UITableViewCellSeparatorStyleSingleLine : UITableViewCellSeparatorStyleNone;
+    self.tableView.separatorStyle = ExteriaClassicListSeparatorStyle(_list.count > 0);
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {

@@ -127,7 +127,7 @@
         [_topics release];
         _topics = [items copy];
         _status.text = _topics.count ? @"" : NSLocalizedString(_forum.saved ? @"chat.saved.empty" : @"topics.empty", nil);
-        self.tableView.separatorStyle = _topics.count ? UITableViewCellSeparatorStyleSingleLine : UITableViewCellSeparatorStyleNone;
+        self.tableView.separatorStyle = ExteriaClassicListSeparatorStyle(_topics.count > 0);
         [self.tableView reloadData];
         [self loadIcons];
     };
