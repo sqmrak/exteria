@@ -4510,12 +4510,13 @@ static void ExteriaRedrawTree(UIView *view) {
             replyEntities = visible;
         }
         /* the classic bubble of somebody else is a neutral plate, and the accent on it reads as a link; our own bubble stands on the accent already, so the quote in it
-           takes a light tint of the accent on the dark theme and the deep accent on the light one, where grey looked like a hole in the bubble */
+           takes a light tint of the accent on the dark theme and the deep accent on the light one, where grey looked like a hole in the bubble. these two are the
+           fallback for a quote with no known author, since the author's color replaces them below in both styles */
         UIColor *replyColor = nil;
         if (replyId > 0 || message.replyStory > 0) {
             if (classicTheme) replyColor = message.outgoing ? classicOwnQuote : classicOtherQuote;
             else replyColor = ExteriaColorBubbleLink(message.outgoing);
-            if (original && !classicTheme && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) {
+            if (original && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)) {
                 /* a forward whose author hides the account has a name and no key, and takes no color rather than the color of the person who forwarded it */
                 long long authorKey = originName.length ? original.forwardKey : original.senderKey;
                 ExteriaPerson *author = authorKey ? [_people objectForKey:[NSNumber numberWithLongLong:authorKey]] : nil;
