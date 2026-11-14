@@ -77,12 +77,16 @@
     _media = [media retain];
     _pages = [[NSMutableArray alloc] init];
     _thumbs = [[NSMutableArray alloc] init];
+    _thumbsAsked = [[NSMutableIndexSet alloc] init];
     return self;
 }
 
 - (void)dealloc {
     ExteriaStatusBarShow(self, UIStatusBarAnimationNone);
     _pager.delegate = nil;
+    _strip.delegate = nil;
+    [_thumbsAsked release];
+    [_dateFormat release];
     [_session release];
     [_dialog release];
     [_avatars release];
@@ -167,6 +171,7 @@
     _strip = [[UIScrollView alloc] init];
     _strip.showsHorizontalScrollIndicator = NO;
     _strip.scrollsToTop = NO;
+    _strip.delegate = self;
     _strip.hidden = YES;
     [root addSubview:_strip];
     _toast = [[UILabel alloc] init];
@@ -268,7 +273,7 @@
     }
     /* the pager is put back on its page only when the person is not turning it: a layout pass that came while a finger moved the pages (the counter, the date and the strip
        change as the middle is passed) set the offset back to the page it left and made the photos jump */
-    if (_pager.isTracking || _pager.isDragging || _pager.isDecelerating) return;
+    if (_pager.isTracking || _pager.isDragging || _pager.isDecelerating || _thumbScrolling) return;
     CGPoint target = CGPointMake(size.width * (CGFloat)_index, 0);
     if (fabs(_pager.contentOffset.x - target.x) > 0.5) _pager.contentOffset = target;
 }
@@ -301,20 +306,33 @@
         [_media loadImageForFile:file maxSide:PHOTO_MAX_SIDE completion:^(UIImage *image) {
             page->loading = NO;
             [page->spinner stopAnimating];
-            if (!image) return;
+            /* a page the person has already left is not filled: it would hold a picture of up to 1280 points that nothing shows */
+            if (!image || labs(i - _index) > 1) return;
             page->loaded = YES;
             page->image.image = image;
         }];
+    }
+    /* a long list would keep every picture it passed, some five megabytes decoded each, which an old phone cannot hold; the pages out of reach give theirs up and
+       load again from the cache when the person comes back */
+    for (NSInteger i = 0; i < (NSInteger)_pages.count; ++i) {
+        if (labs(i - index) <= 1) continue;
+        ExteriaAvatarPage *far = [_pages objectAtIndex:(NSUInteger)i];
+        if (!far->loaded) continue;
+        far->image.image = nil;
+        far->loaded = NO;
     }
 }
 
 - (void)updateDate {
     int32_t date = _index < (NSInteger)_photos.count ? [(ExteriaMedia *)[_photos objectAtIndex:(NSUInteger)_index] date] : 0;
     if (date <= 0) { _dateLabel.text = @""; [self.view setNeedsLayout]; return; }
-    NSDateFormatter *format = [[[NSDateFormatter alloc] init] autorelease];
-    format.dateStyle = NSDateFormatterMediumStyle;
-    format.timeStyle = NSDateFormatterShortStyle;
-    _dateLabel.text = [format stringFromDate:[NSDate dateWithTimeIntervalSince1970:date]];
+    /* a formatter costs milliseconds to make on an old phone, and the date changes at every page of a swipe */
+    if (!_dateFormat) {
+        _dateFormat = [[NSDateFormatter alloc] init];
+        _dateFormat.dateStyle = NSDateFormatterMediumStyle;
+        _dateFormat.timeStyle = NSDateFormatterShortStyle;
+    }
+    _dateLabel.text = [_dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:date]];
     [self.view setNeedsLayout];
 }
 
@@ -322,6 +340,7 @@
 - (void)buildThumbs {
     for (UIView *thumb in _thumbs) [thumb removeFromSuperview];
     [_thumbs removeAllObjects];
+    [_thumbsAsked removeAllIndexes];
     _strip.hidden = _photos.count < 2;
     for (NSUInteger i = 0; i < _photos.count; ++i) {
         UIImageView *thumb = [[[UIImageView alloc] init] autorelease];
@@ -334,15 +353,37 @@
         [thumb addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(thumbTapped:)] autorelease]];
         [_strip addSubview:thumb];
         [_thumbs addObject:thumb];
+    }
+    [self layoutThumbs];
+}
+
+/* only the thumbs within a strip's width of the window are fetched and kept: a profile with hundreds of photos would otherwise start every request at once and hold
+   every decoded thumb */
+- (void)loadVisibleThumbs {
+    CGFloat width = _strip.bounds.size.width;
+    if (width <= 0) return;
+    CGFloat from = _strip.contentOffset.x - width, to = _strip.contentOffset.x + 2 * width;
+    for (NSUInteger i = 0; i < _thumbs.count && i < _photos.count; ++i) {
+        UIImageView *thumb = [_thumbs objectAtIndex:i];
+        CGFloat left = thumb.frame.origin.x, right = CGRectGetMaxX(thumb.frame);
+        if (right < from || left > to) {
+            if ([_thumbsAsked containsIndex:i]) {
+                thumb.image = nil;
+                [_thumbsAsked removeIndex:i];
+            }
+            continue;
+        }
+        if ([_thumbsAsked containsIndex:i]) continue;
         ExteriaMedia *photo = [_photos objectAtIndex:i];
         exteria_media_ref ref = photo.ref;
         ExteriaRemoteFile *file = [ExteriaRemoteFile fileForMedia:&ref];
         if (!file) continue;
+        [_thumbsAsked addIndex:i];
         [_media loadImageForFile:file maxSide:THUMB_MAX_SIDE completion:^(UIImage *image) {
-            if (image) thumb.image = image;
+            /* the thumb may have been let go while the request ran */
+            if (image && [_thumbsAsked containsIndex:i]) thumb.image = image;
         }];
     }
-    [self layoutThumbs];
 }
 
 - (void)layoutThumbs {
@@ -360,12 +401,26 @@
         CGFloat target = MAX(0, MIN(CGRectGetMidX(shown) - _strip.bounds.size.width / 2, _strip.contentSize.width - _strip.bounds.size.width));
         [_strip setContentOffset:CGPointMake(target, 0) animated:NO];
     }
+    [self loadVisibleThumbs];
 }
 
 - (void)thumbTapped:(UITapGestureRecognizer *)tap {
     NSInteger index = tap.view.tag;
     if (index < 0 || index >= (NSInteger)_pages.count || index == _index) return;
+    /* the slide to a far photo passes the pages between, and the layout each of them asks for put the pager back on the page it had reached, which stopped the slide there;
+       a slide that was started by a tap is let run to its end */
+    _thumbScrolling = YES;
     [_pager setContentOffset:CGPointMake(_pager.bounds.size.width * (CGFloat)index, 0) animated:YES];
+}
+
+- (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView {
+    if (scrollView != _pager) return;
+    _thumbScrolling = NO;
+    [self layoutPages];
+}
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    if (scrollView == _pager) _thumbScrolling = NO;
 }
 
 - (void)showMenu {
@@ -408,6 +463,7 @@
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (scrollView == _strip) { [self loadVisibleThumbs]; return; }
     CGFloat width = scrollView.bounds.size.width;
     if (width <= 0 || _photos.count == 0) return;
     NSInteger index = (NSInteger)floor((scrollView.contentOffset.x + width / 2) / width);

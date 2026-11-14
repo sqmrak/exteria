@@ -24,9 +24,13 @@
     UILabel *_toast;
     UIScrollView *_strip;
     NSMutableArray *_thumbs;
+    /* the thumbs whose picture was asked for, so a long list loads only the ones near the strip's window */
+    NSMutableIndexSet *_thumbsAsked;
+    NSDateFormatter *_dateFormat;
     UIActivityIndicatorView *_spinner;
     NSMutableArray *_pages;
     NSInteger _index;
+    BOOL _thumbScrolling;
     BOOL _requested;
     BOOL _statusWasHidden;
 }
