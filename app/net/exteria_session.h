@@ -322,6 +322,10 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* everything the account itself wrote in the chat, newest first */
 /* the photos and videos, the files or the links of a chat, newest first, a page older than beforeId (zero for the newest) */
 - (void)loadSharedOfDialog:(ExteriaDialog *)dialog kind:(exteria_shared_kind)kind beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion;
+/* the messages the account itself wrote in the chat (in its topic when the dialog is one), newest first, a page of limit older than beforeId (zero for the newest) */
+- (void)loadOwnMessagesOfDialog:(ExteriaDialog *)dialog beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion;
+/* the oldest message of a kind in the chat, as a page of one */
+- (void)loadOldestSharedOfDialog:(ExteriaDialog *)dialog kind:(exteria_shared_kind)kind completion:(ExteriaHistoryCompletion)completion;
 /* the oldest messages of the chat, one page, newest of them first */
 
 /* the newest messages of a chat that earlier loads and live updates left on disk, with their senders; nil messages

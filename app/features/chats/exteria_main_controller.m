@@ -128,6 +128,8 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     _stickers = [[ExteriaStickerLibrary alloc] initWithSession:session];
     /* the plugins that read Saved Messages and the saved music of the profile (see exteria_plugin_account.h) talk to this session */
     _pluginAccount = [[ExteriaPluginAccount alloc] initWithSession:session];
+    if (ExteriaPluginsAreRunning()) [_pluginAccount refreshDialogs];
+    ExteriaPluginMusicSetMedia(_media);
     ExteriaPluginUISetOwnUser([[session ownPerson] userId], [[session ownPerson] name]);
     return self;
 }

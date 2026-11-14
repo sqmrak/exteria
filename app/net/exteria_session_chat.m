@@ -1089,6 +1089,26 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
     }];
 }
 
+- (void)loadOwnMessagesOfDialog:(ExteriaDialog *)dialog beforeId:(int32_t)beforeId limit:(int32_t)limit completion:(ExteriaHistoryCompletion)completion {
+    ExteriaHistoryCompletion done = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_own_messages_request(arena, &peer, beforeId, limit, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        [self deliverMessagesOfResult:result what:"the messages of the account" completion:done];
+    }];
+}
+
+- (void)loadOldestSharedOfDialog:(ExteriaDialog *)dialog kind:(exteria_shared_kind)kind completion:(ExteriaHistoryCompletion)completion {
+    ExteriaHistoryCompletion done = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_shared_oldest_request(arena, &peer, kind, 1, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        [self deliverMessagesOfResult:result what:"the oldest shared media" completion:done];
+    }];
+}
+
 static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria_tl_value *value);
 
 /* the store keeps a forum as one chat, so a topic takes its own messages out of the newest page of the whole forum */

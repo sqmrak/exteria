@@ -102,6 +102,7 @@
 #import "exteria_translator.h"
 #import "exteria_ayu.h"
 #import "exteria_plugins.h"
+#import "exteria_plugin_account.h"
 #import "exteria_edit_history_controller.h"
 #import "exteria_session_saved.h"
 #import "exteria_falling_view.h"
@@ -868,6 +869,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _wallpaper = [[UIImageView alloc] init];
     ExteriaApplyChatWallpaperForChat(_wallpaper, ExteriaThemeIsDark(), _dialog.peerKind, _dialog.peerId);
     [root addSubview:_wallpaper];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wallpaperDidChange) name:ExteriaWallpaperDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(pluginDeletedMessages:) name:ExteriaPluginMessagesDeletedNotification object:nil];
     /* the song that plays follows the person into the chat, with the buttons to change it; the strip has no height while nothing plays */
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
     _miniPlayer.pill = YES;
@@ -2292,6 +2295,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 #pragma mark menu
 
 typedef enum { ExteriaChatMenuSearch, ExteriaChatMenuPinned, ExteriaChatMenuVoiceChat, ExteriaChatMenuDiscussion, ExteriaChatMenuNotifications, ExteriaChatMenuWallpaper, ExteriaChatMenuClear, ExteriaChatMenuBookmarks, ExteriaChatMenuSavedDialogs, ExteriaChatMenuBotSettings, ExteriaChatMenuBotHelp, ExteriaChatMenuReport, ExteriaChatMenuDelete, ExteriaChatMenuClearSaved } ExteriaChatMenuEntry;
+/* the rows of plugins in the menu of a chat count from here, at most this many */
+enum { ExteriaChatMenuPluginBase = 1000, ExteriaChatMenuPluginMax = 4 };
 enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDeleteMessage, ExteriaChatAlertSearch, ExteriaChatAlertDeleteSelected, ExteriaChatAlertStartVoice, ExteriaChatAlertClearSaved };
 
 /* asks the question first when the person wants it asked (the setting), then runs the block; declined runs when the answer is no */
@@ -2314,7 +2319,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
 - (void)showChatMenu {
     NSMutableArray *titles = [NSMutableArray array];
     NSMutableArray *entries = [NSMutableArray array];
-    ExteriaSymbol symbols[16];
+    ExteriaSymbol symbols[24];
     BOOL channelLike = _dialog.peerKind == 3;
     BOOL bot = _dialog.kind == EXTERIA_DIALOG_BOT;
 /* the rows are the ones the three dots give, in its order */
@@ -2347,11 +2352,25 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
                  channelLike ? (_dialog.kind == EXTERIA_DIALOG_GROUP ? @"channel.menu.leave.group" : @"channel.menu.leave") : @"chat.menu.delete", ExteriaChatMenuDelete);
     }
 #undef MENU_ROW
+    /* the actions plugins put on the menu of a chat (CHAT_ACTION_MENU), after the rows of the app and before nothing else; a few at most, as the list has room for */
+    NSString *deleteTitle = [[entries lastObject] intValue] == ExteriaChatMenuDelete ? [titles lastObject] : nil;
+    NSArray *pluginActions = _pinnedList ? nil : ExteriaPluginsChatActions();
+    for (NSUInteger i = 0; i < pluginActions.count && i < ExteriaChatMenuPluginMax; ++i) {
+        symbols[titles.count] = ExteriaSymbolApps;
+        [titles addObject:[[pluginActions objectAtIndex:i] objectForKey:@"text"]];
+        [entries addObject:[NSNumber numberWithInt:ExteriaChatMenuPluginBase + (int)i]];
+    }
     ExteriaWeakReference *weak = _weak;
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
         ExteriaChatController *chat = weak.target;
         if (!chat || index >= entries.count) return;
-        switch ([[entries objectAtIndex:index] intValue]) {
+        int entry = [[entries objectAtIndex:index] intValue];
+        if (entry >= ExteriaChatMenuPluginBase) {
+            NSDictionary *action = (NSUInteger)(entry - ExteriaChatMenuPluginBase) < pluginActions.count ? [pluginActions objectAtIndex:(NSUInteger)(entry - ExteriaChatMenuPluginBase)] : nil;
+            if (action) ExteriaPluginsRunAction([action objectForKey:@"pluginId"], [action objectForKey:@"item"]);
+            return;
+        }
+        switch (entry) {
         case ExteriaChatMenuSearch: [chat askSearchQuery]; break;
         case ExteriaChatMenuPinned: [chat openPinnedList]; break;
         case ExteriaChatMenuVoiceChat: [chat openVoiceChat]; break;
@@ -2376,7 +2395,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
         case ExteriaChatMenuReport: [ExteriaReportFlow startForDialog:chat->_dialog session:chat->_session host:chat done:nil]; break;
         case ExteriaChatMenuDelete: {
             NSString *message = chat->_dialog.peerKind == 3 ? [NSString stringWithFormat:NSLocalizedString(@"chats.swipe.leave.confirm", nil), chat->_dialog.title] : NSLocalizedString(@"chat.delete.confirm", nil);
-            [chat askWithMessage:message action:[titles lastObject] tag:ExteriaChatAlertDelete];
+            [chat askWithMessage:message action:deleteTitle tag:ExteriaChatAlertDelete];
             break;
         }
         }
@@ -7107,6 +7126,21 @@ static NSDate *ExteriaReminderDate(NSUInteger choice) {
     if (![self selectedMessages].count) return;
     [self askWithMessage:[NSString stringWithFormat:NSLocalizedString(@"chat.select.delete.confirm", nil), (long)[self selectedMessages].count]
                   action:NSLocalizedString(@"chat.msg.delete", nil) tag:ExteriaChatAlertDeleteSelected];
+}
+
+/* a plugin deleted messages of this chat on the server: the rows go, as they do after the person's own delete */
+- (void)pluginDeletedMessages:(NSNotification *)note {
+    ExteriaDialog *dialog = [note.userInfo objectForKey:@"dialog"];
+    /* the ids of a user or a group are the account's, so any chat of that kind drops them; those of a channel belong to that channel */
+    if (dialog ? dialog != _dialog : _dialog.peerKind == 3) return;
+    NSArray *ids = [note.userInfo objectForKey:@"ids"];
+    for (NSNumber *identifier in ids) {
+        [_server removeObjectForKey:identifier];
+        for (ExteriaMessage *local in [[_local copy] autorelease]) if (local.messageId == identifier.intValue) [_local removeObject:local];
+        if (_replyToId == identifier.intValue || _editingId == identifier.intValue) [self cancelCompose];
+    }
+    [self rebuildItems];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaDialogsChangedNotification object:nil];
 }
 
 - (void)deleteSelectedNow {

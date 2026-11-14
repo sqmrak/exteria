@@ -42,6 +42,34 @@ static void test_shared(void) {
     CHECK_EQ_INT(exteria_shared_request(&arena, &channel, EXTERIA_SHARED_MEDIA, -1, 60, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_shared_request(&arena, &channel, EXTERIA_SHARED_MEDIA, 0, 0, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_shared_request(&arena, &nohash, EXTERIA_SHARED_MEDIA, 0, 60, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_own_messages_request(&arena, &channel, 0, 100, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_id(request), EXTERIA_TL_ID_messages_search);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "filter"), EXTERIA_TL_ID_inputMessagesFilterEmpty));
+    CHECK(exteria_tl_is(exteria_tl_get(request, "from_id"), EXTERIA_TL_ID_inputPeerSelf));
+    CHECK(!exteria_tl_has(request, "top_msg_id"));
+    {
+        exteria_peer_ref topic = {3, 500, 7, 0, 0};
+        topic.topic_id = 12;
+        CHECK_EQ_INT(exteria_own_messages_request(&arena, &topic, 40, 50, &request), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &value), EXTERIA_OK);
+        CHECK_EQ_INT(value, 12);
+        CHECK_EQ_INT(exteria_tl_get_i32(request, "offset_id", &value), EXTERIA_OK);
+        CHECK_EQ_INT(value, 40);
+    }
+    CHECK_EQ_INT(exteria_own_messages_request(&arena, &channel, -1, 100, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_own_messages_request(&arena, &channel, 0, 101, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_own_messages_request(&arena, &nohash, 0, 100, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_shared_oldest_request(&arena, &channel, EXTERIA_SHARED_AUDIO, 1, &request), EXTERIA_OK);
+    CHECK(exteria_tl_is(exteria_tl_get(request, "filter"), EXTERIA_TL_ID_inputMessagesFilterMusic));
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "offset_id", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 1);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "add_offset", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, -1);
+    CHECK_EQ_INT(exteria_tl_get_i32(request, "limit", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 1);
+    CHECK_EQ_INT(exteria_shared_oldest_request(&arena, &channel, EXTERIA_SHARED_AUDIO, 0, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    CHECK_EQ_INT(exteria_shared_oldest_request(&arena, &nohash, EXTERIA_SHARED_AUDIO, 1, &request), EXTERIA_E_ARG);
 }
 
 static void test_upload(void) {
