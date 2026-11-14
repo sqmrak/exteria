@@ -166,6 +166,26 @@ static void shipped_list(void) {
     CHECK(hit && strcmp(hit->iso, "UA") == 0 && used == 3);
     hit = exteria_country_match(list, count, "447911123456", &used);
     CHECK(hit && strcmp(hit->iso, "GB") == 0);
+    static const struct { const char *digits, *expected; } shown[] = {
+        {"15722280771", "+1 (572) 228-07-71"},
+        {"12025550123", "+1 (202) 555-01-23"},
+        {"79001234567", "+7 900 123 4567"},
+        {"380501234567", "+380 50 123 45 67"},
+        {"1572", "+1 (572"},
+        {"1", "+1"},
+        {"999", "+999"},
+        {"", "+"},
+    };
+    for (size_t k = 0; k < sizeof(shown) / sizeof(shown[0]); ++k) {
+        char out[48];
+        CHECK_EQ_INT(exteria_phone_display(list, count, shown[k].digits, out, sizeof(out)), EXTERIA_OK);
+        if (strcmp(out, shown[k].expected) != 0) fprintf(stderr, "display %s -> '%s' expected '%s'\n", shown[k].digits, out, shown[k].expected);
+        CHECK(strcmp(out, shown[k].expected) == 0);
+    }
+    char tight[6];
+    CHECK_EQ_INT(exteria_phone_display(list, count, "15722280771", tight, sizeof(tight)), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(exteria_phone_display(list, count, "15722280771", NULL, 4), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_phone_display(NULL, 0, "1572", tight, sizeof(tight)), EXTERIA_E_ARG);
     free(text);
 }
 

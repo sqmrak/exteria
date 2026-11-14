@@ -6,7 +6,10 @@
    positions in the text move, so a text that carries entities must not go through it */
 NSString *ExteriaFilteredText(NSString *text);
 
-/* the number of the account the way a screen of the account shows it: "+" and the digits, or "+" and as many
+/* a number the way a profile shows it, +1 (572) 228-07-71; the digits as they came behind a plus when the dial code list is missing */
+NSString *ExteriaPhoneDisplay(NSString *phone);
+
+/* the number of the account the way a screen of the account shows it: the number as ExteriaPhoneDisplay gives it, or "+" and as many
    bullets when the setting hides it */
 NSString *ExteriaOwnPhoneText(NSString *phone);
 

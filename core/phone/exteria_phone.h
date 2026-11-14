@@ -32,4 +32,8 @@ exteria_status exteria_country_parse(const char *text, size_t len, exteria_count
 const exteria_country *exteria_country_match(const exteria_country *list, size_t count,
                                              const char *digits, size_t *code_len);
 
+/* a number as a profile shows it: "+", the dial code, then the national digits grouped by the pattern of the matched country; the dial code 1 is shown as
+   "+1 (572) 228-07-71" whatever its country says, and a number with no known code or no pattern is "+" and the digits. digits holds ascii digits only */
+exteria_status exteria_phone_display(const exteria_country *list, size_t count, const char *digits, char *out, size_t cap);
+
 #endif

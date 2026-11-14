@@ -619,7 +619,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     }
     ExteriaPerson *person = user.person;
     NSMutableArray *infoRows = [NSMutableArray arrayWithObjects:
-        [NSArray arrayWithObjects:NSLocalizedString(@"profile.phone", nil), person.phone.length ? [@"+" stringByAppendingString:person.phone] : @"", nil],
+        [NSArray arrayWithObjects:NSLocalizedString(@"profile.phone", nil), ExteriaPhoneDisplay(person.phone), nil],
         [NSArray arrayWithObjects:NSLocalizedString(@"profile.about", nil), user.about ? user.about : @"", nil],
         [NSArray arrayWithObjects:NSLocalizedString(@"profile.username", nil), person.username.length ? [@"@" stringByAppendingString:person.username] : @"", nil],
         [NSArray arrayWithObjects:NSLocalizedString(@"contact.note.caption", nil), user.note ? user.note : @"", nil],

@@ -1,5 +1,6 @@
 #include "exteria_phone.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #define PHONE_MIN_TOTAL_DIGITS 7
@@ -147,4 +148,23 @@ const exteria_country *exteria_country_match(const exteria_country *list, size_t
     }
     if (code_len) *code_len = best_len;
     return best;
+}
+
+exteria_status exteria_phone_display(const exteria_country *list, size_t count, const char *digits, char *out, size_t cap) {
+    size_t code_len = 0;
+    char grouped[EXTERIA_PHONE_MAX_DIGITS * 3];
+    if (!out || cap == 0) return EXTERIA_E_ARG;
+    out[0] = '\0';
+    if (!list || !digits) return EXTERIA_E_ARG;
+    const exteria_country *hit = exteria_country_match(list, count, digits, &code_len);
+    const char *pattern = hit ? hit->pattern : "";
+    if (hit && code_len == 1 && hit->code[0] == '1') pattern = "(XXX) XXX-XX-XX";
+    if (!hit || !*pattern || !digits[code_len]) {
+        int n = snprintf(out, cap, "+%s", digits);
+        return n > 0 && (size_t)n < cap ? EXTERIA_OK : EXTERIA_E_LIMIT;
+    }
+    exteria_status status = exteria_phone_format(pattern, digits + code_len, grouped, sizeof(grouped));
+    if (status != EXTERIA_OK) return status;
+    int n = snprintf(out, cap, "+%.*s %s", (int)code_len, digits, grouped);
+    return n > 0 && (size_t)n < cap ? EXTERIA_OK : EXTERIA_E_LIMIT;
 }
