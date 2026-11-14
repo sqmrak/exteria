@@ -1,0 +1,15 @@
+add=42
+greet=hello world
+mix=705
+arguments=-17,text,1099511627776,java.lang.Integer,(long,String)int,(Lookup,String,MethodType)CallSite,2.5,0.5
+varargs=5|s|6|String|
+varargs none=
+switching 0=first:x
+switching 1=second:x
+switching 2=second:x
+combined 0=<0>
+combined 1=<11>
+combined 2=<4>
+combined 3=<13>
+members=11,30,35,36
+guarded=-9

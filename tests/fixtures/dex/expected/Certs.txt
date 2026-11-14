@@ -1,0 +1,62 @@
+ca basics=3,39,X.509,SHA256withRSA,1.2.840.113549.1.1.11,922,1794386843000,2425106843000
+ca subject=CN=Test Root CA,OU=Dex Runtime,O=Exteria Test,C=US | CN=Test Root CA, OU=Dex Runtime, O=Exteria Test, C=US | cn=test root ca,ou=dex runtime,o=exteria test,c=us
+ca issuer=CN=Test Root CA,OU=Dex Runtime,O=Exteria Test,C=US
+ca dn=CN=Test Root CA, OU=Dex Runtime, O=Exteria Test, C=US | CN=Test Root CA, OU=Dex Runtime, O=Exteria Test, C=US
+ca principal=CN=Test Root CA, OU=Dex Runtime, O=Exteria Test, C=US
+ca constraints=2,[false, false, false, false, false, true, true, false, false],null
+ca san=null,null
+ca ext oids=[2.5.29.15, 2.5.29.19] [2.5.29.14, 2.5.29.35] false
+ca key=RSA,X.509,294
+ca rsa=2048,65537
+leaf basics=3,40,X.509,SHA384withRSA,1.2.840.113549.1.1.12,1046,1794386861000,2109746861000
+leaf subject=CN=Müller \+ Söhne,O=Tést\, Inc.,L=München,ST=Bayern,C=DE | CN="Müller + Söhne", O="Tést, Inc.", L=München, ST=Bayern, C=DE | cn=müller \+ söhne,o=tést\, inc.,l=münchen,st=bayern,c=de
+leaf issuer=CN=Test Root CA,OU=Dex Runtime,O=Exteria Test,C=US
+leaf dn=CN="Müller + Söhne", O="Tést, Inc.", L=München, ST=Bayern, C=DE | CN=Test Root CA, OU=Dex Runtime, O=Exteria Test, C=US
+leaf principal=CN="Müller + Söhne", O="Tést, Inc.", L=München, ST=Bayern, C=DE
+leaf constraints=-1,[true, false, true, false, false, false, false, false, false],[1.3.6.1.5.5.7.3.1, 1.3.6.1.5.5.7.3.2]
+leaf san=[[2, test.example.com], [2, *.example.org], [7, 10.1.2.3], [1, a@b.c], [6, https://example.com/x]],null
+leaf ext oids=[2.5.29.15, 2.5.29.19] [2.5.29.14, 2.5.29.17, 2.5.29.35, 2.5.29.37] false
+leaf key=RSA,X.509,294
+leaf rsa=2048,65537
+ec basics=3,40,X.509,SHA256withECDSA,1.2.840.10045.4.3.2,429,1794386843000,2109746843000
+ec subject=O=EC Org,CN=ec.example.com | O=EC Org, CN=ec.example.com | o=ec org,cn=ec.example.com
+ec issuer=O=EC Org,CN=ec.example.com
+ec dn=O=EC Org, CN=ec.example.com | O=EC Org, CN=ec.example.com
+ec principal=O=EC Org, CN=ec.example.com
+ec constraints=2147483647,null,null
+ec san=null,null
+ec ext oids=[2.5.29.19] [2.5.29.14, 2.5.29.35] false
+ec key=EC,X.509,91
+ec ec=x-ok
+ec ec params=256,1,256
+equals=true,false,true,false,true
+hash=-1381075915,-618852217
+ext value=0404030205a0,null
+tbs=766,256
+verify=ok
+verify wrong key=Signature does not match.
+verify ec key=InvalidKeyException
+valid=ok
+expired=CertificateExpiredException:true
+future=CertificateNotYetValidException:true
+before epoch=not yet valid
+factory=X.509
+several=3 50 57 26 
+der input=true,true
+garbage=CertificateException
+short der=CertificateException
+unknown type=NoSuchType not found
+principal=CN=Duke,OU=JavaSoft,O=Sun Microsystems,C=US|CN=Duke, OU=JavaSoft, O=Sun Microsystems, C=US|cn=duke,ou=javasoft,o=sun microsystems,c=us|CN=Duke, OU=JavaSoft, O=Sun Microsystems, C=US|76
+principal equal=true,false,true
+principal escapes=CN=Smith\, John+OU=a\+b,O=Quoted\, Co|CN="Smith, John" + OU="a+b", O="Quoted, Co"
+principal round trip=true,CN=Müller \+ Söhne,O=Tést\, Inc.,L=München,ST=Bayern,C=DE
+principal oid=1.2.3.4=#0c0141,CN=x|1.2.840.113549.1.9.1=#16056140622e63,CN=x
+bad name=iae
+bad format=invalid format specified
+unloaded=Uninitialized keystore
+keystore=2,[leaf, root],true,true,false,PKCS12
+keystore get=true,leaf,null,null
+keystore entry=true,true,true
+keystore delete=1,false,true
+keystore file=ioe
+keystore type=Nope not found

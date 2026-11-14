@@ -1,0 +1,1186 @@
+fmt yyyy-MM-dd HH:mm:ss=2024-03-05 14:07:09
+fmt early yyyy-MM-dd HH:mm:ss=0005-01-02 00:00:00
+fmt yyyy-MM-dd'T'HH:mm:ss.SSS=2024-03-05T14:07:09.123
+fmt early yyyy-MM-dd'T'HH:mm:ss.SSS=0005-01-02T00:00:00.000
+fmt y=2024
+fmt early y=5
+fmt yy=24
+fmt early yy=05
+fmt yyy=2024
+fmt early yyy=005
+fmt yyyy=2024
+fmt early yyyy=0005
+fmt yyyyy=02024
+fmt early yyyyy=00005
+fmt uuuu=2024
+fmt early uuuu=0005
+fmt uu=24
+fmt early uu=05
+fmt M/d/yy=3/5/24
+fmt early M/d/yy=1/2/05
+fmt MM=03
+fmt early MM=01
+fmt MMM=Mar
+fmt early MMM=Jan
+fmt MMMM=March
+fmt early MMMM=January
+fmt MMMMM=M
+fmt early MMMMM=J
+fmt LLL=Mar
+fmt early LLL=Jan
+fmt LLLL=March
+fmt early LLLL=January
+fmt d=5
+fmt early d=2
+fmt dd=05
+fmt early dd=02
+fmt D=65
+fmt early D=2
+fmt DDD=065
+fmt early DDD=002
+fmt E=Tue
+fmt early E=Sun
+fmt EE=Tue
+fmt early EE=Sun
+fmt EEE=Tue
+fmt early EEE=Sun
+fmt EEEE=Tuesday
+fmt early EEEE=Sunday
+fmt EEEEE=T
+fmt early EEEEE=S
+fmt e=3
+fmt early e=1
+fmt ee=03
+fmt early ee=01
+fmt eee=Tue
+fmt early eee=Sun
+fmt c=3
+fmt early c=1
+fmt a=PM
+fmt early a=AM
+fmt h=2
+fmt early h=12
+fmt hh=02
+fmt early hh=12
+fmt H=14
+fmt early H=0
+fmt k=14
+fmt early k=24
+fmt K=2
+fmt early K=0
+fmt m=7
+fmt early m=0
+fmt s=9
+fmt early s=0
+fmt S=1
+fmt early S=0
+fmt SS=12
+fmt early SS=00
+fmt SSSSSS=123456
+fmt early SSSSSS=000000
+fmt SSSSSSSSS=123456789
+fmt early SSSSSSSSS=000000000
+fmt n=123456789
+fmt early n=0
+fmt nnnnnnnnnn=0123456789
+fmt early nnnnnnnnnn=0000000000
+fmt N=50829123456789
+fmt early N=0
+fmt A=50829123
+fmt early A=0
+fmt G=AD
+fmt early G=AD
+fmt GGGG=Anno Domini
+fmt early GGGG=Anno Domini
+fmt GGGGG=A
+fmt early GGGGG=A
+fmt Q=1
+fmt early Q=1
+fmt QQ=01
+fmt early QQ=01
+fmt QQQ=Q1
+fmt early QQQ=Q1
+fmt QQQQ=1st quarter
+fmt early QQQQ=1st quarter
+fmt QQQQQ=1
+fmt early QQQQQ=1
+fmt q=1
+fmt early q=1
+fmt F=1
+fmt early F=1
+fmt h:mm a=2:07 PM
+fmt early h:mm a=12:00 AM
+fmt EEEE, MMMM d, y=Tuesday, March 5, 2024
+fmt early EEEE, MMMM d, y=Sunday, January 2, 5
+fmt dd.MM.yyyy HH:mm=05.03.2024 14:07
+fmt early dd.MM.yyyy HH:mm=02.01.0005 00:00
+fmt 'at' H 'o''clock'=at 14 o'clock
+fmt early 'at' H 'o''clock'=at 0 o'clock
+fmt [yyyy][-MM]=2024-03
+fmt early [yyyy][-MM]=0005-01
+fmt yyyy[-MM[-dd]]=2024-03-05
+fmt early yyyy[-MM[-dd]]=0005-01-02
+fmt HH:mm[:ss]=14:07:09
+fmt early HH:mm[:ss]=00:00:00
+zone moscow VV=14:07 Europe/Moscow
+zone ny VV=14:07 America/New_York
+zone off VV=14:07 -03:30
+zone utc VV=14:07 Z
+zone moscow XXX=14:07 +03:00
+zone ny XXX=14:07 -05:00
+zone off XXX=14:07 -03:30
+zone utc XXX=14:07 Z
+zone moscow XX=14:07 +0300
+zone ny XX=14:07 -0500
+zone off XX=14:07 -0330
+zone utc XX=14:07 Z
+zone moscow X=14:07 +03
+zone ny X=14:07 -05
+zone off X=14:07 -0330
+zone utc X=14:07 Z
+zone moscow XXXX=14:07 +0300
+zone ny XXXX=14:07 -0500
+zone off XXXX=14:07 -0330
+zone utc XXXX=14:07 Z
+zone moscow XXXXX=14:07 +03:00
+zone ny XXXXX=14:07 -05:00
+zone off XXXXX=14:07 -03:30
+zone utc XXXXX=14:07 Z
+zone moscow xxx=14:07 +03:00
+zone ny xxx=14:07 -05:00
+zone off xxx=14:07 -03:30
+zone utc xxx=14:07 +00:00
+zone moscow xx=14:07 +0300
+zone ny xx=14:07 -0500
+zone off xx=14:07 -0330
+zone utc xx=14:07 +0000
+zone moscow x=14:07 +03
+zone ny x=14:07 -05
+zone off x=14:07 -0330
+zone utc x=14:07 +00
+zone moscow xxxx=14:07 +0300
+zone ny xxxx=14:07 -0500
+zone off xxxx=14:07 -0330
+zone utc xxxx=14:07 +0000
+zone moscow xxxxx=14:07 +03:00
+zone ny xxxxx=14:07 -05:00
+zone off xxxxx=14:07 -03:30
+zone utc xxxxx=14:07 +00:00
+zone moscow Z=14:07 +0300
+zone ny Z=14:07 -0500
+zone off Z=14:07 -0330
+zone utc Z=14:07 +0000
+zone moscow ZZ=14:07 +0300
+zone ny ZZ=14:07 -0500
+zone off ZZ=14:07 -0330
+zone utc ZZ=14:07 +0000
+zone moscow ZZZ=14:07 +0300
+zone ny ZZZ=14:07 -0500
+zone off ZZZ=14:07 -0330
+zone utc ZZZ=14:07 +0000
+zone moscow ZZZZ=14:07 GMT+03:00
+zone ny ZZZZ=14:07 GMT-05:00
+zone off ZZZZ=14:07 GMT-03:30
+zone utc ZZZZ=14:07 GMT
+zone moscow ZZZZZ=14:07 +03:00
+zone ny ZZZZZ=14:07 -05:00
+zone off ZZZZZ=14:07 -03:30
+zone utc ZZZZZ=14:07 Z
+zone moscow O=14:07 GMT+3
+zone ny O=14:07 GMT-5
+zone off O=14:07 GMT-3:30
+zone utc O=14:07 GMT
+zone moscow OOOO=14:07 GMT+03:00
+zone ny OOOO=14:07 GMT-05:00
+zone off OOOO=14:07 GMT-03:30
+zone utc OOOO=14:07 GMT
+pattern yyyy-MM-dd{=java.lang.IllegalArgumentException: Pattern includes reserved character: '{'
+pattern 'abc=java.lang.IllegalArgumentException: Pattern ends with an incomplete string literal: 'abc
+pattern bbb=java.lang.IllegalArgumentException: Unknown pattern letter: b
+pattern dddd=java.lang.IllegalArgumentException: Too many pattern letters: d
+pattern MMMMMM=java.lang.IllegalArgumentException: Too many pattern letters: M
+pattern aa=java.lang.IllegalArgumentException: Too many pattern letters: a
+pattern VVV=java.lang.IllegalArgumentException: Pattern letter count must be 2: V
+pattern OO=java.lang.IllegalArgumentException: Pattern letter count must be 1 or 4: O
+pattern ZZZZZZ=java.lang.IllegalArgumentException: Too many pattern letters: Z
+pattern xxxxxx=java.lang.IllegalArgumentException: Too many pattern letters: x
+pattern hhh=java.lang.IllegalArgumentException: Too many pattern letters: h
+pattern [=
+pattern ]=java.lang.IllegalArgumentException: Pattern invalid as it contains ] without previous [
+pattern #=java.lang.IllegalArgumentException: Pattern includes reserved character: '#'
+pattern pp=java.lang.IllegalArgumentException: Pad letter 'p' must be followed by valid pad pattern: pp
+pattern pH=Pad(Value(HourOfDay),1)
+iso toString ISO_LOCAL_DATE=Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2)
+iso ISO_LOCAL_DATE dt=2024-03-05
+iso ISO_LOCAL_DATE night=2021-12-31
+iso ISO_LOCAL_DATE moscow=2024-03-05
+iso ISO_LOCAL_DATE off=2024-03-05
+iso ISO_LOCAL_DATE date=2024-03-05
+iso ISO_LOCAL_DATE time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_LOCAL_DATE instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_LOCAL_DATE instant zone=2023-11-14
+iso toString ISO_LOCAL_TIME=Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]]
+iso ISO_LOCAL_TIME dt=14:07:09.123456789
+iso ISO_LOCAL_TIME night=00:30:00
+iso ISO_LOCAL_TIME moscow=14:07:09.123456789
+iso ISO_LOCAL_TIME off=14:07:09.123456789
+iso ISO_LOCAL_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_LOCAL_TIME time=14:07:09.123456789
+iso ISO_LOCAL_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_LOCAL_TIME instant zone=22:13:20.005
+iso toString ISO_LOCAL_DATE_TIME=ParseCaseSensitive(false)(Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2))'T'(Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]])
+iso ISO_LOCAL_DATE_TIME dt=2024-03-05T14:07:09.123456789
+iso ISO_LOCAL_DATE_TIME night=2021-12-31T00:30:00
+iso ISO_LOCAL_DATE_TIME moscow=2024-03-05T14:07:09.123456789
+iso ISO_LOCAL_DATE_TIME off=2024-03-05T14:07:09.123456789
+iso ISO_LOCAL_DATE_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_LOCAL_DATE_TIME time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_LOCAL_DATE_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_LOCAL_DATE_TIME instant zone=2023-11-14T22:13:20.005
+iso toString ISO_OFFSET_DATE_TIME=ParseCaseSensitive(false)(ParseCaseSensitive(false)(Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2))'T'(Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]]))ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)
+iso ISO_OFFSET_DATE_TIME dt=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_DATE_TIME night=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_DATE_TIME moscow=2024-03-05T14:07:09.123456789+03:00
+iso ISO_OFFSET_DATE_TIME off=2024-03-05T14:07:09.123456789-03:30
+iso ISO_OFFSET_DATE_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_OFFSET_DATE_TIME time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_OFFSET_DATE_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_OFFSET_DATE_TIME instant zone=2023-11-14T22:13:20.005Z
+iso toString ISO_ZONED_DATE_TIME=(ParseCaseSensitive(false)(ParseCaseSensitive(false)(Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2))'T'(Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]]))ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true))['['ParseCaseSensitive(true)ZoneRegionId()']']
+iso ISO_ZONED_DATE_TIME dt=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_ZONED_DATE_TIME night=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_ZONED_DATE_TIME moscow=2024-03-05T14:07:09.123456789+03:00[Europe/Moscow]
+iso ISO_ZONED_DATE_TIME off=2024-03-05T14:07:09.123456789-03:30
+iso ISO_ZONED_DATE_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_ZONED_DATE_TIME time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_ZONED_DATE_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_ZONED_DATE_TIME instant zone=2023-11-14T22:13:20.005Z
+iso toString ISO_DATE_TIME=(ParseCaseSensitive(false)(Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2))'T'(Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]]))[ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)['['ParseCaseSensitive(true)ZoneRegionId()']']]
+iso ISO_DATE_TIME dt=2024-03-05T14:07:09.123456789
+iso ISO_DATE_TIME night=2021-12-31T00:30:00
+iso ISO_DATE_TIME moscow=2024-03-05T14:07:09.123456789+03:00[Europe/Moscow]
+iso ISO_DATE_TIME off=2024-03-05T14:07:09.123456789-03:30
+iso ISO_DATE_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_DATE_TIME time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_DATE_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_DATE_TIME instant zone=2023-11-14T22:13:20.005Z
+iso toString ISO_DATE=ParseCaseSensitive(false)(Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2))[ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)]
+iso ISO_DATE dt=2024-03-05
+iso ISO_DATE night=2021-12-31
+iso ISO_DATE moscow=2024-03-05+03:00
+iso ISO_DATE off=2024-03-05-03:30
+iso ISO_DATE date=2024-03-05
+iso ISO_DATE time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_DATE instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_DATE instant zone=2023-11-14Z
+iso toString ISO_TIME=ParseCaseSensitive(false)(Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]])[ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)]
+iso ISO_TIME dt=14:07:09.123456789
+iso ISO_TIME night=00:30:00
+iso ISO_TIME moscow=14:07:09.123456789+03:00
+iso ISO_TIME off=14:07:09.123456789-03:30
+iso ISO_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_TIME time=14:07:09.123456789
+iso ISO_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_TIME instant zone=22:13:20.005Z
+iso toString ISO_OFFSET_DATE=ParseCaseSensitive(false)(Value(Year,4,10,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2))ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)
+iso ISO_OFFSET_DATE dt=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_DATE night=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_DATE moscow=2024-03-05+03:00
+iso ISO_OFFSET_DATE off=2024-03-05-03:30
+iso ISO_OFFSET_DATE date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_DATE time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_OFFSET_DATE instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_OFFSET_DATE instant zone=2023-11-14Z
+iso toString ISO_OFFSET_TIME=ParseCaseSensitive(false)(Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]])ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)
+iso ISO_OFFSET_TIME dt=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_TIME night=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_TIME moscow=14:07:09.123456789+03:00
+iso ISO_OFFSET_TIME off=14:07:09.123456789-03:30
+iso ISO_OFFSET_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_OFFSET_TIME time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso ISO_OFFSET_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso ISO_OFFSET_TIME instant zone=22:13:20.005Z
+iso toString ISO_ORDINAL_DATE=ParseCaseSensitive(false)Value(Year,4,10,EXCEEDS_PAD)'-'Value(DayOfYear,3)[ParseStrict(false)Offset(+HH:MM:ss,'Z')ParseStrict(true)]
+iso ISO_ORDINAL_DATE dt=2024-065
+iso ISO_ORDINAL_DATE night=2021-365
+iso ISO_ORDINAL_DATE moscow=2024-065+03:00
+iso ISO_ORDINAL_DATE off=2024-065-03:30
+iso ISO_ORDINAL_DATE date=2024-065
+iso ISO_ORDINAL_DATE time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_ORDINAL_DATE instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso ISO_ORDINAL_DATE instant zone=2023-318Z
+iso toString ISO_INSTANT=ParseCaseSensitive(false)Instant()
+iso ISO_INSTANT dt=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: InstantSeconds
+iso ISO_INSTANT night=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: InstantSeconds
+iso ISO_INSTANT moscow=2024-03-05T11:07:09.123456789Z
+iso ISO_INSTANT off=2024-03-05T17:37:09.123456789Z
+iso ISO_INSTANT date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: InstantSeconds
+iso ISO_INSTANT time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: InstantSeconds
+iso ISO_INSTANT instant=2023-11-14T22:13:20.005Z
+iso ISO_INSTANT instant zone=2023-11-14T22:13:20.005Z
+iso toString BASIC_ISO_DATE=ParseCaseSensitive(false)Value(Year,4)Value(MonthOfYear,2)Value(DayOfMonth,2)[ParseStrict(false)Offset(+HHMMss,'Z')ParseStrict(true)]
+iso BASIC_ISO_DATE dt=20240305
+iso BASIC_ISO_DATE night=20211231
+iso BASIC_ISO_DATE moscow=20240305+0300
+iso BASIC_ISO_DATE off=20240305-0330
+iso BASIC_ISO_DATE date=20240305
+iso BASIC_ISO_DATE time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso BASIC_ISO_DATE instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: Year
+iso BASIC_ISO_DATE instant zone=20231114Z
+iso toString RFC_1123_DATE_TIME=ParseCaseSensitive(false)ParseStrict(false)[Text(DayOfWeek)', ']Value(DayOfMonth,1,2,NOT_NEGATIVE)' 'Text(MonthOfYear)' 'Value(Year,4)' 'Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)]' 'Offset(+HHMM,'GMT')
+iso RFC_1123_DATE_TIME dt=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso RFC_1123_DATE_TIME night=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: OffsetSeconds
+iso RFC_1123_DATE_TIME moscow=Tue, 5 Mar 2024 14:07:09 +0300
+iso RFC_1123_DATE_TIME off=Tue, 5 Mar 2024 14:07:09 -0330
+iso RFC_1123_DATE_TIME date=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+iso RFC_1123_DATE_TIME time=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: DayOfMonth
+iso RFC_1123_DATE_TIME instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: DayOfMonth
+iso RFC_1123_DATE_TIME instant zone=Tue, 14 Nov 2023 22:13:20 GMT
+instant plain=1970-01-01T00:00:00Z
+instant micro=1970-01-01T00:00:00.000123Z
+instant nano=1970-01-01T00:00:00.000000001Z
+instant year5=+11476-08-15T05:20:00Z
+instant yearneg=-7537-05-18T18:40:00Z
+parse ISO_LOCAL_DATE 2024-03-05={},ISO resolved to 2024-03-05
+parse ldt ISO_LOCAL_DATE 2024-03-05=java.time.format.DateTimeParseException: Text '2024-03-05' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse ld ISO_LOCAL_DATE 2024-03-05=2024-03-05
+parse zdt ISO_LOCAL_DATE 2024-03-05=java.time.format.DateTimeParseException: Text '2024-03-05' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse ISO_LOCAL_DATE 2024-3-5=java.time.format.DateTimeParseException: Text '2024-3-5' could not be parsed at index 5
+parse ldt ISO_LOCAL_DATE 2024-3-5=java.time.format.DateTimeParseException: Text '2024-3-5' could not be parsed at index 5
+parse ld ISO_LOCAL_DATE 2024-3-5=java.time.format.DateTimeParseException: Text '2024-3-5' could not be parsed at index 5
+parse zdt ISO_LOCAL_DATE 2024-3-5=java.time.format.DateTimeParseException: Text '2024-3-5' could not be parsed at index 5
+parse ISO_LOCAL_DATE 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Invalid date 'FEBRUARY 30'
+parse ldt ISO_LOCAL_DATE 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Invalid date 'FEBRUARY 30'
+parse ld ISO_LOCAL_DATE 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Invalid date 'FEBRUARY 30'
+parse zdt ISO_LOCAL_DATE 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Invalid date 'FEBRUARY 30'
+parse ISO_LOCAL_DATE 2023-02-29=java.time.format.DateTimeParseException: Text '2023-02-29' could not be parsed: Invalid date 'February 29' as '2023' is not a leap year
+parse ldt ISO_LOCAL_DATE 2023-02-29=java.time.format.DateTimeParseException: Text '2023-02-29' could not be parsed: Invalid date 'February 29' as '2023' is not a leap year
+parse ld ISO_LOCAL_DATE 2023-02-29=java.time.format.DateTimeParseException: Text '2023-02-29' could not be parsed: Invalid date 'February 29' as '2023' is not a leap year
+parse zdt ISO_LOCAL_DATE 2023-02-29=java.time.format.DateTimeParseException: Text '2023-02-29' could not be parsed: Invalid date 'February 29' as '2023' is not a leap year
+parse ISO_LOCAL_DATE +12345-01-01={},ISO resolved to +12345-01-01
+parse ldt ISO_LOCAL_DATE +12345-01-01=java.time.format.DateTimeParseException: Text '+12345-01-01' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to +12345-01-01 of type java.time.format.Parsed
+parse ld ISO_LOCAL_DATE +12345-01-01=+12345-01-01
+parse zdt ISO_LOCAL_DATE +12345-01-01=java.time.format.DateTimeParseException: Text '+12345-01-01' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to +12345-01-01 of type java.time.format.Parsed
+parse ISO_LOCAL_DATE 2024-13-01=java.time.format.DateTimeParseException: Text '2024-13-01' could not be parsed: Invalid value for MonthOfYear (valid values 1 - 12): 13
+parse ldt ISO_LOCAL_DATE 2024-13-01=java.time.format.DateTimeParseException: Text '2024-13-01' could not be parsed: Invalid value for MonthOfYear (valid values 1 - 12): 13
+parse ld ISO_LOCAL_DATE 2024-13-01=java.time.format.DateTimeParseException: Text '2024-13-01' could not be parsed: Invalid value for MonthOfYear (valid values 1 - 12): 13
+parse zdt ISO_LOCAL_DATE 2024-13-01=java.time.format.DateTimeParseException: Text '2024-13-01' could not be parsed: Invalid value for MonthOfYear (valid values 1 - 12): 13
+parse ISO_LOCAL_DATE 2024-03-05x=java.time.format.DateTimeParseException: Text '2024-03-05x' could not be parsed, unparsed text found at index 10
+parse ldt ISO_LOCAL_DATE 2024-03-05x=java.time.format.DateTimeParseException: Text '2024-03-05x' could not be parsed, unparsed text found at index 10
+parse ld ISO_LOCAL_DATE 2024-03-05x=java.time.format.DateTimeParseException: Text '2024-03-05x' could not be parsed, unparsed text found at index 10
+parse zdt ISO_LOCAL_DATE 2024-03-05x=java.time.format.DateTimeParseException: Text '2024-03-05x' could not be parsed, unparsed text found at index 10
+parse ISO_LOCAL_DATE =java.time.format.DateTimeParseException: Text '' could not be parsed at index 0
+parse ldt ISO_LOCAL_DATE =java.time.format.DateTimeParseException: Text '' could not be parsed at index 0
+parse ld ISO_LOCAL_DATE =java.time.format.DateTimeParseException: Text '' could not be parsed at index 0
+parse zdt ISO_LOCAL_DATE =java.time.format.DateTimeParseException: Text '' could not be parsed at index 0
+parse ISO_LOCAL_TIME 10:15={},ISO resolved to 10:15
+parse ldt ISO_LOCAL_TIME 10:15=java.time.format.DateTimeParseException: Text '10:15' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 10:15 of type java.time.format.Parsed
+parse ld ISO_LOCAL_TIME 10:15=java.time.format.DateTimeParseException: Text '10:15' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 10:15 of type java.time.format.Parsed
+parse zdt ISO_LOCAL_TIME 10:15=java.time.format.DateTimeParseException: Text '10:15' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 10:15 of type java.time.format.Parsed
+parse ISO_LOCAL_TIME 10:15:30={},ISO resolved to 10:15:30
+parse ldt ISO_LOCAL_TIME 10:15:30=java.time.format.DateTimeParseException: Text '10:15:30' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 10:15:30 of type java.time.format.Parsed
+parse ld ISO_LOCAL_TIME 10:15:30=java.time.format.DateTimeParseException: Text '10:15:30' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 10:15:30 of type java.time.format.Parsed
+parse zdt ISO_LOCAL_TIME 10:15:30=java.time.format.DateTimeParseException: Text '10:15:30' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 10:15:30 of type java.time.format.Parsed
+parse ISO_LOCAL_TIME 10:15:30.123456789={},ISO resolved to 10:15:30.123456789
+parse ldt ISO_LOCAL_TIME 10:15:30.123456789=java.time.format.DateTimeParseException: Text '10:15:30.123456789' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 10:15:30.123456789 of type java.time.format.Parsed
+parse ld ISO_LOCAL_TIME 10:15:30.123456789=java.time.format.DateTimeParseException: Text '10:15:30.123456789' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 10:15:30.123456789 of type java.time.format.Parsed
+parse zdt ISO_LOCAL_TIME 10:15:30.123456789=java.time.format.DateTimeParseException: Text '10:15:30.123456789' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 10:15:30.123456789 of type java.time.format.Parsed
+parse ISO_LOCAL_TIME 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+parse ldt ISO_LOCAL_TIME 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+parse ld ISO_LOCAL_TIME 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+parse zdt ISO_LOCAL_TIME 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+parse ISO_LOCAL_TIME 10:15:30.1234567890=java.time.format.DateTimeParseException: Text '10:15:30.1234567890' could not be parsed, unparsed text found at index 18
+parse ldt ISO_LOCAL_TIME 10:15:30.1234567890=java.time.format.DateTimeParseException: Text '10:15:30.1234567890' could not be parsed, unparsed text found at index 18
+parse ld ISO_LOCAL_TIME 10:15:30.1234567890=java.time.format.DateTimeParseException: Text '10:15:30.1234567890' could not be parsed, unparsed text found at index 18
+parse zdt ISO_LOCAL_TIME 10:15:30.1234567890=java.time.format.DateTimeParseException: Text '10:15:30.1234567890' could not be parsed, unparsed text found at index 18
+parse ISO_LOCAL_TIME 25:00=java.time.format.DateTimeParseException: Text '25:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 25
+parse ldt ISO_LOCAL_TIME 25:00=java.time.format.DateTimeParseException: Text '25:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 25
+parse ld ISO_LOCAL_TIME 25:00=java.time.format.DateTimeParseException: Text '25:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 25
+parse zdt ISO_LOCAL_TIME 25:00=java.time.format.DateTimeParseException: Text '25:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 25
+parse ISO_LOCAL_TIME 10:61=java.time.format.DateTimeParseException: Text '10:61' could not be parsed: Invalid value for MinuteOfHour (valid values 0 - 59): 61
+parse ldt ISO_LOCAL_TIME 10:61=java.time.format.DateTimeParseException: Text '10:61' could not be parsed: Invalid value for MinuteOfHour (valid values 0 - 59): 61
+parse ld ISO_LOCAL_TIME 10:61=java.time.format.DateTimeParseException: Text '10:61' could not be parsed: Invalid value for MinuteOfHour (valid values 0 - 59): 61
+parse zdt ISO_LOCAL_TIME 10:61=java.time.format.DateTimeParseException: Text '10:61' could not be parsed: Invalid value for MinuteOfHour (valid values 0 - 59): 61
+parse ISO_LOCAL_DATE_TIME 2024-03-05T10:15:30={},ISO resolved to 2024-03-05T10:15:30
+parse ldt ISO_LOCAL_DATE_TIME 2024-03-05T10:15:30=2024-03-05T10:15:30
+parse ld ISO_LOCAL_DATE_TIME 2024-03-05T10:15:30=2024-03-05
+parse zdt ISO_LOCAL_DATE_TIME 2024-03-05T10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05T10:15:30 of type java.time.format.Parsed
+parse ISO_LOCAL_DATE_TIME 2024-03-05t10:15:30={},ISO resolved to 2024-03-05T10:15:30
+parse ldt ISO_LOCAL_DATE_TIME 2024-03-05t10:15:30=2024-03-05T10:15:30
+parse ld ISO_LOCAL_DATE_TIME 2024-03-05t10:15:30=2024-03-05
+parse zdt ISO_LOCAL_DATE_TIME 2024-03-05t10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05t10:15:30' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05T10:15:30 of type java.time.format.Parsed
+parse ISO_LOCAL_DATE_TIME 2024-03-05 10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05 10:15:30' could not be parsed at index 10
+parse ldt ISO_LOCAL_DATE_TIME 2024-03-05 10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05 10:15:30' could not be parsed at index 10
+parse ld ISO_LOCAL_DATE_TIME 2024-03-05 10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05 10:15:30' could not be parsed at index 10
+parse zdt ISO_LOCAL_DATE_TIME 2024-03-05 10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05 10:15:30' could not be parsed at index 10
+parse ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30+01:00={InstantSeconds=1709630130, OffsetSeconds=3600},ISO resolved to 2024-03-05T10:15:30
+parse ldt ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30+01:00=2024-03-05T10:15:30
+parse ld ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30+01:00=2024-03-05
+parse zdt ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30+01:00=2024-03-05T10:15:30+01:00
+parse ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30Z={InstantSeconds=1709633730, OffsetSeconds=0},ISO resolved to 2024-03-05T10:15:30
+parse ldt ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30Z=2024-03-05T10:15:30
+parse ld ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30Z=2024-03-05
+parse zdt ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30Z=2024-03-05T10:15:30Z
+parse ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30' could not be parsed at index 19
+parse ldt ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30' could not be parsed at index 19
+parse ld ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30' could not be parsed at index 19
+parse zdt ISO_OFFSET_DATE_TIME 2024-03-05T10:15:30=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30' could not be parsed at index 19
+parse ISO_ZONED_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]={InstantSeconds=1709622930, OffsetSeconds=10800},ISO,Europe/Moscow resolved to 2024-03-05T10:15:30
+parse ldt ISO_ZONED_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]=2024-03-05T10:15:30
+parse ld ISO_ZONED_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]=2024-03-05
+parse zdt ISO_ZONED_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]=2024-03-05T10:15:30+03:00[Europe/Moscow]
+parse ISO_ZONED_DATE_TIME 2024-03-05T10:15:30Z={InstantSeconds=1709633730, OffsetSeconds=0},ISO resolved to 2024-03-05T10:15:30
+parse ldt ISO_ZONED_DATE_TIME 2024-03-05T10:15:30Z=2024-03-05T10:15:30
+parse ld ISO_ZONED_DATE_TIME 2024-03-05T10:15:30Z=2024-03-05
+parse zdt ISO_ZONED_DATE_TIME 2024-03-05T10:15:30Z=2024-03-05T10:15:30Z
+parse ISO_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]={InstantSeconds=1709622930, OffsetSeconds=10800},ISO,Europe/Moscow resolved to 2024-03-05T10:15:30
+parse ldt ISO_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]=2024-03-05T10:15:30
+parse ld ISO_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]=2024-03-05
+parse zdt ISO_DATE_TIME 2024-03-05T10:15:30+03:00[Europe/Moscow]=2024-03-05T10:15:30+03:00[Europe/Moscow]
+parse ISO_DATE_TIME 2024-03-05T10:15={},ISO resolved to 2024-03-05T10:15
+parse ldt ISO_DATE_TIME 2024-03-05T10:15=2024-03-05T10:15
+parse ld ISO_DATE_TIME 2024-03-05T10:15=2024-03-05
+parse zdt ISO_DATE_TIME 2024-03-05T10:15=java.time.format.DateTimeParseException: Text '2024-03-05T10:15' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05T10:15 of type java.time.format.Parsed
+parse ISO_INSTANT 2024-03-05T10:15:30Z={InstantSeconds=1709633730, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO
+parse ldt ISO_INSTANT 2024-03-05T10:15:30Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30Z' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {InstantSeconds=1709633730, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse ld ISO_INSTANT 2024-03-05T10:15:30Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30Z' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {InstantSeconds=1709633730, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse zdt ISO_INSTANT 2024-03-05T10:15:30Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30Z' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {InstantSeconds=1709633730, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse ISO_INSTANT 2024-03-05T10:15:30.5Z={InstantSeconds=1709633730, MicroOfSecond=500000, MilliOfSecond=500, NanoOfSecond=500000000},ISO
+parse ldt ISO_INSTANT 2024-03-05T10:15:30.5Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30.5Z' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {InstantSeconds=1709633730, MicroOfSecond=500000, MilliOfSecond=500, NanoOfSecond=500000000},ISO of type java.time.format.Parsed
+parse ld ISO_INSTANT 2024-03-05T10:15:30.5Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30.5Z' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {InstantSeconds=1709633730, MicroOfSecond=500000, MilliOfSecond=500, NanoOfSecond=500000000},ISO of type java.time.format.Parsed
+parse zdt ISO_INSTANT 2024-03-05T10:15:30.5Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30.5Z' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {InstantSeconds=1709633730, MicroOfSecond=500000, MilliOfSecond=500, NanoOfSecond=500000000},ISO of type java.time.format.Parsed
+parse ISO_INSTANT 2024-03-05T10:15:30+01:00={InstantSeconds=1709630130, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO
+parse ldt ISO_INSTANT 2024-03-05T10:15:30+01:00=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30+01:00' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {InstantSeconds=1709630130, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse ld ISO_INSTANT 2024-03-05T10:15:30+01:00=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30+01:00' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {InstantSeconds=1709630130, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse zdt ISO_INSTANT 2024-03-05T10:15:30+01:00=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30+01:00' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {InstantSeconds=1709630130, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse ISO_INSTANT 2024-03-05T24:00:00Z={InstantSeconds=1709683200, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO
+parse ldt ISO_INSTANT 2024-03-05T24:00:00Z=java.time.format.DateTimeParseException: Text '2024-03-05T24:00:00Z' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {InstantSeconds=1709683200, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse ld ISO_INSTANT 2024-03-05T24:00:00Z=java.time.format.DateTimeParseException: Text '2024-03-05T24:00:00Z' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {InstantSeconds=1709683200, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse zdt ISO_INSTANT 2024-03-05T24:00:00Z=java.time.format.DateTimeParseException: Text '2024-03-05T24:00:00Z' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {InstantSeconds=1709683200, MicroOfSecond=0, MilliOfSecond=0, NanoOfSecond=0},ISO of type java.time.format.Parsed
+parse ISO_INSTANT 2024-03-05T10:15Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15Z' could not be parsed at index 16
+parse ldt ISO_INSTANT 2024-03-05T10:15Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15Z' could not be parsed at index 16
+parse ld ISO_INSTANT 2024-03-05T10:15Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15Z' could not be parsed at index 16
+parse zdt ISO_INSTANT 2024-03-05T10:15Z=java.time.format.DateTimeParseException: Text '2024-03-05T10:15Z' could not be parsed at index 16
+parse ISO_ORDINAL_DATE 2024-065={},ISO resolved to 2024-03-05
+parse ldt ISO_ORDINAL_DATE 2024-065=java.time.format.DateTimeParseException: Text '2024-065' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse ld ISO_ORDINAL_DATE 2024-065=2024-03-05
+parse zdt ISO_ORDINAL_DATE 2024-065=java.time.format.DateTimeParseException: Text '2024-065' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse ISO_ORDINAL_DATE 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+parse ldt ISO_ORDINAL_DATE 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+parse ld ISO_ORDINAL_DATE 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+parse zdt ISO_ORDINAL_DATE 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+parse BASIC_ISO_DATE 20240305={},ISO resolved to 2024-03-05
+parse ldt BASIC_ISO_DATE 20240305=java.time.format.DateTimeParseException: Text '20240305' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse ld BASIC_ISO_DATE 20240305=2024-03-05
+parse zdt BASIC_ISO_DATE 20240305=java.time.format.DateTimeParseException: Text '20240305' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse BASIC_ISO_DATE 20240305+0100={OffsetSeconds=3600},ISO resolved to 2024-03-05
+parse ldt BASIC_ISO_DATE 20240305+0100=java.time.format.DateTimeParseException: Text '20240305+0100' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {OffsetSeconds=3600},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse ld BASIC_ISO_DATE 20240305+0100=2024-03-05
+parse zdt BASIC_ISO_DATE 20240305+0100=java.time.format.DateTimeParseException: Text '20240305+0100' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {OffsetSeconds=3600},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+parse RFC_1123_DATE_TIME Tue, 5 Mar 2024 10:15:30 GMT={InstantSeconds=1709633730, OffsetSeconds=0},ISO resolved to 2024-03-05T10:15:30
+parse ldt RFC_1123_DATE_TIME Tue, 5 Mar 2024 10:15:30 GMT=2024-03-05T10:15:30
+parse ld RFC_1123_DATE_TIME Tue, 5 Mar 2024 10:15:30 GMT=2024-03-05
+parse zdt RFC_1123_DATE_TIME Tue, 5 Mar 2024 10:15:30 GMT=2024-03-05T10:15:30Z
+parse RFC_1123_DATE_TIME 5 Mar 2024 10:15 +0100={InstantSeconds=1709630100, OffsetSeconds=3600},ISO resolved to 2024-03-05T10:15
+parse ldt RFC_1123_DATE_TIME 5 Mar 2024 10:15 +0100=2024-03-05T10:15
+parse ld RFC_1123_DATE_TIME 5 Mar 2024 10:15 +0100=2024-03-05
+parse zdt RFC_1123_DATE_TIME 5 Mar 2024 10:15 +0100=2024-03-05T10:15+01:00
+parse RFC_1123_DATE_TIME Wed, 5 Mar 2024 10:15:30 GMT=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024 10:15:30 GMT' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+parse ldt RFC_1123_DATE_TIME Wed, 5 Mar 2024 10:15:30 GMT=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024 10:15:30 GMT' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+parse ld RFC_1123_DATE_TIME Wed, 5 Mar 2024 10:15:30 GMT=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024 10:15:30 GMT' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+parse zdt RFC_1123_DATE_TIME Wed, 5 Mar 2024 10:15:30 GMT=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024 10:15:30 GMT' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp dd MMM yyyy | 05 Mar 2024={},ISO resolved to 2024-03-05
+pp ld dd MMM yyyy | 05 Mar 2024=2024-03-05
+pp lt dd MMM yyyy | 05 Mar 2024=java.time.format.DateTimeParseException: Text '05 Mar 2024' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp ldt dd MMM yyyy | 05 Mar 2024=java.time.format.DateTimeParseException: Text '05 Mar 2024' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp zdt dd MMM yyyy | 05 Mar 2024=java.time.format.DateTimeParseException: Text '05 Mar 2024' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp strict dd MMM yyyy | 05 Mar 2024={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient dd MMM yyyy | 05 Mar 2024={},ISO resolved to 2024-03-05
+pp dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp ld dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp lt dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp ldt dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp zdt dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp strict dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp lenient dd MMM yyyy | 05 mar 2024=java.time.format.DateTimeParseException: Text '05 mar 2024' could not be parsed at index 3
+pp dd MMMM yyyy | 05 March 2024={},ISO resolved to 2024-03-05
+pp ld dd MMMM yyyy | 05 March 2024=2024-03-05
+pp lt dd MMMM yyyy | 05 March 2024=java.time.format.DateTimeParseException: Text '05 March 2024' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp ldt dd MMMM yyyy | 05 March 2024=java.time.format.DateTimeParseException: Text '05 March 2024' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp zdt dd MMMM yyyy | 05 March 2024=java.time.format.DateTimeParseException: Text '05 March 2024' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp strict dd MMMM yyyy | 05 March 2024={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient dd MMMM yyyy | 05 March 2024={},ISO resolved to 2024-03-05
+pp d.M.yy | 5.3.24={},ISO resolved to 2024-03-05
+pp ld d.M.yy | 5.3.24=2024-03-05
+pp lt d.M.yy | 5.3.24=java.time.format.DateTimeParseException: Text '5.3.24' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp ldt d.M.yy | 5.3.24=java.time.format.DateTimeParseException: Text '5.3.24' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp zdt d.M.yy | 5.3.24=java.time.format.DateTimeParseException: Text '5.3.24' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp strict d.M.yy | 5.3.24={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient d.M.yy | 5.3.24={},ISO resolved to 2024-03-05
+pp d.M.yy | 5.3.99={},ISO resolved to 2099-03-05
+pp ld d.M.yy | 5.3.99=2099-03-05
+pp lt d.M.yy | 5.3.99=java.time.format.DateTimeParseException: Text '5.3.99' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2099-03-05 of type java.time.format.Parsed
+pp ldt d.M.yy | 5.3.99=java.time.format.DateTimeParseException: Text '5.3.99' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2099-03-05 of type java.time.format.Parsed
+pp zdt d.M.yy | 5.3.99=java.time.format.DateTimeParseException: Text '5.3.99' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2099-03-05 of type java.time.format.Parsed
+pp strict d.M.yy | 5.3.99={DayOfMonth=5, MonthOfYear=3, YearOfEra=2099},ISO
+pp lenient d.M.yy | 5.3.99={},ISO resolved to 2099-03-05
+pp yyyy-MM-dd HH:mm | 2024-03-05 14:07={},ISO resolved to 2024-03-05T14:07
+pp ld yyyy-MM-dd HH:mm | 2024-03-05 14:07=2024-03-05
+pp lt yyyy-MM-dd HH:mm | 2024-03-05 14:07=14:07
+pp ldt yyyy-MM-dd HH:mm | 2024-03-05 14:07=2024-03-05T14:07
+pp zdt yyyy-MM-dd HH:mm | 2024-03-05 14:07=java.time.format.DateTimeParseException: Text '2024-03-05 14:07' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05T14:07 of type java.time.format.Parsed
+pp strict yyyy-MM-dd HH:mm | 2024-03-05 14:07={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO resolved to 14:07
+pp lenient yyyy-MM-dd HH:mm | 2024-03-05 14:07={},ISO resolved to 2024-03-05T14:07
+pp yyyyMMdd | 20240305={},ISO resolved to 2024-03-05
+pp ld yyyyMMdd | 20240305=2024-03-05
+pp lt yyyyMMdd | 20240305=java.time.format.DateTimeParseException: Text '20240305' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp ldt yyyyMMdd | 20240305=java.time.format.DateTimeParseException: Text '20240305' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp zdt yyyyMMdd | 20240305=java.time.format.DateTimeParseException: Text '20240305' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp strict yyyyMMdd | 20240305={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient yyyyMMdd | 20240305={},ISO resolved to 2024-03-05
+pp yyyyMMddHHmmss | 20240305140709={},ISO resolved to 2024-03-05T14:07:09
+pp ld yyyyMMddHHmmss | 20240305140709=2024-03-05
+pp lt yyyyMMddHHmmss | 20240305140709=14:07:09
+pp ldt yyyyMMddHHmmss | 20240305140709=2024-03-05T14:07:09
+pp zdt yyyyMMddHHmmss | 20240305140709=java.time.format.DateTimeParseException: Text '20240305140709' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05T14:07:09 of type java.time.format.Parsed
+pp strict yyyyMMddHHmmss | 20240305140709={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO resolved to 14:07:09
+pp lenient yyyyMMddHHmmss | 20240305140709={},ISO resolved to 2024-03-05T14:07:09
+pp HHmm | 1407={},ISO resolved to 14:07
+pp ld HHmm | 1407=java.time.format.DateTimeParseException: Text '1407' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 14:07 of type java.time.format.Parsed
+pp lt HHmm | 1407=14:07
+pp ldt HHmm | 1407=java.time.format.DateTimeParseException: Text '1407' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 14:07 of type java.time.format.Parsed
+pp zdt HHmm | 1407=java.time.format.DateTimeParseException: Text '1407' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 14:07 of type java.time.format.Parsed
+pp strict HHmm | 1407={},ISO resolved to 14:07
+pp lenient HHmm | 1407={},ISO resolved to 14:07
+pp hh:mm a | 02:07 PM={},ISO resolved to 14:07
+pp ld hh:mm a | 02:07 PM=java.time.format.DateTimeParseException: Text '02:07 PM' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 14:07 of type java.time.format.Parsed
+pp lt hh:mm a | 02:07 PM=14:07
+pp ldt hh:mm a | 02:07 PM=java.time.format.DateTimeParseException: Text '02:07 PM' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 14:07 of type java.time.format.Parsed
+pp zdt hh:mm a | 02:07 PM=java.time.format.DateTimeParseException: Text '02:07 PM' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 14:07 of type java.time.format.Parsed
+pp strict hh:mm a | 02:07 PM={},ISO resolved to 14:07
+pp lenient hh:mm a | 02:07 PM={},ISO resolved to 14:07
+pp hh:mm a | 12:07 AM={},ISO resolved to 00:07
+pp ld hh:mm a | 12:07 AM=java.time.format.DateTimeParseException: Text '12:07 AM' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 00:07 of type java.time.format.Parsed
+pp lt hh:mm a | 12:07 AM=00:07
+pp ldt hh:mm a | 12:07 AM=java.time.format.DateTimeParseException: Text '12:07 AM' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 00:07 of type java.time.format.Parsed
+pp zdt hh:mm a | 12:07 AM=java.time.format.DateTimeParseException: Text '12:07 AM' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 00:07 of type java.time.format.Parsed
+pp strict hh:mm a | 12:07 AM={},ISO resolved to 00:07
+pp lenient hh:mm a | 12:07 AM={},ISO resolved to 00:07
+pp h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp ld h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp lt h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp ldt h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp zdt h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp strict h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp lenient h:mm a | 2:07 pm=java.time.format.DateTimeParseException: Text '2:07 pm' could not be parsed at index 5
+pp EEE, d MMM yyyy | Tue, 5 Mar 2024={},ISO resolved to 2024-03-05
+pp ld EEE, d MMM yyyy | Tue, 5 Mar 2024=2024-03-05
+pp lt EEE, d MMM yyyy | Tue, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Tue, 5 Mar 2024' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp ldt EEE, d MMM yyyy | Tue, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Tue, 5 Mar 2024' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp zdt EEE, d MMM yyyy | Tue, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Tue, 5 Mar 2024' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+pp strict EEE, d MMM yyyy | Tue, 5 Mar 2024={DayOfMonth=5, DayOfWeek=2, MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient EEE, d MMM yyyy | Tue, 5 Mar 2024={},ISO resolved to 2024-03-05
+pp EEE, d MMM yyyy | Wed, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp ld EEE, d MMM yyyy | Wed, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp lt EEE, d MMM yyyy | Wed, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp ldt EEE, d MMM yyyy | Wed, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp zdt EEE, d MMM yyyy | Wed, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp strict EEE, d MMM yyyy | Wed, 5 Mar 2024={DayOfMonth=5, DayOfWeek=3, MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient EEE, d MMM yyyy | Wed, 5 Mar 2024=java.time.format.DateTimeParseException: Text 'Wed, 5 Mar 2024' could not be parsed: Conflict found: Field DayOfWeek 2 differs from DayOfWeek 3 derived from 2024-03-05
+pp EEEE | Tuesday={DayOfWeek=2},ISO
+pp ld EEEE | Tuesday=java.time.format.DateTimeParseException: Text 'Tuesday' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {DayOfWeek=2},ISO of type java.time.format.Parsed
+pp lt EEEE | Tuesday=java.time.format.DateTimeParseException: Text 'Tuesday' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {DayOfWeek=2},ISO of type java.time.format.Parsed
+pp ldt EEEE | Tuesday=java.time.format.DateTimeParseException: Text 'Tuesday' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {DayOfWeek=2},ISO of type java.time.format.Parsed
+pp zdt EEEE | Tuesday=java.time.format.DateTimeParseException: Text 'Tuesday' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {DayOfWeek=2},ISO of type java.time.format.Parsed
+pp strict EEEE | Tuesday={DayOfWeek=2},ISO
+pp lenient EEEE | Tuesday={DayOfWeek=2},ISO
+pp yyyy-MM-dd | 2024-02-31={},ISO resolved to 2024-02-29
+pp ld yyyy-MM-dd | 2024-02-31=2024-02-29
+pp lt yyyy-MM-dd | 2024-02-31=java.time.format.DateTimeParseException: Text '2024-02-31' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp ldt yyyy-MM-dd | 2024-02-31=java.time.format.DateTimeParseException: Text '2024-02-31' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp zdt yyyy-MM-dd | 2024-02-31=java.time.format.DateTimeParseException: Text '2024-02-31' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp strict yyyy-MM-dd | 2024-02-31={DayOfMonth=31, MonthOfYear=2, YearOfEra=2024},ISO
+pp lenient yyyy-MM-dd | 2024-02-31={},ISO resolved to 2024-03-02
+pp yyyy-MM-dd | 2024-04-31={},ISO resolved to 2024-04-30
+pp ld yyyy-MM-dd | 2024-04-31=2024-04-30
+pp lt yyyy-MM-dd | 2024-04-31=java.time.format.DateTimeParseException: Text '2024-04-31' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-04-30 of type java.time.format.Parsed
+pp ldt yyyy-MM-dd | 2024-04-31=java.time.format.DateTimeParseException: Text '2024-04-31' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-04-30 of type java.time.format.Parsed
+pp zdt yyyy-MM-dd | 2024-04-31=java.time.format.DateTimeParseException: Text '2024-04-31' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-04-30 of type java.time.format.Parsed
+pp strict yyyy-MM-dd | 2024-04-31={DayOfMonth=31, MonthOfYear=4, YearOfEra=2024},ISO
+pp lenient yyyy-MM-dd | 2024-04-31={},ISO resolved to 2024-05-01
+pp uuuu-MM-dd | 2024-02-30={},ISO resolved to 2024-02-29
+pp ld uuuu-MM-dd | 2024-02-30=2024-02-29
+pp lt uuuu-MM-dd | 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp ldt uuuu-MM-dd | 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp zdt uuuu-MM-dd | 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp strict uuuu-MM-dd | 2024-02-30=java.time.format.DateTimeParseException: Text '2024-02-30' could not be parsed: Invalid date 'FEBRUARY 30'
+pp lenient uuuu-MM-dd | 2024-02-30={},ISO resolved to 2024-03-01
+pp yyyy-DDD | 2024-060={},ISO resolved to 2024-02-29
+pp ld yyyy-DDD | 2024-060=2024-02-29
+pp lt yyyy-DDD | 2024-060=java.time.format.DateTimeParseException: Text '2024-060' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp ldt yyyy-DDD | 2024-060=java.time.format.DateTimeParseException: Text '2024-060' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp zdt yyyy-DDD | 2024-060=java.time.format.DateTimeParseException: Text '2024-060' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-02-29 of type java.time.format.Parsed
+pp strict yyyy-DDD | 2024-060={DayOfYear=60, YearOfEra=2024},ISO
+pp lenient yyyy-DDD | 2024-060={},ISO resolved to 2024-02-29
+pp yyyy-DDD | 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+pp ld yyyy-DDD | 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+pp lt yyyy-DDD | 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+pp ldt yyyy-DDD | 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+pp zdt yyyy-DDD | 2023-366=java.time.format.DateTimeParseException: Text '2023-366' could not be parsed: Invalid date 'DayOfYear 366' as '2023' is not a leap year
+pp strict yyyy-DDD | 2023-366={DayOfYear=366, YearOfEra=2023},ISO
+pp lenient yyyy-DDD | 2023-366={},ISO resolved to 2024-01-01
+pp G yyyy | BC 0044={Year=-43},ISO
+pp ld G yyyy | BC 0044=java.time.format.DateTimeParseException: Text 'BC 0044' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {Year=-43},ISO of type java.time.format.Parsed
+pp lt G yyyy | BC 0044=java.time.format.DateTimeParseException: Text 'BC 0044' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {Year=-43},ISO of type java.time.format.Parsed
+pp ldt G yyyy | BC 0044=java.time.format.DateTimeParseException: Text 'BC 0044' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {Year=-43},ISO of type java.time.format.Parsed
+pp zdt G yyyy | BC 0044=java.time.format.DateTimeParseException: Text 'BC 0044' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {Year=-43},ISO of type java.time.format.Parsed
+pp strict G yyyy | BC 0044={Year=-43},ISO
+pp lenient G yyyy | BC 0044={Year=-43},ISO
+pp GGGG yyyy | Anno Domini 2024={Year=2024},ISO
+pp ld GGGG yyyy | Anno Domini 2024=java.time.format.DateTimeParseException: Text 'Anno Domini 2024' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp lt GGGG yyyy | Anno Domini 2024=java.time.format.DateTimeParseException: Text 'Anno Domini 2024' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp ldt GGGG yyyy | Anno Domini 2024=java.time.format.DateTimeParseException: Text 'Anno Domini 2024' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp zdt GGGG yyyy | Anno Domini 2024=java.time.format.DateTimeParseException: Text 'Anno Domini 2024' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp strict GGGG yyyy | Anno Domini 2024={Year=2024},ISO
+pp lenient GGGG yyyy | Anno Domini 2024={Year=2024},ISO
+pp yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123={},ISO resolved to 2024-03-05T14:07:09.123
+pp ld yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123=2024-03-05
+pp lt yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123=14:07:09.123
+pp ldt yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123=2024-03-05T14:07:09.123
+pp zdt yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123=java.time.format.DateTimeParseException: Text '2024-03-05T14:07:09.123' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 2024-03-05T14:07:09.123 of type java.time.format.Parsed
+pp strict yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO resolved to 14:07:09.123
+pp lenient yyyy-MM-dd'T'HH:mm:ss.SSS | 2024-03-05T14:07:09.123={},ISO resolved to 2024-03-05T14:07:09.123
+pp HH:mm:ss.SSSSSS | 14:07:09.123456={},ISO resolved to 14:07:09.123456
+pp ld HH:mm:ss.SSSSSS | 14:07:09.123456=java.time.format.DateTimeParseException: Text '14:07:09.123456' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 14:07:09.123456 of type java.time.format.Parsed
+pp lt HH:mm:ss.SSSSSS | 14:07:09.123456=14:07:09.123456
+pp ldt HH:mm:ss.SSSSSS | 14:07:09.123456=java.time.format.DateTimeParseException: Text '14:07:09.123456' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 14:07:09.123456 of type java.time.format.Parsed
+pp zdt HH:mm:ss.SSSSSS | 14:07:09.123456=java.time.format.DateTimeParseException: Text '14:07:09.123456' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 14:07:09.123456 of type java.time.format.Parsed
+pp strict HH:mm:ss.SSSSSS | 14:07:09.123456={},ISO resolved to 14:07:09.123456
+pp lenient HH:mm:ss.SSSSSS | 14:07:09.123456={},ISO resolved to 14:07:09.123456
+pp HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp ld HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp lt HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp ldt HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp zdt HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp strict HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp lenient HH:mm:ss.SSS | 14:07:09.12=java.time.format.DateTimeParseException: Text '14:07:09.12' could not be parsed at index 9
+pp yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00={InstantSeconds=1709636829, OffsetSeconds=10800},ISO resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00=2024-03-05T14:07:09+03:00
+pp strict yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00={DayOfMonth=5, MonthOfYear=3, OffsetSeconds=10800, YearOfEra=2024},ISO resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 +03:00={InstantSeconds=1709636829, OffsetSeconds=10800},ISO resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z={InstantSeconds=1709647629, OffsetSeconds=0},ISO resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z=2024-03-05T14:07:09Z
+pp strict yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z={DayOfMonth=5, MonthOfYear=3, OffsetSeconds=0, YearOfEra=2024},ISO resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss XXX | 2024-03-05 14:07:09 Z={InstantSeconds=1709647629, OffsetSeconds=0},ISO resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow={InstantSeconds=1709636829},ISO,Europe/Moscow resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow=2024-03-05T14:07:09+03:00[Europe/Moscow]
+pp strict yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO,Europe/Moscow resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 Europe/Moscow={InstantSeconds=1709636829},ISO,Europe/Moscow resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC={InstantSeconds=1709647629},ISO,UTC resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC=2024-03-05T14:07:09Z[UTC]
+pp strict yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO,UTC resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 UTC={InstantSeconds=1709647629},ISO,UTC resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00={InstantSeconds=1709640429},ISO,GMT+02:00 resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00=2024-03-05T14:07:09+02:00[GMT+02:00]
+pp strict yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00={DayOfMonth=5, MonthOfYear=3, YearOfEra=2024},ISO,GMT+02:00 resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss VV | 2024-03-05 14:07:09 GMT+02:00={InstantSeconds=1709640429},ISO,GMT+02:00 resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300={InstantSeconds=1709636829, OffsetSeconds=10800},ISO resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300=2024-03-05T14:07:09+03:00
+pp strict yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300={DayOfMonth=5, MonthOfYear=3, OffsetSeconds=10800, YearOfEra=2024},ISO resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss Z | 2024-03-05 14:07:09 +0300={InstantSeconds=1709636829, OffsetSeconds=10800},ISO resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3={InstantSeconds=1709636829, OffsetSeconds=10800},ISO resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3=2024-03-05T14:07:09+03:00
+pp strict yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3={DayOfMonth=5, MonthOfYear=3, OffsetSeconds=10800, YearOfEra=2024},ISO resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss O | 2024-03-05 14:07:09 GMT+3={InstantSeconds=1709636829, OffsetSeconds=10800},ISO resolved to 2024-03-05T14:07:09
+pp yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530={InstantSeconds=1709667429, OffsetSeconds=-19800},ISO resolved to 2024-03-05T14:07:09
+pp ld yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530=2024-03-05
+pp lt yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530=14:07:09
+pp ldt yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530=2024-03-05T14:07:09
+pp zdt yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530=2024-03-05T14:07:09-05:30
+pp strict yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530={DayOfMonth=5, MonthOfYear=3, OffsetSeconds=-19800, YearOfEra=2024},ISO resolved to 14:07:09
+pp lenient yyyy-MM-dd HH:mm:ss xx | 2024-03-05 14:07:09 -0530={InstantSeconds=1709667429, OffsetSeconds=-19800},ISO resolved to 2024-03-05T14:07:09
+pp yyyy [MM] | 2024 03={MonthOfYear=3, Year=2024},ISO
+pp ld yyyy [MM] | 2024 03=java.time.format.DateTimeParseException: Text '2024 03' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {MonthOfYear=3, Year=2024},ISO of type java.time.format.Parsed
+pp lt yyyy [MM] | 2024 03=java.time.format.DateTimeParseException: Text '2024 03' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {MonthOfYear=3, Year=2024},ISO of type java.time.format.Parsed
+pp ldt yyyy [MM] | 2024 03=java.time.format.DateTimeParseException: Text '2024 03' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {MonthOfYear=3, Year=2024},ISO of type java.time.format.Parsed
+pp zdt yyyy [MM] | 2024 03=java.time.format.DateTimeParseException: Text '2024 03' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {MonthOfYear=3, Year=2024},ISO of type java.time.format.Parsed
+pp strict yyyy [MM] | 2024 03={MonthOfYear=3, YearOfEra=2024},ISO
+pp lenient yyyy [MM] | 2024 03={MonthOfYear=3, Year=2024},ISO
+pp yyyy [MM] | 2024 ={Year=2024},ISO
+pp ld yyyy [MM] | 2024 =java.time.format.DateTimeParseException: Text '2024 ' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp lt yyyy [MM] | 2024 =java.time.format.DateTimeParseException: Text '2024 ' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp ldt yyyy [MM] | 2024 =java.time.format.DateTimeParseException: Text '2024 ' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp zdt yyyy [MM] | 2024 =java.time.format.DateTimeParseException: Text '2024 ' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp strict yyyy [MM] | 2024 ={YearOfEra=2024},ISO
+pp lenient yyyy [MM] | 2024 ={Year=2024},ISO
+pp QQQ yyyy | Q2 2024={QuarterOfYear=2, Year=2024},ISO
+pp ld QQQ yyyy | Q2 2024=java.time.format.DateTimeParseException: Text 'Q2 2024' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {QuarterOfYear=2, Year=2024},ISO of type java.time.format.Parsed
+pp lt QQQ yyyy | Q2 2024=java.time.format.DateTimeParseException: Text 'Q2 2024' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {QuarterOfYear=2, Year=2024},ISO of type java.time.format.Parsed
+pp ldt QQQ yyyy | Q2 2024=java.time.format.DateTimeParseException: Text 'Q2 2024' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {QuarterOfYear=2, Year=2024},ISO of type java.time.format.Parsed
+pp zdt QQQ yyyy | Q2 2024=java.time.format.DateTimeParseException: Text 'Q2 2024' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {QuarterOfYear=2, Year=2024},ISO of type java.time.format.Parsed
+pp strict QQQ yyyy | Q2 2024={QuarterOfYear=2, YearOfEra=2024},ISO
+pp lenient QQQ yyyy | Q2 2024={QuarterOfYear=2, Year=2024},ISO
+pp MM/dd | 02/30={DayOfMonth=30, MonthOfYear=2},ISO
+pp ld MM/dd | 02/30=java.time.format.DateTimeParseException: Text '02/30' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {DayOfMonth=30, MonthOfYear=2},ISO of type java.time.format.Parsed
+pp lt MM/dd | 02/30=java.time.format.DateTimeParseException: Text '02/30' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {DayOfMonth=30, MonthOfYear=2},ISO of type java.time.format.Parsed
+pp ldt MM/dd | 02/30=java.time.format.DateTimeParseException: Text '02/30' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {DayOfMonth=30, MonthOfYear=2},ISO of type java.time.format.Parsed
+pp zdt MM/dd | 02/30=java.time.format.DateTimeParseException: Text '02/30' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {DayOfMonth=30, MonthOfYear=2},ISO of type java.time.format.Parsed
+pp strict MM/dd | 02/30={DayOfMonth=30, MonthOfYear=2},ISO
+pp lenient MM/dd | 02/30={DayOfMonth=30, MonthOfYear=2},ISO
+pp yy | 24={Year=2024},ISO
+pp ld yy | 24=java.time.format.DateTimeParseException: Text '24' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp lt yy | 24=java.time.format.DateTimeParseException: Text '24' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp ldt yy | 24=java.time.format.DateTimeParseException: Text '24' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp zdt yy | 24=java.time.format.DateTimeParseException: Text '24' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {Year=2024},ISO of type java.time.format.Parsed
+pp strict yy | 24={YearOfEra=2024},ISO
+pp lenient yy | 24={Year=2024},ISO
+pp yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp ld yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp lt yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp ldt yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp zdt yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp strict yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp lenient yyyy | 12345=java.time.format.DateTimeParseException: Text '12345' could not be parsed at index 0
+pp yyyy | -0001=java.time.format.DateTimeParseException: Text '-0001' could not be parsed: Invalid value for YearOfEra (valid values 1 - 999999999/1000000000): -1
+pp ld yyyy | -0001=java.time.format.DateTimeParseException: Text '-0001' could not be parsed: Invalid value for YearOfEra (valid values 1 - 999999999/1000000000): -1
+pp lt yyyy | -0001=java.time.format.DateTimeParseException: Text '-0001' could not be parsed: Invalid value for YearOfEra (valid values 1 - 999999999/1000000000): -1
+pp ldt yyyy | -0001=java.time.format.DateTimeParseException: Text '-0001' could not be parsed: Invalid value for YearOfEra (valid values 1 - 999999999/1000000000): -1
+pp zdt yyyy | -0001=java.time.format.DateTimeParseException: Text '-0001' could not be parsed: Invalid value for YearOfEra (valid values 1 - 999999999/1000000000): -1
+pp strict yyyy | -0001=java.time.format.DateTimeParseException: Text '-0001' could not be parsed: Invalid value for YearOfEra (valid values 1 - 999999999/1000000000): -1
+pp lenient yyyy | -0001={Year=-1},ISO
+pp HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp ld HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp lt HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp ldt HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp zdt HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp strict HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp lenient HH:mm | 7:07=java.time.format.DateTimeParseException: Text '7:07' could not be parsed at index 0
+pp H:mm | 07:07={},ISO resolved to 07:07
+pp ld H:mm | 07:07=java.time.format.DateTimeParseException: Text '07:07' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 07:07 of type java.time.format.Parsed
+pp lt H:mm | 07:07=07:07
+pp ldt H:mm | 07:07=java.time.format.DateTimeParseException: Text '07:07' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 07:07 of type java.time.format.Parsed
+pp zdt H:mm | 07:07=java.time.format.DateTimeParseException: Text '07:07' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 07:07 of type java.time.format.Parsed
+pp strict H:mm | 07:07={},ISO resolved to 07:07
+pp lenient H:mm | 07:07={},ISO resolved to 07:07
+pp d MMMM | 5 March={DayOfMonth=5, MonthOfYear=3},ISO
+pp ld d MMMM | 5 March=java.time.format.DateTimeParseException: Text '5 March' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {DayOfMonth=5, MonthOfYear=3},ISO of type java.time.format.Parsed
+pp lt d MMMM | 5 March=java.time.format.DateTimeParseException: Text '5 March' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {DayOfMonth=5, MonthOfYear=3},ISO of type java.time.format.Parsed
+pp ldt d MMMM | 5 March=java.time.format.DateTimeParseException: Text '5 March' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {DayOfMonth=5, MonthOfYear=3},ISO of type java.time.format.Parsed
+pp zdt d MMMM | 5 March=java.time.format.DateTimeParseException: Text '5 March' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {DayOfMonth=5, MonthOfYear=3},ISO of type java.time.format.Parsed
+pp strict d MMMM | 5 March={DayOfMonth=5, MonthOfYear=3},ISO
+pp lenient d MMMM | 5 March={DayOfMonth=5, MonthOfYear=3},ISO
+pp kk:mm | 24:00={},ISO resolved to 00:00
+pp ld kk:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 00:00 of type java.time.format.Parsed
+pp lt kk:mm | 24:00=00:00
+pp ldt kk:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 00:00 of type java.time.format.Parsed
+pp zdt kk:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 00:00 of type java.time.format.Parsed
+pp strict kk:mm | 24:00={},ISO resolved to 00:00
+pp lenient kk:mm | 24:00={},ISO resolved to 00:00
+pp HH:mm | 24:00={},ISO resolved to 00:00
+pp ld HH:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Unable to obtain LocalDate from TemporalAccessor: {},ISO resolved to 00:00 of type java.time.format.Parsed
+pp lt HH:mm | 24:00=00:00
+pp ldt HH:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Unable to obtain LocalDateTime from TemporalAccessor: {},ISO resolved to 00:00 of type java.time.format.Parsed
+pp zdt HH:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Unable to obtain ZonedDateTime from TemporalAccessor: {},ISO resolved to 00:00 of type java.time.format.Parsed
+pp strict HH:mm | 24:00=java.time.format.DateTimeParseException: Text '24:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp lenient HH:mm | 24:00={},ISO resolved to 00:00
+pp HH:mm | 24:01=java.time.format.DateTimeParseException: Text '24:01' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp ld HH:mm | 24:01=java.time.format.DateTimeParseException: Text '24:01' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp lt HH:mm | 24:01=java.time.format.DateTimeParseException: Text '24:01' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp ldt HH:mm | 24:01=java.time.format.DateTimeParseException: Text '24:01' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp zdt HH:mm | 24:01=java.time.format.DateTimeParseException: Text '24:01' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp strict HH:mm | 24:01=java.time.format.DateTimeParseException: Text '24:01' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 24
+pp lenient HH:mm | 24:01={},ISO resolved to 00:01
+query=2024-03-05
+query bad=java.time.format.DateTimeParseException: Text '2024-03-05' could not be parsed: Unable to obtain LocalTime from TemporalAccessor: {},ISO resolved to 2024-03-05 of type java.time.format.Parsed
+query year=2024
+query ym=2024-03
+best=2024-03-05T10:15
+best date=java.time.format.DateTimeParseException: Text '2024-03-05' could not be parsed at index 10
+best none=java.time.format.DateTimeParseException: Text '2024-03-05T10:15' could not be parsed: Unable to convert parsed text using any of the specified queries
+pos={},ISO resolved to 2024-03-05 15
+pos bad=Text 'abc' could not be parsed at index 0 0
+exc info=2024-03-0x 8
+exc long=Text '2024-03-05 and a very long text after the date, which is longer ...' could not be parsed, unparsed text found at index 10
+exc resolve=no
+format missing=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+format missing zone=java.time.DateTimeException: Unable to extract ZoneId from temporal 2024-01-01
+format zone override=2023-11-15 03:13 +05:00
+format zone override zdt=2024-03-05 16:07 +05:00
+format zone override local=2024-01-01 Asia/Tokyo
+format instant=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: YearOfEra
+format year=2024 AD
+format ym=2024 May
+format dow=Monday
+null=java.lang.NullPointerException: temporal
+b1=Value(Year,4)'/'Value(MonthOfYear,2)
+b2=2024/03
+b3=+2024
+b4=0005
+b5=-0005
+b6=java.time.DateTimeException: Field Year cannot be printed as the value -5 cannot be negative according to the SignStyle
+b7=java.time.DateTimeException: Field Year cannot be printed as the value 12345 exceeds the maximum print width of 4
+b8=+2024
+b9=+2024
+b10=ReducedValue(Year,2,2,1980)
+b11=24
+b12={Year=2079},ISO
+b13={Year=1980},ISO
+b14=java.time.format.DateTimeParseException: Text '2080' could not be parsed, unparsed text found at index 2
+b15={Year=2099},ISO
+b16=Fraction(NanoOfSecond,0,9,DecimalPoint)
+b17=.12345
+b18=
+b19=123
+b20=.123
+b21=.15
+b22={NanoOfSecond=500000000},ISO
+b23=java.time.format.DateTimeParseException: Text '.5' could not be parsed at index 1
+b24=March
+b25=Mar
+b26=M
+b27=Text(MonthOfYear,SHORT)
+b28=Text(MonthOfYear)
+b29=5
+b30=three 5 2
+b31=2024-03-05 at 14:07
+b32=Value(YearOfEra,4,19,EXCEEDS_PAD)'-'Value(MonthOfYear,2)'-'Value(DayOfMonth,2)' at 'Value(HourOfDay,2)':'Value(MinuteOfHour,2)
+b33=[Value(HourOfDay,2)':'Value(MinuteOfHour,2)]'!'
+b34=!
+b35=14:07!
+b36={},ISO resolved to 14:00
+b37={},ISO resolved to 14:30
+b38=java.time.format.DateTimeParseException: Text '14:3' could not be parsed, unparsed text found at index 2
+b39=java.lang.IllegalStateException: Cannot call optionalEnd() as there was no previous call to optionalStart()
+b40=[Value(HourOfDay,2)':'Value(MinuteOfHour,2)[':'Value(SecondOfMinute,2)[Fraction(NanoOfSecond,0,9,DecimalPoint)]]]
+b41={},ISO resolved to 2024-03-05T10:15
+b42={},ISO resolved to 2024-03-05
+b43=    5
+b44=****5
+b45=Pad(Value(DayOfMonth),5,'*')
+b46={DayOfMonth=12},ISO
+b47=java.time.DateTimeException: Cannot print as output of 4 characters exceeds pad width of 2
+b48=Offset(+HH:MM:ss,'Z')
+b49=-03:30
+b50=+0
+b51=java.lang.IllegalArgumentException: Invalid zone offset pattern: bad
+offset +H 0=Z -> 0
+offset +H 3600=+1 -> 3600
+offset +H -3600=-1 -> -3600
+offset +H 36000=+10 -> 36000
+offset +H 5400=+1 -> 3600
+offset +H -5430=-1 -> -3600
+offset +H 3661=+1 -> 3600
+offset +H -45296=-12 -> -43200
+offset +H 61200=+17 -> 61200
+offset +Hmm 0=Z -> 0
+offset +Hmm 3600=+1 -> 3600
+offset +Hmm -3600=-1 -> -3600
+offset +Hmm 36000=+10 -> 36000
+offset +Hmm 5400=+130 -> 5400
+offset +Hmm -5430=-130 -> -5400
+offset +Hmm 3661=+101 -> 3660
+offset +Hmm -45296=-1234 -> -45240
+offset +Hmm 61200=+17 -> 61200
+offset +H:mm 0=Z -> 0
+offset +H:mm 3600=+1 -> 3600
+offset +H:mm -3600=-1 -> -3600
+offset +H:mm 36000=+10 -> 36000
+offset +H:mm 5400=+1:30 -> 5400
+offset +H:mm -5430=-1:30 -> -5400
+offset +H:mm 3661=+1:01 -> 3660
+offset +H:mm -45296=-12:34 -> -45240
+offset +H:mm 61200=+17 -> 61200
+offset +HMM 0=Z -> 0
+offset +HMM 3600=+100 -> 3600
+offset +HMM -3600=-100 -> -3600
+offset +HMM 36000=+1000 -> 36000
+offset +HMM 5400=+130 -> 5400
+offset +HMM -5430=-130 -> -5400
+offset +HMM 3661=+101 -> 3660
+offset +HMM -45296=-1234 -> -45240
+offset +HMM 61200=+1700 -> 61200
+offset +H:MM 0=Z -> 0
+offset +H:MM 3600=+1:00 -> 3600
+offset +H:MM -3600=-1:00 -> -3600
+offset +H:MM 36000=+10:00 -> 36000
+offset +H:MM 5400=+1:30 -> 5400
+offset +H:MM -5430=-1:30 -> -5400
+offset +H:MM 3661=+1:01 -> 3660
+offset +H:MM -45296=-12:34 -> -45240
+offset +H:MM 61200=+17:00 -> 61200
+offset +HMMss 0=Z -> 0
+offset +HMMss 3600=+100 -> 3600
+offset +HMMss -3600=-100 -> -3600
+offset +HMMss 36000=+1000 -> 36000
+offset +HMMss 5400=+130 -> 5400
+offset +HMMss -5430=-13030 -> -5430
+offset +HMMss 3661=+10101 -> 3661
+offset +HMMss -45296=-123456 -> -45296
+offset +HMMss 61200=+1700 -> 61200
+offset +H:MM:ss 0=Z -> 0
+offset +H:MM:ss 3600=+1:00 -> 3600
+offset +H:MM:ss -3600=-1:00 -> -3600
+offset +H:MM:ss 36000=+10:00 -> 36000
+offset +H:MM:ss 5400=+1:30 -> 5400
+offset +H:MM:ss -5430=-1:30:30 -> -5430
+offset +H:MM:ss 3661=+1:01:01 -> 3661
+offset +H:MM:ss -45296=-12:34:56 -> -45296
+offset +H:MM:ss 61200=+17:00 -> 61200
+offset +HMMSS 0=Z -> 0
+offset +HMMSS 3600=+10000 -> 3600
+offset +HMMSS -3600=-10000 -> -3600
+offset +HMMSS 36000=+100000 -> 36000
+offset +HMMSS 5400=+13000 -> 5400
+offset +HMMSS -5430=-13030 -> -5430
+offset +HMMSS 3661=+10101 -> 3661
+offset +HMMSS -45296=-123456 -> -45296
+offset +HMMSS 61200=+170000 -> 61200
+offset +H:MM:SS 0=Z -> 0
+offset +H:MM:SS 3600=+1:00:00 -> 3600
+offset +H:MM:SS -3600=-1:00:00 -> -3600
+offset +H:MM:SS 36000=+10:00:00 -> 36000
+offset +H:MM:SS 5400=+1:30:00 -> 5400
+offset +H:MM:SS -5430=-1:30:30 -> -5430
+offset +H:MM:SS 3661=+1:01:01 -> 3661
+offset +H:MM:SS -45296=-12:34:56 -> -45296
+offset +H:MM:SS 61200=+17:00:00 -> 61200
+offset +Hmmss 0=Z -> 0
+offset +Hmmss 3600=+1 -> 3600
+offset +Hmmss -3600=-1 -> -3600
+offset +Hmmss 36000=+10 -> 36000
+offset +Hmmss 5400=+130 -> 5400
+offset +Hmmss -5430=-13030 -> -5430
+offset +Hmmss 3661=+10101 -> 3661
+offset +Hmmss -45296=-123456 -> -45296
+offset +Hmmss 61200=+17 -> 61200
+offset +H:mm:ss 0=Z -> 0
+offset +H:mm:ss 3600=+1 -> 3600
+offset +H:mm:ss -3600=-1 -> -3600
+offset +H:mm:ss 36000=+10 -> 36000
+offset +H:mm:ss 5400=+1:30 -> 5400
+offset +H:mm:ss -5430=-1:30:30 -> -5430
+offset +H:mm:ss 3661=+1:01:01 -> 3661
+offset +H:mm:ss -45296=-12:34:56 -> -45296
+offset +H:mm:ss 61200=+17 -> 61200
+offset +HH 0=Z -> 0
+offset +HH 3600=+01 -> 3600
+offset +HH -3600=-01 -> -3600
+offset +HH 36000=+10 -> 36000
+offset +HH 5400=+01 -> 3600
+offset +HH -5430=-01 -> -3600
+offset +HH 3661=+01 -> 3600
+offset +HH -45296=-12 -> -43200
+offset +HH 61200=+17 -> 61200
+offset +HHmm 0=Z -> 0
+offset +HHmm 3600=+01 -> 3600
+offset +HHmm -3600=-01 -> -3600
+offset +HHmm 36000=+10 -> 36000
+offset +HHmm 5400=+0130 -> 5400
+offset +HHmm -5430=-0130 -> -5400
+offset +HHmm 3661=+0101 -> 3660
+offset +HHmm -45296=-1234 -> -45240
+offset +HHmm 61200=+17 -> 61200
+offset +HH:mm 0=Z -> 0
+offset +HH:mm 3600=+01 -> 3600
+offset +HH:mm -3600=-01 -> -3600
+offset +HH:mm 36000=+10 -> 36000
+offset +HH:mm 5400=+01:30 -> 5400
+offset +HH:mm -5430=-01:30 -> -5400
+offset +HH:mm 3661=+01:01 -> 3660
+offset +HH:mm -45296=-12:34 -> -45240
+offset +HH:mm 61200=+17 -> 61200
+offset +HHMM 0=Z -> 0
+offset +HHMM 3600=+0100 -> 3600
+offset +HHMM -3600=-0100 -> -3600
+offset +HHMM 36000=+1000 -> 36000
+offset +HHMM 5400=+0130 -> 5400
+offset +HHMM -5430=-0130 -> -5400
+offset +HHMM 3661=+0101 -> 3660
+offset +HHMM -45296=-1234 -> -45240
+offset +HHMM 61200=+1700 -> 61200
+offset +HH:MM 0=Z -> 0
+offset +HH:MM 3600=+01:00 -> 3600
+offset +HH:MM -3600=-01:00 -> -3600
+offset +HH:MM 36000=+10:00 -> 36000
+offset +HH:MM 5400=+01:30 -> 5400
+offset +HH:MM -5430=-01:30 -> -5400
+offset +HH:MM 3661=+01:01 -> 3660
+offset +HH:MM -45296=-12:34 -> -45240
+offset +HH:MM 61200=+17:00 -> 61200
+offset +HHMMss 0=Z -> 0
+offset +HHMMss 3600=+0100 -> 3600
+offset +HHMMss -3600=-0100 -> -3600
+offset +HHMMss 36000=+1000 -> 36000
+offset +HHMMss 5400=+0130 -> 5400
+offset +HHMMss -5430=-013030 -> -5430
+offset +HHMMss 3661=+010101 -> 3661
+offset +HHMMss -45296=-123456 -> -45296
+offset +HHMMss 61200=+1700 -> 61200
+offset +HH:MM:ss 0=Z -> 0
+offset +HH:MM:ss 3600=+01:00 -> 3600
+offset +HH:MM:ss -3600=-01:00 -> -3600
+offset +HH:MM:ss 36000=+10:00 -> 36000
+offset +HH:MM:ss 5400=+01:30 -> 5400
+offset +HH:MM:ss -5430=-01:30:30 -> -5430
+offset +HH:MM:ss 3661=+01:01:01 -> 3661
+offset +HH:MM:ss -45296=-12:34:56 -> -45296
+offset +HH:MM:ss 61200=+17:00 -> 61200
+offset +HHMMSS 0=Z -> 0
+offset +HHMMSS 3600=+010000 -> 3600
+offset +HHMMSS -3600=-010000 -> -3600
+offset +HHMMSS 36000=+100000 -> 36000
+offset +HHMMSS 5400=+013000 -> 5400
+offset +HHMMSS -5430=-013030 -> -5430
+offset +HHMMSS 3661=+010101 -> 3661
+offset +HHMMSS -45296=-123456 -> -45296
+offset +HHMMSS 61200=+170000 -> 61200
+offset +HH:MM:SS 0=Z -> 0
+offset +HH:MM:SS 3600=+01:00:00 -> 3600
+offset +HH:MM:SS -3600=-01:00:00 -> -3600
+offset +HH:MM:SS 36000=+10:00:00 -> 36000
+offset +HH:MM:SS 5400=+01:30:00 -> 5400
+offset +HH:MM:SS -5430=-01:30:30 -> -5430
+offset +HH:MM:SS 3661=+01:01:01 -> 3661
+offset +HH:MM:SS -45296=-12:34:56 -> -45296
+offset +HH:MM:SS 61200=+17:00:00 -> 61200
+offset +HHmmss 0=Z -> 0
+offset +HHmmss 3600=+01 -> 3600
+offset +HHmmss -3600=-01 -> -3600
+offset +HHmmss 36000=+10 -> 36000
+offset +HHmmss 5400=+0130 -> 5400
+offset +HHmmss -5430=-013030 -> -5430
+offset +HHmmss 3661=+010101 -> 3661
+offset +HHmmss -45296=-123456 -> -45296
+offset +HHmmss 61200=+17 -> 61200
+offset +HH:mm:ss 0=Z -> 0
+offset +HH:mm:ss 3600=+01 -> 3600
+offset +HH:mm:ss -3600=-01 -> -3600
+offset +HH:mm:ss 36000=+10 -> 36000
+offset +HH:mm:ss 5400=+01:30 -> 5400
+offset +HH:mm:ss -5430=-01:30:30 -> -5430
+offset +HH:mm:ss 3661=+01:01:01 -> 3661
+offset +HH:mm:ss -45296=-12:34:56 -> -45296
+offset +HH:mm:ss 61200=+17 -> 61200
+b52=GMT-03:30
+b53=GMT-3:30
+b54=GMT+3
+b55={OffsetSeconds=10800},ISO
+b56=java.lang.IllegalArgumentException: Style must be either full or short
+b57=Europe/Moscow
+b58=-03:30
+b60=Europe/Moscow
+b61=java.time.DateTimeException: Unable to extract ZoneId from temporal 2024-03-05T14:07:09.123456789
+b62=ZoneId()
+b63=ZoneRegionId()
+b64={},ISO,Europe/Moscow
+b65={},ISO,America/Argentina/Buenos_Aires
+b66={},ISO,+05:30
+b67=java.time.format.DateTimeParseException: Text 'Nowhere/Land' could not be parsed at index 0
+b68=java.time.format.DateTimeParseException: Text 'UTC+3' could not be parsed, unparsed text found at index 3
+b69={},ISO,GMT
+b70=Instant()
+b71=1970-01-01T00:00:00.001Z
+b72=1970-01-01T00:00:00Z
+b73=1970-01-01T00:00:00.0015Z
+b74=1970-01-01T00:00:00Z
+b75=java.lang.IllegalArgumentException: The fractional digits must be from -1 to 9 inclusive but was 12
+b76={InstantSeconds=1709633730, MicroOfSecond=123456, MilliOfSecond=123, NanoOfSecond=123456000},ISO
+b77=java.time.format.DateTimeParseException: Text '2024-03-05T10:15:30.123Z' could not be parsed at index 20
+b78={MonthOfYear=3},ISO
+b79=java.time.format.DateTimeParseException: Text 'mAr' could not be parsed at index 0
+b80={},ISO resolved to 2024-03-05
+b81=java.time.format.DateTimeParseException: Text '2024-3-5' could not be parsed at index 5
+b82=ParseCaseSensitive(false)ParseStrict(false)
+b83={},ISO resolved to 2000-03-05
+b84=2000-03-05
+b85=2000-03-05
+b86=2024-03-05T00:00
+b87=Value(HourOfDay,2)Value(MinuteOfHour,2)
+b88={},ISO resolved to 09:30
+b89={},ISO resolved to 2024-03-05
+b90={},ISO resolved to 0120-01-01
+b91={},ISO resolved to 2024-03-05
+b92=java.time.format.DateTimeParseException: Text '1231' could not be parsed at index 4
+b93={NanoOfSecond=123000000, Year=2024},ISO
+b94=java.lang.NullPointerException: field
+b95=java.lang.IllegalArgumentException: The width must be from 1 to 19 inclusive but was 0
+b96=java.lang.IllegalArgumentException: The maximum width must exceed or equal the minimum width but 4 < 5
+b97=java.lang.IllegalArgumentException: The width must be from 1 to 19 inclusive but was 20
+b98=java.lang.IllegalArgumentException: Maximum width must exceed or equal the minimum width but 2 < 5
+b99=
+b100='it''s'''
+b101=it's'
+b102=java.time.format.DateTimeParseException: Text 'ac' could not be parsed at index 0
+b103=
+b106=1p
+b107=Anno Domini
+b108=B
+b109=6 Before Christ
+b110=java.time.format.DateTimeParseException: Text '6 BC' could not be parsed at index 2
+b111=java.time.format.DateTimeParseException: Text '6 BC' could not be parsed at index 2
+b112=java.time.format.DateTimeParseException: Text '6 BC' could not be parsed at index 2
+b113=java.time.format.DateTimeParseException: Text '6 BC-03-01' could not be parsed at index 2
+b114=Asia/Tokyo
+b115=STRICT
+b116=SMART
+b117=LENIENT
+b118=ISO
+b119=null
+b120=Z
+loc date FULL=Tuesday, March 5, 2024
+loc time FULL=2:07:09_PM Z
+loc dt FULL=Tuesday, March 5, 2024, 2:07:09_PM Z
+loc str FULL=Localized(FULL,)
+loc date LONG=March 5, 2024
+loc time LONG=2:07:09_PM Z
+loc dt LONG=March 5, 2024, 2:07:09_PM Z
+loc str LONG=Localized(LONG,)
+loc date MEDIUM=Mar 5, 2024
+loc time MEDIUM=2:07:09_PM
+loc dt MEDIUM=Mar 5, 2024, 2:07:09_PM
+loc str MEDIUM=Localized(MEDIUM,)
+loc date SHORT=3/5/24
+loc time SHORT=2:07_PM
+loc dt SHORT=3/5/24, 2:07_PM
+loc str SHORT=Localized(SHORT,)
+loc dt2=March 5, 2024, 2:07_PM
+loc str2=Localized(LONG,SHORT)
+loc pattern=MMM d, y
+loc pattern2=h:mm_a
+loc pattern3=java.lang.IllegalArgumentException: Either dateStyle or timeStyle must be non-null
+ldt format=2024/03/05
+ld format=2024-03-05
+zdt format=Tue, 5 Mar 2024 14:07:09 +0300
+odt format=2024-03-05T14:07:09.123456789+03:00
+odt parse=2024-03-05T10:15:30+01:00
+zdt parse=2024-03-05T10:15:30+01:00
+zdt parse2=2024-03-05T10:15:30+09:00[Asia/Tokyo]
+instant from=2024-03-05T10:15:30Z
+instant from zdt=2024-03-05T09:15:30Z
+ldt from=2024-03-05T10:15:30
+odt from=2024-03-05T10:15:30+01:00
+ta get=65
+ta get2=java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+ta supported=true false
+ta query=null

@@ -1,0 +1,120 @@
+cp type=X.509 2
+cp encodings=[PkiPath, PKCS7]
+cp factory encodings=[PkiPath, PKCS7]
+cp encoded=true
+cp pkipath=true
+cp pkcs7=true
+cp bad enc=java.security.cert.CertificateEncodingException: unsupported encoding
+cp order=CN=leaf.example.test | CN=Test Intermediate
+cp roundtrip=true true 2
+cp roundtrip7=false 2
+cp roundtripP=true
+cp equals other=false false true
+cp empty=0 2
+cp list immutable=java.lang.UnsupportedOperationException: null
+cp bad element=java.security.cert.CertificateException: List is not all X509Certificates: java.lang.String
+cp bad stream=java.security.cert.CertificateException: Empty input
+cp bad encoding=java.security.cert.CertificateException: unsupported encoding
+crl type=X.509 2 SHA256withRSA 1.2.840.113549.1.1.11
+crl issuer=CN=Test Intermediate | CN=Test Intermediate
+crl dates=true true
+crl revoked count=1 null
+crl isRevoked=true false false
+crl entry=4098 1704067200000 KEY_COMPROMISE true null
+crl entry by serial=KEY_COMPROMISE null
+crl verify ok=ok
+crl verify bad=java.security.SignatureException: Signature does not match.
+crl verify bad2=java.security.SignatureException: Signature does not match.
+crl ext=false null null
+crl equals=true false true
+crl encoded=true true true
+crl str=true
+crl entry str=true
+crls=2
+crl bad=java.security.cert.CRLException: Empty input
+reason enum=[UNSPECIFIED, KEY_COMPROMISE, CA_COMPROMISE, AFFILIATION_CHANGED, SUPERSEDED, CESSATION_OF_OPERATION, CERTIFICATE_HOLD, UNUSED, REMOVE_FROM_CRL, PRIVILEGE_WITHDRAWN, AA_COMPROMISE]
+sel subject=true false
+sel issuer=true false false
+sel cert=true false
+sel serial=true false
+sel valid=true false false
+sel bc=true true false
+sel bc -2=true false
+sel bc -1=true true
+sel ku=true false
+sel subject str=true false CN=Test Root
+sel clone=true true
+sel default=true
+sel bad=java.lang.IllegalArgumentException: basic constraints less than -2
+sel subject bad=java.io.IOException: Incorrect AVA format
+crlsel=true false 1
+crlsel cert=true true
+crlsel date=true true
+crlsel default=true
+store type=Collection CollectionCertStoreParameters
+store certs=4 4
+store select=1
+store crls=2 2
+store crl select=1
+store bad type=java.security.InvalidAlgorithmParameterException: Parameters must be either LDAPCertStoreParameters or URICertStoreParameters, but instance of java.security.cert.CollectionCertStoreParameters passed
+store default=LDAP
+store bad params=java.security.InvalidAlgorithmParameterException: parameters must be CollectionCertStoreParameters
+store empty=0
+anchor=CN=Test Root null null null null
+anchor2=null CN=Test Root CN=Test Root RSA
+anchor3=CN=Test Root CN=Test Root
+anchor null=java.lang.NullPointerException: the trustedCert parameter must be non-null
+anchors empty=java.security.InvalidAlgorithmParameterException: the trustAnchors parameter must be non-empty
+anchors null=java.lang.NullPointerException: the trustAnchors parameters must be non-null
+params default=true null 0 1 [] false false false true null [] null
+params set=1798761600000 false true
+builder default=5
+builder max=3
+builder bad max=java.security.InvalidParameterException: the maximum path length parameter can not be less than -1
+v ok=CN=Test Root key=RSA policy=null
+v ok no root in path=CN=Test Root key=RSA policy=null
+v ok root in path=CN=Test Root key=RSA policy=null
+v single=CN=Test Root key=RSA policy=null
+v empty=CN=Test Root key=RSA policy=anyPolicy  ROOT
+
+v missing intermediate=java.security.cert.CertPathValidatorException: Path does not chain with any of the trust anchors | index=-1 reason=NO_TRUST_ANCHOR
+v wrong anchor=java.security.cert.CertPathValidatorException: Path does not chain with any of the trust anchors | index=-1 reason=NO_TRUST_ANCHOR
+v other leaf=java.security.cert.CertPathValidatorException: Path does not chain with any of the trust anchors | index=-1 reason=NO_TRUST_ANCHOR
+v other chain=CN=Other Root key=RSA policy=null
+v wrong order=java.security.cert.CertPathValidatorException: Path does not chain with any of the trust anchors | index=-1 reason=NO_TRUST_ANCHOR
+v expired=java.security.cert.CertPathValidatorException: validity check failed | index=0 reason=EXPIRED cause=java.security.cert.CertificateExpiredException: NotAfter: DATE
+v future=java.security.cert.CertPathValidatorException: validity check failed | index=0 reason=NOT_YET_VALID cause=java.security.cert.CertificateNotYetValidException: NotBefore: DATE
+v date early=java.security.cert.CertPathValidatorException: validity check failed | index=1 reason=NOT_YET_VALID cause=java.security.cert.CertificateNotYetValidException: NotBefore: DATE
+v date late=java.security.cert.CertPathValidatorException: validity check failed | index=1 reason=EXPIRED cause=java.security.cert.CertificateExpiredException: NotAfter: DATE
+v not ca=java.security.cert.CertPathValidatorException: CA key usage check failed: keyCertSign bit is not set | index=1 reason=INVALID_KEY_USAGE cause=java.security.cert.CertPathValidatorException: CA key usage check failed: keyCertSign bit is not set
+v pathlen=java.security.cert.CertPathValidatorException: basic constraints check failed: pathLenConstraint violated - this cert must be the last cert in the certification path | index=1 reason=PATH_TOO_LONG cause=java.security.cert.CertPathValidatorException: basic constraints check failed: pathLenConstraint violated - this cert must be the last cert in the certification path
+v deep ok=CN=Test Intermediate key=RSA policy=null
+v anchor intermediate=CN=Test Intermediate key=RSA policy=null
+v anchor leaf=java.security.cert.CertPathValidatorException: Path does not chain with any of the trust anchors | index=-1 reason=NO_TRUST_ANCHOR
+v rev no crl=java.security.cert.CertPathValidatorException: Could not determine revocation status | index=1 reason=UNDETERMINED_REVOCATION_STATUS cause=java.security.cert.CertPathValidatorException: Could not determine revocation status
+v rev crl ok=CN=Test Root key=RSA policy=null
+v rev crl revoked=java.security.cert.CertPathValidatorException: Certificate has been revoked, reason: KEY_COMPROMISE, revocation date: DATE, authority: CN=Test Intermediate, extension OIDs: [2.5.29.21] | index=0 reason=REVOKED cause=java.security.cert.CertificateRevokedException: Certificate has been revoked, reason: KEY_COMPROMISE, revocation date: DATE, authority: CN=Test Intermediate, extension OIDs: [2.5.29.21]
+v rev only inter crl=java.security.cert.CertPathValidatorException: Could not determine revocation status | index=1 reason=UNDETERMINED_REVOCATION_STATUS cause=java.security.cert.CertPathValidatorException: Could not determine revocation status
+v rev only root crl=java.security.cert.CertPathValidatorException: Could not determine revocation status | index=0 reason=UNDETERMINED_REVOCATION_STATUS cause=java.security.cert.CertPathValidatorException: Could not determine revocation status
+v key anchor=CN=Test Root null
+v key anchor wrong name=java.security.cert.CertPathValidatorException: subject/issuer name chaining check failed | index=1 reason=NAME_CHAINING cause=java.security.cert.CertPathValidatorException: subject/issuer name chaining check failed
+v bad params=java.security.InvalidAlgorithmParameterException: inappropriate params, must be an instance of PKIXParameters
+v alg=java.security.NoSuchAlgorithmException: nope CertPathValidator not available
+v default alg=PKIX PKIX
+b ok=CN=leaf.example.test / CN=Test Intermediate / CN=Test Root RSA
+b deep=sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+b missing=sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+b wrong anchor=sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+b maxlen=sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+b no target=java.security.InvalidAlgorithmParameterException: the targetCertConstraints parameter must be an X509CertSelector
+b revoked=sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target | cause=java.security.cert.CertPathValidatorException
+b bad params=java.security.InvalidAlgorithmParameterException: inappropriate params, must be an instance of PKIXBuilderParameters
+b default=PKIX
+exc=m 1 EXPIRED true c
+exc2=null -1 UNSPECIFIED null null
+exc3=java.lang.RuntimeException: why -1
+exc idx=java.lang.IndexOutOfBoundsException: null
+exc idx2=java.lang.IllegalArgumentException: null
+reasons=[UNSPECIFIED, EXPIRED, NOT_YET_VALID, REVOKED, UNDETERMINED_REVOCATION_STATUS, INVALID_SIGNATURE, ALGORITHM_CONSTRAINED]
+cre=KEY_COMPROMISE CN=A 0 {} null
+cre msg=Certificate has been revoked, reason: KEY_COMPROMISE, revocation date: DATE, authority: CN=A, extension OIDs: []

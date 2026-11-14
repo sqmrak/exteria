@@ -3,7 +3,7 @@ BUILD   ?= ../build/host
 ROOT    := ..
 INCLUDE := -I$(ROOT)/core/base -I$(ROOT)/core/crypto -I$(ROOT)/core/tl -I$(ROOT)/core/tl/generated \
            -I$(ROOT)/core/client -I$(ROOT)/core/mtproto -I$(ROOT)/core/auth -I$(ROOT)/core/updates \
-           -I$(ROOT)/core/storage -I$(ROOT)/core/secret_chats -I$(ROOT)/core/layout -I$(ROOT)/core/phone -I$(ROOT)/core/session -I$(ROOT)/core/chats -I$(ROOT)/core/emoji -I$(ROOT)/core/media -I$(ROOT)/core/notify -I$(ROOT)/core/calls -I$(ROOT)/core/tgcalls -I$(ROOT)/core/video -I$(ROOT)/core/shiro -I$(ROOT)/core/pyhost \
+           -I$(ROOT)/core/storage -I$(ROOT)/core/secret_chats -I$(ROOT)/core/layout -I$(ROOT)/core/phone -I$(ROOT)/core/session -I$(ROOT)/core/chats -I$(ROOT)/core/emoji -I$(ROOT)/core/media -I$(ROOT)/core/notify -I$(ROOT)/core/calls -I$(ROOT)/core/tgcalls -I$(ROOT)/core/video -I$(ROOT)/core/shiro -I$(ROOT)/core/pyhost -I$(ROOT)/core/dexnative \
            -I$(ROOT)/third_party/opus/include -I$(ROOT)/third_party/ogg/include -Icore
 WARN    := -Wall -Wextra -Werror -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wconversion -Wno-sign-conversion
 OPT     ?= -O2 -g
@@ -29,7 +29,7 @@ CORE_SRC := $(BASE_SRC) $(CRYPTO_SRC) $(wildcard $(ROOT)/core/tl/*.c) $(wildcard
             $(wildcard $(ROOT)/core/secret_chats/*.c) $(wildcard $(ROOT)/core/client/*.c) \
             $(wildcard $(ROOT)/core/layout/*.c) $(wildcard $(ROOT)/core/phone/*.c) \
             $(wildcard $(ROOT)/core/session/*.c) $(wildcard $(ROOT)/core/chats/*.c) $(wildcard $(ROOT)/core/emoji/*.c) \
-            $(wildcard $(ROOT)/core/media/*.c) $(wildcard $(ROOT)/core/notify/*.c) $(wildcard $(ROOT)/core/calls/*.c) $(wildcard $(ROOT)/core/tgcalls/*.c) $(wildcard $(ROOT)/core/shiro/*.c) $(ROOT)/core/video/exteria_yuv.c $(ROOT)/core/video/exteria_video_edit.c $(OPUS_SRC) $(OGG_SRC)
+            $(wildcard $(ROOT)/core/media/*.c) $(wildcard $(ROOT)/core/notify/*.c) $(wildcard $(ROOT)/core/calls/*.c) $(wildcard $(ROOT)/core/tgcalls/*.c) $(wildcard $(ROOT)/core/shiro/*.c) $(wildcard $(ROOT)/core/dexnative/*.c) $(ROOT)/core/video/exteria_yuv.c $(ROOT)/core/video/exteria_video_edit.c $(OPUS_SRC) $(OGG_SRC)
 CORE_OBJ := $(patsubst $(ROOT)/%.c,$(BUILD)/%.o,$(CORE_SRC))
 
 # the python host test embeds a real interpreter: EXTERIA_PYTHON_HOST_PREFIX is an install prefix of cpython 3.11

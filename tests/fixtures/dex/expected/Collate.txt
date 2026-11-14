@@ -1,0 +1,273 @@
+class=java.text.RuleBasedCollator 2 0
+order=  -­‐‑‒–—―_¯,;;:!¡?¿/.´`^¨~·¸'"«»()[]{}§¶©®@¤¢$£¥*\&#%+±÷×<=>¬|¦°µ0123456789¼½¾aAáÁàÀăĂâÂǎǍåÅǻǺäÄǟǞãÃȧȦǡǠāĀąĄȁȀȃȂæÆbBcCćĆĉĈčČċĊçÇdDďĎðÐeEéÉèÈĕĔêÊěĚëËėĖēĒȩȨęĘȅȄȇȆfFgGǵǴğĞĝĜǧǦġĠģĢhHĥĤȟȞiIíÍìÌĭĬîÎǐǏïÏĩĨİīĪįĮȉȈȋȊjJĵĴǰkKǩǨķĶlLĺĹľĽļĻmMnNńŃǹǸňŇñÑņŅoOóÓòÒŏŎôÔǒǑöÖȫȪőŐõÕȭȬȯȮȱȰōŌǫǪǭǬȍȌȏȎơƠœŒpPqQrRŕŔřŘŗŖȑȐȓȒsSśŚŝŜšŠşŞșȘßtTťŤţŢțȚþÞuUúÚùÙŭŬûÛǔǓůŮüÜǘǗǜǛǚǙǖǕűŰũŨūŪųŲȕȔȗȖưƯvVwWŵŴxXyYýÝŷŶÿŸȳȲzZźŹžŽżŻǽǼǣǢª²³¹ºØøĐđĦħıĲĳĸĿŀŁłŉŊŋŦŧſƀƁƂƃƄƅƆƇƈƉƊƋƌƍƎƏƐƑƒƓƔƕƖƗƘƙƚƛƜƝƞƟƢƣƤƥƦƧƨƩƪƫƬƭƮƱƲƳƴƵƶƷƸƹƺƻƼƽƾƿǀǁǂǃǄǅǆǇǈǉǊǋǌǝǤǥǮǯǱǲǳǶǷǾǿȜȝȠȡȢȣȤȥȴȵȶȷȸȹȺȻȼȽȾȿɀɁɂɃɄɅɆɇɈɉɊɋɌɍɎɏͰͱͲͳʹ͵Ͷͷ͸͹ͺͻͼͽͿ‖‗‘’‚‛“”„‟†‡•‣․‥…‧  ‪‫‬‭‮ 
+sort 0 s0 d0=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, a-b, ab, a b, Ab, aB, b, B, côte, cote, coté, côté, résumé, resume, Resume]
+sort 0 s0 d1=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, a-b, ab, a b, Ab, aB, b, B, côte, cote, coté, côté, résumé, resume, Resume]
+sort 0 s0 d2=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, a-b, ab, a b, Ab, aB, b, B, côte, cote, coté, côté, résumé, resume, Resume]
+sort 0 s1 d0=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, Ab, aB, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s1 d1=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, Ab, aB, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s1 d2=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, Ab, aB, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s2 d0=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, aB, Ab, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s2 d1=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, aB, Ab, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s2 d2=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, aB, Ab, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s3 d0=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, aB, Ab, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s3 d1=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, aB, Ab, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 0 s3 d2=[,  , -, 10, 9, a, A, a-, -a, a1, a10, a2, ab, aB, Ab, a b, a-b, b, B, cote, coté, côte, côté, resume, Resume, résumé]
+sort 1 s0 d0=[ad, æ, ae, AE, Æ, af, od, œ, oe, of, ß, ss, SS, ST, su, þ, th, TH, ti]
+sort 1 s0 d1=[ad, æ, ae, AE, Æ, af, od, œ, oe, of, ß, ss, SS, ST, su, þ, th, TH, ti]
+sort 1 s0 d2=[ad, æ, ae, AE, Æ, af, od, œ, oe, of, ß, ss, SS, ST, su, þ, th, TH, ti]
+sort 1 s1 d0=[ad, æ, ae, AE, Æ, af, od, œ, oe, of, ß, ss, SS, ST, su, þ, th, TH, ti]
+sort 1 s1 d1=[ad, æ, ae, AE, Æ, af, od, œ, oe, of, ß, ss, SS, ST, su, þ, th, TH, ti]
+sort 1 s1 d2=[ad, æ, ae, AE, Æ, af, od, œ, oe, of, ß, ss, SS, ST, su, þ, th, TH, ti]
+sort 1 s2 d0=[ad, ae, AE, æ, Æ, af, od, oe, œ, of, ss, SS, ß, ST, su, th, TH, þ, ti]
+sort 1 s2 d1=[ad, ae, AE, æ, Æ, af, od, oe, œ, of, ss, SS, ß, ST, su, th, TH, þ, ti]
+sort 1 s2 d2=[ad, ae, AE, æ, Æ, af, od, oe, œ, of, ss, SS, ß, ST, su, th, TH, þ, ti]
+sort 1 s3 d0=[ad, ae, AE, æ, Æ, af, od, oe, œ, of, ss, SS, ß, ST, su, th, TH, þ, ti]
+sort 1 s3 d1=[ad, ae, AE, æ, Æ, af, od, oe, œ, of, ss, SS, ß, ST, su, th, TH, þ, ti]
+sort 1 s3 d2=[ad, ae, AE, æ, Æ, af, od, oe, œ, of, ss, SS, ß, ST, su, th, TH, þ, ti]
+sort 2 s0 d0=[ä, a, å, ä, é, é, e, f, n, ñ, ö, o, ö, ü, u, z]
+sort 2 s0 d1=[ä, a, å, ä, é, é, e, f, n, ñ, ö, o, ö, ü, u, z]
+sort 2 s0 d2=[ä, a, å, ä, é, é, e, f, n, ñ, ö, o, ö, ü, u, z]
+sort 2 s1 d0=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s1 d1=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s1 d2=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s2 d0=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s2 d1=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s2 d2=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s3 d0=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s3 d1=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 2 s3 d2=[a, å, ä, ä, e, é, é, f, n, ñ, o, ö, ö, u, ü, z]
+sort 3 s0 d0=[appl, apple, Apple, APPLE, apple_pie, apple pie, apple-pie, applepie, Apple Pie, apples]
+sort 3 s0 d1=[appl, apple, Apple, APPLE, apple_pie, apple pie, apple-pie, applepie, Apple Pie, apples]
+sort 3 s0 d2=[appl, apple, Apple, APPLE, apple_pie, apple pie, apple-pie, applepie, Apple Pie, apples]
+sort 3 s1 d0=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s1 d1=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s1 d2=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s2 d0=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s2 d1=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s2 d2=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s3 d0=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s3 d1=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 3 s3 d2=[appl, apple, Apple, APPLE, apple_pie, applepie, apple pie, Apple Pie, apple-pie, apples]
+sort 4 s0 d0=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s0 d1=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s0 d2=[1, ①, ½, z, Z, α, А, Ж, а, א, あ, 一]
+sort 4 s1 d0=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s1 d1=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s1 d2=[1, ①, ½, z, Z, α, А, Ж, а, א, あ, 一]
+sort 4 s2 d0=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s2 d1=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s2 d2=[1, ①, ½, z, Z, α, А, Ж, а, א, あ, 一]
+sort 4 s3 d0=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s3 d1=[1, ½, z, Z, α, А, Ж, а, א, ①, あ, 一]
+sort 4 s3 d2=[1, ①, ½, z, Z, α, А, Ж, а, א, あ, 一]
+sort 5 s0 d0=[coo, co-op, coop, co op, Co-op, COOP, coöp]
+sort 5 s0 d1=[coo, co-op, coop, co op, Co-op, COOP, coöp]
+sort 5 s0 d2=[coo, co-op, coop, co op, Co-op, COOP, coöp]
+sort 5 s1 d0=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s1 d1=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s1 d2=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s2 d0=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s2 d1=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s2 d2=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s3 d0=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s3 d1=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 5 s3 d2=[coo, coop, COOP, coöp, co op, co-op, Co-op]
+sort 6 s0 d0=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s0 d1=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s0 d2=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s1 d0=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s1 d1=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s1 d2=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s2 d0=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s2 d1=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s2 d2=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s3 d0=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s3 d1=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 6 s3 d2=[x_1, x.1, x1, X1, x 1, x-1, x10, x2]
+sort 7 s0 d0=[0a, a, a0, aS, Za, aZ, 	a, a	, 
+a, a
+]
+sort 7 s0 d1=[0a, a, a0, aS, Za, aZ, 	a, a	, 
+a, a
+]
+sort 7 s0 d2=[0a, a, a0, aS, Za, aZ, 	a, a	, 
+a, a
+]
+sort 7 s1 d0=[0a, a, a0, Za, aZ, a	, a
+, aS, 	a, 
+a]
+sort 7 s1 d1=[0a, a, a0, Za, aZ, a	, a
+, aS, 	a, 
+a]
+sort 7 s1 d2=[0a, a, a0, Za, aZ, a	, a
+, aS, 	a, 
+a]
+sort 7 s2 d0=[0a, a, a0, Za, aZ, a	, a
+, aS, 	a, 
+a]
+sort 7 s2 d1=[0a, a, a0, Za, aZ, a	, a
+, aS, 	a, 
+a]
+sort 7 s2 d2=[0a, a, a0, Za, aZ, a	, a
+, aS, 	a, 
+a]
+sort 7 s3 d0=[0a, a, a0, aZ, Za, a	, a
+, aS, 	a, 
+a]
+sort 7 s3 d1=[0a, a, a0, aZ, Za, a	, a
+, aS, 	a, 
+a]
+sort 7 s3 d2=[0a, a, a0, aZ, Za, a	, a
+, aS, 	a, 
+a]
+cmp s0 a|A=0 true
+cmp s0 a|á=0 true
+cmp s0 á|A=0 true
+cmp s0 e|é=0 true
+cmp s0 a b|ab=0 true
+cmp s0 a-b|ab=0 true
+cmp s0 abc|abd=-1 false
+cmp s0 abc|ab=1 false
+cmp s0 ab|abc=-1 false
+cmp s0 |=0 true
+cmp s0 |a=-1 false
+cmp s0 a|=1 false
+cmp s0 | =0 true
+cmp s0  |=0 true
+cmp s0 x|x=0 true
+cmp s0 æ|ae=0 true
+cmp s0 ß|ss=0 true
+cmp s0 á|á=0 true
+cmp s0 á|á=0 true
+cmp s0 Á|á=0 true
+cmp s0 co-op|coop=0 true
+cmp s0 coop|co-op=0 true
+cmp s1 a|A=0 true
+cmp s1 a|á=-1 false
+cmp s1 á|A=1 false
+cmp s1 e|é=-1 false
+cmp s1 a b|ab=1 false
+cmp s1 a-b|ab=1 false
+cmp s1 abc|abd=-1 false
+cmp s1 abc|ab=1 false
+cmp s1 ab|abc=-1 false
+cmp s1 |=0 true
+cmp s1 |a=-1 false
+cmp s1 a|=1 false
+cmp s1 | =-1 false
+cmp s1  |=1 false
+cmp s1 x|x=0 true
+cmp s1 æ|ae=0 true
+cmp s1 ß|ss=0 true
+cmp s1 á|á=0 true
+cmp s1 á|á=0 true
+cmp s1 Á|á=0 true
+cmp s1 co-op|coop=1 false
+cmp s1 coop|co-op=-1 false
+cmp s2 a|A=-1 false
+cmp s2 a|á=-1 false
+cmp s2 á|A=1 false
+cmp s2 e|é=-1 false
+cmp s2 a b|ab=1 false
+cmp s2 a-b|ab=1 false
+cmp s2 abc|abd=-1 false
+cmp s2 abc|ab=1 false
+cmp s2 ab|abc=-1 false
+cmp s2 |=0 true
+cmp s2 |a=-1 false
+cmp s2 a|=1 false
+cmp s2 | =-1 false
+cmp s2  |=1 false
+cmp s2 x|x=0 true
+cmp s2 æ|ae=1 false
+cmp s2 ß|ss=1 false
+cmp s2 á|á=0 true
+cmp s2 á|á=0 true
+cmp s2 Á|á=1 false
+cmp s2 co-op|coop=1 false
+cmp s2 coop|co-op=-1 false
+cmp s3 a|A=-1 false
+cmp s3 a|á=-1 false
+cmp s3 á|A=1 false
+cmp s3 e|é=-1 false
+cmp s3 a b|ab=1 false
+cmp s3 a-b|ab=1 false
+cmp s3 abc|abd=-1 false
+cmp s3 abc|ab=1 false
+cmp s3 ab|abc=-1 false
+cmp s3 |=0 true
+cmp s3 |a=-1 false
+cmp s3 a|=1 false
+cmp s3 | =-1 false
+cmp s3  |=1 false
+cmp s3 x|x=0 true
+cmp s3 æ|ae=1 false
+cmp s3 ß|ss=1 false
+cmp s3 á|á=-128 false
+cmp s3 á|á=128 false
+cmp s3 Á|á=1 false
+cmp s3 co-op|coop=1 false
+cmp s3 coop|co-op=-1 false
+obj=-1
+obj bad=java.lang.ClassCastException
+obj bad2=java.lang.ClassCastException
+null=java.lang.NullPointerException
+strength=java.lang.IllegalArgumentException: Incorrect comparison level.
+decomp=java.lang.IllegalArgumentException: Wrong decomposition mode.
+constants=0 1 2 3 0 1 2
+equals=true false
+clone=0 2 false
+hash=true
+keys s0=,ab,abc,ABC,ábc,a b c,abd,zebra,Zebra,
+key cmp s0=-1 0 0
+key eq s0=true true
+keys s1=,ab,abc,ABC,a b c,ábc,abd,zebra,Zebra,
+key cmp s1=-1 0 0
+key eq s1=true true
+keys s2=,ab,abc,ABC,a b c,ábc,abd,zebra,Zebra,
+key cmp s2=-1 -1 0
+key eq s2=false true
+key null=null
+key bytes=true
+elements 1 97=(52,0,0) 
+elements 1 65=(52,0,1) 
+elements 1 225=(52,0,0) (0,13,0) 
+elements 1 230=(52,0,2) (57,0,1) 
+elements 1 223=(65,0,2) (65,0,1) 
+elements 1 32=(0,1,0) 
+elements 1 45=(0,6d,1) 
+elements 1 769=(0,13,0) 
+elements 1 52=(49,0,0) 
+elements 1 19968=(7fff,0,0) (4e00,0,0) 
+elements 1 1046=(7fff,0,0) (416,0,0) 
+elements 2 97=(52,0,0) (53,0,0) 
+elements 3 97=(52,0,0) (0,1,0) (53,0,0) 
+elements 2 99=(54,0,0) (5a,0,0) 
+elements 0 0=
+elements 1 8203=(0,0,0) 
+elements 1 173=(0,6e,0) 
+iter offset=2
+iter prev=true
+iter reset=true
+iter setoffset=2 more
+iter null=-1
+rules < a < b < c=[, a, ab, á, b, ba, bá, c, ca, cb, ch, A, B, E, d, e, x, y, z] true -1 -1 -1
+rules < c < b < a=[, c, cb, ca, ch, b, ba, bá, a, ab, á, A, B, E, d, e, x, y, z] true 1 -1 1
+rules < a, A < b, B=[, a, A, ab, á, b, B, ba, bá, E, c, ca, cb, ch, d, e, x, y, z] true -1 -1 -1
+rules < a ; á < b=[, a, á, ab, b, ba, bá, A, B, E, c, ca, cb, ch, d, e, x, y, z] true -1 -1 -1
+rules < a < b & a < x=[, a, ab, á, x, b, ba, bá, A, B, E, c, ca, cb, ch, d, e, y, z] true -1 -1 -1
+rules < a < b < c & b < z=[, a, ab, á, b, ba, bá, z, c, ca, cb, ch, A, B, E, d, e, x, y] true -1 -1 -1
+rules < a = b < c=[, a, b, ab, ba, bá, á, c, ca, cb, ch, A, B, E, d, e, x, y, z] true 0 -1 -1
+rules & a < b=java.text.ParseException: couldn't find: &a
+rules < b < a & c < a=java.text.ParseException: couldn't find: &c
+rules < a < b ; c < d=[, a, ab, á, b, c, ba, ca, bá, cb, ch, d, A, B, E, e, x, y, z] true -1 -1 -1
+rules < x < y < z @=[, x, y, z, A, B, E, a, ab, á, b, ba, bá, c, ca, cb, ch, d, e] true -1 1 -1
+rules < a , A ; b < d=[, a, A, b, ab, ba, bá, á, d, B, E, c, ca, cb, ch, e, x, y, z] true -1 -1 -1
+badrules < a <=java.text.ParseException: missing chars (=,;<&): 
+badrules a < b=java.text.ParseException: missing char (=,;<&) : a < b
+badrules < 'a=ok
+badrules & < a=java.text.ParseException: missing chars (=,;<&): < a
+badrules <=java.text.ParseException: missing chars (=,;<&): 
+badrules &=java.text.ParseException: missing chars (=,;<&): 
+nullrules=java.lang.NullPointerException
+default rules=850 681002966

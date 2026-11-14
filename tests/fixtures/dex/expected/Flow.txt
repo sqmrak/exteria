@@ -1,0 +1,16 @@
+fib=2584
+ack=9
+switch=-1,10,11,12,-1,14,15,-1,
+sparse=1,2,3,4,0,
+strswitch=1,2,3,4,5,0,
+fin0=tef
+fin1=tcf
+fin2=tr
+nested0=inner-f1-outer:a-f2
+nested1=-f1-throwable:b-f2
+nested2=ok-f1-f2
+loops=1410
+collatz=111
+even=true,true
+deep=2500
+sum=89995

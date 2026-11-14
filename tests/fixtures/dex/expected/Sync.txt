@@ -1,0 +1,11 @@
+counts=2000,2000,2000
+reentrant=42
+pingpong=0,1,4,9,16,25,36,49,64,81,100,121,144,169,196,225,256,289,324,361,
+imse=imse
+imse2=imse
+held=ok
+name=worker-x,false
+done=false
+thrown=joined
+main=main
+slept=true

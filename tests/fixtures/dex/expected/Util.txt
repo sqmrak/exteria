@@ -1,0 +1,50 @@
+list=[0, 3, 6, 2, 5, 1, 4, 0, 3, 6],10,4,true,7
+list2=[-1, 6, 99, 2, 1, 4, 0, 3, 6],[6, 99, 2],2
+sorted=[-1, 0, 1, 2, 3, 4, 6, 6, 99],99,-1,8
+reversed=[6, 99, 6, 4, 3, 2, 1, 0, -1],1
+cmp=[99, 6, 6, 4, 3, 2, 1, 0, -1],true,-26516289
+iterremove=[99, 3, 1, -1]
+errors=cme,ioobe
+hashmap={over=1, big=1, a=1, quick=1, away=1, lazy=1, jumps=1, then=1, brown=1, fox=2, the=3, and=1, from=1, runs=1, dog=2}
+keyset=[over, big, a, quick, away, lazy, jumps, then, brown, fox, the, and, from, runs, dog],[1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 1, 1, 1, 2]
+hashset=[over, a, big, quick, away, lazy, jumps, then, brown, fox, the, and, from, dog, runs]
+intmap={0=v0, 100=v30, 70=v21, 40=v12, 9=v33, 10=v3, 80=v24, 50=v15, 19=v36, 20=v6, 90=v27, 60=v18, 29=v39, 30=v9}
+bigmap=0:0 513:56 517:23 9:178 13:145 17:112 530:168 21:79 534:135 25:46 538:102 29:13 200
+objkeys={(0,0)=d, (1,2)=b, (3,4)=c},c,false
+accessorder={b=2, c=3, a=1, d=4}
+treemap={a=1, and=1, away=1, big=1, brown=1, dog=2, fox=2, from=1, jumps=1, lazy=1, over=1, quick=1, runs=1, the=3, then=1}
+nav=20,30,null,null,10,50=n50,{10=n10, 20=n20},{40=n40, 50=n50},{50=n50, 40=n40, 30=n30, 20=n20, 10=n10}
+treeset=[a, and, away, big, brown, dog, fox, from, jumps, lazy, over, quick, runs, the, then],a,then,[a, and, away, big, brown, dog],jumps
+computeIfAbsent={fizz=[0, 3, 6], other=[1, 2, 4, 5, 7]}
+mapops=20,-1,15,true
+deque=[0, 1, 2, 3],0,3,0,[1, 2]
+linked=[w, m, x, y],w,3
+pq=[1, 3, 2, 5, 9, 8, 7] -> 1 2 3 5 7 8 9 
+pq2=abaa,[bb, ccc]
+stack=[1, 2, 3],3,2,2
+random=-1170105035,63,-5843495416241995736,0.30871945533265976,false,0.70771056,0.2809776380727795,0,400181
+randbytes=[-103, 23, 15, -69, 24, 52]
+shuffle=[6, 8, 1, 4, 9, 3, 0, 7, 5, 2]
+arrays=[1, 2, 5, 7, 9][1, 2, 5, 7, 9, 0, 0][2, 5]3true29617285[1, 2, 3][[1], [2, 3]]
+sortstr=[Apple, fig, pear]
+prim=[-1.0, 2.25, 3.5][7, 7, 7]
+optional=Optional[v],V,false,dflt,false
+joiner={a, b},true,x|y|z,p/q
+objects=1074037727,true,null,96354,e
+bigint=15241578753238836750495351562536198787501905199875019052100,52,290,-3,-2,3,1915528825,965707,255,18ee90ff6c373e0ee4e3f0ad2,true,30
+bigdec=124.000,308.6400,123.5,123.45,2.5,0.33333,-123,2.5,0,false,1000,0.5,2.5
+bigdecerr=ae
+sha256=2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+md5=5d41402abc4b2a76b9719d911017c592
+sha1=da39a3ee5e6b4b0d3255bfef95601890afd80709
+base64=aGVsbG8gd29ybGQhPw==,hello,-_8,AQ==
+crc32=907060870
+uuid=9dd4e461-268c-3034-b5c8-564e155c67a6,1314564453825188563
+atomic=6,6,true,1,-9223372036854775808,true,7,10
+executor=55,task,true,true
+latch=3,0
+completable=42,C
+blockingqueue=30
+timeunit=3000,4,3,DAYS
+chm={j=2, k=6}
+threadlocal=8,7
