@@ -118,7 +118,10 @@ typedef enum exteria_service_kind {
     EXTERIA_SERVICE_GIVEAWAY_RESULTS, /* value is the number of winners */
     EXTERIA_SERVICE_PAYMENT_REFUNDED,
     EXTERIA_SERVICE_SHARING_REQUEST, /* value bits: previous, requested, expired */
-    EXTERIA_SERVICE_SHARING_TOGGLE   /* value bits: previous, new */
+    EXTERIA_SERVICE_SHARING_TOGGLE,  /* value bits: previous, new */
+    EXTERIA_SERVICE_POLL_ANSWER_ADDED,   /* text is the answer a person added to a poll */
+    EXTERIA_SERVICE_POLL_ANSWER_REMOVED, /* text is the answer a person took out of a poll */
+    EXTERIA_SERVICE_COMMUNITY            /* value bits: 1 taken out of the community, 2 no person acted (the chat itself or a channel post); the community is service_community */
 } exteria_service_kind;
 
 /* how a call ended, as the server says: nothing for a call that was talked through and hung up */
@@ -148,6 +151,7 @@ typedef struct exteria_message_row {
     int64_t from_id;            /* the user who wrote it, zero for a channel post or an anonymous sender */
     int64_t from_channel;       /* the channel it was written as in a group, zero when a user wrote it */
     int64_t target_id;          /* the user a service message is about */
+    int64_t service_community;  /* the community a chat was added to, zero when it was taken out; for EXTERIA_SERVICE_COMMUNITY */
     uint8_t out;
     uint8_t noforwards;
     uint8_t invert_media;       /* the sender asked for the words above the picture or the file instead of under it */

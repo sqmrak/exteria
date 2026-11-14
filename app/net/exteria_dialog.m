@@ -12,6 +12,7 @@
 @synthesize showsSender = _showsSender;
 @synthesize savedSource = _savedSource;
 @synthesize linkedCommunityId = _linkedCommunityId;
+@synthesize linkedCommunityTitle = _linkedCommunityTitle;
 @synthesize senderId = _senderId;
 @synthesize senderInitials = _senderInitials;
 @synthesize senderPhoto = _senderPhoto;
@@ -186,7 +187,19 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
         if (row->sender[0]) who = ExteriaUtf8(row->sender);
         else if (row->sender_is_self) who = NSLocalizedString(@"media.you", nil);
         else if (row->kind == EXTERIA_DIALOG_USER || row->kind == EXTERIA_DIALOG_BOT || row->kind == EXTERIA_DIALOG_CHANNEL) who = ExteriaUtf8(row->title);
-        body = ExteriaServiceLine((exteria_service_kind)(row->service - 1), who, ExteriaUtf8(row->service_target), ExteriaUtf8(row->text), row->service_value, row->service_actor_is_target);
+        exteria_service_kind kind = (exteria_service_kind)(row->service - 1);
+        NSString *text = ExteriaUtf8(row->text);
+        int32_t value = row->service_value;
+        if (kind == EXTERIA_SERVICE_COMMUNITY) {
+            /* the line names the community this chat is in now, and says who acted by the sender of the row */
+            text = ExteriaUtf8(row->linked_community_title);
+            if (row->kind == EXTERIA_DIALOG_CHANNEL) value |= ExteriaCommunityChannel;
+            if (row->kind == EXTERIA_DIALOG_BOT) value |= ExteriaCommunityBot;
+            if (row->sender_is_self) value |= ExteriaCommunityByMe;
+            /* a post of a channel and a line of a bot chat come from the chat itself, as exteraGram words them */
+            if (row->kind == EXTERIA_DIALOG_CHANNEL || row->kind == EXTERIA_DIALOG_BOT || (!row->sender[0] && !row->sender_is_self)) value |= ExteriaCommunityUnknownActor;
+        }
+        body = ExteriaServiceLine(kind, who, ExteriaUtf8(row->service_target), text, value, row->service_actor_is_target);
     }
     /* our own last message stands without a name before it; the name of another sender is kept in a group */
     if (row->preview != EXTERIA_PREVIEW_NONE && row->preview != EXTERIA_PREVIEW_SERVICE && row->sender[0] &&

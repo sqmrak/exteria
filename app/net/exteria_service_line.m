@@ -13,6 +13,20 @@ static NSString *ExteriaDurationText(int32_t seconds) {
     return [NSString stringWithFormat:@"%d:%02d", (int)(seconds / 60), (int)(seconds % 60)];
 }
 
+/* the six lines of exteraGram for a chat added to a community or taken out of it, in the words of a group, a channel or a bot */
+static NSString *ExteriaCommunityLine(NSString *actor, NSString *community, int32_t value) {
+    NSString *noun = (value & ExteriaCommunityBot) ? @"bot" : ((value & ExteriaCommunityChannel) ? @"channel" : @"group");
+    NSString *action = (value & ExteriaCommunityRemoved) ? @"removed" : @"added";
+    NSString *who = (value & ExteriaCommunityUnknownActor) ? @"unknown" : ((value & ExteriaCommunityByMe) ? @"you" : @"someone");
+    NSString *key = [NSString stringWithFormat:@"chat.service.community.%@.%@.%@", noun, action, who];
+    NSString *title = community.length ? community : NSLocalizedString(@"channel.community.card", nil);
+    BOOL removed = (value & ExteriaCommunityRemoved) != 0;
+    NSString *format = NSLocalizedString(key, nil);
+    if ([who isEqualToString:@"someone"]) return removed ? [NSString stringWithFormat:format, actor] : [NSString stringWithFormat:format, actor, title];
+    if (removed) return format;
+    return [NSString stringWithFormat:format, title];
+}
+
 NSString *ExteriaServiceLine(exteria_service_kind kind, NSString *who, NSString *whom, NSString *text, int32_t value, BOOL actorIsTarget) {
     NSString *actor = who.length ? who : NSLocalizedString(@"chat.someone", nil);
     NSString *target = whom.length ? whom : NSLocalizedString(@"chat.someone", nil);
@@ -72,6 +86,9 @@ NSString *ExteriaServiceLine(exteria_service_kind kind, NSString *who, NSString 
     case EXTERIA_SERVICE_SHARING_TOGGLE:
         if (!!(value & 1) == !!(value & 2)) return NSLocalizedString((value & 2) ? @"chat.service.sharing.still.disabled" : @"chat.service.sharing.still.enabled", nil);
         return [NSString stringWithFormat:NSLocalizedString((value & 2) ? @"chat.service.sharing.disabled" : @"chat.service.sharing.enabled", nil), actor];
+    case EXTERIA_SERVICE_POLL_ANSWER_ADDED: return [NSString stringWithFormat:NSLocalizedString(@"chat.service.poll.added", nil), actor, text];
+    case EXTERIA_SERVICE_POLL_ANSWER_REMOVED: return [NSString stringWithFormat:NSLocalizedString(@"chat.service.poll.removed", nil), actor, text];
+    case EXTERIA_SERVICE_COMMUNITY: return ExteriaCommunityLine(actor, text, value);
     case EXTERIA_SERVICE_OTHER:
         /* no wording for it: the action's own name, as readable as it gets, beats a line that says nothing */
         if (text.length) return text;

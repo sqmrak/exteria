@@ -221,6 +221,7 @@ typedef enum {
     BOOL _deletedLocally;
     int _service;
     int32_t _serviceValue;
+    long long _serviceCommunity;
     ExteriaMessageState _state;
     float _uploadProgress;
     NSString *_text;
@@ -368,6 +369,8 @@ typedef enum {
 @property (nonatomic, readonly, copy) NSString *senderRank;
 /* the number some service messages carry: a period, a duration, a count */
 @property (nonatomic, readonly) int32_t serviceValue;
+/* the community a chat was added to by a community service message, zero when it was taken out */
+@property (nonatomic, readonly) long long serviceCommunity;
 @property (nonatomic, readonly, retain) NSArray *entities;
 @property (nonatomic, readonly, copy) NSArray *reactions;
 @property (nonatomic, readonly) BOOL reactionsPossible;

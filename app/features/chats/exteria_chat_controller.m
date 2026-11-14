@@ -4569,6 +4569,7 @@ static void ExteriaRedrawTree(UIView *view) {
         if (!item) {
             item = album ? [ExteriaChatItem itemForAlbum:album group:group people:_people role:role] : [ExteriaChatItem itemForMessage:message group:group people:_people role:role];
             if (message.service == EXTERIA_SERVICE_SHARING_REQUEST + 1) item.sharingExpired = sharingExpired;
+            [item wordCommunityLineForDialog:_dialog people:_people];
             if (_dialog.replies) {
                 [item dropForwardText];
                 if (message.forwardOriginId && message.forwardOriginMessage > 0) [item showOpenChatRow];

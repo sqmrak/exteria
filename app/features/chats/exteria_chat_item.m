@@ -4,6 +4,7 @@
 
 #import "exteria_person.h"
 #import "exteria_service_line.h"
+#import "exteria_dialog.h"
 #import "exteria_plural.h"
 #import "exteria_reactions_view.h"
 #import "exteria_string_drawing.h"
@@ -288,6 +289,19 @@ static BOOL ExteriaSameString(NSString *a, NSString *b) {
     [_highlightQuery release];
     _highlightQuery = [query copy];
     _textLayout.highlight = _highlightQuery;
+}
+
+- (void)wordCommunityLineForDialog:(ExteriaDialog *)dialog people:(NSDictionary *)people {
+    if (!_message || _message.service - 1 != EXTERIA_SERVICE_COMMUNITY || _kind != ExteriaChatItemPill) return;
+    int32_t value = _message.serviceValue;
+    if (dialog.kind == EXTERIA_DIALOG_CHANNEL) value |= ExteriaCommunityChannel | ExteriaCommunityUnknownActor;
+    if (dialog.kind == EXTERIA_DIALOG_BOT) value |= ExteriaCommunityBot | ExteriaCommunityUnknownActor;
+    if (_message.outgoing) value |= ExteriaCommunityByMe;
+    /* the title belongs to the community the chat is in now: a line of an earlier one names no community rather than the wrong one */
+    NSString *title = _message.serviceCommunity && _message.serviceCommunity == dialog.linkedCommunityId ? dialog.linkedCommunityTitle : nil;
+    ExteriaPerson *actor = [people objectForKey:[NSNumber numberWithLongLong:_message.senderKey]];
+    [_pillText release];
+    _pillText = [ExteriaServiceLine(EXTERIA_SERVICE_COMMUNITY, actor.name, nil, title, value, NO) copy];
 }
 
 - (BOOL)reflectsMessage:(ExteriaMessage *)message {

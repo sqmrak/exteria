@@ -217,6 +217,8 @@
    carry the hash that opening it needs */
 - (ExteriaDialog *)linkedCommunity;
 @property (nonatomic, readonly) long long linkedCommunityId;
+/* its title, empty when the chat is in none or the answer did not carry it */
+@property (nonatomic, readonly, copy) NSString *linkedCommunityTitle;
 /* the chat the favorites are narrowed to, nil for the whole favorites */
 @property (nonatomic, readonly, retain) ExteriaDialog *savedSource;
 

@@ -483,6 +483,9 @@ static exteria_service_kind service_kind(const exteria_tl_value *action) {
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionPaymentRefunded)) return EXTERIA_SERVICE_PAYMENT_REFUNDED;
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionNoForwardsRequest)) return EXTERIA_SERVICE_SHARING_REQUEST;
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionNoForwardsToggle)) return EXTERIA_SERVICE_SHARING_TOGGLE;
+    if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionPollAppendAnswer)) return EXTERIA_SERVICE_POLL_ANSWER_ADDED;
+    if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionPollDeleteAnswer)) return EXTERIA_SERVICE_POLL_ANSWER_REMOVED;
+    if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionChangeCommunity)) return EXTERIA_SERVICE_COMMUNITY;
     return EXTERIA_SERVICE_OTHER;
 }
 
@@ -548,6 +551,8 @@ uint8_t exteria_service_summary(const exteria_tl_value *action, char *text, size
             if (exteria_tl_get_i32(action, "days", &days) == EXTERIA_OK && days > 0) *value = (days + 15) / 30;
             else exteria_tl_get_i32(action, "months", value);
         }
+        /* no community_id means the chat left its community */
+        if (kind == EXTERIA_SERVICE_COMMUNITY && !exteria_tl_has(action, "community_id")) *value |= 1;
         if (kind == EXTERIA_SERVICE_GAME_SCORE) exteria_tl_get_i32(action, "score", value);
         if (kind == EXTERIA_SERVICE_GIVEAWAY_RESULTS) exteria_tl_get_i32(action, "winners_count", value);
         if (kind == EXTERIA_SERVICE_TOPIC_EDIT) {
@@ -568,6 +573,11 @@ static void read_service(const exteria_tl_value *action, exteria_message_row *ro
         if (exteria_tl_is(reason, EXTERIA_TL_ID_phoneCallDiscardReasonMissed)) row->call_reason = EXTERIA_OUTCOME_MISSED;
         else if (exteria_tl_is(reason, EXTERIA_TL_ID_phoneCallDiscardReasonBusy)) row->call_reason = EXTERIA_OUTCOME_BUSY;
         else if (exteria_tl_is(reason, EXTERIA_TL_ID_phoneCallDiscardReasonDisconnect)) row->call_reason = EXTERIA_OUTCOME_DISCONNECTED;
+    }
+    if (row->service - 1 == EXTERIA_SERVICE_COMMUNITY) {
+        exteria_tl_get_i64(action, "community_id", &row->service_community);
+        /* a service line written in the name of the chat itself, or a channel post, has no person behind it */
+        if (!row->from_id && !row->from_channel) row->service_value |= 2;
     }
     if (row->service - 1 == EXTERIA_SERVICE_GIFT) {
         const exteria_tl_value *note = exteria_tl_get(action, "message");

@@ -222,6 +222,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize uploadProgress = _uploadProgress;
 @synthesize service = _service;
 @synthesize serviceValue = _serviceValue;
+@synthesize serviceCommunity = _serviceCommunity;
 @synthesize state = _state;
 @synthesize pendingSend = _pendingSend;
 @synthesize localPoster = _localPoster;
@@ -410,6 +411,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_edited = row->edit_date > 0 && !row->edit_hide;
     message->_service = row->service;
     message->_serviceValue = row->service_value;
+    message->_serviceCommunity = row->service_community;
     message->_viaBotId = row->via_bot_id;
     message->_hasMarkup = row->has_markup;
     message->_reactionsPossible = row->reactions_possible;

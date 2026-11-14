@@ -153,8 +153,7 @@
     ExteriaUserAction *_discussionAction;
     ExteriaUserAction *_linkAction;
     ExteriaInfoCardView *_info;
-    ExteriaLinkedGroupCard *_linkedCard;
-    /* the community the channel was added to, under the card of its discussion group */
+    /* the community the channel was added to */
     ExteriaLinkedGroupCard *_communityCard;
     ExteriaDialog *_community;
     ExteriaGiftFactsView *_counts;

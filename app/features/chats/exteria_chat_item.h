@@ -8,6 +8,8 @@ NSString *ExteriaFileSizeText(long long bytes);
 #import "exteria_person.h"
 #import "exteria_text_layout.h"
 
+@class ExteriaDialog;
+
 typedef enum {
     ExteriaChatItemPill,        /* a date or a service line, centered in a capsule */
     ExteriaChatItemBubble,
@@ -306,6 +308,9 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 - (BOOL)reflectsMessage:(ExteriaMessage *)message;
 /* the sender's name, picture and tag are what this item was built with */
 - (BOOL)reflectsPeople:(NSDictionary *)people role:(NSString *)role;
+/* a community service line names the community and says whether the chat is a group, a channel or a bot, which only the dialog knows; the pill is
+   worded again with them. nothing happens to any other item */
+- (void)wordCommunityLineForDialog:(ExteriaDialog *)dialog people:(NSDictionary *)people;
 /* both stand for the same message, or for the same date pill; the content may differ */
 - (BOOL)isSameRowAs:(ExteriaChatItem *)other;
 /* the cell drawn for the other item still shows this one; the same item shows itself unless its flags moved since

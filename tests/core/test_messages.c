@@ -2028,6 +2028,47 @@ static void test_forward_origin(void) {
     free(row);
 }
 
+/* a chat added to a community or taken out of it: who acted, and which community, are read from the message and the action */
+static void test_community_message(void) {
+    exteria_message_row *row = calloc(1, sizeof(*row));
+    exteria_tl_value *m = obj("messageService"), *action = obj("messageActionChangeCommunity");
+    CHECK(row != NULL);
+    set_i32(m, "id", 70);
+    set(m, "peer_id", peer_user(5));
+    set_i32(m, "date", 9);
+    set(m, "from_id", peer_user(8));
+    set_i64(action, "community_id", 777);
+    set(m, "action", action);
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->service, EXTERIA_SERVICE_COMMUNITY + 1);
+    CHECK_EQ_INT(row->service_value, 0);
+    CHECK_EQ_INT(row->service_community, 777);
+    /* no community_id: the chat was taken out */
+    memset(row, 0, sizeof(*row));
+    m = obj("messageService");
+    action = obj("messageActionChangeCommunity");
+    set_i32(m, "id", 71);
+    set(m, "peer_id", peer_user(5));
+    set_i32(m, "date", 9);
+    set(m, "from_id", peer_user(8));
+    set(m, "action", action);
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->service_value, 1);
+    CHECK_EQ_INT(row->service_community, 0);
+    /* a line with no sender (the chat itself, or a post of a channel) has no person behind it */
+    memset(row, 0, sizeof(*row));
+    m = obj("messageService");
+    action = obj("messageActionChangeCommunity");
+    set_i64(action, "community_id", 777);
+    set_i32(m, "id", 72);
+    set(m, "peer_id", peer_user(5));
+    set_i32(m, "date", 9);
+    set(m, "action", action);
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->service_value, 2);
+    free(row);
+}
+
 /* a call service message keeps how it ended, whether it had video and how long it lasted */
 static void test_call_message(void) {
     exteria_message_row *row = calloc(1, sizeof(*row));
@@ -2191,6 +2232,7 @@ int main(void) {
     test_service_summary();
     test_forward_origin();
     test_call_message();
+    test_community_message();
     test_more_service_kinds();
     exteria_arena_free(&arena);
     if (g_failures) {
