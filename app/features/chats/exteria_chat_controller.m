@@ -5543,24 +5543,6 @@ static void ExteriaRedrawTree(UIView *view) {
     }];
 }
 
-/* a song's menu: the song goes on the profile, and the reactions stay one entry away */
-- (void)showSongMenuForCell:(ExteriaMessageCell *)cell {
-    ExteriaMessage *message = cell.item.message;
-    NSMutableArray *titles = [NSMutableArray arrayWithObject:NSLocalizedString(@"music.add", nil)];
-    ExteriaSymbol symbols[2] = {ExteriaSymbolMusic, ExteriaSymbolHeart};
-    BOOL reactions = message.messageId > 0 && message.reactionsPossible && ![self reactionsHidden];
-    if (reactions) [titles addObject:NSLocalizedString(@"chat.reactions", nil)];
-    ExteriaWeakReference *weak = _weak;
-    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
-        ExteriaChatController *chat = weak.target;
-        if (!chat) return;
-        if (index == 0) [chat addSongToProfile:message.media];
-        else [chat showReactionPickerForMessage:message];
-    }] autorelease];
-    CGRect bubble = [self.view convertRect:cell.item.bubbleFrame fromView:cell.contentView];
-    [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(bubble), CGRectGetMaxY(bubble))];
-}
-
 - (void)addSongToProfile:(ExteriaMedia *)song {
     [self retain];
     [_session saveMusic:song unsave:NO completion:^(NSString *errorName) {
@@ -5576,12 +5558,6 @@ static void ExteriaRedrawTree(UIView *view) {
 }
 
 - (void)messageCellDidLongPress:(ExteriaMessageCell *)cell {
-    ExteriaMessage *message = cell.item.message;
-    if (message.media.kind == EXTERIA_PREVIEW_AUDIO && message.media.file && message.media.ref.ref_len) {
-        [self dismissInput];
-        [self showSongMenuForCell:cell];
-        return;
-    }
     [self showMessageMenuForCell:cell];
 }
 
@@ -6479,6 +6455,7 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
         [ExteriaMessageReportFlow startForMessageIds:[NSArray arrayWithObject:[NSNumber numberWithInt:message.messageId]] dialog:_dialog session:_session host:self];
         break;
     case EXTERIA_ACTION_SAVE: [self saveMessageToFavorites:message]; break;
+    case EXTERIA_ACTION_SAVE_MUSIC: [self addSongToProfile:message.media]; break;
     case EXTERIA_ACTION_GALLERY: [self saveMediaOfMessage:message]; break;
     case EXTERIA_ACTION_SELECT: [self beginSelectionWith:message]; break;
     case EXTERIA_ACTION_BOOKMARK: [self bookmarkMessage:message]; break;
