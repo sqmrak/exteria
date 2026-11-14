@@ -53,6 +53,10 @@ class ByteBuffer(Object):
     def remaining(self):
         return self._limit - self._position
 
+    def to_bytes(self):
+        """the remaining bytes without moving the position"""
+        return bytes(self._data[self._position:self._limit])
+
     def hasRemaining(self):
         return self._position < self._limit
 
@@ -88,3 +92,11 @@ class ByteBuffer(Object):
             self._data[self._position] = value & 255
             self._position += 1
         return self
+
+
+def __getattr__(name):
+    if name.startswith("__"):
+        raise AttributeError(name)
+    # a class the shim does not write itself but the dex runtime implements
+    from java import host_class
+    return host_class("java.nio", name)

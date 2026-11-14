@@ -132,3 +132,11 @@ class FileOutputStream(Object):
 
     def close(self):
         self._closed = True
+
+
+def __getattr__(name):
+    if name.startswith("__"):
+        raise AttributeError(name)
+    # a class the shim does not write itself but the dex runtime implements
+    from java import host_class
+    return host_class("java.io", name)

@@ -43,3 +43,11 @@ class URL(Object):
 
     toString = toExternalForm
     __str__ = toExternalForm
+
+
+def __getattr__(name):
+    if name.startswith("__"):
+        raise AttributeError(name)
+    # a class the shim does not write itself but the dex runtime implements
+    from java import host_class
+    return host_class("java.net", name)

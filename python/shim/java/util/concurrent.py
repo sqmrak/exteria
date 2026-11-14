@@ -16,3 +16,11 @@ class ConcurrentHashMap(HashMap):
     def remove(self, key):
         with self._lock:
             return HashMap.remove(self, key)
+
+
+def __getattr__(name):
+    if name.startswith("__"):
+        raise AttributeError(name)
+    # a class the shim does not write itself but the dex runtime implements
+    from java import host_class
+    return host_class("java.util.concurrent", name)

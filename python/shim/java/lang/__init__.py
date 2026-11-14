@@ -34,8 +34,13 @@ class Class(Object):
         self._py = target
 
     @staticmethod
-    def forName(name, *_loader):
+    def forName(name, *args):
         """the class the shims answer for under that java name; ClassNotFoundException for any other, the way a plugin tells a client without it"""
+        if len(args) >= 2 and args[1] is not None:
+            found = args[1].loadClass(str(name))
+            if args[0] and hasattr(found, "ensure_initialized"):
+                found.ensure_initialized()
+            return found
         from java import jclass
         return Class._of(jclass(str(name)))
 
@@ -153,6 +158,26 @@ class SecurityException(RuntimeException):
     pass
 
 
+class IllegalStateException(RuntimeException):
+    pass
+
+
+class UnsupportedOperationException(RuntimeException):
+    pass
+
+
+class ClassCastException(RuntimeException):
+    pass
+
+
+class IndexOutOfBoundsException(RuntimeException):
+    pass
+
+
+class ArrayIndexOutOfBoundsException(IndexOutOfBoundsException):
+    pass
+
+
 class ReflectiveOperationException(_JavaException):
     pass
 
@@ -169,7 +194,11 @@ def __getattr__(name):
     # a module level name Exception would shadow the builtin for every function of this module
     if name == "Exception":
         return _JavaException
-    raise AttributeError(name)
+    if name.startswith("__"):
+        raise AttributeError(name)
+    # a class the shim does not write itself but the dex runtime implements: ClassLoader, CharSequence, WeakReference
+    from java import host_class
+    return host_class("java.lang", name)
 
 
 class Runnable:
@@ -188,6 +217,11 @@ class Thread:
     def sleep(ms):
         import time
         time.sleep(ms / 1000.0)
+
+    @staticmethod
+    def getAllStackTraces():
+        from dexvm.jlang import Thread as VMThread
+        return VMThread.getAllStackTraces()
 
 
 class Math:
@@ -243,9 +277,23 @@ class Integer(int):
         return Integer(int(text))
 
 
-# the class object of the primitive int, which a plugin passes to getDeclaredMethod as a parameter type
-Integer.TYPE = Class._of(int)
-Long.TYPE = Class._of(int)
+class _PrimitiveClass(Class):
+    """the class object of a primitive, which a plugin passes to getDeclaredMethod as a parameter type. int and long are
+    both python ints, so the descriptor letter is kept to pick between I and J in a dex signature"""
+
+    def __init__(self, target, name, code):
+        Class.__init__(self, target)
+        self._name = name
+        self._code = code
+
+    def getName(self):
+        return self._name
+
+    getSimpleName = getName
+
+
+Integer.TYPE = _PrimitiveClass(int, "int", "I")
+Long.TYPE = _PrimitiveClass(int, "long", "J")
 
 
 class Boolean:
@@ -261,7 +309,7 @@ class Boolean:
         return str(text).lower() == "true"
 
 
-Boolean.TYPE = Class._of(bool)
+Boolean.TYPE = _PrimitiveClass(bool, "boolean", "Z")
 
 
 class Float(float):
@@ -272,3 +320,6 @@ class Float(float):
     @staticmethod
     def parseFloat(text):
         return Float(text)
+
+
+Float.TYPE = _PrimitiveClass(float, "float", "F")

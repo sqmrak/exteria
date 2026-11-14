@@ -15,10 +15,33 @@ class ClassNotFoundException(JavaException):
     pass
 
 
+# packages the dex runtime implements in full: a name the shims do not list is answered by the runtime
+_DEX_RUNTIME = ("dalvik.system.", "java.", "javax.", "org.json.")
+
+
+def host_class(package, name):
+    """the class of the dex runtime for a java name, for the module level __getattr__ of the shim packages"""
+    from dexvm import api
+    entry = api.lookup_host(package + "." + name)
+    if entry is None:
+        raise AttributeError(name)
+    return entry.py
+
+
 def jclass(name):
+    if isinstance(name, str) and name.startswith("dalvik.system."):
+        from dexvm import api
+        entry = api.lookup_host(name)
+        if entry is not None:
+            return entry.py
     entry = _registry.lookup(name)
     if entry is None:
         entry = _from_module(name)
+    if entry is None and isinstance(name, str) and name.startswith(_DEX_RUNTIME):
+        from dexvm import api
+        found = api.lookup_host(name)
+        if found is not None:
+            entry = found.py
     if entry is None:
         raise ClassNotFoundException(name)
     return entry
@@ -42,6 +65,12 @@ def _from_module(name):
     except (ImportError, AttributeError):
         return None
     return entry
+
+
+def static_proxy(*_interfaces):
+    """chaquopy turns a class that extends static_proxy into a java class when the android app is built; an app that is not built that way has no
+    such class, so a plugin that needs one cannot run here"""
+    raise NotImplementedError("a static proxy is a java class made when an android app is built, it does not exist at run time on ios")
 
 
 def dynamic_proxy(*interfaces):
