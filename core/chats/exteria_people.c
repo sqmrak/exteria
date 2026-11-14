@@ -19,6 +19,22 @@ static void copy_text(char *dst, size_t cap, const exteria_tl_value *object, con
     dst[out] = 0;
 }
 
+/* the public name: the username field, or the first active one of the usernames list that a user with several of them (a bot with a collectible one) carries in its place;
+   without it "via @bot" had no name to show */
+static void read_username(char *dst, size_t cap, const exteria_tl_value *user) {
+    const exteria_tl_value *names = exteria_tl_get(user, "usernames");
+    uint32_t i;
+    copy_text(dst, cap, user, "username");
+    if (dst[0] || !names || names->kind != EXTERIA_TL_V_VEC) return;
+    for (i = 0; i < names->u.vec.count; ++i) {
+        const exteria_tl_value *name = names->u.vec.items[i];
+        if (exteria_tl_has(name, "active")) {
+            copy_text(dst, cap, name, "username");
+            if (dst[0]) return;
+        }
+    }
+}
+
 static void join_name(char *dst, size_t cap, const exteria_tl_value *user) {
     char first[EXTERIA_PERSON_NAME_MAX], last[EXTERIA_PERSON_NAME_MAX];
     size_t a, b;
@@ -181,7 +197,7 @@ exteria_status exteria_person_parse(const exteria_tl_value *user, exteria_person
         }
     }
     join_name(out->name, sizeof(out->name), user);
-    copy_text(out->username, sizeof(out->username), user, "username");
+    read_username(out->username, sizeof(out->username), user);
     copy_text(out->phone, sizeof(out->phone), user, "phone");
     exteria_photo_ref_read(user, 1, out->id, &out->photo);
     exteria_presence_read(exteria_tl_get(user, "status"), &out->presence, &out->seen);

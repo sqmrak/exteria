@@ -94,6 +94,24 @@ static void test_person(void) {
     CHECK_EQ_INT(row.bot, 1);
     CHECK_EQ_INT(row.presence, EXTERIA_PRESENCE_ONLINE);
 
+    /* a bot with several usernames carries them in a list and no username field: the first active one is its name for "via @bot" */
+    {
+        exteria_tl_value *first = obj("username"), *second = obj("username"), *names[2];
+        u = user(10, "Music", NULL);
+        set_flag(u, "bot");
+        set_str(first, "username", "old_music_bot");
+        set_str(second, "username", "music_bot");
+        set_flag(second, "active");
+        names[0] = first;
+        names[1] = second;
+        set(u, "usernames", vec_of(names, 2));
+        CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+        CHECK(strcmp(row.username, "music_bot") == 0);
+        set_str(u, "username", "main_bot");
+        CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
+        CHECK(strcmp(row.username, "main_bot") == 0);
+    }
+
     u = user(9, "Only", NULL);
     set(u, "status", obj("userStatusLastWeek"));
     CHECK_EQ_INT(exteria_person_parse(u, &row), EXTERIA_OK);
