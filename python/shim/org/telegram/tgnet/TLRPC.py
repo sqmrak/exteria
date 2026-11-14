@@ -19,7 +19,12 @@ class User(_Record):
 
 
 class Chat(_Record):
-    _FIELDS = {"id": 0, "title": ""}
+    # channel is a broadcast channel or a supergroup (the android TL_channel), megagroup the supergroup; admin_rights is a record with delete_messages, None for a member
+    _FIELDS = {"id": 0, "title": "", "creator": False, "channel": False, "megagroup": False, "broadcast": False, "admin_rights": None}
+
+
+class TL_chatAdminRights(_Record):
+    _FIELDS = {"delete_messages": False}
 
 
 class PhotoSize(_Record):
@@ -35,7 +40,7 @@ class Document(_Record):
 
 
 class Message(_Record):
-    _FIELDS = {"id": 0, "message": "", "out": False, "date": 0, "dialog_id": 0, "from_id": 0, "attachPath": ""}
+    _FIELDS = {"id": 0, "message": "", "out": False, "post": False, "date": 0, "dialog_id": 0, "from_id": 0, "attachPath": ""}
 
 
 # python cannot send a request to telegram on ios, so these records are only what a plugin builds or tests against: a
@@ -86,6 +91,10 @@ class TLObject_(_Record):
     pass
 
 
+class MessagesFilter(_Record):
+    pass
+
+
 class InputPeer(_Record):
     pass
 
@@ -96,6 +105,18 @@ class TL_inputPeerSelf(InputPeer):
 
 class TL_inputPeerUser(InputPeer):
     _FIELDS = {"user_id": 0, "access_hash": 0}
+
+
+class TL_inputPeerChat(InputPeer):
+    _FIELDS = {"chat_id": 0}
+
+
+class TL_inputPeerChannel(InputPeer):
+    _FIELDS = {"channel_id": 0, "access_hash": 0}
+
+
+class TL_inputPeerEmpty(InputPeer):
+    pass
 
 
 class InputUser(_Record):
@@ -122,8 +143,37 @@ class TL_messages_getHistory(_Record):
     _FIELDS = {"peer": None, "offset_id": 0, "offset_date": 0, "add_offset": 0, "limit": 0, "max_id": 0, "min_id": 0, "hash": 0}
 
 
+class TL_inputChannel(_Record):
+    _FIELDS = {"channel_id": 0, "access_hash": 0}
+
+
+class TL_inputMessagesFilterEmpty(MessagesFilter):
+    pass
+
+
+class TL_messages_getReplies(_Record):
+    _FIELDS = {"peer": None, "msg_id": 0, "offset_id": 0, "offset_date": 0, "add_offset": 0, "limit": 0, "max_id": 0, "min_id": 0, "hash": 0}
+
+
+class TL_channels_deleteMessages(_Record):
+    _FIELDS = {"channel": None}
+
+    def __init__(self, **fields):
+        super().__init__(**fields)
+        self.id = fields.get("id", ArrayList())
+
+
 class TL_users_getSavedMusic(_Record):
     _FIELDS = {"id": None, "offset": 0, "limit": 0, "hash": 0}
+
+
+class TL_inputMessagesFilterMusic(MessagesFilter):
+    pass
+
+
+class TL_messages_search(_Record):
+    _FIELDS = {"flags": 0, "peer": None, "q": "", "from_id": None, "top_msg_id": 0, "filter": None, "min_date": 0, "max_date": 0, "offset_id": 0,
+               "add_offset": 0, "limit": 0, "max_id": 0, "min_id": 0, "hash": 0}
 
 
 class TL_account_saveMusic(_Record):
@@ -159,6 +209,10 @@ class TL_messageMediaDocument(MessageMedia):
     pass
 
 
+class TL_messageService(Message):
+    """a service message (a member joined, a pin, a title change): the cleaner tells it from a message with text because the server refuses some of them"""
+
+
 class TL_message(Message):
     _FIELDS = dict(Message._FIELDS, media=None)
 
@@ -175,6 +229,11 @@ class TL_users_savedMusic(_Record):
     def __init__(self, **fields):
         super().__init__(**fields)
         self.documents = fields.get("documents", ArrayList())
+
+
+# the names the android client gives the saved music request and its answer
+TL_getSavedMusic = TL_users_getSavedMusic
+TL_savedMusic = TL_users_savedMusic
 
 
 class TL_boolTrue(_Record):

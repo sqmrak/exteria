@@ -29,6 +29,16 @@ def _state():
     return _ui.ask("music.state")
 
 
+def _document_json(document):
+    """the plain values the app names a song by: the identity the server knows it by and the tags it shows"""
+    audio = next((one for one in document.attributes if type(one).__name__ == "TL_documentAttributeAudio"), None)
+    name = next((one.file_name for one in document.attributes if type(one).__name__ == "TL_documentAttributeFilename"), "")
+    return {"id": int(document.id), "access_hash": int(document.access_hash), "dc": int(document.dc_id),
+            "file_ref": bytes(document.file_reference or b"").hex(), "size": int(document.size), "mime": str(document.mime_type), "name": str(name),
+            "title": str(audio.title) if audio is not None else "", "performer": str(audio.performer) if audio is not None else "",
+            "duration": int(audio.duration) if audio is not None else 0}
+
+
 def _message_of(entry):
     """the MessageObject of a song of the player. its id is the index in the queue, which playMessage starts"""
     from org.telegram.messenger import MessageObject
@@ -41,29 +51,51 @@ def _message_of(entry):
 
 
 class _Playlist(Object):
-    """the songs of the queue in the order of the android client, read from the app when asked"""
+    """the songs of the queue in the order of the android client, read from the app when asked. a plugin that changes the list (clear, add, addAll, or
+    setPlaylist on the controller) makes a list of its own, which the next playMessage plays; until then the list is the queue of the app"""
 
     def __init__(self, count):
         self._count = int(count)
 
+    def _own(self):
+        """the first change takes the songs of the app as they are and works on them"""
+        if MediaController._pending is None:
+            MediaController._pending = list(self)
+        return MediaController._pending
+
     def size(self):
-        return self._count
+        pending = MediaController._pending
+        return len(pending) if pending is not None else self._count
 
     def isEmpty(self):
-        return self._count == 0
+        return self.size() == 0
 
     def get(self, index):
         index = int(index)
+        pending = MediaController._pending
+        if pending is not None:
+            return pending[index]
         if not 0 <= index < self._count:
             raise IndexError("the playlist has %d songs, not a song %d" % (self._count, index))
         # the app counts in the order the songs are played; the android list counts the other way
         return _message_of(_ui.ask("music.entry", position=self._count - 1 - index))
 
+    def clear(self):
+        MediaController._pending = []
+
+    def add(self, item):
+        self._own().append(item)
+        return True
+
+    def addAll(self, items):
+        self._own().extend(items)
+        return True
+
     def __len__(self):
-        return self._count
+        return self.size()
 
     def __iter__(self):
-        return (self.get(index) for index in range(self._count))
+        return (self.get(index) for index in range(self.size()))
 
     def toArray(self):
         return list(self)
@@ -129,6 +161,11 @@ class MediaController(Object):
     # the playback whose player was taken out; audioPlayer is None until the next song starts
     _detached = 0
     _players = {}
+    # the list a plugin built (setPlaylist, or changes to getPlaylist), in the order of the android client; None while the queue of the app is the playlist
+    _pending = None
+    _pending_current = None
+    # the profile list a plugin is playing from (MessagesController.SavedMusicList); the app plays the queue it was given and reads no further
+    currentSavedMusicList = None
 
     @staticmethod
     def getInstance():
@@ -163,6 +200,17 @@ class MediaController(Object):
     def getPlaylist(self):
         return _Playlist(_state()["count"])
 
+    def setPlaylist(self, messages, current, dialog_id=0, *_rest):
+        """the songs a plugin will start with playMessage. current is one of them; the dialog the android client keeps it for has no use here"""
+        MediaController._pending = list(messages)
+        MediaController._pending_current = current
+
+    def cleanup(self):
+        """the android client drops the player, the playlist and the profile list in one call"""
+        self.cleanupPlayer(True, True, False, False)
+        MediaController._pending = None
+        MediaController.currentSavedMusicList = None
+
     def getPlayingMessageObject(self):
         state = _state()
         if state["state"] not in _LOADED or "track" not in state:
@@ -184,12 +232,24 @@ class MediaController(Object):
         return bool(track and state["state"] == "playing" and "track" in state and state["track"]["key"] == track["key"])
 
     def playMessage(self, message):
-        """starts the song of a message of the playlist. True when the music player took it"""
+        """starts the song of a message. a song of the queue of the app is started in the queue; the message of a document (a search result, a song of a profile)
+        starts the list a plugin built, from this song, or the song alone. True when the music player took it"""
         track = getattr(message, "_track", None)
-        if track is None or "index" not in track:
-            raise NotImplementedError("only a song of the playlist of the app can be started from a plugin")
+        if track is not None and "index" in track:
+            self.cleanupPlayer(True, True, False, False)
+            _ui.ask("music.start", index=int(track["index"]))
+            return True
+        if message.getDocument() is None:
+            raise NotImplementedError("only a song of the app or a message with a document can be started from a plugin")
+        listed = MediaController._pending
+        if listed is None or not any(one is message for one in listed):
+            listed = [message]
+        # the android list has the next song before the current one, the app plays its queue from the front
+        queue = [one for one in reversed(listed) if one.getDocument() is not None]
         self.cleanupPlayer(True, True, False, False)
-        _ui.ask("music.start", index=int(track["index"]))
+        _ui.ask("music.play_docs", docs=[_document_json(one.getDocument()) for one in queue],
+                index=next(at for at, one in enumerate(queue) if one is message))
+        MediaController._pending = None
         return True
 
     def cleanupPlayer(self, notify=True, stop_service=True, by_voice_end=False, transfer_to_viewer=False):

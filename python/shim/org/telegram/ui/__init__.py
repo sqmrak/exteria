@@ -64,15 +64,57 @@ class ChatActivity(BaseFragment):
         self._data = data
 
     def getDialogId(self):
-        return int(self._data.get("dialog", 0))
+        """the id the android client has for the chat: a user is positive, a group or a channel is its plain id with a minus"""
+        return int(self._data.get("signed", self._data.get("dialog", 0)))
+
+    def getTopicId(self):
+        return int(self._data.get("topic", 0))
+
+    def getChatMode(self):
+        """0, the chat itself; the app has no scheduled or pinned lists as modes of a chat"""
+        return 0
+
+    def getSavedDialogId(self):
+        return 0
+
+    def getMergeDialogId(self):
+        """the history a group had before it became a supergroup is not merged in the app"""
+        return 0
+
+    def getCurrentEncryptedChat(self):
+        return None
+
+    def getCurrentAccount(self):
+        return 0
+
+    def getMessagesController(self):
+        from org.telegram.messenger import MessagesController
+        return MessagesController.getInstance(0)
+
+    def getConnectionsManager(self):
+        from org.telegram.tgnet import ConnectionsManager
+        return ConnectionsManager.getInstance(0)
+
+    def getUserConfig(self):
+        from org.telegram.messenger import UserConfig
+        return UserConfig.getInstance(0)
 
     def getCurrentUser(self):
         user = self._data.get("user")
         return TLRPC.User(**user) if user else None
 
     def getCurrentChat(self):
+        """a group or a channel as the record the android client has. the app knows a channel is one, whether the person administers it and that it is a supergroup,
+        not their rights in a group, so those are not set there"""
         chat = self._data.get("chat")
-        return TLRPC.Chat(**chat) if chat else None
+        kind = int(self._data.get("peer_kind", 0))
+        if not chat or kind == 1:
+            return None
+        broadcast = bool(self._data.get("broadcast"))
+        record = TLRPC.Chat(id=int(chat.get("id", 0)), title=str(chat.get("title", "")), channel=kind == 3, broadcast=broadcast, megagroup=kind == 3 and not broadcast)
+        if broadcast and self._data.get("admin"):
+            record.admin_rights = TLRPC.TL_chatAdminRights(delete_messages=True)
+        return record
 
     def getChatListView(self):
         return None
@@ -262,6 +304,7 @@ def reset_pages():
     for page in SettingsActivity._single:
         page.fragmentView.removeAllViews()
         page.listView.sectionBackgroundPaint.setColorFilter(None)
+    _tabs.reset()
 
 
 def _fragment():
@@ -281,7 +324,17 @@ class _LaunchMeta(type):
         return activity()
 
 
+class _FragmentLayout(Object):
+    """the stack of screens the android client keeps; the app has the main screen with its bar, and a plugin looks it up here"""
+
+    def getFragmentStack(self):
+        return _tabs.fragment_stack()
+
+
 class LaunchActivity(Activity, metaclass=_LaunchMeta):
+    def getActionBarLayout(self):
+        return _FragmentLayout()
+
     def onActivityResult(self, request_code, result_code, data):
         """the app calls this when a screen it opened for a plugin has an answer (exteria_host.activity_result), and a plugin hooks it to
         take the answer, as it does on android"""
@@ -299,3 +352,13 @@ class LaunchActivity(Activity, metaclass=_LaunchMeta):
 setattr(ChatActivity.ReplyQuote, "from", staticmethod(ChatActivity.ReplyQuote.make))
 
 
+class SelectAnimatedEmojiDialog(Object):
+    """importable only: the emoji picker of the android client, which the app does not have in this form. a plugin that imports it still loads;
+    the TYPE_ numbers the client defines are not given here, as nothing of the picker is there to read them"""
+
+    def __init__(self, *_arguments):
+        raise NotImplementedError("the emoji picker of the android client has no equal a plugin can open")
+
+
+from org.telegram.ui import _tabs  # noqa: E402
+from org.telegram.ui._tabs import MainTabsActivity  # noqa: E402,F401

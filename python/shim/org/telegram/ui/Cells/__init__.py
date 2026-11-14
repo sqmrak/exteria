@@ -102,3 +102,107 @@ class TextCheckCell2(_CheckCell):
 
     def setValue(self, value):
         self._set_texts(self._label._text, value)
+
+
+class TextCheckCell(_CheckCell):
+    """the row of a switch of the settings screens: a text, an optional value line and the indicator. a tap is the plugin's to handle, the
+    cell does not flip itself, as in the android client"""
+
+    def __init__(self, context=None, *_resources):
+        super().__init__(context)
+
+    def setTextAndCheck(self, text, checked, divider=False):
+        self._set_texts(text, "")
+        self.setChecked(checked)
+
+    def setTextAndValueAndCheck(self, text, value, checked, multiline=False, divider=False):
+        self._set_texts(text, value)
+        self.setChecked(checked)
+
+    def setEnabled(self, value):
+        super().setEnabled(value)
+        self._column.setAlpha(1.0 if value else 0.5)
+
+
+class TextSettingsCell(LinearLayout):
+    """a row with a text on the left and a value on the right"""
+
+    def __init__(self, context=None, *_resources):
+        super().__init__(context)
+        self.setOrientation(LinearLayout.HORIZONTAL)
+        self.setGravity(Gravity.CENTER_VERTICAL)
+        self.setPadding(16, 12, 16, 12)
+        self._label = TextView(context)
+        self._label.setTextSize(16)
+        self._label.setTextColor(0xFFFFFFFF)
+        self._value = TextView(context)
+        self._value.setTextSize(16)
+        self._value.setTextColor(0xFF2481CC)
+        self.addView(self._label, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1.0))
+        self.addView(self._value, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        self._value.setVisibility(View.GONE)
+        self._can_disable = False
+
+    def setText(self, text, divider=False):
+        self._label.setText(text)
+        self._value.setVisibility(View.GONE)
+
+    def setTextAndValue(self, text, value, divider=False):
+        self._label.setText(text)
+        self._value.setText(value or "")
+        self._value.setVisibility(View.VISIBLE if value else View.GONE)
+
+    def setTextColor(self, color):
+        self._label.setTextColor(color)
+
+    def setTextValueColor(self, color):
+        self._value.setTextColor(color)
+
+    def getTextView(self):
+        return self._label
+
+    def getValueTextView(self):
+        return self._value
+
+    def setCanDisable(self, value):
+        self._can_disable = bool(value)
+
+    def setEnabled(self, value):
+        super().setEnabled(value)
+        self.setAlpha(1.0 if value or not self._can_disable else 0.5)
+
+
+class HeaderCell(LinearLayout):
+    """the small accent title above a group of rows, with an optional second line"""
+
+    def __init__(self, context=None, *_resources):
+        super().__init__(context)
+        self.setOrientation(LinearLayout.VERTICAL)
+        self.setPadding(16, 14, 16, 4)
+        self._title = TextView(context)
+        self._title.setTextSize(15)
+        self._title.setTextColor(0xFF2481CC)
+        from android.graphics import Typeface
+        self._title.setTypeface(Typeface.DEFAULT_BOLD)
+        self._sub = TextView(context)
+        self._sub.setTextSize(13)
+        self._sub.setTextColor(0xFF8E8E93)
+        self._sub.setVisibility(View.GONE)
+        self.addView(self._title, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        self.addView(self._sub, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+
+    def setText(self, text, *_animate):
+        self._title.setText(text)
+
+    def setText2(self, text):
+        self._sub.setText(text or "")
+        self._sub.setVisibility(View.VISIBLE if text else View.GONE)
+
+    def setTextSize(self, size):
+        self._title.setTextSize(size)
+
+    def setTextColor(self, color):
+        self._title.setTextColor(color)
+
+    def getTextView(self):
+        return self._title

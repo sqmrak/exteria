@@ -37,6 +37,37 @@ _elyx_libraries()
 audit_gate._runtime_paths()
 
 
+def _system(command):
+    """os.system for a build that has no system(): the shell of the device runs the command and the answer is a wait status, as the
+    real one returns it. the audit event is the one the gate watches; a device without /bin/sh raises FileNotFoundError"""
+    import subprocess
+    sys.audit("os.system", command)
+    code = subprocess.Popen(["/bin/sh", "-c", command]).wait()
+    return code << 8 if code >= 0 else -code
+
+
+if not hasattr(os, "system"):
+    os.system = _system
+
+
+def _dex_runtime():
+    """translated dex methods are kept next to the plugin files in Library/Caches, a folder the app may clear and a plugin
+    cannot reach. a call from a plugin into the dex runtime gets 20 s, the longest limit a plugin call has (loading), so a
+    loop in a dex program ends with BudgetExceeded even when no host timer is running"""
+    import logging
+    import dexvm
+    from app.exteraless.plugins import PythonBridge
+    root = os.path.join(os.path.dirname(str(PythonBridge.getCacheDir())), "exteria-dex-methods")
+    try:
+        dexvm.cache.configure(root)
+    except OSError as error:
+        logging.getLogger("exteria").warning("the dex method cache is off: %s", error)
+    dexvm.limits.configure(seconds=20.0)
+
+
+_dex_runtime()
+
+
 def _flushed(function):
     """a view tree changes inside a plugin call and reaches uikit when the call ends"""
 
@@ -100,6 +131,15 @@ def load(path, plugin_id):
     if not result.get("ok"):
         import exteria_diagnose
         result["why"] = exteria_diagnose.explain(path, result.get("error"))
+    else:
+        import exteria_diagnose
+        try:
+            result["notice"] = exteria_diagnose.unavailable(path)
+        except Exception as error:
+            # the line under the switch is a courtesy; a source it cannot read must not undo a load that worked
+            result["notice"] = None
+            import logging
+            logging.getLogger("exteria").warning("diagnose of %s failed: %s", plugin_id, error)
     return result
 
 
@@ -390,11 +430,23 @@ def alert_result(token, index, text=""):
 @_flushed
 def fragment_event(page, event, width, height):
     """a page of the app that plugins hook was built ("create"), came on screen ("resume"), went away ("pause") or changed its size
-    ("layout"); width and height are the size of its layer in points. only the settings tab is such a page"""
+    ("layout"); width and height are the size of its layer in points. the settings tab is such a page, and the main screen ("tabs") with its
+    bar, which hears "create" and "resume" only"""
+    if page == "tabs":
+        from org.telegram.ui import MainTabsActivity
+        MainTabsActivity.instance()._event(str(event))
+        return
     if page != "settings":
         raise ValueError("no such page: %r" % (page,))
     from org.telegram.ui import SettingsActivity
     SettingsActivity.instance()._event(str(event), int(width), int(height))
+
+
+@_flushed
+def tab_event(slot, kind):
+    """a tab of the bar that a plugin gave a listener was tapped ("click") or held ("hold"): slot is its place in the bar"""
+    from org.telegram.ui import MainTabsActivity
+    MainTabsActivity.instance()._tap(int(slot), str(kind))
 
 
 @_flushed

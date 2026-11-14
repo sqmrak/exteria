@@ -256,6 +256,7 @@ _registry.register_lazy("app.exteraless.plugins.xposed.PyMethodHook", "app.exter
 _registry.register_lazy("app.exteraless.plugins.xposed.PyMethodReplacement", "app.exteraless.plugins.xposed", "PyMethodReplacement")
 _registry.register_lazy("app.exteraless.plugins.models.CustomSetting", "app.exteraless.plugins.models", "CustomSetting")
 _registry.register_lazy("app.exteraless.plugins.PluginsConstants", "base_plugin", "PluginsConstants")
+_registry.register_lazy("app.exteraless.plugins.ui.PluginSettingsActivity", "app.exteraless.plugins.ui", "PluginSettingsActivity")
 _registry.register_lazy("com.exteragram.messenger.ExteraConfig", "app.exteraless.compat", "ExteraConfig")
 _registry.register_lazy("com.exteragram.messenger.utils.AppUtils", "app.exteraless.compat", "AppUtils")
 _registry.register_lazy("com.exteragram.messenger.utils.chats.ChatUtils", "app.exteraless.compat", "ChatUtils")

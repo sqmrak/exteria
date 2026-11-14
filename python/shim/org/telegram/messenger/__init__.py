@@ -51,6 +51,11 @@ class AndroidUtilities(metaclass=_ScreenMeta):
         from android.os import Handler
         Handler().postDelayed(runnable, delay)
 
+    @staticmethod
+    def cancelRunOnUIThread(runnable):
+        from android.os import Handler
+        Handler().removeCallbacks(runnable)
+
 
 class _LoaderMeta(type):
     @property
@@ -137,6 +142,14 @@ class UserConfig(Object):
 
 class UserObject:
     @staticmethod
+    def getUserName(user):
+        """the name the android client shows: first and last name, else the user name"""
+        if user is None:
+            return ""
+        name = " ".join(part for part in (getattr(user, "first_name", ""), getattr(user, "last_name", "")) if part)
+        return name or str(getattr(user, "username", "") or "")
+
+    @staticmethod
     def getFirstName(user, *_ignored):
         return getattr(user, "first_name", "") if user is not None else ""
 
@@ -153,12 +166,23 @@ class MessageObject(Object):
     # what the music player says of a song that is the message (org.telegram.messenger.music), None for a message of a chat
     _track = None
 
-    def __init__(self, owner, dialog_id=0):
+    def __init__(self, *args):
+        """(message, dialog_id) as the app builds it for a hook, or (account, message, generate_layout, check_media) as a plugin builds one of its own"""
+        if args and isinstance(args[0], int):
+            owner = args[1]
+            dialog_id = getattr(owner, "dialog_id", 0)
+        else:
+            owner, dialog_id = args[0], (args[1] if len(args) > 1 else 0)
         self.messageOwner = owner
         self._dialog = dialog_id
         self.messageText = owner.message
         # the text of a message with media is its caption, and the app keeps both in one text
         self.caption = None
+
+    def getDocument(self):
+        """the document of a message with a file, None for the rest"""
+        media = getattr(self.messageOwner, "media", None)
+        return getattr(media, "document", None) if media is not None else None
 
     def applyNewText(self, text):
         self.messageOwner.message = str(text)
@@ -177,7 +201,11 @@ class MessageObject(Object):
         return self._track is not None and self._track.get("kind") == "voice"
 
     def isMusic(self):
-        return self._track is not None and self._track.get("kind") == "music"
+        if self._track is not None:
+            return self._track.get("kind") == "music"
+        document = self.getDocument()
+        audio = [a for a in document.attributes if type(a).__name__ == "TL_documentAttributeAudio"] if document is not None else []
+        return bool(audio) and not audio[0].voice
 
     def shouldEncryptPhotoOrVideo(self):
         # only a secret chat protects its files like that, and the music player plays the songs of the cloud
@@ -199,8 +227,69 @@ class MessagesController(Object):
     def isDialogMuted(self, dialog_id, topic_id=0):
         return bool((_ui.ask("app.muted", dialog=int(dialog_id)) or {}).get("value"))
 
-    def getUser(self, user_id):
+    @staticmethod
+    def _open(dialog_id):
+        """what the app says of the chat that is open when it has this id: the chat on screen is always known, whatever the chat list holds"""
+        current = _ui.ask("app.current") or {}
+        if current.get("kind") == "chat" and int(current.get("signed", current.get("dialog", 0))) == int(dialog_id):
+            return current
         return None
+
+    @staticmethod
+    def _known(dialog_id):
+        if MessagesController._open(dialog_id) is not None:
+            return True
+        return bool((_ui.ask("peer.known", dialog=int(dialog_id)) or {}).get("value"))
+
+    def getUser(self, user_id):
+        """the user of the chat list with this id, or the person; None for one the app has no chat with"""
+        user_id = int(user_id)
+        if user_id <= 0 or not self._known(user_id):
+            return None
+        open_chat = self._open(user_id)
+        title = str((open_chat or {}).get("chat", {}).get("title", ""))
+        return TLRPC.User(id=user_id, first_name=title)
+
+    def getChat(self, chat_id):
+        """the group or channel of the chat list with this plain id, None when the app has none"""
+        chat_id = int(chat_id)
+        if chat_id <= 0 or not self._known(-chat_id):
+            return None
+        open_chat = self._open(-chat_id)
+        return TLRPC.Chat(id=chat_id, title=str((open_chat or {}).get("chat", {}).get("title", "")))
+
+    def getInputPeer(self, dialog_id):
+        """the peer a request names for a chat of the list; an empty peer when the app does not have it, as the android client answers. the app finds the access hash
+        itself, so only the id is carried. a negative id is a group or a channel, the app tells which"""
+        dialog_id = int(dialog_id)
+        if dialog_id == int((_ui.ask("app.me") or {}).get("id") or 0):
+            return TLRPC.TL_inputPeerSelf()
+        if not self._known(dialog_id):
+            return TLRPC.TL_inputPeerEmpty()
+        if dialog_id > 0:
+            return TLRPC.TL_inputPeerUser(user_id=dialog_id)
+        return TLRPC.TL_inputPeerChat(chat_id=-dialog_id)
+
+    def getInputUser(self, user_id):
+        user_id = int(user_id)
+        if user_id == int((_ui.ask("app.me") or {}).get("id") or 0):
+            return TLRPC.TL_inputUserSelf()
+        return TLRPC.TL_inputUser(user_id=user_id) if user_id > 0 and self._known(user_id) else None
+
+    class SavedMusicList(Object):
+        """the songs of the profile of a user a plugin plays from. the android list loads the rest of the profile after the first song; this one holds the
+        song it was set up with"""
+
+        def __init__(self, account, dialog_id):
+            self._account = account
+            self._dialog = int(dialog_id)
+            self.list = ArrayList()
+
+        def setup(self, document):
+            message = TLRPC.TL_message(dialog_id=self._dialog)
+            message.media = TLRPC.TL_messageMediaDocument(document=document)
+            self.list.clear()
+            self.list.add(MessageObject(self._account, message, True, True))
 
     def getStoriesController(self):
         from org.telegram.ui.Stories import StoriesController
@@ -214,7 +303,7 @@ def _needs_requests(owner, name):
     return refuse
 
 
-for _name in ("getChat", "getInputPeer", "getInputChannel", "processUpdates", "loadChannelAdmins", "deleteMessages"):
+for _name in ("processUpdates", "loadChannelAdmins"):
     setattr(MessagesController, _name, _needs_requests("MessagesController", _name))
 
 
@@ -323,11 +412,60 @@ class AccountInstance(Object):
     def getUserConfig(self):
         return UserConfig.getInstance(self._account)
 
-    getConnectionsManager = _needs_requests("AccountInstance", "getConnectionsManager")
+    def getConnectionsManager(self):
+        from org.telegram.tgnet import ConnectionsManager
+        return ConnectionsManager.getInstance(self._account)
+
     getFileLoader = _needs_requests("AccountInstance", "getFileLoader")
 
     def getNotificationCenter(self):
         return NotificationCenter.getInstance(self._account)
+
+
+def _local_only(self, *_args, **_kwargs):
+    """the app drops a message from its kept copies and from the open screen when the delete request it sends for a plugin is answered, so the call that does it
+    on android has nothing left to do here"""
+
+
+def _input_channel(chat):
+    """the channel a request names, from a chat record of a channel; None for a chat that is not one"""
+    return TLRPC.TL_inputChannel(channel_id=int(chat.id)) if chat is not None and getattr(chat, "channel", False) else None
+
+
+MessagesController.getInputChannel = staticmethod(_input_channel)
+MessagesController.deleteMessages = _local_only
+# the counters the server numbers its updates with are the core's, a plugin that moves them on has nothing to move
+MessagesController.processNewDifferenceParams = _local_only
+
+
+class _Topics(Object):
+    def findTopic(self, _chat_id, _topic_id):
+        """the title of a topic is known to the app's topics screen only"""
+        return None
+
+
+MessagesController.getTopicsController = lambda self: _Topics()
+
+
+class MessagesStorage(Object):
+    """the database of the android client. the app keeps its own copies and cleans them when a delete request is answered; what a plugin posts to the storage
+    queue runs on a queue of its own, the way it runs there"""
+
+    _instances = {}
+
+    @staticmethod
+    def getInstance(account=0):
+        if account not in MessagesStorage._instances:
+            MessagesStorage._instances[account] = MessagesStorage()
+        return MessagesStorage._instances[account]
+
+    def __init__(self):
+        self._queue = None
+
+    def getStorageQueue(self):
+        if self._queue is None:
+            self._queue = DispatchQueue("storage")
+        return self._queue
 
 
 class _AnyResource(type):
@@ -393,6 +531,27 @@ class BuildVars(metaclass=_BuildMeta):
 class Utilities(Object):
     class Callback(Object):
         """a plugin class implements run(argument)"""
+        _jinterface = True
+
+    class Callback2(Object):
+        """a plugin class implements run(first, second)"""
+        _jinterface = True
+
+    class Callback3(Object):
+        """a plugin class implements run(first, second, third)"""
+        _jinterface = True
+
+    class Callback4(Object):
+        """a plugin class implements run(first, second, third, fourth)"""
+        _jinterface = True
+
+    class Callback5(Object):
+        """a plugin class implements run(first, second, third, fourth, fifth)"""
+        _jinterface = True
+
+    class CallbackReturn(Object):
+        """a plugin class implements run(argument) and returns the result"""
+        _jinterface = True
 
     BLUR_RADIUS_MAX = 254
 
@@ -487,4 +646,80 @@ class ChatObject(Object):
         current = _ui.ask("app.current") or {}
         return bool(current.get("kind") == "chat" and abs(int(current.get("dialog", 0))) == abs(int(chat_id)) and current.get("discussion"))
 
-    isChannel = _needs_requests("ChatObject", "isChannel")
+    ACTION_DELETE_MESSAGES = 13
+
+    @staticmethod
+    def isChannel(chat):
+        """a broadcast channel or a supergroup, what the android client calls a TL_channel"""
+        return bool(getattr(chat, "channel", False))
+
+    @staticmethod
+    def isMonoForum(chat):
+        """the app has no direct message dialogs of a channel"""
+        return False
+
+    @staticmethod
+    def canUserDoAdminAction(chat, action):
+        """the owner may do anything; an administrator is asked about the right the action needs. the app knows that a person administers a channel, not which rights they
+        have, so an administrator of a channel counts as having delete_messages and the server answers CHAT_ADMIN_REQUIRED when it does not"""
+        if chat is None:
+            return False
+        if getattr(chat, "creator", False):
+            return True
+        rights = getattr(chat, "admin_rights", None)
+        if rights is None:
+            return False
+        if int(action) == ChatObject.ACTION_DELETE_MESSAGES:
+            return bool(rights.delete_messages)
+        return False
+
+
+class FileLog(Object):
+    """the log of the client: lines go to stderr, where the app keeps them"""
+
+    @staticmethod
+    def _write(level, message, error=None):
+        import sys
+        sys.stderr.write("%s/tmessages: %s\n" % (level, message))
+        if error is not None:
+            sys.stderr.write("%s\n" % (error,))
+
+    @staticmethod
+    def d(message, error=None):
+        FileLog._write("D", message, error)
+
+    @staticmethod
+    def e(message, error=None):
+        if error is None and not isinstance(message, str):
+            FileLog._write("E", "", message)
+        else:
+            FileLog._write("E", message, error)
+
+    @staticmethod
+    def w(message, error=None):
+        FileLog._write("W", message, error)
+
+
+class MediaDataController(Object):
+    """importable only: the stickers, reactions and emoji the android client loads for itself. getInstance(account) answers, so a plugin that
+    names the class loads, and every call that would need that data raises NotImplementedError. the app keeps no TL records of sticker sets
+    or reactions that python could read, and python cannot ask the server for them"""
+
+    _instances = {}
+
+    @staticmethod
+    def getInstance(account=0):
+        found = MediaDataController._instances.get(int(account))
+        if found is None:
+            found = MediaDataController._instances[int(account)] = MediaDataController()
+        return found
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+
+        def unavailable(*_arguments):
+            raise NotImplementedError("MediaDataController.%s needs the sticker, reaction and emoji data of the android client, which the app does "
+                                      "not give to plugins" % name)
+
+        return unavailable

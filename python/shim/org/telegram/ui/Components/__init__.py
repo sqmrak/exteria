@@ -6,6 +6,7 @@ from android.view import MATCH_PARENT, WRAP_CONTENT, Gravity, View, ViewGroup, _
 from android.widget import EditText, FrameLayout, ImageView, LinearLayout, TextView
 from org.telegram.messenger import AndroidUtilities
 from org.telegram.messenger.music import VideoPlayer  # noqa: F401
+from android.graphics.drawable import Drawable
 from java.lang import Object
 
 
@@ -384,3 +385,305 @@ class RecyclerListView(ViewGroup):
 
     def invalidateViews(self):
         """the changes of a plugin are applied when it makes them"""
+
+
+class RadialProgressView(View):
+    """a ring. with setNoProgress(True), the default, a quarter turn of it spins; with setNoProgress(False) the arc of setProgress(0..1) is
+    drawn. the spin is a frame every 100 ms for as long as the view is in a window, and stops when it leaves"""
+
+    FRAME_MS = 100
+    TURN = 30
+
+    def __init__(self, context=None, *_resources):
+        super().__init__(context)
+        self._size = 40
+        self._stroke = 3.0
+        self._color = 0xFF2481CC
+        self._progress = 0.0
+        self._spinning = True
+        self._angle = 0
+        self._loop = 0
+
+    def setSize(self, size):
+        self._size = max(int(size), 1)
+        self._request_layout()
+        self.invalidate()
+
+    def getSize(self):
+        return self._size
+
+    def setStrokeWidth(self, width):
+        self._stroke = max(float(width), 1.0)
+        self.invalidate()
+
+    def setProgressColor(self, color):
+        self._color = int(color) & 0xFFFFFFFF
+        self.invalidate()
+
+    def setProgress(self, value):
+        self._progress = min(max(float(value), 0.0), 1.0)
+        self.invalidate()
+
+    def getProgress(self):
+        return self._progress
+
+    def setNoProgress(self, value):
+        self._spinning = bool(value)
+        self._restart()
+        self.invalidate()
+
+    def _content_size(self, max_w, max_h):
+        return (self._size, self._size)
+
+    def onDraw(self, canvas):
+        from android.graphics import Paint, RectF
+        paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.setStyle(Paint.Style.STROKE)
+        paint.setStrokeWidth(self._stroke)
+        paint.setColor(self._color)
+        paint.setStrokeCap(Paint.Cap.ROUND)
+        inset = self._stroke / 2.0
+        ring = RectF(inset, inset, max(self.getWidth(), self._size) - inset, max(self.getHeight(), self._size) - inset)
+        if self._spinning:
+            canvas.drawArc(ring, self._angle, 270.0, False, paint)
+        else:
+            canvas.drawArc(ring, -90.0, 360.0 * self._progress, False, paint)
+
+    def _restart(self):
+        self._loop += 1
+        if self._attached and self._spinning:
+            self._schedule(self._loop)
+
+    def _schedule(self, loop):
+        from android.os import Handler
+
+        def frame():
+            if loop != self._loop or not self._attached or not self._spinning:
+                return
+            self._angle = (self._angle + RadialProgressView.TURN) % 360
+            self.invalidate()
+            self._schedule(loop)
+
+        class Step:
+            def run(self):
+                frame()
+
+        Handler().postDelayed(Step(), RadialProgressView.FRAME_MS)
+
+    def onAttachedToWindow(self):
+        self._restart()
+
+    def onDetachedFromWindow(self):
+        self._loop += 1
+
+
+def _avatar_initials(first, last):
+    """the first letter of the first name and of the last one, upper case; one letter when only one name is there, else nothing"""
+    letters = []
+    for name in (first, last):
+        name = (name or "").strip()
+        if name:
+            letters.append(name[0].upper())
+    return "".join(letters)
+
+
+class AvatarDrawable(Drawable):
+    """the round picture of a person or chat that has none: a color picked by the id and the initials. the colors are the seven of the classic
+    client, in the order red, orange, violet, green, cyan, blue, pink; a person with ids 0 to 6 gets the color of the same number. setInfo takes a
+    user or chat record (id and first_name, last_name or title), the three arguments (id, first name, last name), or an account first"""
+
+    COLORS = (0xFFE56555, 0xFFF28C48, 0xFF8E85EE, 0xFF76C84D, 0xFF5FBED5, 0xFF549CDD, 0xFFF2749A)
+
+    def __init__(self, *_chat_or_user):
+        super().__init__()
+        self._color = AvatarDrawable.COLORS[0]
+        self._text = ""
+        self._text_size = 0
+        self._bounds = (0, 0, 0, 0)
+
+    @staticmethod
+    def getColorForId(identifier):
+        identifier = int(identifier)
+        index = identifier if 0 <= identifier < 7 else abs(identifier) % 7
+        return AvatarDrawable.COLORS[index]
+
+    def setInfo(self, *args):
+        if len(args) == 3 and isinstance(args[0], int):
+            identifier, first, last = args
+        else:
+            record = args[-1]
+            if record is None:
+                self._text = ""
+                self._changed()
+                return
+            identifier = getattr(record, "id", 0)
+            if getattr(record, "title", None) is not None:
+                first, last = record.title, ""
+            else:
+                first, last = getattr(record, "first_name", ""), getattr(record, "last_name", "")
+        self._color = AvatarDrawable.getColorForId(identifier)
+        self._text = _avatar_initials(first, last)
+        self._changed()
+
+    def setColor(self, color):
+        self._color = int(color) & 0xFFFFFFFF
+        self._changed()
+
+    def getColor(self):
+        return self._color
+
+    def setTextSize(self, size):
+        self._text_size = int(size)
+        self._changed()
+
+    def getText(self):
+        return self._text
+
+    def getIntrinsicWidth(self):
+        return -1
+
+    def draw(self, canvas):
+        from android.graphics import Paint, RectF
+        left, top, right, bottom = self._bounds
+        if right <= left or bottom <= top or not self._visible:
+            return
+        disc = self._paint_for(self._color)
+        disc.setAntiAlias(True)
+        canvas.drawOval(RectF(left, top, right, bottom), disc)
+        if not self._text:
+            return
+        size = self._text_size or int((bottom - top) * 0.42)
+        letters = Paint(Paint.ANTI_ALIAS_FLAG)
+        letters.setColor(0xFFFFFFFF)
+        letters.setAlpha(self._alpha)
+        letters.setTextSize(size)
+        letters.setTextAlign(Paint.Align.CENTER)
+        metrics = letters.getFontMetrics()
+        baseline = (top + bottom) / 2.0 - (metrics.ascent + metrics.descent) / 2.0
+        canvas.drawText(self._text, (left + right) / 2.0, baseline, letters)
+
+
+class SizeNotifierFrameLayout(FrameLayout):
+    """the root layout of a chat screen in the android client, which tells its delegate when the keyboard changes the size. the keyboard of ios is
+    not followed here, so getKeyboardHeight is 0 and the delegate is kept and never called; the background image is the background of the view"""
+
+    class SizeNotifierFrameLayoutDelegate:
+        """a program implements onSizeChanged(keyboard_height, is_width_greater)"""
+
+    def __init__(self, context=None, *_more):
+        super().__init__(context)
+        self._delegate = None
+        self._image = None
+
+    def setDelegate(self, delegate):
+        self._delegate = delegate
+
+    def getKeyboardHeight(self):
+        return 0
+
+    def measureKeyboardHeight(self):
+        return 0
+
+    def setBackgroundImage(self, drawable, motion=False):
+        self._image = drawable
+        self.setBackground(drawable)
+
+    def getBackgroundImage(self):
+        return self._image
+
+
+class CheckBox2(View):
+    """the round check box of the settings and share screens: a ring when off (drawn only with setDrawUnchecked), a disc with a tick when on.
+    setColor takes the color of the ring and of the disc and of the tick, each a number or a theme key. setChecked takes an animated flag that the
+    drawing here does not use, the box changes at once"""
+
+    def __init__(self, context=None, size=21, *_resources):
+        super().__init__(context)
+        self._size = max(int(size), 1)
+        self._checked = False
+        self._draw_unchecked = False
+        self._arc = 0
+        self._number = -1
+        self._colors = (0xFF8E8E93, 0xFF2481CC, 0xFFFFFFFF)
+
+    def setColor(self, background, checked_background, check):
+        self._colors = (background, checked_background, check)
+        self.invalidate()
+
+    def setDrawUnchecked(self, value):
+        self._draw_unchecked = bool(value)
+        self.invalidate()
+
+    def setDrawBackgroundAsArc(self, kind):
+        self._arc = int(kind)
+        self.invalidate()
+
+    def setNum(self, number):
+        self._number = int(number)
+        self.invalidate()
+
+    def getNum(self):
+        return self._number
+
+    def setChecked(self, checked, animated=False):
+        self._checked = bool(checked)
+        self.invalidate()
+
+    def isChecked(self):
+        return self._checked
+
+    def _content_size(self, max_w, max_h):
+        return (self._size, self._size)
+
+    @staticmethod
+    def _color(value):
+        if isinstance(value, str):
+            from org.telegram.ui.ActionBar import Theme
+            return Theme.getColor(value)
+        return int(value) & 0xFFFFFFFF
+
+    def onDraw(self, canvas):
+        from android.graphics import Paint, Path, RectF
+        size = float(max(self._size, min(self.getWidth(), self.getHeight())))
+        if not self._checked and not self._draw_unchecked:
+            return
+        ring, disc, tick = (self._color(c) for c in self._colors)
+        paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        stroke = max(size / 10.0, 1.0)
+        box = RectF(stroke / 2.0, stroke / 2.0, size - stroke / 2.0, size - stroke / 2.0)
+        if self._checked:
+            paint.setColor(disc)
+            canvas.drawOval(box, paint)
+            paint.setColor(tick)
+            paint.setStyle(Paint.Style.STROKE)
+            paint.setStrokeWidth(stroke)
+            paint.setStrokeCap(Paint.Cap.ROUND)
+            mark = Path()
+            mark.moveTo(size * 0.28, size * 0.52)
+            mark.lineTo(size * 0.44, size * 0.68)
+            mark.lineTo(size * 0.74, size * 0.34)
+            canvas.drawPath(mark, paint)
+        else:
+            paint.setColor(ring)
+            paint.setStyle(Paint.Style.STROKE)
+            paint.setStrokeWidth(stroke)
+            canvas.drawOval(box, paint)
+
+
+class RLottieImageView(ImageView):
+    """importable only: the player of Lottie animations of the android client. the app plays its animations with its own player and gives plugins no
+    way to start one, so making a view raises NotImplementedError"""
+
+    def __init__(self, *_arguments):
+        raise NotImplementedError("a Lottie animation view has no equal a plugin can use, the animations of the app are played by the app")
+
+
+class ShareAlert(Object):
+    """importable only: the share sheet of the android client. making one raises NotImplementedError; ShareAlertDelegate, the interface a
+    plugin implements to hear of the sharing, is there so that a class which extends it can be written"""
+
+    class ShareAlertDelegate:
+        """a program implements didShare(), didCopy() and the other callbacks of the delegate"""
+
+    def __init__(self, *_arguments):
+        raise NotImplementedError("the share sheet of the android client has no equal a plugin can open")
