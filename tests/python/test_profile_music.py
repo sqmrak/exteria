@@ -143,8 +143,8 @@ class Requests(unittest.TestCase):
         document = call(history(5))[0].messages.get(0).media.document
         self.assertEqual(list(document.thumbs), [])
 
-    def test_only_saved_messages_can_be_read_and_the_limit_is_bounded(self):
-        for peer in (TLRPC.TL_inputPeerUser(user_id=fake.me + 1), None, TLRPC.InputPeer()):
+    def test_the_newest_messages_of_saved_messages_are_read_without_an_open_chat_and_the_limit_is_bounded(self):
+        for peer in (None, TLRPC.InputPeer()):
             request = history()
             request.peer = peer
             with self.assertRaises(NotImplementedError):
@@ -152,14 +152,21 @@ class Requests(unittest.TestCase):
         for limit in (0, 101, -1):
             with self.assertRaises(ValueError):
                 requests.send(history(limit), lambda *_: None)
-        paged = history()
-        paged.offset_id = 50
-        with self.assertRaises(NotImplementedError):
-            requests.send(paged, lambda *_: None)
+        # a window that is not the newest page is read from the open chat, by offset_id only
+        for field in ("offset_date", "add_offset", "max_id", "min_id"):
+            request = history()
+            setattr(request, field, 5)
+            with self.assertRaises(NotImplementedError):
+                requests.send(request, lambda *_: None)
         self.assertEqual(fake.saved["calls"], [])
         request = history()
         request.peer = TLRPC.TL_inputPeerSelf()
         self.assertIsNone(call(request)[1])
+        self.assertEqual(fake.saved["calls"][-1][0], "history")
+        paged = history()
+        paged.offset_id = 50
+        requests.send(paged, lambda *_: None)
+        self.assertEqual(fake.saved["calls"][-1][0], "chat_page")
 
     def test_the_saved_music_is_read_page_after_page_up_to_the_limit_the_plugin_asked_for(self):
         fake.saved["music"] = [song(n) for n in range(65)]

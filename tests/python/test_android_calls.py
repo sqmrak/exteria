@@ -69,7 +69,7 @@ class Interfaces(unittest.TestCase):
 
     def test_unknown_class_still_missing(self):
         with self.assertRaises(java.ClassNotFoundException):
-            java.jclass("android.graphics.Shader")
+            java.jclass("android.media.MediaCodec")
 
 
 class Timed(unittest.TestCase):

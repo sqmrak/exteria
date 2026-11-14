@@ -64,9 +64,34 @@ class Dialogs(unittest.TestCase):
         exteria_host.alert_result(asked["token"], 2)
         self.assertEqual(picked, [2])
 
-    def test_a_progress_dialog_says_it_is_missing(self):
-        with self.assertRaises(NotImplementedError):
-            AlertDialogBuilder(alert_type=AlertDialogBuilder.ALERT_TYPE_LOADING)
+    def test_a_progress_dialog_is_a_panel_the_plugin_moves_and_closes(self):
+        taps = []
+        builder = AlertDialogBuilder(alert_type=AlertDialogBuilder.ALERT_TYPE_LOADING)
+        builder.set_title("Working").set_message("Starting")
+        builder.set_positive_button("Hide", lambda d, w: taps.append("hide"))
+        builder.set_negative_button("Stop", lambda d, w: taps.append("stop"))
+        builder.show()
+        builder.set_progress(40)
+        self.run_timers()
+        shown = self.calls("progress.show")[0]
+        self.assertEqual((shown["title"], shown["message"], shown["buttons"]), ("Working", "Starting", ["Stop", "Hide"]))
+        dialog = builder.get_dialog()
+        self.assertTrue(dialog.isShowing())
+        dialog.setMessage("Halfway")
+        self.assertEqual(self.calls("progress.update")[-1]["message"], "Halfway")
+        self.assertEqual(self.calls("progress.update")[-1]["percent"], 40)
+        exteria_host.alert_result(shown["token"], 0)
+        self.assertEqual(taps, ["stop"])
+        self.assertFalse(dialog.isShowing())
+
+    def test_a_progress_dialog_the_plugin_closes_leaves_the_screen(self):
+        builder = AlertDialogBuilder(alert_type=AlertDialogBuilder.ALERT_TYPE_LOADING)
+        builder.set_title("Working")
+        builder.show()
+        builder.dismiss()
+        self.run_timers()
+        self.assertEqual(len(self.calls("progress.close")), 1)
+        self.assertFalse(builder.get_dialog().isShowing())
 
     def test_bulletins_become_banners(self):
         BulletinHelper.show_info("Saved")

@@ -324,10 +324,9 @@ class Proxies(unittest.TestCase):
     def test_requests_to_telegram_fail_with_their_reason(self):
         from org.telegram.messenger import AccountInstance, MessagesController
         with self.assertRaises(NotImplementedError) as raised:
-            MessagesController.getInstance(0).getInputPeer(5)
+            MessagesController.getInstance(0).processUpdates(5)
         self.assertIn("telegram requests", str(raised.exception))
-        with self.assertRaises(NotImplementedError):
-            AccountInstance.getInstance(0).getConnectionsManager()
+        self.assertTrue(hasattr(AccountInstance.getInstance(0).getConnectionsManager(), "sendRequest"))
         from android.app import activity
         with self.assertRaises(NotImplementedError):
             activity().openMessage(1, 2, None, None, 0, -1, None, None)
@@ -370,17 +369,14 @@ async def answer():
 
 print(asyncio.run_coroutine_threadsafe(answer(), loop).result(5))
 import subprocess
-try:
-    subprocess.run(["true"])
-except OSError as error:
-    print("no process:", error.errno)
+print("ran:", subprocess.run(["true"]).returncode)
 '''
 
 
 class DeviceStdlib(unittest.TestCase):
     def test_asyncio_imports_without_the_extensions_the_bundle_leaves_out(self):
-        # zwylib runs its tasks on an asyncio loop, and asyncio imports subprocess, which needs _posixsubprocess (no fork on ios)
-        # not subprocess: the shim of _posixsubprocess is first on the path of this process too
+        # zwylib runs its tasks on an asyncio loop, and asyncio imports subprocess, which needs _posixsubprocess (no fork on ios): the
+        # shim of it, which starts programs with posix_spawn, is first on the path of the child process
         read, write = os.pipe()
         pid = os.posix_spawn(sys.executable, [sys.executable, "-I", "-c", TRIMMED, os.path.join(ROOT, "python", "shim")], os.environ,
                              file_actions=[(os.POSIX_SPAWN_DUP2, write, 1), (os.POSIX_SPAWN_DUP2, write, 2), (os.POSIX_SPAWN_CLOSE, read)])
@@ -389,7 +385,7 @@ class DeviceStdlib(unittest.TestCase):
             output = pipe.read()
         _pid, status = os.waitpid(pid, 0)
         self.assertEqual(status, 0, output)
-        self.assertEqual(output.split(), ["5", "no", "process:", "38"])
+        self.assertEqual(output.split(), ["5", "ran:", "0"])
 
 
 class Versions(unittest.TestCase):

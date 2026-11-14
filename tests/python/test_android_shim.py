@@ -16,7 +16,7 @@ from android.app import activity  # noqa: E402
 from android.graphics import Bitmap, Canvas, Paint  # noqa: E402
 from android.graphics.drawable import GradientDrawable  # noqa: E402
 from android.hardware import Sensor, SensorEventListener, SensorManager  # noqa: E402
-from android.os import Handler  # noqa: E402
+from android.os import Bundle, Handler, Looper  # noqa: E402
 from android.view import Gravity, MotionEvent, View, dispatch_touch  # noqa: E402
 from android.widget import FrameLayout, ImageView, LinearLayout, TextView  # noqa: E402
 import exteria_host  # noqa: E402
@@ -44,6 +44,31 @@ class AndroidShim(unittest.TestCase):
             if op[0] == "set" and op[1] == view_id:
                 merged.update(op[2])
         return merged
+
+    def test_bundle_typed_defaults_and_copy(self):
+        bundle = Bundle()
+        self.assertEqual(bundle.getInt("missing"), 0)
+        self.assertFalse(bundle.getBoolean("missing"))
+        self.assertEqual(bundle.getFloat("missing"), 0.0)
+        self.assertIsNone(bundle.getString("missing"))
+        bundle.putBoolean("flag", True)
+        self.assertEqual(bundle.getInt("flag", 7), 7)
+        bundle.putInt("count", 4)
+        self.assertFalse(bundle.getBoolean("count"))
+        copy = Bundle(bundle)
+        bundle.remove("count")
+        self.assertEqual(copy.getInt("count"), 4)
+        copy.clear()
+        self.assertTrue(copy.isEmpty())
+
+    def test_worker_has_no_main_looper(self):
+        import threading
+        found = []
+        thread = threading.Thread(target=lambda: found.append(Looper.myLooper()))
+        thread.start()
+        thread.join()
+        self.assertEqual(found, [None])
+        self.assertIs(Looper.myLooper(), Looper.getMainLooper())
 
     def test_frame_layout_places_by_gravity_and_margins(self):
         ctx = activity()

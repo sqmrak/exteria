@@ -113,6 +113,32 @@ class PluginHost(unittest.TestCase):
             java.jclass("org.telegram.messenger.NoSuchThing")
         self.assertIsNotNone(java.jclass("app.exteraless.plugins.PythonBridge"))
 
+    def test_plugin_loads_and_runs_a_dex_class(self):
+        dex_path = os.path.join(ROOT, "tests", "fixtures", "dex", "Flow.dex")
+        source = '''__id__ = "dexfixture"
+__name__ = "Dex fixture"
+__description__ = "executes a dex method"
+__author__ = "test"
+__version__ = "1.0"
+__min_version__ = "11.9.0"
+from base_plugin import BasePlugin
+from dalvik.system import DexClassLoader
+class DexPlugin(BasePlugin):
+    def on_plugin_load(self):
+        loader = DexClassLoader(%r, None, None, None)
+        self.set_setting("result", loader.loadClass("Flow").call_static("fib", 9))
+''' % dex_path
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "dexfixture.plugin")
+            with open(path, "w") as handle:
+                handle.write(source)
+            try:
+                result = exteria_host.load(path, "dexfixture")
+                self.assertTrue(result["ok"], result)
+                self.assertEqual(fake.settings[("dexfixture", "result")], "34")
+            finally:
+                exteria_host.unload("dexfixture")
+
 
 if __name__ == "__main__":
     unittest.main()

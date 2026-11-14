@@ -301,24 +301,26 @@ class WhyNotLoaded(unittest.TestCase):
             handle.write(source)
         return exteria_diagnose.explain(path, error)
 
-    def test_java_code_is_named(self):
-        why = self.explain("from dalvik.system import InMemoryDexClassLoader\nloader = InMemoryDexClassLoader\n")
-        self.assertEqual(why["kind"], "java")
-        self.assertIn("InMemoryDexClassLoader", why["classes"])
+    def test_a_loader_in_the_source_is_not_a_reason(self):
+        why = self.explain("from dalvik.system import InMemoryDexClassLoader\nloader = InMemoryDexClassLoader\n", "ValueError: broken")
+        self.assertEqual(why, {"kind": "other", "detail": "ValueError: broken"})
 
-    def test_a_dex_in_an_archive_is_java_code(self):
+    def test_a_dex_in_an_archive_is_not_a_reason(self):
         import exteria_diagnose
         path = os.path.join(PLUGINS, "withdex.elyx")
         build_archive(path, {"main.py": "x = 1\n", "classes.dex": "dex\n035"})
-        why = exteria_diagnose.explain(path, "")
-        self.assertEqual((why["kind"], why["classes"]), ("java", ["classes.dex"]))
+        self.assertEqual(exteria_diagnose.explain(path, "ValueError: broken"), {"kind": "other", "detail": "ValueError: broken"})
+
+    def test_a_class_the_dex_program_lacks_is_named(self):
+        why = self.explain("x = 1\n", "java.lang.NoClassDefFoundError: org/telegram/ui/Components/Paint")
+        self.assertEqual((why["kind"], why["classes"]), ("android", ["org.telegram.ui.Components.Paint"]))
 
     def test_android_classes_the_app_lacks_are_counted(self):
-        why = self.explain("from android.widget import LinearLayout\nfrom android.graphics import Shader, RenderEffect\n"
+        why = self.explain("from android.widget import LinearLayout\nfrom android.graphics import RenderEffect, RuntimeShader\n"
                            "from org.telegram.ui.Components import ChatActivityEnterView\n")
         self.assertEqual(why["kind"], "android")
-        self.assertEqual((why["missing"], why["total"]), (3, 4))
-        self.assertEqual(why["classes"], ["android.graphics.RenderEffect", "android.graphics.Shader", "org.telegram.ui.Components.ChatActivityEnterView"])
+        self.assertEqual((why["missing"], why["total"]), (2, 4))
+        self.assertEqual(why["classes"], ["android.graphics.RuntimeShader", "org.telegram.ui.Components.ChatActivityEnterView"])
 
     def test_a_missing_library_is_a_library_and_not_android(self):
         why = self.explain("import somelib\n", "ModuleNotFoundError: No module named 'somelib'")
@@ -336,12 +338,36 @@ class WhyNotLoaded(unittest.TestCase):
         error = 'Traceback (most recent call last):\n  File "/private/var/Exteria.app/python/shim/exteria_host.py", line 25\nValueError: broken\n'
         self.assertEqual(self.explain("x = 1\n", error), {"kind": "other", "detail": "ValueError: broken"})
 
+    def test_a_class_held_in_a_variable_is_named(self):
+        import exteria_diagnose
+        path = os.path.join(PLUGINS, "held.plugin")
+        with open(path, "w") as handle:
+            handle.write('layout = "org.telegram.ui.Components.ChatActivityEnterView"\ninner = "org.telegram.ui.Components.ChatActivityEnterView$Holder"\n'
+                         'permission = "android.permission.CAMERA"\naction = "android.intent.action.VIEW"\nword = "org.telegram"\n')
+        notice = exteria_diagnose.unavailable(path)
+        self.assertEqual(notice["kind"], "android")
+        self.assertEqual(notice["classes"], ["org.telegram.ui.Components.ChatActivityEnterView", "org.telegram.ui.Components.ChatActivityEnterView$Holder"])
+        self.assertEqual((notice["missing"], notice["total"]), (2, 2))
+
+    def test_a_plugin_that_names_only_what_the_app_has_gets_no_notice(self):
+        import exteria_diagnose
+        path = os.path.join(PLUGINS, "complete.plugin")
+        with open(path, "w") as handle:
+            handle.write("from android.widget import LinearLayout\nx = 1\n")
+        self.assertIsNone(exteria_diagnose.unavailable(path))
+
+    def test_the_host_adds_a_notice_to_a_load_that_worked(self):
+        path = write("hollow", HEADER + 'from base_plugin import BasePlugin\nclass H(BasePlugin):\n    target = "org.telegram.ui.Components.SharedMediaLayout"\n')
+        result = exteria_host.load(path, "hollow")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["notice"]["classes"], ["org.telegram.ui.Components.SharedMediaLayout"])
+
     def test_the_host_adds_the_reason_to_a_refused_load(self):
-        path = write("lacking", HEADER + "from android.graphics import Shader\n")
+        path = write("lacking", HEADER + "from android.graphics import RuntimeShader\n")
         result = exteria_host.load(path, "lacking")
         self.assertFalse(result["ok"])
         self.assertEqual(result["why"]["kind"], "android")
-        self.assertEqual(result["why"]["classes"], ["android.graphics.Shader"])
+        self.assertEqual(result["why"]["classes"], ["android.graphics.RuntimeShader"])
         self.assertIn("ok", exteria_host.load(write("fine", HEADER + "from base_plugin import BasePlugin\nclass F(BasePlugin):\n    pass\n"), "fine"))
         exteria_host.unload("fine")
 

@@ -29,6 +29,20 @@ fake.pictures = {}
 fake.encoded = []
 fake.cards = []
 fake.me = 4242
+fake.opened = []
+fake.clipboard = []
+fake.notices = []
+fake.notices_cancelled = []
+fake.notices_on = True
+fake.plugin_pages = {"shown"}
+fake.settings_opened = []
+fake.progress = {}
+fake.progress_log = []
+fake.chat = {"messages": [], "log": [], "channel": False, "errors": {}}
+fake.tabs = {}
+fake.tabs_up = True
+fake.peers = set()
+fake.played = []
 fake.saved = {"messages": [], "music": [], "next_id": 100, "calls": [], "errors": {}, "inbox": []}
 
 
@@ -158,6 +172,15 @@ class Music:
             return {"detached": True}
         if name == "music.player":
             return self.player(data)
+        if name == "music.play_docs":
+            # the app starts the first song of the queue it was handed; the documents are what python names them by
+            if not data["docs"] or not 0 <= data["index"] < len(data["docs"]):
+                raise RuntimeError("a queue of songs and the place to start are needed")
+            fake.played.append(dict(data))
+            self.playback += 1
+            self.state = "playing"
+            self.alive = True
+            return {"id": self.playback}
         raise RuntimeError("%s is not served" % name)
 
 
@@ -183,6 +206,18 @@ def _account(name, data):
         if op == "history":
             newest = sorted(state["messages"], key=lambda m: -m["id"])[:data["limit"]]
             answer = {"messages": [dict(m) for m in newest]}
+        elif op == "chat_music":
+            songs = sorted(state.get("chat_music", {}).get(data["dialog"], []), key=lambda m: m["id"])
+            if data["dialog"] not in fake.peers and data["dialog"] != fake.me:
+                error = "PEER_ID_INVALID"
+            else:
+                answer = {"messages": songs[:1] if data["first"] else songs[-1:]}
+        elif op == "saved_music" and "user" in data:
+            songs = state.get("profile_music", {}).get(data["user"])
+            if songs is None or (data["user"] not in fake.peers and data["user"] != fake.me):
+                error = "USER_ID_INVALID"
+            else:
+                answer = {"documents": songs[data["offset"]:data["offset"] + 30], "count": len(songs)}
         elif op == "saved_music":
             answer = {"documents": state["music"][data["offset"]:data["offset"] + 30], "count": len(state["music"])}
         elif op == "save_music":
@@ -191,8 +226,25 @@ def _account(name, data):
             if not data["unsave"]:
                 known = [m["doc"] for m in state["messages"] if m.get("doc") and m["doc"]["id"] == doc["id"]]
                 state["music"].insert(0, known[0] if known else dict(doc, name="", mime="", title="", performer="", duration=0, size=0, thumb=False))
+        elif op == "chat_page":
+            chat = fake.chat
+            chat["log"].append(("page", dict(data)))
+            if "page" in chat["errors"]:
+                error = chat["errors"]["page"]
+            else:
+                rows = [dict(m) for m in sorted(chat["messages"], key=lambda m: -m["id"]) if not data["offset_id"] or m["id"] < data["offset_id"]]
+                if data["mode"] == "mine":
+                    rows = [m for m in rows if m["out"]]
+                answer = {"messages": rows[:data["limit"]]}
         elif op == "delete":
-            state["messages"] = [m for m in state["messages"] if m["id"] not in data["ids"]]
+            chat = fake.chat
+            chat["log"].append(("delete", dict(data)))
+            if "delete" in chat["errors"]:
+                error = chat["errors"]["delete"]
+            else:
+                state["messages"] = [m for m in state["messages"] if m["id"] not in data["ids"]]
+                chat["messages"] = [m for m in chat["messages"] if m["id"] not in data["ids"]]
+                answer = {"count": len(data["ids"])}
         elif op == "story_post":
             state.setdefault("stories", []).append(dict(data))
         elif op == "send_audio":
@@ -256,6 +308,45 @@ def service(name, payload):
     if name == "ui.measure":
         return json.dumps({"w": min(int(len(data["text"]) * data["size"] * 0.6), data["width"]),
                            "h": int(data["size"] * 1.3)})
+    if name == "ui.text_image":
+        # a stand-in for the glyph picture of the app: one solid block of 0.6 em per character, in a box of the size ui.measure gives.
+        # it has the shape of the real answer (an 8 bit coverage mask with the baseline row), not the look of a font
+        import base64
+        size = data["size"]
+        w, h = int(len(data["text"]) * size * 0.6) + 2, int(size * 1.3) + 2
+        ascent = int(size * 0.8) + 1
+        rows = bytearray(w * h)
+        for y in range(1, 1 + int(size * 1.0)):
+            for x in range(1, w - 1):
+                rows[y * w + x] = 255
+        return json.dumps({"w": w, "h": h, "ascent": ascent, "descent": int(size * 0.2), "alpha": base64.b64encode(bytes(rows)).decode()})
+    if name == "app.open_url":
+        from urllib.parse import urlsplit
+        parts = urlsplit(data["url"])
+        if parts.scheme not in ("http", "https", "tg") or (parts.scheme != "tg" and not parts.netloc):
+            raise RuntimeError("only http, https and tg addresses open")
+        fake.opened.append(data["url"])
+        return "{}"
+    if name == "app.plugin_settings":
+        if data.get("plugin") not in fake.plugin_pages:
+            raise RuntimeError("no such plugin")
+        fake.settings_opened.append(data["plugin"])
+        return "{}"
+    if name == "app.notice":
+        if not fake.notices_on:
+            raise RuntimeError("the notifications are switched off in the app")
+        fake.notices.append((data["key"], data["title"], data["text"]))
+        return "{}"
+    if name == "app.notice_cancel":
+        fake.notices_cancelled.append(data["key"])
+        return "{}"
+    if name == "app.notices_enabled":
+        return json.dumps({"value": fake.notices_on})
+    if name == "app.clipboard_set":
+        if not isinstance(data.get("text"), str) or len(data["text"].encode()) > 1024 * 1024:
+            raise RuntimeError("no text, or more than 1 MiB of it")
+        fake.clipboard.append(data["text"])
+        return "{}"
     if name == "ui.run":
         fake.timers.append((data["token"], data["delay"]))
         return "{}"
@@ -279,6 +370,24 @@ def service(name, payload):
     if name.startswith("account."):
         _account(name, data)
         return "{}"
+    if name.startswith("progress."):
+        fake.progress_log.append((name, data))
+        if name == "progress.show":
+            fake.progress[data["token"]] = dict(data)
+        elif name == "progress.update":
+            fake.progress[data["token"]].update(data)
+        elif name == "progress.close":
+            fake.progress.pop(data["token"], None)
+        return "{}"
+    if name == "tabs.state":
+        return json.dumps({"value": fake.tabs_up})
+    if name == "tabs.set":
+        if data.get("icon") not in (None, "music"):
+            raise RuntimeError("the bar has no icon %s" % data["icon"])
+        fake.tabs[data["slot"]] = dict(data)
+        return "{}"
+    if name == "peer.known":
+        return json.dumps({"value": data["dialog"] == fake.me or data["dialog"] in fake.peers})
     if name.startswith("music."):
         return json.dumps(fake.music.service(name, data))
     if name == "app.pick_root":

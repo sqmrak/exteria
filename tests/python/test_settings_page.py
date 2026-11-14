@@ -432,10 +432,11 @@ class Page(unittest.TestCase):
         return Uri.parse(text)
 
     def plugin(self):
-        for candidate in gc.get_objects():
-            if type(candidate).__name__ == "Wall" and hasattr(candidate, "refs"):
-                return candidate
-        raise AssertionError("the plugin is not loaded")
+        # the one the loader holds: an instance of an earlier test may still be alive in the garbage and found first by gc
+        record = plugin_loader.plugins.get("wall")
+        if record is None:
+            raise AssertionError("the plugin is not loaded")
+        return record.instance
 
 
 @unittest.skipUnless(os.environ.get("EXTERIA_SETTINGS_WALLPAPER"), "set EXTERIA_SETTINGS_WALLPAPER to the file of the plugin")
