@@ -1742,6 +1742,12 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
         [self dropSessionKey];
         return;
     }
+    /* a tunnel that is still being made lets nothing out, and every dial fails at once: those do not count toward the limit, or a login gave up and dropped its code request
+       within seconds, before the tunnel came up, and nothing asked for the link again */
+    if (reason == EXTERIA_E_STATE && _shiro && _shiro.route == ExteriaShiroRouteBlocked) {
+        _retryAt = ExteriaNowMs() + 1000;
+        return;
+    }
     if (_failures < UINT_MAX) ++_failures;
     if (_failures >= RETRY_LIMIT && _account <= 0) {
         _wantLink = NO;

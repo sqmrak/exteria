@@ -245,6 +245,8 @@ static NSString *ExteriaSupportDirectory(void) {
     if (_shiro.route == _shiroRoute) return;
     _shiroRoute = _shiro.route;
     [_session routeChanged];
+    /* the session of a login of another account dialed meanwhile too, and waits on the old path */
+    [_addSession routeChanged];
 }
 
 - (void)proxyChanged:(NSNotification *)note {
