@@ -166,7 +166,7 @@
                                         : [ExteriaSettingsRow rowWithSymbol:_kind == ExteriaStickerCatalogEmoji ? ExteriaSymbolSmiley : ExteriaSymbolSticker tone:ExteriaSettingsToneOrangeDeep
                                                                       title:set.title subtitle:count value:nil tap:tap];
         /* a trending set the account has is ticked; the others add on a tap */
-        if (_kind == ExteriaStickerCatalogFeatured && set.row.installed) row.trailingImage = ExteriaSymbolImage(ExteriaSymbolCheck, 22, ExteriaColorAccent());
+        if (_kind == ExteriaStickerCatalogFeatured && set.row.installed) row.trailingImage = ExteriaSymbolImage(ExteriaSymbolCheckMark(), 22, ExteriaColorAccent());
         [rows addObject:row];
     }
     NSString *empty[] = {@"stickers.empty.featured", @"stickers.empty.archived", @"stickers.empty.emoji"};

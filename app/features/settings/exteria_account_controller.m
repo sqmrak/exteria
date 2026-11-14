@@ -307,7 +307,7 @@ static NSString *ExteriaAccountErrorText(NSString *errorName) {
                                                           subtitle:username.length ? [@"@" stringByAppendingString:username] : nil tap:^{
         if (!active) [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaAccountSwitchNotification object:nil userInfo:[NSDictionary dictionaryWithObject:name forKey:@"name"]];
     }];
-    if (active) row.trailingImage = ExteriaSymbolImage(ExteriaSymbolCheck, 22, ExteriaColorAccent());
+    if (active) row.trailingImage = ExteriaSymbolImage(ExteriaSymbolCheckMark(), 22, ExteriaColorAccent());
     return row;
 }
 

@@ -101,7 +101,7 @@
             [editor rebuild];
         }]];
     }
-    ExteriaSettingsRow *save = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCheck title:NSLocalizedString(@"tabedit.apply", nil) destructive:NO tap:^{
+    ExteriaSettingsRow *save = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCheckMark() title:NSLocalizedString(@"tabedit.apply", nil) destructive:NO tap:^{
         ExteriaTabEditor *editor = weak.target;
         if (!editor) return;
         if (!ExteriaTabOrderStore(editor->_order)) {

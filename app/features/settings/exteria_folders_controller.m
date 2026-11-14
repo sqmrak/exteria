@@ -460,7 +460,7 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
                       sectionWithHeader:nil
                                  footer:nil
                                    rows:[NSArray arrayWithObject:[ExteriaSettingsRow
-                                                                     actionRowWithSymbol:ExteriaSymbolCheck
+                                                                     actionRowWithSymbol:ExteriaSymbolCheckMark()
                                                                                    title:NSLocalizedString(_saving ? @"folders.saving" : @"folders.save", nil)
                                                                              destructive:NO
                                                                                      tap:^{

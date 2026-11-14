@@ -168,14 +168,14 @@ static const ExteriaBadgeEntry ExteriaBadgeEntries[] = {
         BOOL on = (marks & mark) != 0;
         ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTileImage:picture title:NSLocalizedString(ExteriaBadgeEntries[i].title, nil)
                                                               subtitle:NSLocalizedString(ExteriaBadgeEntries[i].info, nil) tap:^{ [(ExteriaDeveloperBadgesController *)weak.target toggle:mark]; }];
-        if (on) row.trailingImage = ExteriaSymbolImage(ExteriaSymbolCheck, 22, ExteriaColorAccent());
+        if (on) row.trailingImage = ExteriaSymbolImage(ExteriaSymbolCheckMark(), 22, ExteriaColorAccent());
         [rows addObject:row];
     }
     ExteriaSettingsRow *previewRow = [ExteriaSettingsRow viewRowWithView:_preview height:^CGFloat(CGFloat width) { (void)width; return 104; }];
     [_preview showName:_name marks:marks custom:ExteriaHasLocalMarks(_userId)];
     NSMutableArray *tools = [NSMutableArray arrayWithObjects:
-        [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCheckDouble title:NSLocalizedString(@"developer.badges.all", nil) destructive:NO tap:^{ [(ExteriaDeveloperBadgesController *)weak.target setAll:YES]; }],
-        [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolClose title:NSLocalizedString(@"developer.badges.none", nil) destructive:NO tap:^{ [(ExteriaDeveloperBadgesController *)weak.target setAll:NO]; }], nil];
+        [ExteriaSettingsRow actionRowWithSymbol:(ExteriaThemeIsClassic() ? ExteriaSymbolCheckDouble : ExteriaSymbolMaterialDoneAll) title:NSLocalizedString(@"developer.badges.all", nil) destructive:NO tap:^{ [(ExteriaDeveloperBadgesController *)weak.target setAll:YES]; }],
+        [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCloseMark() title:NSLocalizedString(@"developer.badges.none", nil) destructive:NO tap:^{ [(ExteriaDeveloperBadgesController *)weak.target setAll:NO]; }], nil];
     if (ExteriaHasLocalMarks(_userId)) {
         [tools addObject:[ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolRotate title:NSLocalizedString(@"developer.badges.restore", nil) destructive:YES
                                                              tap:^{ [(ExteriaDeveloperBadgesController *)weak.target restore]; }]];

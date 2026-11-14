@@ -202,6 +202,11 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
     if (!message.outgoing) return;
     CGFloat markX = origin.x + ceil(textWidth) + 3;
     CGFloat markY = origin.y + 1;
+    if (message.state == ExteriaMessageStateFailed && !ExteriaThemeIsClassic()) {
+        UIImage *failed = ExteriaFailedImage(14, ExteriaColorBadgeRed());
+        [failed drawAtPoint:CGPointMake(markX - 1, markY - 1)];
+        return;
+    }
     if (message.state == ExteriaMessageStateFailed) {
         CGRect badge = CGRectMake(markX - 1, markY - 1, 14, 14);
         [ExteriaColorBadgeRed() setFill];
@@ -212,7 +217,7 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
         return;
     }
     UIImage *mark;
-    if (message.state == ExteriaMessageStateSending) mark = ExteriaSymbolImage(ExteriaSymbolClock, 11, color);
+    if (message.state == ExteriaMessageStateSending) mark = ExteriaSendingImage(11, color);
     else mark = ExteriaCheckImage(_item.read, 11, color);
     /* the slot fits the double check, a single one sits at its right edge */
     CGFloat slot = 11 * 25.0 / 16.0;

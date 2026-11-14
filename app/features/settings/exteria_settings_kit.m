@@ -962,7 +962,7 @@ static UIImage *ExteriaBatteryImage(float fill, UIColor *color) {
     _switch.hidden = !row.hasSwitch;
     _switch.on = row.on;
     _check.hidden = !row.checked;
-    _check.image = row.checked ? ExteriaSymbolImage(ExteriaSymbolCheck, 22, ExteriaColorAccent()) : nil;
+    _check.image = row.checked ? ExteriaSymbolImage(ExteriaSymbolCheckMark(), 22, ExteriaColorAccent()) : nil;
     _slider.hidden = !row.hasSlider;
     BOOL level = row.hasLevel;
     _levelBadge.hidden = _leftLabel.hidden = _rightLabel.hidden = _middle.hidden = _battery.hidden = !level;

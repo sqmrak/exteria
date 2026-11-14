@@ -211,7 +211,7 @@ static UIView *ExteriaDeveloperHost(void) {
         POPUP(ExteriaSymbolInfo, @"developer.popup.notice", @"developer.popup.notice.info", {
             ExteriaShowNotice(NSLocalizedString(@"developer.popup.notice", nil), NSLocalizedString(@"developer.popup.notice.text", nil));
         }),
-        POPUP(ExteriaSymbolCheck, @"developer.popup.confirm", @"developer.popup.confirm.info", {
+        POPUP(ExteriaSymbolCheckMark(), @"developer.popup.confirm", @"developer.popup.confirm.info", {
             ExteriaConfirm(NSLocalizedString(@"developer.popup.confirm", nil), NSLocalizedString(@"developer.popup.confirm.text", nil), NSLocalizedString(@"notice.ok", nil), ^{});
         }),
         POPUP(ExteriaSymbolEllipsis, @"developer.popup.choose", @"developer.popup.choose.info", {
@@ -238,7 +238,7 @@ static UIView *ExteriaDeveloperHost(void) {
         ExteriaDeveloperSettingsController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaLogsController alloc] initWithSession:me->_session] autorelease] animated:YES];
     }];
-    ExteriaSettingsRow *readAll = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolCheck tone:ExteriaSettingsToneBlack title:NSLocalizedString(@"developer.readall", nil)
+    ExteriaSettingsRow *readAll = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolCheckMark() tone:ExteriaSettingsToneBlack title:NSLocalizedString(@"developer.readall", nil)
                                                            subtitle:NSLocalizedString(@"developer.readall.info", nil) value:nil tap:^{
         ExteriaDeveloperSettingsController *me = weak.target;
         if (!me) return;
@@ -275,7 +275,7 @@ static UIView *ExteriaDeveloperHost(void) {
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.popups", nil) footer:NSLocalizedString(@"developer.popups.info", nil) rows:popups],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.system", nil) footer:nil rows:system],
         [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:
-            [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolClose title:NSLocalizedString(@"developer.hide", nil) destructive:YES tap:^{
+            [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCloseMark() title:NSLocalizedString(@"developer.hide", nil) destructive:YES tap:^{
                 ExteriaDeveloperModeSet(NO);
                 /* the switches belong to the page, so hiding it puts the interface back */
                 [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaClassicAnywhereKey];

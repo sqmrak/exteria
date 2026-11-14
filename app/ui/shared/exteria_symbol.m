@@ -1,5 +1,6 @@
 #import "exteria_symbol.h"
 #import "exteria_platform.h"
+#import "exteria_theme.h"
 #import "exteria_symbol_paths.h"
 
 /* the bundled mask of a symbol, resources/icons/symbol_*, cut drawables by tools/make_assets.py */
@@ -396,7 +397,36 @@ UIImage *ExteriaSymbolImage(ExteriaSymbol symbol, CGFloat pointSize, UIColor *co
 #define CHECK_CANVAS 16.0
 #define CHECK_DOUBLE_CANVAS 25.0
 
+/* a Material glyph cut to the box its ink fills in the 24 unit canvas of the SVG, drawn so that the ink is width points wide: the masks keep their padding, which pushed
+   a mark off the slot it is aligned in */
+static UIImage *ExteriaInkImage(ExteriaSymbol symbol, CGRect ink, CGFloat width, UIColor *color) {
+    CGFloat unit = width / ink.size.width;
+    UIImage *full = ExteriaSymbolImage(symbol, 24 * unit, color);
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, ink.size.height * unit), NO, 0);
+    [full drawAtPoint:CGPointMake(-ink.origin.x * unit, -ink.origin.y * unit)];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
+ExteriaSymbol ExteriaSymbolCheckMark(void) { return ExteriaThemeIsClassic() ? ExteriaSymbolCheck : ExteriaSymbolMaterialCheck; }
+ExteriaSymbol ExteriaSymbolCloseMark(void) { return ExteriaThemeIsClassic() ? ExteriaSymbolClose : ExteriaSymbolMaterialCloseOutlined; }
+
+UIImage *ExteriaSendingImage(CGFloat pointSize, UIColor *color) {
+    if (ExteriaThemeIsClassic()) return ExteriaSymbolImage(ExteriaSymbolClock, pointSize, color);
+    return ExteriaInkImage(ExteriaSymbolMaterialSchedule, CGRectMake(2, 2, 20, 20), pointSize, color);
+}
+
+UIImage *ExteriaFailedImage(CGFloat pointSize, UIColor *color) {
+    return ExteriaInkImage(ExteriaSymbolMaterialError, CGRectMake(2, 2, 20, 20), pointSize, color);
+}
+
 UIImage *ExteriaCheckImage(BOOL read, CGFloat pointSize, UIColor *color) {
+    if (!ExteriaThemeIsClassic()) {
+        /* the ink of the single check is 16.7 units wide and of the double one 22, so the pair keeps the proportion the slot of the old marks had */
+        if (read) return ExteriaInkImage(ExteriaSymbolMaterialDoneAll, CGRectMake(1, 6, 22, 12), pointSize * CHECK_DOUBLE_CANVAS / CHECK_CANVAS, color);
+        return ExteriaInkImage(ExteriaSymbolMaterialCheck, CGRectMake(3.6667, 6, 16.6667, 12), pointSize, color);
+    }
     return ExteriaSymbolImage(read ? ExteriaSymbolCheckDouble : ExteriaSymbolCheck,
                               read ? pointSize * CHECK_DOUBLE_CANVAS / CHECK_CANVAS : pointSize, color);
 }
