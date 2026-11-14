@@ -210,11 +210,93 @@ class TextView(View):
 
     def setText(self, text, *_ignored):
         self._text = "" if text is None else str(text)
+        # the label of the app draws plain text, the spans stay here for a movement method to find a tapped link
+        self._spanned = text if hasattr(text, "getSpans") else None
         self._push(text=self._text)
         self._request_layout()
 
     def getText(self):
         return _Text(self._text)
+
+    _movement = None
+    _spanned = None
+
+    def setMovementMethod(self, method):
+        self._movement = method
+        self._push_touch()
+
+    def getMovementMethod(self):
+        return self._movement
+
+    def _wants_touch(self):
+        return self._movement is not None or super()._wants_touch()
+
+    def onTouchEvent(self, event):
+        if self._movement is not None and self._spanned is not None:
+            return bool(self._movement.onTouchEvent(self, self._spanned, event))
+        return False
+
+    def _line_end(self, text, start, width):
+        """the index after the last character of the line that starts at start: the longest prefix the label sets on one line, cut back to a
+        space when it would split a word (the label wraps whole words)"""
+        line_h = _ui.measure_text("A", self._size, self._bold, 100000)[1]
+        low, high = start + 1, len(text)
+        if _ui.measure_text(text[start:high], self._size, self._bold, width)[1] <= line_h:
+            return high
+        while low < high:
+            mid = (low + high + 1) // 2
+            if _ui.measure_text(text[start:mid], self._size, self._bold, width)[1] <= line_h:
+                low = mid
+            else:
+                high = mid - 1
+        if low < len(text) and text[low] != " " and text[low - 1] != " ":
+            space = text.rfind(" ", start, low)
+            if space > start:
+                return space + 1
+        return low
+
+    def getOffsetForPosition(self, x, y):
+        """the index of the character under (x, y) of the view, for text laid out from the left. -1 when the point is below the text or to
+        the right of the end of its line"""
+        text = self._text
+        line_h = _ui.measure_text("A", self._size, self._bold, 100000)[1]
+        width = max(self.getWidth() - self._pad[0] - self._pad[2], 1)
+        if self._max_width is not None:
+            width = min(width, max(self._max_width - self._pad[0] - self._pad[2], 1))
+        row = int((y - self._pad[1]) // line_h) if line_h else 0
+        if row < 0:
+            return 0
+        start = 0
+        while True:
+            newline = text.find("\n", start)
+            stop = len(text) if newline < 0 else newline
+            first = start
+            while True:
+                end = stop if first >= stop else self._line_end(text[:stop], first, width)
+                if row == 0:
+                    return self._column(text[first:end], first, x - self._pad[0])
+                row -= 1
+                if end >= stop:
+                    break
+                first = end
+            if newline < 0:
+                return -1
+            start = newline + 1
+
+    def _column(self, line, first, x):
+        reach = lambda count: _ui.measure_text(line[:count], self._size, self._bold, 100000)[0]
+        if not line or x < 0:
+            return first
+        if reach(len(line)) <= x:
+            return -1
+        low, high = 1, len(line)
+        while low < high:
+            mid = (low + high) // 2
+            if reach(mid) > x:
+                high = mid
+            else:
+                low = mid + 1
+        return first + low - 1
 
     def setTextColor(self, color):
         self._color = _argb(color)
@@ -270,6 +352,132 @@ class EditText(TextView):
     def setHintTextColor(self, color):
         # the field of a dialog is drawn by the system with the hint color it picks, so the color is not applied to it
         self._hint_color = _argb(color)
+
+
+class Button(TextView):
+    def __init__(self, context=None, *args):
+        super().__init__(context, *args)
+        self.setGravity(Gravity.CENTER)
+        self.setClickable(True)
+
+
+class CompoundButton(LinearLayout):
+    """a square and a label in a row. the square is a GradientDrawable like the track of SeekBar: outlined when off and filled with the
+    accent when on, with no check mark, as the label of the app draws no glyph the old fonts are known to have. it is a layout and not a
+    TextView, so isinstance(view, TextView) is false; setText, getText, setTextColor, setTextSize, setTypeface, setGravity, setMaxLines
+    and setSingleLine go to the label"""
+
+    class OnCheckedChangeListener:
+        """a plugin class implements onCheckedChanged(button, checked)"""
+
+    BOX = 22
+    GAP = 8
+    ACCENT = 0xFF2481CC
+    EDGE = 0xFF8E8E93
+
+    def __init__(self, context=None, *args):
+        super().__init__(context, *args)
+        self._checked = False
+        self._changed = None
+        self._user_click = None
+        self.setOrientation(LinearLayout.HORIZONTAL)
+        self._gravity = Gravity.CENTER_VERTICAL | Gravity.LEFT
+        self._box = View(context)
+        self._label = TextView(context)
+        box_params = LinearLayout.LayoutParams(CompoundButton.BOX, CompoundButton.BOX)
+        box_params.rightMargin = CompoundButton.GAP
+        self.addView(self._box, box_params)
+        self.addView(self._label, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        self._draw_box()
+        View.setOnClickListener(self, _Toggle(self))
+
+    def _draw_box(self):
+        from android.graphics.drawable import GradientDrawable
+        shape = GradientDrawable()
+        shape.setCornerRadius(CompoundButton.BOX / 4.0)
+        if self._checked:
+            shape.setColor(CompoundButton.ACCENT)
+        else:
+            shape.setColor(0x00000000)
+            shape.setStroke(2, CompoundButton.EDGE)
+        self._box.setBackground(shape)
+
+    def setChecked(self, value):
+        value = bool(value)
+        if value == self._checked:
+            return
+        self._checked = value
+        self._draw_box()
+        _call_listener(self._changed, "onCheckedChanged", self, value)
+
+    def isChecked(self):
+        return self._checked
+
+    def toggle(self):
+        self.setChecked(not self._checked)
+
+    def setOnCheckedChangeListener(self, listener):
+        self._changed = listener
+
+    def setOnClickListener(self, listener):
+        self._user_click = listener
+
+    def hasOnClickListeners(self):
+        return self._user_click is not None
+
+    def setText(self, text, *_ignored):
+        self._label.setText(text)
+
+    def getText(self):
+        return self._label.getText()
+
+    def setTextColor(self, color):
+        self._label.setTextColor(color)
+
+    def setTextSize(self, *args):
+        self._label.setTextSize(*args)
+
+    def setTypeface(self, typeface, *style):
+        self._label.setTypeface(typeface, *style)
+
+    def setMaxLines(self, lines):
+        self._label.setMaxLines(lines)
+
+    def setSingleLine(self, single=True):
+        self._label.setSingleLine(single)
+
+    def setButtonTintList(self, _colors):
+        # the square is drawn from the accent, a tint list of the theme has no state to read from
+        return None
+
+
+class _Toggle:
+    """the click of a CompoundButton: flips the state, then tells the listener a plugin set with setOnClickListener"""
+
+    def __init__(self, button):
+        self._button = button
+
+    def onClick(self, view):
+        self._button.toggle()
+        _call_listener(self._button._user_click, "onClick", self._button)
+
+
+class CheckBox(CompoundButton):
+    pass
+
+
+class HorizontalScrollView(ScrollView):
+    """the scroll view of the app moves on both axes, so only the measure differs: the child gets the height of the view and any width"""
+
+    def _on_measure(self, wspec, hspec):
+        pad_h = self._pad[1] + self._pad[3]
+        content_w = content_h = 0
+        for child in self._visible_children():
+            left, top, right, bottom = self._margins(child)
+            child.measure(UNSPECIFIED, self._child_spec(hspec, pad_h, top + bottom, child._params().height))
+            content_w = max(content_w, child._measured[0] + left + right)
+            content_h = max(content_h, child._measured[1] + top + bottom)
+        return (_resolve(wspec, content_w + self._pad[0] + self._pad[2]), _resolve(hspec, content_h + pad_h))
 
 
 class ImageView(View):

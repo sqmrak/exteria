@@ -6,7 +6,7 @@ getHeight and getLocationInWindow answer what a plugin expects. not implemented:
 long press, focus, and anything that needs the views of the host app, which has none the plugin can reach"""
 
 from android import _ui
-from java.lang import Object
+from java.lang import IllegalStateException, Object
 
 UNSPECIFIED = 0
 EXACTLY = 1 << 30
@@ -178,13 +178,53 @@ def _call(listener, name, *args):
 _dirty_roots = set()
 
 
+def _laid_out(root):
+    observer = getattr(root, "_observer", None)
+    if observer is not None:
+        observer.dispatchOnGlobalLayout()
+
+
 def _layout_pass():
     for root in list(_dirty_roots):
         _dirty_roots.discard(root)
         root._layout_root()
+        _laid_out(root)
 
 
 _ui.on_flush(_layout_pass)
+
+_draw_dirty = set()
+# the biggest picture a view paints for itself: 4 megapixels is 16 MB of rgba, and the base64 of it goes to the app
+MAX_DRAW_PIXELS = 4 * 1024 * 1024
+
+
+def _draw_pass():
+    """paint the views that draw themselves and are dirty, after the layout pass gave them a size"""
+    import sys
+    import traceback
+    from android.graphics import Bitmap, Canvas
+    for view in list(_draw_dirty):
+        _draw_dirty.discard(view)
+        if not view._attached:
+            continue
+        width, height = view._frame[2], view._frame[3]
+        if width <= 0 or height <= 0:
+            _draw_dirty.add(view)
+            continue
+        if width * height > MAX_DRAW_PIXELS:
+            sys.stderr.write("E/View: %s is %dx%d, larger than the %d pixels a view paints for itself\n" % (
+                type(view).__name__, width, height, MAX_DRAW_PIXELS))
+            continue
+        bitmap = Bitmap(width, height)
+        try:
+            view.draw(Canvas(bitmap))
+        except Exception:
+            # a view whose onDraw fails keeps what it drew; the next invalidate tries again
+            traceback.print_exc(file=sys.stderr)
+        _ui.emit("img", view._id, width, height, bitmap._base64())
+
+
+_ui.on_flush(_draw_pass)
 
 
 class View(Object):
@@ -202,6 +242,15 @@ class View(Object):
 
     class OnLongClickListener:
         pass
+
+    class OnAttachStateChangeListener:
+        """a program implements onViewAttachedToWindow(view) and onViewDetachedFromWindow(view)"""
+
+    class OnLayoutChangeListener:
+        """a program implements onLayoutChange(view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom)"""
+
+    class OnScrollChangeListener:
+        """a program implements onScrollChange(view, scrollX, scrollY, oldScrollX, oldScrollY)"""
 
     _KIND = "view"
 
@@ -228,9 +277,20 @@ class View(Object):
         self._tag = None
         self._on_click = None
         self._on_touch = None
+        self._on_long_click = None
+        self._attach_listeners = []
+        self._layout_listeners = []
+        self._measured_set = None
         self._animator = None
 
     # identity and tree
+
+    def getViewTreeObserver(self):
+        """one observer for the tree, kept by its root; it reports the layout passes of python"""
+        root = self.getRootView()
+        if getattr(root, "_observer", None) is None:
+            root._observer = ViewTreeObserver()
+        return root._observer
 
     def getContext(self):
         return self._context
@@ -425,6 +485,8 @@ class View(Object):
         self._push(clip=self._clip_radius())
 
     def _encode_bg(self):
+        if self._draws_itself():
+            return None
         return self._bg._encode() if self._bg is not None else None
 
     def _bg_changed(self):
@@ -478,7 +540,8 @@ class View(Object):
         return False
 
     def _wants_touch(self):
-        return self._clickable or self._on_touch is not None or self._on_click is not None
+        return (self._clickable or self._on_touch is not None or self._on_click is not None
+                or self._on_long_click is not None or type(self).onTouchEvent is not View.onTouchEvent)
 
     def _push_touch(self):
         self._push(touch=self._wants_touch())
@@ -497,6 +560,19 @@ class View(Object):
         from android.os import Handler
         Handler().removeCallbacks(runnable)
 
+    def startAnimation(self, animation):
+        self.clearAnimation()
+        self._animation = animation
+        animation.start(self)
+
+    def clearAnimation(self):
+        if getattr(self, "_animation", None) is not None:
+            self._animation.cancel()
+            self._animation = None
+
+    def getAnimation(self):
+        return getattr(self, "_animation", None)
+
     def animate(self):
         if self._animator is None:
             self._animator = ViewPropertyAnimator(self)
@@ -508,8 +584,157 @@ class View(Object):
             parent.removeView(self)
             parent.addView(self)
 
-    def invalidate(self):
-        pass
+    def invalidate(self, *_region):
+        """a view that draws itself (it overrides onDraw or draw) is painted again, into a bitmap the app shows on its layer,
+        when the entry point that called python returns. the app draws nothing else for such a view: its background is drawn here too"""
+        if self._draws_itself():
+            _draw_dirty.add(self)
+
+    postInvalidate = postInvalidateOnAnimation = invalidate
+
+    def _draws_itself(self):
+        cls = type(self)
+        return self._KIND != "image" and (cls.onDraw is not View.onDraw or cls.draw is not View.draw
+                                          or cls.dispatchDraw is not View.dispatchDraw)
+
+    def draw(self, canvas):
+        """background, then onDraw, then the children (they are layers of their own here), then the foreground"""
+        background = self._bg
+        if background is not None and hasattr(background, "draw") and getattr(type(background), "draw", None) is not None:
+            width, height = self._frame[2], self._frame[3]
+            background.setBounds(0, 0, width, height)
+            try:
+                background.draw(canvas)
+            except NotImplementedError:
+                pass
+        self.onDraw(canvas)
+        self.dispatchDraw(canvas)
+        self.onDrawForeground(canvas)
+
+    def onDraw(self, canvas):
+        return None
+
+    def dispatchDraw(self, canvas):
+        return None
+
+    def onDrawForeground(self, canvas):
+        return None
+
+    def onAttachedToWindow(self):
+        return None
+
+    def onDetachedFromWindow(self):
+        return None
+
+    def onSizeChanged(self, width, height, old_width, old_height):
+        return None
+
+    def onWindowVisibilityChanged(self, visibility):
+        return None
+
+    def onTouchEvent(self, event):
+        return False
+
+    def dispatchTouchEvent(self, event):
+        taken = False
+        if self._on_touch is not None:
+            taken = bool(_call(self._on_touch, "onTouch", self, event))
+        return taken or bool(self.onTouchEvent(event))
+
+    def onMeasure(self, wspec, hspec):
+        self.setMeasuredDimension(*self._on_measure(wspec, hspec))
+
+    def setMeasuredDimension(self, width, height):
+        self._measured_set = (int(width), int(height))
+
+    def onLayout(self, changed, left, top, right, bottom):
+        return None
+
+    def layout(self, left, top, right, bottom):
+        parent = self._parent
+        if parent is not None:
+            parent._place(self, left, top, right - left, bottom - top)
+
+    def setFocusable(self, value):
+        self._focusable = bool(value)
+
+    def isFocusable(self):
+        return getattr(self, "_focusable", False)
+
+    setFocusableInTouchMode = setFocusable
+
+    def setLongClickable(self, value):
+        self._long_clickable = bool(value)
+
+    def isLongClickable(self):
+        return getattr(self, "_long_clickable", False) or self._on_long_click is not None
+
+    def setOnLongClickListener(self, listener):
+        self._on_long_click = listener
+        self._push_touch()
+
+    def addOnAttachStateChangeListener(self, listener):
+        self._attach_listeners.append(listener)
+
+    def removeOnAttachStateChangeListener(self, listener):
+        if listener in self._attach_listeners:
+            self._attach_listeners.remove(listener)
+
+    def addOnLayoutChangeListener(self, listener):
+        self._layout_listeners.append(listener)
+
+    def removeOnLayoutChangeListener(self, listener):
+        if listener in self._layout_listeners:
+            self._layout_listeners.remove(listener)
+
+    def getResources(self):
+        from android.content.res import Resources
+        return Resources.getSystem()
+
+    def getGlobalVisibleRect(self, rect, offset=None):
+        x, y = self._origin()
+        width, height = self._frame[2], self._frame[3]
+        screen = _ui.screen()
+        left, top = max(0, int(x)), max(0, int(y))
+        right, bottom = min(int(screen["w"]), int(x) + width), min(int(screen["h"]), int(y) + height)
+        rect.set(left, top, right, bottom)
+        return right > left and bottom > top
+
+    def getSystemUiVisibility(self):
+        return getattr(self, "_system_ui", 0)
+
+    def setSystemUiVisibility(self, value):
+        self._system_ui = int(value)
+
+    def setLayerType(self, layer_type, paint=None):
+        self._layer_type = layer_type
+
+    def getLayerType(self):
+        return getattr(self, "_layer_type", 0)
+
+    def requestFocus(self, *_args):
+        return False
+
+    def clearFocus(self):
+        return None
+
+    def hasFocus(self):
+        return False
+
+    def getWindowToken(self):
+        return None
+
+    def requestRectangleOnScreen(self, rect, immediate=False):
+        return False
+
+    def setRenderEffect(self, effect):
+        """a blur is drawn by the app over the view and what it holds (see apply_blur in exteria_plugin_ui.m); None takes it away"""
+        radius = 0.0 if effect is None else effect._blur_radius()
+        self._render_effect = effect
+        self._push(blur=radius)
+
+    def getRenderEffect(self):
+        return getattr(self, "_render_effect", None)
 
     def requestLayout(self):
         self._request_layout()
@@ -521,6 +746,7 @@ class View(Object):
         if root in _dirty_roots:
             _dirty_roots.discard(root)
             root._layout_root()
+            _laid_out(root)
 
     def getLeft(self):
         self._ensure_layout()
@@ -563,7 +789,14 @@ class View(Object):
         return 0
 
     def measure(self, wspec, hspec):
-        self._measured = self._on_measure(wspec, hspec)
+        if type(self).onMeasure is View.onMeasure:
+            self._measured = self._on_measure(wspec, hspec)
+            return
+        self._measured_set = None
+        self.onMeasure(wspec, hspec)
+        if self._measured_set is None:
+            raise IllegalStateException("onMeasure of %s did not call setMeasuredDimension" % type(self).__name__)
+        self._measured = self._measured_set
 
     def _content_size(self, max_w, max_h):
         return (0, 0)
@@ -609,6 +842,9 @@ class View(Object):
                  "tx": self._tx, "ty": self._ty, "sx": self._sx, "sy": self._sy, "rot": self._rot,
                  "elev": self._elevation, "bg": self._encode_bg(), "clip": self._clip_radius()}
         props.update(self._kind_props())
+        effect = getattr(self, "_render_effect", None)
+        if effect is not None:
+            props["blur"] = effect._blur_radius()
         return props
 
     def _kind_props(self):
@@ -625,14 +861,35 @@ class View(Object):
         _ui.set_props(self._id, self._initial_props())
         self._sync_bitmap_bg()
         self._pushed_frame = None
+        if self._draws_itself():
+            _draw_dirty.add(self)
+        for listener in list(self._attach_listeners):
+            _call(listener, "onViewAttachedToWindow", self)
+        self.onAttachedToWindow()
 
     def _detach(self):
         self._attached = False
         _ui.forget(self._id)
         self._pushed_frame = None
+        _draw_dirty.discard(self)
+        self.onDetachedFromWindow()
+        for listener in list(self._attach_listeners):
+            _call(listener, "onViewDetachedFromWindow", self)
 
     def _layout_root(self):
         pass
+
+    def _frame_changed(self, old, frame):
+        old = old or (0, 0, 0, 0)
+        if (old[2], old[3]) != (frame[2], frame[3]):
+            self.onSizeChanged(frame[2], frame[3], old[2], old[3])
+            if self._draws_itself():
+                _draw_dirty.add(self)
+            if getattr(self._bg, "_sized", False):
+                self._sync_bitmap_bg()
+        for listener in list(self._layout_listeners):
+            _call(listener, "onLayoutChange", self, frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3],
+                  old[0], old[1], old[0] + old[2], old[1] + old[3])
 
 
 class ViewPropertyAnimator(Object):
@@ -830,22 +1087,32 @@ class ViewGroup(View):
     def _place(self, child, left, top, width, height):
         child._frame = (int(left), int(top), int(width), int(height))
         if isinstance(child, ViewGroup):
-            child._layout_children(int(width), int(height))
+            child._do_layout(int(width), int(height))
 
     def _layout_root(self):
         screen = _ui.screen()
         width, height = int(screen["w"]), int(screen["h"])
         self.measure(width | EXACTLY, height | EXACTLY)
         self._frame = (0, 0, width, height)
-        self._layout_children(width, height)
+        self._do_layout(width, height)
         self._push_frames()
+
+    def _do_layout(self, width, height):
+        """a program that extends ViewGroup lays its children out in onLayout, with child.layout(l, t, r, b); the shims
+        lay out their own in _layout_children"""
+        if type(self).onLayout is not View.onLayout:
+            self.onLayout(True, 0, 0, int(width), int(height))
+        else:
+            self._layout_children(width, height)
 
     def _push_frames(self):
         for child in self._children:
             frame = child._frame
             if child._attached and frame != child._pushed_frame:
+                old = child._pushed_frame
                 child._pushed_frame = frame
                 _ui.set_props(child._id, {"x": frame[0], "y": frame[1], "w": frame[2], "h": frame[3]})
+                child._frame_changed(old, frame)
             if isinstance(child, ViewGroup):
                 child._push_frames()
                 child._push_content_size()
@@ -908,7 +1175,7 @@ class PageView(DecorView):
         width, height = self._size
         self.measure(width | EXACTLY, height | EXACTLY)
         self._frame = (0, 0, width, height)
-        self._layout_children(width, height)
+        self._do_layout(width, height)
         self._push_frames()
 
     def resize(self, width, height):
@@ -930,7 +1197,10 @@ class PageView(DecorView):
 
 
 def _gravity_of(params, default):
-    gravity = getattr(params, "gravity", -1)
+    # a WindowManager.LayoutParams keeps the gravity the plugin set (0 means the center for a window) and the one the layout uses apart
+    gravity = getattr(params, "_layout_gravity", None)
+    if gravity is None:
+        gravity = getattr(params, "gravity", -1)
     return default if gravity is None or gravity < 0 else gravity
 
 
@@ -973,18 +1243,334 @@ def dispatch_touch(view_id, action, raw_x, raw_y, now):
         if abs(raw_x - state["down"][0]) > 12 or abs(raw_y - state["down"][1]) > 12:
             state["moved"] = True
     event = MotionEvent(action, raw_x, raw_y, view, state["time"], now)
-    taken = False
-    if view._on_touch is not None:
-        taken = bool(_call(view._on_touch, "onTouch", view, event))
+    taken = bool(view.dispatchTouchEvent(event))
     if action == MotionEvent.ACTION_DOWN:
         state["taken"] = taken
     elif action == MotionEvent.ACTION_UP:
-        if not taken and not state["moved"] and view._on_click is not None and view._enabled:
-            _call(view._on_click, "onClick", view)
-            taken = True
+        if not taken and not state["moved"] and view._enabled:
+            if view._on_long_click is not None and now - state["time"] >= 0.5:
+                # the app reports a touch when it starts and when it ends, so a long press is told when the finger lifts
+                taken = bool(_call(view._on_long_click, "onLongClick", view))
+            if not taken and view._on_click is not None:
+                _call(view._on_click, "onClick", view)
+                taken = True
     if action in (MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL):
         _touch_state.pop(view_id, None)
     return taken or state["taken"] or view._on_click is not None
 
 
 _touch_state = {}
+
+
+class ViewParent:
+    """what getParent() answers to: a ViewGroup"""
+
+
+class ViewTreeObserver(Object):
+    """listeners of the tree. only the global layout listener is called: it runs after every layout pass python makes. the draw and
+    scroll listeners are kept and handed back on removal, but the views here do not draw or scroll under python, so they never fire"""
+
+    class OnGlobalLayoutListener:
+        """a program implements onGlobalLayout()"""
+
+    class OnPreDrawListener:
+        """a program implements onPreDraw() and returns whether the drawing goes on"""
+
+    class OnDrawListener:
+        """a program implements onDraw()"""
+
+    class OnScrollChangedListener:
+        """a program implements onScrollChanged()"""
+
+    def __init__(self):
+        self._layout = []
+        self._other = []
+
+    def addOnGlobalLayoutListener(self, listener):
+        self._layout.append(listener)
+
+    def removeOnGlobalLayoutListener(self, listener):
+        if listener in self._layout:
+            self._layout.remove(listener)
+
+    def addOnPreDrawListener(self, listener):
+        self._other.append(listener)
+
+    def addOnDrawListener(self, listener):
+        self._other.append(listener)
+
+    def addOnScrollChangedListener(self, listener):
+        self._other.append(listener)
+
+    def removeOnPreDrawListener(self, listener):
+        if listener in self._other:
+            self._other.remove(listener)
+
+    removeOnDrawListener = removeOnScrollChangedListener = removeOnPreDrawListener
+
+    def isAlive(self):
+        return True
+
+    def dispatchOnGlobalLayout(self):
+        import sys
+        import traceback
+        for listener in list(self._layout):
+            try:
+                _call(listener, "onGlobalLayout")
+            except Exception:
+                # one listener that fails must not stop the layout pass of every other plugin
+                traceback.print_exc(file=sys.stderr)
+
+
+class ViewConfiguration(Object):
+    """the touch constants of the platform in points, the values iOS uses for its own gestures"""
+
+    _instance = None
+
+    @staticmethod
+    def get(context=None):
+        if ViewConfiguration._instance is None:
+            ViewConfiguration._instance = ViewConfiguration()
+        return ViewConfiguration._instance
+
+    def getScaledTouchSlop(self):
+        return 10
+
+    getScaledPagingTouchSlop = getScaledTouchSlop
+
+    def getScaledDoubleTapSlop(self):
+        return 100
+
+    def getScaledMinimumFlingVelocity(self):
+        return 50
+
+    def getScaledMaximumFlingVelocity(self):
+        return 8000
+
+    def getScaledScrollFactor(self):
+        return 64
+
+    @staticmethod
+    def getLongPressTimeout():
+        return 500
+
+    @staticmethod
+    def getTapTimeout():
+        return 100
+
+    @staticmethod
+    def getDoubleTapTimeout():
+        return 300
+
+    @staticmethod
+    def getPressedStateDuration():
+        return 64
+
+    @staticmethod
+    def getScrollFriction():
+        return 0.015
+
+
+class Outline(Object):
+    def __init__(self):
+        self._shape = None
+        self._alpha = 0.0
+
+    def setEmpty(self):
+        self._shape = None
+
+    def isEmpty(self):
+        return self._shape is None
+
+    def setRect(self, left, top=None, right=None, bottom=None):
+        self.setRoundRect(left, top, right, bottom, 0.0)
+
+    def setRoundRect(self, left, top=None, right=None, bottom=None, radius=0.0):
+        if top is None:
+            rect = left
+            left, top, right, bottom, radius = rect.left, rect.top, rect.right, rect.bottom, right or 0.0
+        self._shape = ("round", left, top, right, bottom, float(radius))
+
+    def setOval(self, left, top=None, right=None, bottom=None):
+        if top is None:
+            rect = left
+            left, top, right, bottom = rect.left, rect.top, rect.right, rect.bottom
+        self._shape = ("oval", left, top, right, bottom, 0.0)
+
+    def getRadius(self):
+        return self._shape[5] if self._shape is not None and self._shape[0] == "round" else -1.0
+
+    def setAlpha(self, alpha):
+        self._alpha = float(alpha)
+
+    def getAlpha(self):
+        return self._alpha
+
+
+class ViewOutlineProvider(Object):
+    """a program overrides getOutline(view, outline); the shims keep the provider on the view and never ask for the outline"""
+
+    BACKGROUND = None
+    BOUNDS = None
+    PADDED_BOUNDS = None
+
+    def getOutline(self, view, outline):
+        return None
+
+
+class Window(Object):
+    """the window of an activity. what a program sets here is kept and read back: the app owns its status bar and its flags, so
+    none of it changes how the app looks"""
+
+    FEATURE_NO_TITLE = 1
+    ID_ANDROID_CONTENT = 0x01020002
+
+    def __init__(self, activity):
+        self._activity = activity
+        self._flags = 0
+        self._status_bar_color = 0xFF000000
+        self._navigation_bar_color = 0xFF000000
+        self._soft_input_mode = 0
+
+    def getDecorView(self):
+        return self._activity._decor
+
+    def getContext(self):
+        return self._activity
+
+    def getStatusBarColor(self):
+        return self._status_bar_color
+
+    def setStatusBarColor(self, color):
+        self._status_bar_color = int(color) & 0xFFFFFFFF
+
+    def getNavigationBarColor(self):
+        return self._navigation_bar_color
+
+    def setNavigationBarColor(self, color):
+        self._navigation_bar_color = int(color) & 0xFFFFFFFF
+
+    def addFlags(self, flags):
+        self._flags |= flags
+
+    def clearFlags(self, flags):
+        self._flags &= ~flags
+
+    def setFlags(self, flags, mask):
+        self._flags = (self._flags & ~mask) | (flags & mask)
+
+    def getFlags(self):
+        return self._flags
+
+    def setSoftInputMode(self, mode):
+        self._soft_input_mode = mode
+
+    def getSoftInputMode(self):
+        return self._soft_input_mode
+
+
+class WindowManager(Object):
+    """the window service. a window is a view of the overlay the app lays above its screens (the DecorView), placed by gravity and the offsets x and
+    y as the android window manager places it: from the edge the gravity names, from the center when it names none. the types and flags are
+    kept for the plugin to read back. FLAG_NOT_FOCUSABLE is how every view of the overlay behaves, a keyboard needs the dialog of the app, and
+    a view that has a touch or click listener gets touches whatever FLAG_NOT_TOUCHABLE says"""
+
+    class LayoutParams(MarginLayoutParams):
+        TYPE_APPLICATION = 2
+        TYPE_APPLICATION_PANEL = 1000
+        TYPE_PHONE = 2002
+        TYPE_SYSTEM_ALERT = 2003
+        TYPE_TOAST = 2005
+        TYPE_APPLICATION_OVERLAY = 2038
+        FLAG_NOT_FOCUSABLE = 0x8
+        FLAG_NOT_TOUCH_MODAL = 0x20
+        FLAG_NOT_TOUCHABLE = 0x10
+        FLAG_KEEP_SCREEN_ON = 0x80
+        FLAG_LAYOUT_IN_SCREEN = 0x100
+        FLAG_LAYOUT_NO_LIMITS = 0x200
+        FLAG_FULLSCREEN = 0x400
+        FLAG_WATCH_OUTSIDE_TOUCH = 0x40000
+
+        def __init__(self, *args):
+            super().__init__(MATCH_PARENT, MATCH_PARENT)
+            self.x = self.y = 0
+            self.gravity = Gravity.NO_GRAVITY
+            self.type = 0
+            self.flags = 0
+            self.format = -1
+            self.alpha = 1.0
+            self.token = None
+            if len(args) == 1:
+                self.type = int(args[0])
+            elif len(args) == 2:
+                self.type, self.flags = int(args[0]), int(args[1])
+            elif len(args) == 3:
+                self.type, self.flags, self.format = (int(a) for a in args)
+            elif len(args) == 5:
+                self.width, self.height, self.type, self.flags, self.format = (int(a) for a in args)
+            elif len(args) == 7:
+                self.width, self.height, self.x, self.y, self.type, self.flags, self.format = (int(a) for a in args)
+            elif args:
+                raise TypeError("WindowManager.LayoutParams takes 0, 1, 2, 3, 5 or 7 arguments, got %d" % len(args))
+
+        def _lay_out(self):
+            """the margins and the gravity the frame layout reads, from gravity, x and y"""
+            gravity = self.gravity if self.gravity else Gravity.CENTER
+            self._layout_gravity = gravity
+            horizontal, vertical = gravity & Gravity.HORIZONTAL_GRAVITY_MASK, gravity & Gravity.VERTICAL_GRAVITY_MASK
+            self.leftMargin = self.rightMargin = self.topMargin = self.bottomMargin = 0
+            if horizontal == Gravity.RIGHT:
+                self.rightMargin = int(self.x)
+            else:
+                self.leftMargin = int(self.x)
+            if vertical == Gravity.BOTTOM:
+                self.bottomMargin = int(self.y)
+            else:
+                self.topMargin = int(self.y)
+
+    _instance = None
+
+    @staticmethod
+    def _get():
+        if WindowManager._instance is None:
+            WindowManager._instance = WindowManager()
+        return WindowManager._instance
+
+    @staticmethod
+    def _root():
+        from android.app import activity
+        return activity().getWindow().getDecorView()
+
+    @staticmethod
+    def _checked(params):
+        from java.lang import IllegalArgumentException
+        if not isinstance(params, WindowManager.LayoutParams):
+            raise IllegalArgumentException("Params must be WindowManager.LayoutParams")
+        return params
+
+    def addView(self, view, params):
+        from java.lang import IllegalStateException, NullPointerException
+        if view is None:
+            raise NullPointerException("view must not be null")
+        self._checked(params)._lay_out()
+        if view.getParent() is not None:
+            raise IllegalStateException("View %s has already been added to the window manager." % (view,))
+        self._root().addView(view, params)
+        if params.alpha != 1.0:
+            view.setAlpha(params.alpha)
+
+    def updateViewLayout(self, view, params):
+        from java.lang import IllegalArgumentException
+        self._checked(params)._lay_out()
+        if view is None or view.getParent() is not self._root():
+            raise IllegalArgumentException("View not attached to window manager")
+        view.setLayoutParams(params)
+        view.setAlpha(params.alpha)
+
+    def removeView(self, view):
+        from java.lang import IllegalArgumentException
+        if view is None or view.getParent() is not self._root():
+            raise IllegalArgumentException("View not attached to window manager")
+        self._root().removeView(view)
+
+    removeViewImmediate = removeView

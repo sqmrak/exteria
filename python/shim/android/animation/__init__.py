@@ -17,6 +17,10 @@ _CURVES = {
 }
 
 
+class TimeInterpolator:
+    """a program implements getInterpolation(input)"""
+
+
 def _notify(listeners, name, *args):
     for listener in list(listeners):
         method = getattr(listener, name, None)
