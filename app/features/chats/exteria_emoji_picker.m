@@ -1,18 +1,23 @@
 #import "exteria_emoji_picker.h"
 
+#import "exteria_alert.h"
+#import "exteria_emoji_keywords.h"
 #import "exteria_emoji_store.h"
 #import "exteria_platform.h"
+#import "exteria_session_keywords.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_weak_reference.h"
 
 #define STRIP_HEIGHT 34.0
 #define ROW_HEIGHT 44.0
 #define CELL_MIN 40.0
 #define RECENT_MAX 28
 #define RECENT_KEY @"ExteriaRecentEmoji"
-/* one emoji from each group stands for it on the strip, as the code points of its fully qualified form */
+/* one emoji from each group stands for it on the strip, as the code points of its fully qualified form: the football is U+26BD alone, since it looks like an emoji by default,
+   and with U+FE0F after it the table has no such entry and its place on the strip stayed empty */
 static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTERIA_EMOJI_GROUPS] = {
-    {{0x1F600}, 1}, {{0x1F44B}, 1}, {{0x1F43B}, 1}, {{0x1F34E}, 1}, {{0x1F697}, 1}, {{0x26BD, 0xFE0F}, 2}, {{0x1F4A1}, 1},
+    {{0x1F600}, 1}, {{0x1F44B}, 1}, {{0x1F43B}, 1}, {{0x1F34E}, 1}, {{0x1F697}, 1}, {{0x26BD}, 1}, {{0x1F4A1}, 1},
     {{0x2764, 0xFE0F}, 2}, {{0x1F3C1}, 1}
 };
 
@@ -107,6 +112,12 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
     NSMutableArray *_rows;
     NSMutableArray *_groupRows;
     NSInteger _columns;
+    /* the magnifier at the head of the strip, and what a typed word found: entry numbers of the grid, best first; nil while no word is being looked up */
+    UIButton *_searchButton;
+    UILabel *_nothing;
+    NSString *_query;
+    NSArray *_found;
+    ExteriaSession *_session;
     CGSize _stripBuiltFor;
 }
 @end
@@ -114,6 +125,7 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
 @implementation ExteriaEmojiPicker
 
 @synthesize delegate = _delegate;
+@synthesize session = _session;
 
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -131,6 +143,10 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
         [_strip addSubview:button];
         [_stripButtons addObject:button];
     }
+    _searchButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    [_searchButton addTarget:self action:@selector(askQuery) forControlEvents:UIControlEventTouchUpInside];
+    _searchButton.accessibilityLabel = NSLocalizedString(@"panel.emoji.search", nil);
+    [_strip addSubview:_searchButton];
     _table = [[UITableView alloc] init];
     _table.backgroundColor = [UIColor clearColor];
     _table.separatorStyle = UITableViewCellSeparatorStyleNone;
@@ -139,6 +155,14 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
     _table.rowHeight = ROW_HEIGHT;
     _table.scrollsToTop = NO;
     [self addSubview:_table];
+    _nothing = [[UILabel alloc] init];
+    _nothing.backgroundColor = [UIColor clearColor];
+    _nothing.textColor = ExteriaColorSecondary();
+    _nothing.font = ExteriaFontRegular(15);
+    _nothing.textAlignment = ExteriaTextAlignmentCenter;
+    _nothing.text = NSLocalizedString(@"panel.emoji.nothing", nil);
+    _nothing.hidden = YES;
+    [self addSubview:_nothing];
     _rows = [[NSMutableArray alloc] init];
     _groupRows = [[NSMutableArray alloc] init];
     [self loadRecent];
@@ -150,6 +174,10 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
     _table.delegate = nil;
     [_strip release];
     [_stripButtons release];
+    [_searchButton release];
+    [_nothing release];
+    [_query release];
+    [_found release];
     [_table release];
     [_recent release];
     [_rows release];
@@ -185,6 +213,14 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
     _columns = columns;
     [_rows removeAllObjects];
     [_groupRows removeAllObjects];
+    if (_found) {
+        for (NSUInteger start = 0; start < _found.count; start += (NSUInteger)columns) {
+            [_rows addObject:[_found subarrayWithRange:NSMakeRange(start, MIN((NSUInteger)columns, _found.count - start))]];
+        }
+        /* the strip jumps to the head of the list while a word is looked up */
+        for (int group = 0; group <= EXTERIA_EMOJI_GROUPS; ++group) [_groupRows addObject:[NSNumber numberWithUnsignedInteger:0]];
+        return;
+    }
     for (int group = 0; group <= EXTERIA_EMOJI_GROUPS; ++group) {
         NSMutableArray *entries = [NSMutableArray array];
         if (group == 0) {
@@ -207,11 +243,15 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
     CGSize size = self.bounds.size;
     _strip.frame = CGRectMake(0, 0, size.width, STRIP_HEIGHT);
     _table.frame = CGRectMake(0, STRIP_HEIGHT, size.width, size.height - STRIP_HEIGHT);
-    CGFloat buttonWidth = size.width / (CGFloat)_stripButtons.count;
-    for (UIButton *button in _stripButtons) button.frame = CGRectMake(buttonWidth * (CGFloat)button.tag, 0, buttonWidth, STRIP_HEIGHT);
+    CGFloat buttonWidth = size.width / (CGFloat)(_stripButtons.count + 1);
+    _searchButton.frame = CGRectMake(0, 0, buttonWidth, STRIP_HEIGHT);
+    for (UIButton *button in _stripButtons) button.frame = CGRectMake(buttonWidth * (CGFloat)(button.tag + 1), 0, buttonWidth, STRIP_HEIGHT);
+    _nothing.frame = CGRectMake(16, STRIP_HEIGHT + 24, size.width - 32, 22);
+    [self showSearchState];
     if (_stripBuiltFor.width == 0) {
         _stripBuiltFor = size;
         for (UIButton *button in _stripButtons) [button setImage:[self stripImageForGroup:button.tag] forState:UIControlStateNormal];
+        [self showSearchState];
     }
     _strip.contentSize = CGSizeMake(size.width, STRIP_HEIGHT);
     NSInteger columns = MAX(5, (NSInteger)floor(_table.bounds.size.width / CELL_MIN));
@@ -225,7 +265,10 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
 - (UIImage *)stripImageForGroup:(NSInteger)group {
     if (group == 0) return ExteriaSymbolImage(ExteriaSymbolClock, 20, ExteriaColorSecondary());
     size_t index;
-    if (!exteria_emoji_find(ExteriaGroupFaces[group - 1].points, ExteriaGroupFaces[group - 1].count, &index)) return nil;
+    if (!exteria_emoji_find(ExteriaGroupFaces[group - 1].points, ExteriaGroupFaces[group - 1].count, &index)) {
+        NSLog(@"exteria: the face of emoji group %ld is not in the emoji table", (long)group);
+        return nil;
+    }
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(22, 22), NO, 0);
     /* the strip keeps this bitmap, so the picture is decoded here and not filled in later */
     UIImage *face = ExteriaEmojiImageNow(exteria_emoji_entries[index].canonical);
@@ -235,7 +278,85 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
     return image;
 }
 
+/* the magnifier takes the accent while a word is looked up; the list says so when nothing was found */
+- (void)showSearchState {
+    UIColor *ink = _found ? ExteriaColorAccent() : ExteriaColorSecondary();
+    [_searchButton setImage:ExteriaSymbolImage(ExteriaSymbolMagnifier, 20, ink) forState:UIControlStateNormal];
+    _nothing.hidden = !(_found && _found.count == 0);
+}
+
+- (void)askQuery {
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaPromptText(NSLocalizedString(@"panel.emoji.search", nil), nil, _query, nil, ^(NSString *text) {
+        [(ExteriaEmojiPicker *)weak.target searchFor:[text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]];
+    });
+}
+
+/* the entry numbers of the grid for the emoji strings of the keywords; one the picture pack does not draw is left out */
+static NSArray *ExteriaEntriesOfEmoji(NSArray *strings, NSMutableSet *seen) {
+    NSMutableArray *entries = [NSMutableArray array];
+    for (NSString *emoji in strings) {
+        uint16_t units[16];
+        NSUInteger length = emoji.length;
+        size_t entry;
+        if (length == 0 || length > 16) continue;
+        [emoji getCharacters:units range:NSMakeRange(0, length)];
+        if (!exteria_emoji_single(units, length, &entry) || exteria_emoji_entries[entry].image == EXTERIA_EMOJI_NO_IMAGE) continue;
+        NSNumber *number = [NSNumber numberWithUnsignedInteger:entry];
+        if ([seen containsObject:number]) continue;
+        [seen addObject:number];
+        [entries addObject:number];
+    }
+    return entries;
+}
+
+/* an empty word leaves the search; otherwise the words of the interface language come first and those of English after them */
+- (void)searchFor:(NSString *)query {
+    [_query release];
+    _query = query.length ? [query copy] : nil;
+    [_found release];
+    _found = nil;
+    if (_query) {
+        NSMutableArray *all = [NSMutableArray array];
+        NSMutableSet *seen = [NSMutableSet set];
+        for (NSString *language in [ExteriaEmojiKeywords searchLanguages]) {
+            ExteriaEmojiKeywords *keywords = [ExteriaEmojiKeywords keywordsForLanguage:language];
+            [all addObjectsFromArray:ExteriaEntriesOfEmoji([keywords emojiForQuery:_query], seen)];
+            [self updateKeywords:keywords];
+        }
+        _found = [all retain];
+    }
+    [self showSearchState];
+    [self buildRows];
+    [_table reloadData];
+    if (_rows.count) [_table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] atScrollPosition:UITableViewScrollPositionTop animated:NO];
+}
+
+/* the list of a language is asked for once a launch; the words that arrive search again, so a first search does not stay empty */
+- (void)updateKeywords:(ExteriaEmojiKeywords *)keywords {
+    if (!_session || keywords.updateRequested) return;
+    keywords.updateRequested = YES;
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    [_session updateEmojiKeywords:keywords completion:^(NSString *errorName) {
+        ExteriaEmojiPicker *picker = (ExteriaEmojiPicker *)weak.target;
+        if (errorName) {
+            NSLog(@"exteria: the emoji keywords could not be updated: %@", errorName);
+            keywords.updateRequested = NO;
+        } else if (picker && picker->_query) {
+            [picker searchFor:picker->_query];
+        }
+    }];
+}
+
+/* the lists are fetched when the panel opens, so the first word typed already finds something */
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    if (!self.window) return;
+    for (NSString *language in [ExteriaEmojiKeywords searchLanguages]) [self updateKeywords:[ExteriaEmojiKeywords keywordsForLanguage:language]];
+}
+
 - (void)groupTapped:(UIButton *)button {
+    if (_found) [self searchFor:nil];
     NSUInteger row = [[_groupRows objectAtIndex:(NSUInteger)button.tag] unsignedIntegerValue];
     if (row >= _rows.count) return;
     [_table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)row inSection:0] atScrollPosition:UITableViewScrollPositionTop animated:NO];

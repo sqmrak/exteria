@@ -1308,6 +1308,8 @@
 "chat.gif.failed" = "The animations did not load";
 "chat.gif.none" = "No animations here yet";
 "panel.emoji" = "Emoji";
+"panel.emoji.search" = "Search emoji";
+"panel.emoji.nothing" = "No emoji found";
 "panel.stickers" = "Stickers";
 "chatset.hidestickertime" = "Hide time on stickers";
 "chatset.editedicon" = "Pencil instead of the word \"edited\"";

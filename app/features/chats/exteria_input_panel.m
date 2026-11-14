@@ -49,6 +49,10 @@ typedef enum { ExteriaPageEmoji, ExteriaPageGifs, ExteriaPageStickers, ExteriaPa
     return button;
 }
 
+- (void)enableEmojiSearchWithSession:(ExteriaSession *)session {
+    _emoji.session = session;
+}
+
 - (id)initWithMedia:(ExteriaMediaCache *)media library:(ExteriaStickerLibrary *)library {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;

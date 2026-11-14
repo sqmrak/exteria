@@ -1314,6 +1314,8 @@
 "chat.gif.failed" = "анимации не загрузились :P";
 "chat.gif.none" = "здесь пока нет анимаций";
 "panel.emoji" = "эмодзи";
+"panel.emoji.search" = "поиск эмодзи";
+"panel.emoji.nothing" = "эмодзи не найдены";
 "panel.stickers" = "стикеры";
 "chatset.hidestickertime" = "скрыть время на стикерах";
 "chatset.editedicon" = "карандаш вместо слова «изм.»";

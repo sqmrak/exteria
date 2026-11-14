@@ -3331,6 +3331,7 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
         CGFloat width = self.view.window ? self.view.window.bounds.size.width : [UIScreen mainScreen].bounds.size.width;
         _panel.frame = CGRectMake(0, 0, width, [self panelHeight]);
         _panel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        [_panel enableEmojiSearchWithSession:_session];
         [_panel enableGifsWithSession:_session media:_media library:_stickers dialog:_dialog];
         /* only a Premium account may write custom emoji, so the tab waits for the answer about the signed in user */
         ExteriaWeakReference *weak = _weak;

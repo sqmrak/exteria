@@ -26,6 +26,8 @@
 @property (nonatomic, assign) id<ExteriaInputPanelDelegate> delegate;
 
 - (id)initWithMedia:(ExteriaMediaCache *)media library:(ExteriaStickerLibrary *)library;
+/* the account the search of the emoji grid asks its keywords from */
+- (void)enableEmojiSearchWithSession:(ExteriaSession *)session;
 /* adds the tab of custom emoji, for an account with Telegram Premium; asking twice is the same as once */
 - (void)enableCustomEmojiWithSession:(ExteriaSession *)session media:(ExteriaMediaCache *)media;
 /* the tab of animations; dialog is the chat they are sent to, which the search needs */
