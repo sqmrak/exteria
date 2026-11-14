@@ -171,6 +171,9 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolGear: return nil;
     case ExteriaSymbolSmiley: return nil;
     case ExteriaSymbolPhone: return nil;
+    case ExteriaSymbolProfileMessage: return nil;
+    case ExteriaSymbolProfileMute: return nil;
+    case ExteriaSymbolProfileUnmute: return nil;
     }
     return nil;
 }
@@ -336,6 +339,9 @@ static UIImage *ExteriaRenderSymbolImage(ExteriaSymbol symbol, CGFloat pointSize
     if (symbol == ExteriaSymbolGear) return ExteriaVectorImage(pointSize, color, ExteriaPathGear, EXTERIA_PATH_GEAR_GRID, 0);
     if (symbol == ExteriaSymbolSmiley) return ExteriaVectorImage(pointSize, color, ExteriaPathSmiley, EXTERIA_PATH_SMILEY_GRID, 0);
     if (symbol == ExteriaSymbolPhone) return ExteriaVectorImage(pointSize, color, ExteriaPathPhone, EXTERIA_PATH_PHONE_GRID, 0);
+    if (symbol == ExteriaSymbolProfileMessage) return ExteriaVectorImage(pointSize, color, ExteriaPathProfileMessage, EXTERIA_PATH_PROFILE_GRID, 0);
+    if (symbol == ExteriaSymbolProfileMute) return ExteriaVectorImage(pointSize, color, ExteriaPathProfileMute, EXTERIA_PATH_PROFILE_GRID, 0);
+    if (symbol == ExteriaSymbolProfileUnmute) return ExteriaVectorImage(pointSize, color, ExteriaPathProfileUnmute, EXTERIA_PATH_PROFILE_GRID, 0);
     if (symbol == ExteriaSymbolCross) return ExteriaVectorImage(pointSize, color, "M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12Z", 24, 0);
     NSString *name = ExteriaSymbolMaskName(symbol);
     UIImage *mask = name ? [UIImage imageNamed:name] : nil;

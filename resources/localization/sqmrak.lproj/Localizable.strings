@@ -286,7 +286,6 @@
 "channel.kind.group" = "группа";
 "channel.action.sound" = "звук";
 "channel.action.muted" = "без звука";
-"channel.action.discussion" = "обсуждение";
 "channel.action.link" = "ссылка";
 "channel.description" = "описание";
 "channel.link" = "ссылка-приглашение";
@@ -294,7 +293,6 @@
 "channel.members" = "участники";
 "channel.admins" = "администраторы";
 "channel.banned" = "чёрный список";
-"channel.discussion.card" = "группа обсуждения";
 "channel.community.card" = "сообщество";
 "channel.menu.discussion" = "просмотреть обсуждение";
 "channel.menu.leave" = "покинуть канал";
@@ -695,6 +693,8 @@
 "channel.join.toomuch" = "вы вступили в максимум каналов и групп, который разрешает telegram";
 "channel.join.denied" = "вы не можете вступить в этот канал";
 "profile.action.message" = "сообщение";
+"profile.action.chat" = "чат";
+"profile.action.sound" = "звук";
 "profile.action.call" = "звонок";
 "profile.action.video" = "видео";
 "report.title" = "пожаловаться";

@@ -499,7 +499,7 @@ SYMBOL_ICONS = (
     ("qr", "msg_qrcode", 0, True), ("link", "msg_link", 0, True), ("music", "baseline_music_note_24", 0, True),
     ("pause", "ic_pause", 0, True), ("next", "baseline_skip_next_24_white", 0, True),
     ("previous", "baseline_skip_previous_24_white", 0, True), ("eyeslash", "menu_hide_gift", 0, True),
-    ("speaker", "msg_voice_speaker", 0, True), ("speakerslash", "baseline_volume_off_24_white", 0, True),
+    ("speaker", "msg_voice_speaker", 0, True),
     ("ellipsisvertical", "ic_ab_other", 0, True), ("bell", "msg_unmute", 0, True), ("eye", "msg_views", 0, True),
     ("share", "msg_share", 0, True), ("bellmuted", "msg_mute", 0, True), ("pinnedlist", "msg_pinnedlist", 0, True),
     ("broom", "msg_clearcache", 0, True), ("back", "ic_ab_back", 0, True), ("externallink", "mini_external_link", 0, True),
@@ -654,6 +654,22 @@ def build_material_icons(src_dir, out_dir):
             write_png(image, os.path.join(out_dir, "material_%s%s.png" % (name, suffix)))
 
 
+# symbols the reference tree animates instead of keeping as a drawable, drawn once from a frame of the animation into tools/symbols
+SYMBOL_SVGS = ("speakerslash",)
+
+
+def build_svg_symbols(src_dir, out_dir):
+    """the white masks of SYMBOL_SVGS at the densities of the symbols, trimmed to the same square the drawables are"""
+    for name in SYMBOL_SVGS:
+        svg = os.path.join(src_dir, name + ".svg")
+        if not os.path.exists(svg):
+            sys.exit("no %s" % svg)
+        png = subprocess.check_output(["rsvg-convert", "-w", "512", "-h", "512", svg])
+        glyph = trim_to_square(Image.open(io.BytesIO(png)).convert("RGBA"))
+        for folder, suffix, side in SYMBOL_DENSITIES:
+            write_png(glyph.resize((side, side), Image.LANCZOS), os.path.join(out_dir, "symbol_%s%s.png" % (name, suffix)))
+
+
 def build_symbol_icons(res_dir, out_dir):
     """the glyphs of the app from the reference drawables, as white masks the app tints at run time"""
     for old in glob.glob(os.path.join(out_dir, "symbol_*.png")):
@@ -675,6 +691,7 @@ def build_symbol_icons(res_dir, out_dir):
         lid, can = split_trash(trim_to_square(Image.fromarray(mask, "RGBA")))
         write_png(lid, os.path.join(out_dir, "symbol_trashlid%s.png" % suffix))
         write_png(can, os.path.join(out_dir, "symbol_trashcan%s.png" % suffix))
+    build_svg_symbols(os.path.join(ROOT, "tools/symbols"), out_dir)
 
 
 def build_launch_images(out_dir):

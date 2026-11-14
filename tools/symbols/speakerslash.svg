@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- the muted frame (20) of res/raw/media_mute_unmute.json of the reference tree, the sound button of its story viewer: the speaker and the cross of its top layer, without the shadow -->
+  <g transform="translate(249.617 256) scale(0.99937)" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 33.271,-121.847 C 33.271,-159 1.078,-161.577 -15.728,-144.085 L -80.954,-75.396 C -85.332,-70.785 -91.399,-68.176 -97.742,-68.176 L -144.423,-68.176 C -167.395,-68.176 -177.034,-54.034 -177.034,-39.797 L -177.034,39.953 C -177.034,54.19 -167.395,68.333 -144.423,68.333 L -97.742,68.333 C -91.399,68.333 -85.332,70.941 -80.954,75.552 L -15.728,144.241 C 1.078,161.733 33.271,159.157 33.271,122.004 Z"/>
+    <g transform="translate(6.373 -6)">
+      <path d="M 94.341,-40.188 L 186.166,51.749"/>
+      <path d="M 186.166,-40.188 L 94.341,51.749"/>
+    </g>
+  </g>
+</svg>

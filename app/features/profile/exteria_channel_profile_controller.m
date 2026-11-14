@@ -46,7 +46,7 @@
 #define GAP 14.0
 #define LINKED_HEIGHT 64.0
 
-/* the discussion group of a channel as a card: its picture, its name and a line that says what it is, with a chevron */
+/* a linked group as a card: its picture, its name and a line that says what it is, with a chevron */
 @interface ExteriaLinkedGroupCard : UIControl {
     ExteriaAvatarView *_picture;
     ExteriaEmojiLabel *_title;
@@ -54,7 +54,7 @@
     UIImageView *_chevron;
 }
 - (void)configureWithDialog:(ExteriaDialog *)dialog avatars:(ExteriaAvatarCache *)avatars;
-/* the line under the name, for a card that stands for something other than the discussion group */
+/* the line under the name */
 - (void)setCaption:(NSString *)caption;
 @end
 
@@ -77,7 +77,6 @@
     _caption.backgroundColor = [UIColor clearColor];
     _caption.textColor = ExteriaColorSecondary();
     _caption.font = ExteriaFontRegular(14);
-    _caption.text = NSLocalizedString(@"channel.discussion.card", nil);
     [self addSubview:_caption];
     _chevron = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolChevronRight, 16, ExteriaColorMuted())];
     _chevron.contentMode = UIViewContentModeCenter;
@@ -150,7 +149,6 @@
     ExteriaUserAction *_messageAction;
     ExteriaUserAction *_addAction;
     ExteriaUserAction *_soundAction;
-    ExteriaUserAction *_discussionAction;
     ExteriaUserAction *_linkAction;
     ExteriaInfoCardView *_info;
     /* the community the channel was added to */
@@ -241,7 +239,7 @@
     _hero = [hero retain];
     _heroOpen = YES;
     _heroMoving = YES;
-    NSArray *cards = [NSArray arrayWithObjects:_joinAction, _messageAction, _addAction, _soundAction, _discussionAction, _linkAction, nil];
+    NSArray *cards = [NSArray arrayWithObjects:_joinAction, _messageAction, _addAction, _soundAction, _linkAction, nil];
     for (ExteriaUserAction *card in cards) [_head bringSubviewToFront:card];
     BOOL motion = !ExteriaReduceMotionEnabled();
     [hero animateCornerTo:0 duration:motion ? 0.38 : 0];
@@ -298,7 +296,7 @@
     _heroOpen = NO;
     _avatar.hidden = NO;
     [_hero beginClose];
-    NSArray *cards = [NSArray arrayWithObjects:_joinAction, _messageAction, _addAction, _soundAction, _discussionAction, _linkAction, nil];
+    NSArray *cards = [NSArray arrayWithObjects:_joinAction, _messageAction, _addAction, _soundAction, _linkAction, nil];
     BOOL motion = !ExteriaReduceMotionEnabled();
     [_hero animateCornerTo:_heroCircle.size.width / 2 duration:motion ? 0.38 : 0];
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
@@ -340,10 +338,8 @@
     [_messageAction release];
     [_addAction release];
     [_soundAction release];
-    [_discussionAction release];
     [_linkAction release];
     [_info release];
-    [_linkedCard release];
     [_communityCard release];
     [_community release];
     [_counts release];
@@ -406,7 +402,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _joinAction.hidden = YES;
     [_joinAction addTarget:self action:@selector(join) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_joinAction];
-    _messageAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolChats title:NSLocalizedString(@"channel.action.message", nil)];
+    _messageAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolProfileMessage title:NSLocalizedString(@"channel.action.message", nil)];
     _messageAction.hidden = YES;
     [_messageAction addTarget:self action:@selector(openMessages) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_messageAction];
@@ -414,15 +410,11 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _addAction.hidden = YES;
     [_addAction addTarget:self action:@selector(addMembers) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_addAction];
-    _soundAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolBell title:NSLocalizedString(@"channel.action.sound", nil)];
+    _soundAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolProfileMute title:NSLocalizedString(@"channel.action.sound", nil)];
     _soundAction.enabled = NO;
     _soundAction.hidden = YES;
     [_soundAction addTarget:self action:@selector(toggleMute) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_soundAction];
-    _discussionAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolChats title:NSLocalizedString(@"channel.action.discussion", nil)];
-    _discussionAction.hidden = YES;
-    [_discussionAction addTarget:self action:@selector(openDiscussion) forControlEvents:UIControlEventTouchUpInside];
-    [_head addSubview:_discussionAction];
     /* the share glyph profile row; the link is copied, because the share sheet starts at ios 6 */
     _linkAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolShare title:NSLocalizedString(@"channel.action.link", nil)];
     _linkAction.hidden = YES;
@@ -436,10 +428,6 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _info.codeCaption = NSLocalizedString(@"channel.link", nil);
     _info.codeHandler = ^{ [(ExteriaChannelProfileController *)me.target openQr]; };
     [_head addSubview:_info];
-    _linkedCard = [[ExteriaLinkedGroupCard alloc] init];
-    _linkedCard.hidden = YES;
-    [_linkedCard addTarget:self action:@selector(openDiscussion) forControlEvents:UIControlEventTouchUpInside];
-    [_head addSubview:_linkedCard];
     _communityCard = [[ExteriaLinkedGroupCard alloc] init];
     [_communityCard setCaption:NSLocalizedString(@"channel.community.card", nil)];
     _communityCard.hidden = YES;
@@ -546,9 +534,8 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _soundAction.hidden = !member;
     _soundAction.enabled = member;
     BOOL muted = _full.muted;
-    [_soundAction setSymbol:muted ? ExteriaSymbolBellMuted : ExteriaSymbolBell
+    [_soundAction setSymbol:muted ? ExteriaSymbolProfileUnmute : ExteriaSymbolProfileMute
                       title:NSLocalizedString(muted ? @"channel.action.muted" : @"channel.action.sound", nil)];
-    _discussionAction.hidden = _full.linked == nil;
     _linkAction.hidden = !_full.webLink.length;
 }
 
@@ -561,8 +548,6 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     if (full.shownLink.length) [rows addObject:[NSArray arrayWithObjects:NSLocalizedString(@"channel.link", nil), full.shownLink, nil]];
     [rows addObjectsFromArray:ExteriaIdentityRows(_dialog.peerId, _dialog.photo)];
     [_info setRows:rows];
-    _linkedCard.hidden = full.linked == nil;
-    if (full.linked) [_linkedCard configureWithDialog:full.linked avatars:self.avatars];
     /* the dialog of the list carries the community when the channel is in one; the full channel's own dialog is the fallback */
     [_community release];
     _community = [(_dialog.linkedCommunity ? _dialog.linkedCommunity : full.dialog.linkedCommunity) retain];
@@ -656,8 +641,8 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     _status.frame = CGRectMake(x, y + 30, contentWidth, 20);
     y += 50 + GAP + 4;
     NSMutableArray *actions = [NSMutableArray array];
-    ExteriaUserAction *order[6] = {_joinAction, _messageAction, _addAction, _soundAction, _discussionAction, _linkAction};
-    for (int i = 0; i < 6; ++i) {
+    ExteriaUserAction *order[5] = {_joinAction, _messageAction, _addAction, _soundAction, _linkAction};
+    for (int i = 0; i < 5; ++i) {
         if (!order[i].hidden) [actions addObject:order[i]];
     }
     CGFloat actionsHeight = actions.count ? ExteriaLayoutActions(actions, x, y, contentWidth, ACTION_HEIGHT, 10) : 0;
@@ -677,10 +662,6 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     if (!_info.hidden) {
         _info.frame = CGRectMake(x, y, contentWidth, height);
         y += height + GAP;
-    }
-    if (!_linkedCard.hidden) {
-        _linkedCard.frame = CGRectMake(x, y, contentWidth, LINKED_HEIGHT);
-        y += LINKED_HEIGHT + GAP;
     }
     if (!_communityCard.hidden) {
         _communityCard.frame = CGRectMake(x, y, contentWidth, LINKED_HEIGHT);

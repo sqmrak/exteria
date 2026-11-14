@@ -285,7 +285,6 @@
 "channel.kind.group" = "Group";
 "channel.action.sound" = "Sound";
 "channel.action.muted" = "Muted";
-"channel.action.discussion" = "Discussion";
 "channel.action.link" = "Link";
 "channel.description" = "Description";
 "channel.link" = "Invite link";
@@ -293,7 +292,6 @@
 "channel.members" = "Members";
 "channel.admins" = "Administrators";
 "channel.banned" = "Blacklist";
-"channel.discussion.card" = "Discussion group";
 "channel.community.card" = "Community";
 "channel.menu.discussion" = "View discussion";
 "channel.menu.leave" = "Leave channel";
@@ -693,6 +691,8 @@
 "channel.join.toomuch" = "You have joined as many channels and groups as Telegram allows";
 "channel.join.denied" = "You cannot join this channel";
 "profile.action.message" = "Message";
+"profile.action.chat" = "Chat";
+"profile.action.sound" = "Sound";
 "profile.action.call" = "Call";
 "profile.action.video" = "Video";
 "report.title" = "Report";

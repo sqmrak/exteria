@@ -235,10 +235,10 @@ static UILabel *ExteriaUserLabel(UIColor *color, UIFont *font, NSInteger alignme
     [_ratingBadge addTarget:self action:@selector(openRating) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_ratingBadge];
 
-    _messageAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolChats title:NSLocalizedString(@"profile.action.message", nil)];
+    _messageAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolProfileMessage title:NSLocalizedString(@"profile.action.chat", nil)];
     [_messageAction addTarget:self action:@selector(openMessages) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_messageAction];
-    _soundAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolBell title:NSLocalizedString(@"channel.action.sound", nil)];
+    _soundAction = [[ExteriaUserAction alloc] initWithSymbol:ExteriaSymbolProfileMute title:NSLocalizedString(@"profile.action.sound", nil)];
     [_soundAction addTarget:self action:@selector(toggleMute) forControlEvents:UIControlEventTouchUpInside];
     [_head addSubview:_soundAction];
     [self refreshSound];
@@ -630,7 +630,8 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
     [self refreshStatus];
     _channelCard.hidden = user.channel == nil;
     if (user.channel) [_channelCard configureWithChannel:user.channel avatars:self.avatars];
-    _music.savedTrack = user.music;
+    /* the saved messages are the account itself, and the track of its profile has no place in them: exteraGram shows it on the own profile only */
+    _music.savedTrack = _dialog.saved ? nil : user.music;
     _callAction.hidden = ![self canCallPerson];
     _videoAction.hidden = ![self canCallPerson];
     [self refreshMenu];
@@ -685,6 +686,14 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
 - (void)groupTabs:(ExteriaGroupTabsView *)tabs didOpenPerson:(ExteriaPerson *)person {
     (void)tabs;
     (void)person;
+}
+
+/* a group in common opens its chat */
+- (void)groupTabs:(ExteriaGroupTabsView *)tabs didOpenDialog:(ExteriaDialog *)dialog {
+    (void)tabs;
+    ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:self.session dialog:dialog avatars:self.avatars media:self.media
+                                                                          stickers:_stickers] autorelease];
+    [self.navigationController pushViewController:chat animated:YES];
 }
 
 /* a file or a link opens the chat at its message */
@@ -759,10 +768,7 @@ static UIColor *ExteriaDarkenedBackdrop(uint32_t rgb) {
         CGFloat above = 600;
         /* the wide photo ends the head itself, so the ground shows no strip under it */
         _backdropBottom = _heroOpen ? wideHeight : y - GAP + 6;
-        /* the ground melts at its lower edge unless the wide photo ends the head; the strip past the edge is under the music pill, which is not blurred. the melt is
-           drawn once for the final height, so while the height animates it was stretched into a dark band on the way, and it is drawn when the move ends */
-        _backdrop.softBottom = !_heroOpen && !_heroMoving;
-        _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom + (_heroOpen ? 0 : EXTERIA_BACKDROP_BLEED));
+        _backdrop.frame = CGRectMake(0, -above, width, above + _backdropBottom);
         _backdrop.focus = CGPointMake(width / 2, above + CGRectGetMidY(_avatar.frame));
     }
     if (_music.hasContent) {
@@ -982,8 +988,8 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
 }
 
 - (void)refreshSound {
-    [_soundAction setSymbol:_muted ? ExteriaSymbolBellMuted : ExteriaSymbolBell
-                      title:NSLocalizedString(_muted ? @"channel.action.muted" : @"channel.action.sound", nil)];
+    [_soundAction setSymbol:_muted ? ExteriaSymbolProfileUnmute : ExteriaSymbolProfileMute
+                      title:NSLocalizedString(@"profile.action.sound", nil)];
 }
 
 - (void)toggleMute {
