@@ -866,7 +866,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [root addSubview:_wallpaper];
     /* the song that plays follows the person into the chat, with the buttons to change it; the strip has no height while nothing plays */
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
-    _miniPlayer.wearsBarColor = YES;
+    _miniPlayer.pill = YES;
     ExteriaWeakReference *playerWeak = _weak;
     _miniPlayer.changeHandler = ^{
         ExteriaChatController *chat = playerWeak.target;
@@ -900,6 +900,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     _table.delegate = self;
     _table.hidden = YES;
     [root addSubview:_table];
+    /* the pill is translucent and the list runs under it, so it has to stand above the list */
+    [root insertSubview:_miniPlayer aboveSubview:_table];
     /* a tap on the list puts the keyboard or the panel away, or brings the keyboard back while a message is edited from the panel */
     UITapGestureRecognizer *dismiss = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(listTapped)] autorelease];
     dismiss.cancelsTouchesInView = NO;
@@ -2888,13 +2890,6 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     BOOL wasBottom = _stickToBottom;
     CGRect previousViewport = _table.frame;
     CGFloat previousOffset = _table.contentOffset.y;
-    /* the strip stands right under the header, over the pinned message and the voice bar, as in the android client; on a tablet the chat list beside the chat already shows the strip, and a second one would stand over the messages */
-    BOOL listHasStrip = ExteriaListShowsPlayer(self);
-    CGFloat playerHeight = _miniPlayer.showing && !listHasStrip ? [ExteriaMiniPlayer height] : 0;
-    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
-    _miniPlayer.hidden = listHasStrip || (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
-    _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
-    headerHeight += playerHeight;
     _pinnedBar.frame = CGRectMake(left, headerHeight, width, pinnedHeight);
     UIView *pinnedFoot = [_pinnedBar viewWithTag:PINNED_FOOT_TAG];
     pinnedFoot.frame = CGRectMake(0, pinnedHeight - 1.0 / ExteriaScreenScale(), width, 1.0 / ExteriaScreenScale());
@@ -2910,6 +2905,14 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _toEnd.frame = CGRectMake(CGRectGetMaxX(column) - 56, inputY - contextHeight - 56, 44, 44);
     [self placeReactionJump];
     headerHeight += pinnedHeight;
+    /* the pinned message stands right under the header and the strip is a pill under it, over the voice bar, as in the android client, which also gives the chat list beside it on a tablet a strip of its own */
+    CGFloat listTop = headerHeight;
+    CGFloat playerHeight = _miniPlayer.showing ? [ExteriaMiniPlayer heightForPill:YES] : 0;
+    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
+    _miniPlayer.hidden = (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
+    _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
+    headerHeight += playerHeight;
+    _toast.frame = CGRectMake(CGRectGetMidX(column) - 60, headerHeight + 10, 120, 28);
     CGFloat voiceHeight = _voiceBar.hidden ? 0 : VOICE_HEIGHT;
     _voiceBar.frame = CGRectMake(left, headerHeight, width, voiceHeight);
     _voiceTitle.font = ExteriaFontSemibold(14);
@@ -2919,7 +2922,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _voiceTitle.frame = CGRectMake(24, 5, width - 150, 18);
     _voiceInfo.frame = CGRectMake(24, 23, width - 150, 16);
     headerHeight += voiceHeight;
-    CGRect viewport = CGRectMake(left, headerHeight, width, MAX(0, inputY - contextHeight - headerHeight));
+    /* the list starts under the pill and the voice bar and keeps its first message clear of them with an inset, so the messages show through the gaps and the translucent card instead of being cut off at a hard edge */
+    CGRect viewport = CGRectMake(left, listTop, width, MAX(0, inputY - contextHeight - listTop));
     if (!CGRectEqualToRect(_table.frame, viewport)) _table.frame = viewport;
     BOOL typingWasShown = _typingShown;
     [self placeTypingBubble];
@@ -2930,8 +2934,14 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         suggestions.frame = CGRectMake(left, inputY - room, width, room);
     }
     [_bots layoutCardInRect:CGRectMake(left, headerHeight, width, MAX(0, inputY - headerHeight))];
-    UIEdgeInsets contentInset = UIEdgeInsetsMake(6, 0, 6, 0);
-    if (!UIEdgeInsetsEqualToEdgeInsets(_table.contentInset, contentInset)) _table.contentInset = contentInset;
+    UIEdgeInsets contentInset = UIEdgeInsetsMake(6 + headerHeight - listTop, 0, 6, 0);
+    if (!UIEdgeInsetsEqualToEdgeInsets(_table.contentInset, contentInset)) {
+        /* a list that stands at its first message follows the inset down, one that is read further on stays where it is */
+        BOOL atFirst = fabs(_table.contentOffset.y + _table.contentInset.top) < 1;
+        _table.contentInset = contentInset;
+        _table.scrollIndicatorInsets = UIEdgeInsetsMake(contentInset.top, 0, 0, 0);
+        if (atFirst && !_table.dragging && !_table.decelerating) _table.contentOffset = CGPointMake(0, -contentInset.top);
+    }
     CGPoint middle = CGPointMake(CGRectGetMidX(column), headerHeight + (inputY - headerHeight) / 2);
     CGSize fit = [_status sizeThatFits:CGSizeMake(MIN(width - 64, 420), 200)];
     _status.font = ExteriaFontRegular(16);
@@ -3057,7 +3067,9 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPlayerHostDidChangeNotification object:nil];
+    /* the full channel carries the background of the group; when its answer or the picture of the background was lost, the next appearance asks again instead of leaving the chat plain */
+    if (_dialog.peerKind == 3 && _channelFullFailed) { _channelFullFailed = NO; [self loadChannelFull]; }
+    else if (_channelFull && !_channelWallpaperSignature) [self applyChannelWallpaper:_channelFull.wallpaper];
     /* no screen over the whole display is up, so a bar one of them left hidden comes back */
     ExteriaStatusBarSettle();
     [self refreshBackBadge];
@@ -3150,7 +3162,6 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     if (_typingSent) { [_session setTyping:NO inDialog:_dialog]; _typingSent = NO; }
     [self clearTextSelection];
     [super viewWillDisappear:animated];
-    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPlayerHostDidChangeNotification object:nil];
     ++_codeCopyToken;
     _visible = NO;
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];

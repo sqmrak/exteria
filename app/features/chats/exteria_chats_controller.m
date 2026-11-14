@@ -112,7 +112,6 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     _badgeWeak = [[ExteriaWeakReference referenceTo:self] retain];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogListChanged:) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(localMarksChanged) name:ExteriaLocalMarksDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerHostChanged) name:ExteriaPlayerHostDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogRead:) name:ExteriaDialogReadNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(outboxRead:) name:ExteriaReadOutboxDidChangeNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
@@ -360,8 +359,6 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     });
 }
 
-- (BOOL)playerStripShowing { return _miniPlayer.showing; }
-
 /* a chat was read here: its count goes from the row now, without asking the server for the list, which can still answer with the old count or make the list wait */
 - (void)dialogRead:(NSNotification *)note {
     /* the rows of the main list and of the folder tabs that are not on screen are other objects of the same chat, and would bring the old count back when their tab is opened */
@@ -385,12 +382,15 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     return changed;
 }
 
-- (void)playerHostChanged {
-    if (self.isViewLoaded) [self.view setNeedsLayout];
+- (void)outboxRead:(NSNotification *)note {
+    /* the rows of the main list and of the tabs that are not on screen are other objects of the same chat, which would bring the single check back when their tab is opened */
+    BOOL others = ExteriaDialogsApplyingReadOutbox(_mainDialogs, note.userInfo);
+    for (NSArray *snapshot in [_folderSnapshots allValues]) if (ExteriaDialogsApplyingReadOutbox(snapshot, note.userInfo)) others = YES;
+    if (!ExteriaDialogsApplyingReadOutbox(_dialogs, note.userInfo) && !others) return;
+    if (self.isViewLoaded) [self reloadTable];
 }
 
 - (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaPlayerHostDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogReadNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaReadOutboxDidChangeNotification object:self.session];
     [_feedSeen release];
@@ -615,9 +615,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     CGRect frame = _header.frame;
     CGFloat promptHeight = [_prompt heightForWidth:width];
     CGFloat top = ExteriaChatsHeaderTop();
-    BOOL yielded = [self playerYielded];
-    CGFloat player = _miniPlayer.showing && !yielded ? [ExteriaMiniPlayer height] : 0;
-    _miniPlayer.hidden = yielded;
+    CGFloat player = _miniPlayer.showing ? [ExteriaMiniPlayer height] : 0;
     CGFloat height = top + player + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 8 : 0);
     if (frame.size.width != width || frame.size.height != height) {
         frame.size.width = width;

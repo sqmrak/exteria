@@ -24,9 +24,5 @@
 @property (nonatomic, assign) ExteriaDetailHost *detailHost;
 
 - (id)initWithSession:(ExteriaSession *)session;
-/* YES while the chat list of the tab that is up shows the strip of the song */
-- (BOOL)showsPlayerStrip;
-/* a chat in the right pane of a tablet carries the strip, so the list of this pane shows none */
-- (BOOL)playerYieldedToDetail;
 
 @end

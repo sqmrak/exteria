@@ -14,9 +14,6 @@ void ExteriaSetMainDialogsSnapshot(NSArray *dialogs);
 @protocol ExteriaChatsControllerDelegate <NSObject>
 /* the unread messages of the chats that are not muted, for the badge on the tab */
 - (void)chatsController:(ExteriaChatsController *)controller didChangeUnreadTotal:(NSInteger)total;
-@optional
-/* YES while a chat in the right pane of a tablet carries the strip of the song, so the list does not show a second one */
-- (BOOL)chatsControllerYieldsPlayer:(ExteriaChatsController *)controller;
 @end
 
 /* the chat list: search, filter pills, and a row per chat */
@@ -27,8 +24,6 @@ void ExteriaSetMainDialogsSnapshot(NSArray *dialogs);
 @property (nonatomic, assign) id<ExteriaChatsControllerDelegate> chatsDelegate;
 /* 0 lists the chats, 1 the archive; set before the view loads */
 @property (nonatomic, assign) int32_t folderId;
-/* whether the strip of the song that plays is up in this list */
-@property (nonatomic, readonly) BOOL playerStripShowing;
 /* the list goes back to its first row, as the chats tab does when it is pressed while it is shown */
 - (void)scrollToTopAnimated;
 /* what a chat opened from the list needs for its pictures and its sticker panel; set before the first tap */

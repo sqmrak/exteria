@@ -5,6 +5,8 @@
 @interface ExteriaMiniPlayer : UIView
 
 + (CGFloat)height;
+/* the height of a strip that stands as a pill (see pill): the card and the room above and below it */
++ (CGFloat)heightForPill:(BOOL)pill;
 /* whether a song or a video message holds the output, which is when any strip of the app has a height */
 + (BOOL)isActive;
 /* whether a song is the current one, which is what gives the strip its height */

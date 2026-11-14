@@ -24,7 +24,6 @@
 /* whether the right pane has no page open, so a change of colors cannot leave one in the old ones */
 - (BOOL)detailIsEmpty;
 /* whether the page up in the right pane is a chat of the modern style, which then carries the strip of the song under its own header while the left pane gives it up */
-- (BOOL)detailCarriesPlayer;
 
 @end
 
@@ -48,11 +47,6 @@
 
 /* YES for the page that stands alone in the right pane, which has no left pane to go back to, so its back button stays away */
 BOOL ExteriaIsDetailRoot(UIViewController *screen);
-/* YES for a page of the right pane while the chat list on the left shows the strip of the song, so the page does not show a second one. only the classic style keeps the strip
-   on the left: a modern chat carries it itself */
-BOOL ExteriaListShowsPlayer(UIViewController *screen);
-/* posted when the page up in the right pane may have changed from a chat to something else or back, so the left pane takes the strip back or gives it up */
-extern NSString *const ExteriaPlayerHostDidChangeNotification;
 
 @interface ExteriaSplitController : UIViewController {
     ExteriaDetailHost *_host;

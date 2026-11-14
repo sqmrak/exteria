@@ -165,7 +165,7 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     _cover.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12];
     _cover.userInteractionEnabled = NO;
     [self addSubview:_cover];
-    _note = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMusic, 24, [UIColor colorWithWhite:1 alpha:0.8])];
+    _note = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPlayerNote, 24, [UIColor colorWithWhite:1 alpha:0.8])];
     _note.contentMode = UIViewContentModeCenter;
     _note.userInteractionEnabled = NO;
     [self addSubview:_note];

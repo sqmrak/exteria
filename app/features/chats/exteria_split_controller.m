@@ -86,10 +86,6 @@
     return YES;
 }
 
-- (BOOL)detailCarriesPlayer {
-    return [_detail.topViewController isKindOfClass:[ExteriaChatController class]];
-}
-
 - (BOOL)detailIsEmpty {
     return _detail.viewControllers.count <= 1 && [_detail.topViewController isKindOfClass:[ExteriaDetailPlaceholder class]];
 }
@@ -200,15 +196,6 @@
 }
 
 @end
-
-NSString *const ExteriaPlayerHostDidChangeNotification = @"ExteriaPlayerHostDidChange";
-
-BOOL ExteriaListShowsPlayer(UIViewController *screen) {
-    UINavigationController *navigation = screen.navigationController;
-    if (![navigation isKindOfClass:[ExteriaDetailNavigationController class]]) return NO;
-    /* the strip of a tablet is in the right pane, under the header of the chat, in both styles: the list beside it yields to the chat that is open */
-    return NO;
-}
 
 BOOL ExteriaIsDetailRoot(UIViewController *screen) {
     UINavigationController *navigation = screen.navigationController;

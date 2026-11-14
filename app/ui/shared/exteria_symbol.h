@@ -145,13 +145,18 @@ typedef enum {
     ExteriaSymbolCross,
     /* the microphone with the slash of the exteraless call buttons: a clear gap cut beside a round line across the glyph, drawn over the microphone mask */
     ExteriaSymbolMicrophoneSlash,
-    /* Material Symbols Rounded, filled, from Google (tools/material, resources/icons/material_*): the glyphs of the modern player strip */
-    ExteriaSymbolMaterialPlay,
-    ExteriaSymbolMaterialPause,
-    ExteriaSymbolMaterialSkipPrevious,
-    ExteriaSymbolMaterialSkipNext,
-    ExteriaSymbolMaterialClose,
-    ExteriaSymbolMaterialMusicNote,
+    /* the keys of the modern player strip and sheet, from the YouTube Music icon set of ios/rewind (resources/icons/player_*, 96 px masks) */
+    ExteriaSymbolPlayerPlay,
+    ExteriaSymbolPlayerPause,
+    ExteriaSymbolPlayerPrevious,
+    ExteriaSymbolPlayerNext,
+    ExteriaSymbolPlayerClose,
+    ExteriaSymbolPlayerShuffle,
+    ExteriaSymbolPlayerRepeat,
+    ExteriaSymbolPlayerRepeatOne,
+    /* the note in a star shape, the picture a song shows while its cover has not come or has none */
+    ExteriaSymbolPlayerNote,
+    /* Material Symbols from Google (tools/material, resources/icons/material_*) */
     ExteriaSymbolMaterialMic,
     ExteriaSymbolMaterialVideocam
 } ExteriaSymbol;

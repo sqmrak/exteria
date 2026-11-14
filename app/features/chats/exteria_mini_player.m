@@ -13,12 +13,11 @@
 
 #define STRIP_HEIGHT 46.0
 #define BUTTON_WIDTH 40.0
-/* the modern strip is a tonal card that hangs from the bar above it: 8 points of room at the sides and 4 below, none above, so no gap shows between it and the pinned message
-   or the header. the height the owners lay out is the card and the room below it */
-#define CARD_HEIGHT 56.0
+/* the modern strip is a tonal card with 8 points of room at the sides; a pill has room above and below it too */
+#define CARD_HEIGHT 62.0
 #define CARD_SIDE 8.0
-#define CARD_GUTTER 4.0
 #define CARD_RADIUS 16.0
+#define PILL_GAP 8.0
 #define LEAD_SIDE 40.0
 #define LEAD_RADIUS 12.0
 #define KEY_SIDE 36.0
@@ -44,21 +43,30 @@
     ExteriaEmojiLabel *_subtitle;
     UIView *_track;
     UIView *_indicator;
+    CALayer *_waveClip;
+    CAShapeLayer *_wave;
+    CALayer *_rest;
+    CGFloat _waveWidth;
+    BOOL _waving;
+    UIColor *_tone;
     NSTimer *_timer;
     CGFloat _fraction;
     BOOL _showing;
-    BOOL _wearsBarColor;
-    BOOL _standsOnBar;
+    BOOL _pill;
+    UIColor *_surface;
     void (^_changeHandler)(void);
+    void (^_openHandler)(void);
+    void (^_closeHandler)(void);
 }
 @end
 
 @implementation ExteriaMiniPlayer
 
 @synthesize showing = _showing;
-@synthesize wearsBarColor = _wearsBarColor;
-@synthesize standsOnBar = _standsOnBar;
+@synthesize pill = _pill;
 @synthesize changeHandler = _changeHandler;
+@synthesize openHandler = _openHandler;
+@synthesize closeHandler = _closeHandler;
 
 + (BOOL)isActive {
     ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
@@ -66,21 +74,31 @@
     return [ExteriaRoundPlayback sharedPlayback].active || (player.state != ExteriaMusicStateIdle && player.track != nil);
 }
 
-+ (CGFloat)height { return ExteriaThemeIsClassic() ? STRIP_HEIGHT : CARD_HEIGHT + CARD_GUTTER; }
++ (CGFloat)height { return ExteriaThemeIsClassic() ? STRIP_HEIGHT : CARD_HEIGHT; }
++ (CGFloat)heightForPill:(BOOL)pill { return ExteriaThemeIsClassic() || !pill ? [self height] : CARD_HEIGHT + 2 * PILL_GAP; }
 
 /* the tonal colors of the card from the accent, the way a Material You scheme makes them from its key color: a container a little off the surface, a stronger one for the
    glyph tile, the accent itself for the play key and a dark or light ink for what stands on each */
 static UIColor *ExteriaStripContainer(UIColor *surface) {
     return ExteriaMixedColor(surface, ExteriaColorAccent(), ExteriaThemeIsDark() ? 0.22 : 0.14);
 }
-static UIColor *ExteriaStripTile(void) {
-    return ExteriaThemeIsDark() ? ExteriaMixedColor([UIColor colorWithWhite:0.12 alpha:1], ExteriaColorAccent(), 0.5) : ExteriaMixedColor([UIColor whiteColor], ExteriaColorAccent(), 0.3);
+static UIColor *ExteriaStripTile(UIColor *key) {
+    return ExteriaThemeIsDark() ? ExteriaMixedColor([UIColor colorWithWhite:0.12 alpha:1], key, 0.5) : ExteriaMixedColor([UIColor whiteColor], key, 0.3);
 }
-static UIColor *ExteriaStripOnTile(void) {
-    return ExteriaThemeIsDark() ? ExteriaMixedColor(ExteriaColorAccent(), [UIColor whiteColor], 0.75) : ExteriaMixedColor(ExteriaColorAccent(), [UIColor blackColor], 0.55);
+static UIColor *ExteriaStripOnTile(UIColor *key) {
+    return ExteriaThemeIsDark() ? ExteriaMixedColor(key, [UIColor whiteColor], 0.75) : ExteriaMixedColor(key, [UIColor blackColor], 0.55);
 }
-static UIColor *ExteriaStripOnPrimary(void) {
-    return ExteriaThemeIsDark() ? ExteriaMixedColor(ExteriaColorAccent(), [UIColor blackColor], 0.78) : [UIColor whiteColor];
+static UIColor *ExteriaStripOnPrimary(UIColor *key) {
+    return ExteriaThemeIsDark() ? ExteriaMixedColor(key, [UIColor blackColor], 0.78) : [UIColor whiteColor];
+}
+/* the primary of a scheme made from a color of the cover: pale and soft on the dark theme, deep on the light one, whatever the cover's own brightness was */
+static UIColor *ExteriaStripTonalPrimary(UIColor *tone) {
+    CGFloat red = 0, green = 0, blue = 0, alpha = 0, hue = 0, saturation = 0, value = 0;
+    if (![tone getRed:&red green:&green blue:&blue alpha:&alpha]) return ExteriaColorAccent();
+    ExteriaRGBToHSV(red, green, blue, &hue, &saturation, &value);
+    if (ExteriaThemeIsDark()) ExteriaHSVToRGB(hue, MIN(saturation, 0.5), 0.88, &red, &green, &blue);
+    else ExteriaHSVToRGB(hue, MIN(0.85, MAX(saturation, 0.2)), 0.45, &red, &green, &blue);
+    return [UIColor colorWithRed:red green:green blue:blue alpha:1];
 }
 
 /* a round state layer that stretches to the button it is the background of, so a press lights a disc and not the whole box of the button */
@@ -112,18 +130,50 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     return button;
 }
 
-- (void)setStandsOnBar:(BOOL)stands {
-    _standsOnBar = stands;
+- (void)setPill:(BOOL)pill {
+    if (pill == _pill) return;
+    _pill = pill;
     [self setNeedsLayout];
 }
 
-- (void)setWearsBarColor:(BOOL)wears {
-    _wearsBarColor = wears;
-    if (!ExteriaThemeIsClassic()) {
-        UIColor *surface = wears ? ExteriaColorBar() : ExteriaColorCard();
-        self.backgroundColor = surface;
-        _card.backgroundColor = ExteriaStripContainer(surface);
+- (UIColor *)key { return _tone ? ExteriaStripTonalPrimary(_tone) : ExteriaColorAccent(); }
+
+/* the card in the colors of its key: the surface, the tile, the keys, the bar. a tone makes the card a scheme of that color and its progress a wave, no tone is the accent of the app */
+- (void)applyScheme {
+    if (ExteriaThemeIsClassic()) return;
+    UIColor *key = [self key];
+    BOOL wave = _tone != nil;
+    _card.backgroundColor = _surface ? _surface : ExteriaStripContainer(ExteriaColorCard(), key);
+    _lead.backgroundColor = ExteriaStripTile(key);
+    _track.backgroundColor = wave ? [UIColor clearColor] : ExteriaStripTile(key);
+    _indicator.backgroundColor = key;
+    _indicator.hidden = wave;
+    _waveClip.hidden = !wave;
+    _rest.hidden = !wave;
+    _wave.strokeColor = key.CGColor;
+    _rest.backgroundColor = ExteriaMixedColor(ExteriaColorCard(), key, 0.35).CGColor;
+    [_toggle setBackgroundImage:ExteriaStripDisc(key) forState:UIControlStateNormal];
+    [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaMixedColor(key, ExteriaStripOnPrimary(key), 0.14)) forState:UIControlStateHighlighted];
+    UIColor *ink = wave ? ExteriaStripOnTile(key) : ExteriaColorSecondary();
+    [_previous setImage:ExteriaSymbolImage(ExteriaSymbolPlayerPrevious, 24, ink) forState:UIControlStateNormal];
+    [_next setImage:ExteriaSymbolImage(ExteriaSymbolPlayerNext, 24, ink) forState:UIControlStateNormal];
+    [_close setImage:ExteriaSymbolImage(ExteriaSymbolPlayerClose, 24, ink) forState:UIControlStateNormal];
+    [self refresh];
+}
+
+- (void)setTone:(UIColor *)tone surface:(UIColor *)surface animated:(BOOL)animated {
+    BOOL layoutChanges = (tone != nil) != (_tone != nil);
+    [_tone release];
+    _tone = [tone retain];
+    [_surface release];
+    _surface = [surface retain];
+    if (animated && _card && self.window && !ExteriaReduceMotionEnabled()) {
+        [UIView transitionWithView:_card duration:0.6 options:UIViewAnimationOptionTransitionCrossDissolve | UIViewAnimationOptionAllowUserInteraction
+                        animations:^{ [self applyScheme]; } completion:nil];
+    } else {
+        [self applyScheme];
     }
+    if (layoutChanges) [self setNeedsLayout];
 }
 
 - (id)initWithFrame:(CGRect)frame {
@@ -135,14 +185,15 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
         /* a plain black or white ground, as the pinned message has, and not the purple of the bars: the chat showed through the strip and the plate made a stripe */
         self.backgroundColor = ExteriaClassicStripGround();
     } else {
-        self.backgroundColor = ExteriaColorCard();
+        /* the rounded card stands alone, so the wallpaper shows in the gutter below it and not a plate */
+        self.backgroundColor = [UIColor clearColor];
     }
     if (!classic) {
         _card = [[UIView alloc] init];
-        _card.backgroundColor = ExteriaStripContainer(ExteriaColorCard());
+        _card.backgroundColor = ExteriaStripContainer(ExteriaColorCard(), ExteriaColorAccent());
         [self addSubview:_card];
         _lead = [[UIView alloc] init];
-        _lead.backgroundColor = ExteriaStripTile();
+        _lead.backgroundColor = ExteriaStripTile(ExteriaColorAccent());
         _lead.layer.cornerRadius = LEAD_RADIUS;
         _lead.clipsToBounds = YES;
         [_card addSubview:_lead];
@@ -160,13 +211,26 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
         _subtitle.dropsUndrawable = YES;
         [_card addSubview:_subtitle];
         _track = [[UIView alloc] init];
-        _track.backgroundColor = ExteriaStripTile();
+        _track.backgroundColor = ExteriaStripTile(ExteriaColorAccent());
         _track.layer.cornerRadius = PROGRESS_HEIGHT / 2;
         [_card addSubview:_track];
         _indicator = [[UIView alloc] init];
         _indicator.backgroundColor = ExteriaColorAccent();
         _indicator.layer.cornerRadius = PROGRESS_HEIGHT / 2;
         [_track addSubview:_indicator];
+        _waveClip = [[CALayer layer] retain];
+        _waveClip.masksToBounds = YES;
+        _waveClip.hidden = YES;
+        [_track.layer addSublayer:_waveClip];
+        _wave = [[CAShapeLayer layer] retain];
+        _wave.fillColor = NULL;
+        _wave.lineWidth = WAVE_STROKE;
+        _wave.lineCap = kCALineCapRound;
+        [_waveClip addSublayer:_wave];
+        _rest = [[CALayer layer] retain];
+        _rest.cornerRadius = WAVE_STROKE / 2;
+        _rest.hidden = YES;
+        [_track.layer addSublayer:_rest];
     }
     _title = [[ExteriaEmojiLabel alloc] init];
     _title.font = classic ? [UIFont boldSystemFontOfSize:14] : ExteriaFontSemibold(14);
@@ -179,15 +243,15 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [classic ? (UIView *)self : _card addSubview:_title];
     _title.userInteractionEnabled = YES;
     [_title addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openPlayer)] autorelease]];
-    _previous = [ExteriaStripButton(ExteriaSymbolPrevious, self, @selector(previousTapped), @"music.previous") retain];
+    _previous = [ExteriaStripButton(classic ? ExteriaSymbolPrevious : ExteriaSymbolPlayerPrevious, self, @selector(previousTapped), @"music.previous") retain];
     _toggle = [ExteriaStripButton(ExteriaSymbolPlay, self, @selector(toggleTapped), @"music.play") retain];
-    _next = [ExteriaStripButton(ExteriaSymbolNext, self, @selector(nextTapped), @"music.next") retain];
-    _close = [ExteriaStripButton(ExteriaSymbolClose, self, @selector(closeTapped), @"music.stop") retain];
+    _next = [ExteriaStripButton(classic ? ExteriaSymbolNext : ExteriaSymbolPlayerNext, self, @selector(nextTapped), @"music.next") retain];
+    _close = [ExteriaStripButton(classic ? ExteriaSymbolClose : ExteriaSymbolPlayerClose, self, @selector(closeTapped), @"music.stop") retain];
     for (UIView *view in [NSArray arrayWithObjects:_previous, _toggle, _next, _close, nil]) [classic ? (UIView *)self : _card addSubview:view];
     if (!classic) {
         /* the play key is the filled one: the accent with the light or dark ink of the scheme on it */
         [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaColorAccent()) forState:UIControlStateNormal];
-        [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaMixedColor(ExteriaColorAccent(), ExteriaStripOnPrimary(), 0.14)) forState:UIControlStateHighlighted];
+        [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaMixedColor(ExteriaColorAccent(), ExteriaStripOnPrimary(ExteriaColorAccent()), 0.14)) forState:UIControlStateHighlighted];
     }
     _line = [[UIView alloc] init];
     _line.backgroundColor = classic ? ExteriaClassicStripEdge() : ExteriaColorHairline();
@@ -203,6 +267,11 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_timer invalidate];
+    [_tone release];
+    [_surface release];
+    [_waveClip release];
+    [_wave release];
+    [_rest release];
     [_card release];
     [_lead release];
     [_leadGlyph release];
@@ -218,6 +287,8 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [_line release];
     [_backdrop release];
     [_changeHandler release];
+    [_openHandler release];
+    [_closeHandler release];
     [super dealloc];
 }
 
@@ -270,8 +341,8 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _leadCover.image = cover;
     _leadCover.hidden = cover == nil;
     _leadGlyph.hidden = cover != nil;
-    _leadGlyph.image = ExteriaSymbolImage(round ? ExteriaSymbolMaterialVideocam : (voice ? ExteriaSymbolMaterialMic : ExteriaSymbolMaterialMusicNote), 24, ExteriaStripOnTile());
-    UIImage *key = ExteriaSymbolImage(playing ? ExteriaSymbolMaterialPause : ExteriaSymbolMaterialPlay, 24, ExteriaStripOnPrimary());
+    _leadGlyph.image = ExteriaSymbolImage(round ? ExteriaSymbolMaterialVideocam : (voice ? ExteriaSymbolMaterialMic : ExteriaSymbolPlayerNote), 24, ExteriaStripOnTile([self key]));
+    UIImage *key = ExteriaSymbolImage(playing ? ExteriaSymbolPlayerPause : ExteriaSymbolPlayerPlay, 24, ExteriaStripOnPrimary([self key]));
     if (_toggle.currentImage != key) {
         BOOL animate = self.window != nil && _showing && !ExteriaReduceMotionEnabled() && _toggle.currentImage;
         if (animate) {
@@ -281,6 +352,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
             [_toggle setImage:key forState:UIControlStateNormal];
         }
     }
+    _waving = playing;
     [self updateProgress];
 }
 
@@ -314,7 +386,44 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 }
 
 - (void)layoutProgress {
-    _indicator.frame = CGRectMake(0, 0, _track.bounds.size.width * _fraction, PROGRESS_HEIGHT);
+    CGFloat width = _track.bounds.size.width;
+    if (!_tone) {
+        _indicator.frame = CGRectMake(0, 0, width * _fraction, PROGRESS_HEIGHT);
+        return;
+    }
+    CGFloat active = width * _fraction;
+    CGFloat restStart = active > 0 ? MIN(width, active + WAVE_GAP) : 0;
+    _waveClip.frame = CGRectMake(0, 0, active, WAVE_BOX);
+    _rest.frame = CGRectMake(restStart, (WAVE_BOX - WAVE_STROKE) / 2, MAX(0, width - restStart), WAVE_STROKE);
+    if (width != _waveWidth) {
+        /* one wave longer than the bar, so sliding it by a wave length loops without a seam */
+        _waveWidth = width;
+        UIBezierPath *path = [UIBezierPath bezierPath];
+        for (CGFloat x = 0; x <= width + WAVE_LENGTH; x += 1) {
+            CGPoint point = CGPointMake(x, WAVE_BOX / 2 + WAVE_AMPLITUDE * sinf(2 * (CGFloat)M_PI * x / WAVE_LENGTH));
+            if (x == 0) [path moveToPoint:point];
+            else [path addLineToPoint:point];
+        }
+        _wave.frame = CGRectMake(0, 0, width + WAVE_LENGTH, WAVE_BOX);
+        _wave.path = path.CGPath;
+    }
+    [self updateWave];
+}
+
+/* the wave runs while the sound does and stands still when it is paused or when reduced motion is on */
+- (void)updateWave {
+    BOOL run = _tone && _waving && self.window && !ExteriaReduceMotionEnabled();
+    BOOL running = [_wave animationForKey:@"wave"] != nil;
+    if (run && !running) {
+        CABasicAnimation *slide = [CABasicAnimation animationWithKeyPath:@"transform.translation.x"];
+        slide.fromValue = [NSNumber numberWithFloat:0];
+        slide.toValue = [NSNumber numberWithFloat:(float)-WAVE_LENGTH];
+        slide.duration = WAVE_PERIOD;
+        slide.repeatCount = HUGE_VALF;
+        [_wave addAnimation:slide forKey:@"wave"];
+    } else if (!run && running) {
+        [_wave removeAnimationForKey:@"wave"];
+    }
 }
 
 /* the timer lives only while the card is on a screen and has a sound to follow, since it holds the card; a card taken off the screen lets it go */
@@ -352,11 +461,13 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     else [[ExteriaMusicPlayer sharedPlayer] next];
 }
 - (void)closeTapped {
+    if (_closeHandler) { _closeHandler(); return; }
     if ([ExteriaRoundPlayback sharedPlayback].active) [[ExteriaRoundPlayback sharedPlayback] stop];
     else [[ExteriaMusicPlayer sharedPlayer] stop];
 }
 /* the sheet of the player has nothing for a video message, which has its own circle */
 - (void)openPlayer {
+    if (_openHandler) { _openHandler(); return; }
     if (![ExteriaRoundPlayback sharedPlayback].active) [ExteriaMusicSheet present];
 }
 
@@ -383,16 +494,15 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 /* the card keeps its own height while the owner animates the strip open or shut, and the strip's clipping hides the rest, so the content does not squeeze */
 - (void)layoutCard {
     CGFloat width = self.bounds.size.width;
-    _card.frame = CGRectMake(CARD_SIDE, _standsOnBar ? CARD_GUTTER : 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
-    /* only the corners away from the bar are round: the lower ones under a header, the upper ones over the tab bar */
+    _card.frame = CGRectMake(CARD_SIDE, _pill ? PILL_GAP : 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
     CAShapeLayer *shape = (CAShapeLayer *)_card.layer.mask;
     if (![shape isKindOfClass:[CAShapeLayer class]]) {
         shape = [CAShapeLayer layer];
         _card.layer.mask = shape;
     }
     shape.frame = _card.bounds;
-    shape.path = [UIBezierPath bezierPathWithRoundedRect:_card.bounds byRoundingCorners:_standsOnBar ? (UIRectCornerTopLeft | UIRectCornerTopRight) : (UIRectCornerBottomLeft | UIRectCornerBottomRight)
-                                             cornerRadii:CGSizeMake(CARD_RADIUS, CARD_RADIUS)].CGPath;
+    shape.path = [UIBezierPath bezierPathWithRoundedRect:_card.bounds byRoundingCorners:UIRectCornerAllCorners
+                                             cornerRadii:CGSizeMake(_pill ? CARD_HEIGHT / 2 : CARD_RADIUS, _pill ? CARD_HEIGHT / 2 : CARD_RADIUS)].CGPath;
     CGFloat cardWidth = _card.bounds.size.width;
     BOOL narrow = cardWidth < CARD_NARROW;
     CGFloat key = narrow ? KEY_SIDE_NARROW : KEY_SIDE, lead = narrow ? LEAD_SIDE_NARROW : LEAD_SIDE;
@@ -413,10 +523,13 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     CGFloat textX = 8 + lead + (narrow ? 10 : 12);
     CGFloat textWidth = MAX(0, x - 8 - textX);
     BOOL hasLine = _subtitle.text.length > 0;
-    _title.frame = CGRectMake(textX, hasLine ? 10 : mid - 10, textWidth, 20);
-    _subtitle.frame = CGRectMake(textX, 29, textWidth, 16);
+    _title.frame = CGRectMake(textX, hasLine ? 12 : mid - 10, textWidth, 20);
+    _subtitle.frame = CGRectMake(textX, 31, textWidth, 16);
     _subtitle.hidden = !hasLine;
-    _track.frame = CGRectMake(textX, CARD_HEIGHT - 6, MAX(0, cardWidth - textX - 16), PROGRESS_HEIGHT);
+    /* the track stays clear of the lower edge and, in the pill, of the curve of its end: the pill is rounded to half its height, and a track 16 points from the side ran into
+       that curve near the bottom */
+    CGFloat trackRight = _pill ? 26 : 16;
+    _track.frame = CGRectMake(textX, _tone ? CARD_HEIGHT - 6 - WAVE_BOX : CARD_HEIGHT - 11, MAX(0, cardWidth - textX - trackRight), _tone ? WAVE_BOX : PROGRESS_HEIGHT);
     [self layoutProgress];
 }
 

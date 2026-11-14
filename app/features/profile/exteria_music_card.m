@@ -117,7 +117,7 @@ static ExteriaMusicKey *ExteriaCardKey(UIColor *fill, CGFloat radius, id target,
     _coverImage.contentMode = UIViewContentModeScaleAspectFill;
     _coverImage.clipsToBounds = YES;
     [_coverBox addSubview:_coverImage];
-    _coverNote = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolMusic, 24, accent)];
+    _coverNote = [[UIImageView alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolPlayerNote, 24, accent)];
     _coverNote.contentMode = UIViewContentModeCenter;
     [_coverBox addSubview:_coverNote];
 

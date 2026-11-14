@@ -115,7 +115,7 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
         }
     }
     BOOL covered = _cover.image != nil;
-    ExteriaSymbol glyph = ExteriaSymbolMusic;
+    ExteriaSymbol glyph = ExteriaSymbolPlayerNote;
     if (current) glyph = state == ExteriaMusicStatePlaying ? ExteriaSymbolPause : ExteriaSymbolPlay;
     /* a cover keeps showing under a veil while its song is the current one, and the note is only for songs without a cover */
     _icon.hidden = covered && !current;

@@ -134,12 +134,11 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolFave: return @"symbol_fave";
     case ExteriaSymbolPinLine: return @"symbol_pinline";
     case ExteriaSymbolGhost: return @"symbol_ghost";
-    case ExteriaSymbolMaterialPlay: return @"material_play_arrow";
-    case ExteriaSymbolMaterialPause: return @"material_pause";
-    case ExteriaSymbolMaterialSkipPrevious: return @"material_skip_previous";
-    case ExteriaSymbolMaterialSkipNext: return @"material_skip_next";
-    case ExteriaSymbolMaterialClose: return @"material_close";
-    case ExteriaSymbolMaterialMusicNote: return @"material_music_note";
+    case ExteriaSymbolPlayerPlay: return @"player_play";
+    case ExteriaSymbolPlayerPause: return @"player_pause";
+    case ExteriaSymbolPlayerPrevious: return @"player_previous";
+    case ExteriaSymbolPlayerNext: return @"player_next";
+    case ExteriaSymbolPlayerClose: return @"player_close";
     case ExteriaSymbolMaterialMic: return @"material_mic";
     case ExteriaSymbolMaterialVideocam: return @"material_videocam";
     case ExteriaSymbolHammer: return nil;

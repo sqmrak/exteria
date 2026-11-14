@@ -205,7 +205,6 @@
     [_folderLoad cancel];
     [_folderLoad release];
     [_folders release];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaPlayerHostDidChangeNotification object:nil];
     _miniPlayer.changeHandler = nil;
     [_miniPlayer release];
     [_header release];
@@ -246,7 +245,6 @@
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
     _miniPlayer.changeHandler = ^{ [(ExteriaClassicChatsController *)playerWeak.target layoutHeader]; };
     [header addSubview:_miniPlayer];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerHostChanged) name:ExteriaPlayerHostDidChangeNotification object:nil];
     NSString *searchPlaceholder = NSLocalizedString(@"chats.search", nil);
     _search = [ExteriaClassicSearchFacade(CGRectMake(0, 0, width, 44), searchPlaceholder) retain];
     _search.userInteractionEnabled = NO;
@@ -402,20 +400,11 @@
 }
 
 /* the stories sit under the search bar and push the rows down by their own height */
-- (BOOL)playerStripShowing { return _miniPlayer.showing; }
-- (void)playerHostChanged { if (self.isViewLoaded) [self layoutHeader]; }
-
 - (void)layoutHeader {
     CGFloat width = self.tableView.bounds.size.width;
     CGFloat promptHeight = [_prompt heightForWidth:width];
     CGFloat search = _search.hidden ? 0 : 44;
-    BOOL yielded = NO;
-    for (UIViewController *up = self.parentViewController; up && !yielded; up = up.parentViewController) {
-        if ([up isKindOfClass:[ExteriaMainController class]]) yielded = [(ExteriaMainController *)up playerYieldedToDetail];
-    }
-    if (!yielded) yielded = [(ExteriaMainController *)self.tabBarController.parentViewController isKindOfClass:[ExteriaMainController class]] && [(ExteriaMainController *)self.tabBarController.parentViewController playerYieldedToDetail];
-    _miniPlayer.hidden = yielded;
-    CGFloat player = _miniPlayer.showing && !yielded ? [ExteriaMiniPlayer height] : 0;
+    CGFloat player = _miniPlayer.showing ? [ExteriaMiniPlayer height] : 0;
     CGFloat height = search + player + _folders.height + _stories.height + (promptHeight > 0 ? promptHeight + 16 : 0);
     _miniPlayer.frame = CGRectMake(0, search, width, player);
     _folders.frame = CGRectMake(0, search + player, width, _folders.height);
