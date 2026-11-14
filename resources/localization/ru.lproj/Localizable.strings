@@ -773,6 +773,9 @@
 "chat.unread.line" = "Непрочитанные сообщения";
 "chat.msg.readers" = "Прочитали";
 "chat.msg.readers.count" = "Прочитали: %lu ›";
+"chat.msg.reactions.one" = "%d реакция";
+"chat.msg.reactions.few" = "%d реакции";
+"chat.msg.reactions.other" = "%d реакций";
 "chat.msg.sentat" = "Отправлено в %@";
 
 "attach.contact" = "Контакт";

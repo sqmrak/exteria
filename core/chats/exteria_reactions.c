@@ -133,6 +133,8 @@ exteria_status exteria_reaction_people_parse(const exteria_tl_value *answer, ext
         row.peer_id = peer.id;
         rows[i] = row;
     }
+    /* the server names a next offset also on the last page, which showed a button for a page that is not there; a page shorter than the limit asked for is the end */
+    if (items->u.vec.count < EXTERIA_REACTION_PEOPLE_PAGE) next[0] = 0;
     *count = items->u.vec.count;
     return EXTERIA_OK;
 }

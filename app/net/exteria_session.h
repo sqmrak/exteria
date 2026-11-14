@@ -380,6 +380,9 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 /* ordinary emoji choices permitted by this chat, as ExteriaReaction items */
 /* a Premium account is also offered the custom emoji the chat allows: those it lists, and where it allows any, the account's favorites */
 - (void)loadAvailableReactionsForDialog:(ExteriaDialog *)dialog premium:(BOOL)premium completion:(ExteriaListCompletion)completion;
+/* the same list, with whether the chat takes any custom emoji as a reaction (the picker offers its emoji panel only then) */
+typedef void (^ExteriaReactionChoicesCompletion)(NSArray *choices, BOOL customAllowed, NSString *errorName);
+- (void)loadReactionChoicesForDialog:(ExteriaDialog *)dialog premium:(BOOL)premium completion:(ExteriaReactionChoicesCompletion)completion;
 /* returns the updated stored messages for these ids, including history outside the watched page */
 - (void)refreshReactionsForMessages:(NSArray *)ids dialog:(ExteriaDialog *)dialog completion:(ExteriaListCompletion)completion;
 /* stars sent to a message as a reaction; the reactions of the message come back as they are after it */

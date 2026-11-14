@@ -771,6 +771,9 @@
 "chat.unread.line" = "Unread Messages";
 "chat.msg.readers" = "Read by";
 "chat.msg.readers.count" = "Read by %lu ›";
+"chat.msg.reactions.one" = "%d reaction";
+"chat.msg.reactions.few" = "%d reactions";
+"chat.msg.reactions.other" = "%d reactions";
 "chat.msg.sentat" = "Sent at %@";
 
 "attach.contact" = "Contact";

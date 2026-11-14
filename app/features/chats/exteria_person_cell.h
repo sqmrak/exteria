@@ -21,6 +21,8 @@ UIColor *ExteriaMemberTagColor(BOOL owner);
 /* set just before configureWithName: for a trailing text that is a tag (the post of a member): it stands in a pill
    of this color show it */
 @property (nonatomic, retain) UIColor *trailingTint;
+/* puts a glyph in the round picture in the place of the initials or the photo, such as a microphone for a voice note; call it after configureWithName:, which clears it */
+- (void)showAvatarSymbol:(ExteriaSymbol)symbol;
 - (void)configureWithName:(NSString *)name initials:(NSString *)initials seed:(NSUInteger)seed
                  subtitle:(NSString *)subtitle subtitleColor:(UIColor *)subtitleColor
                  trailing:(NSString *)trailing symbol:(ExteriaSymbol)symbol showsSymbol:(BOOL)showsSymbol

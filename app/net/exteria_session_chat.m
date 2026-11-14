@@ -1931,8 +1931,8 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
 }
 
 - (void)loadReactionCatalogWithPolicy:(exteria_reactions)allowed all:(BOOL)all custom:(BOOL)allowCustom premium:(BOOL)premium
-                           completion:(ExteriaListCompletion)completion {
-    ExteriaListCompletion done = [completion copy];
+                           completion:(ExteriaReactionChoicesCompletion)completion {
+    ExteriaReactionChoicesCompletion done = [completion copy];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         *request = exteria_tl_new_obj(arena, "messages.getAvailableReactions");
         return *request ? exteria_tl_set_i32(arena, *request, "hash", 0) : EXTERIA_E_NOMEM;
@@ -1964,7 +1964,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
             }
         }
         if (error || !premium || !all || !allowCustom) {
-            [self finishLoad:items error:error completion:done];
+            [self finishReactionChoices:items custom:all && allowCustom error:error completion:done];
             [done release];
             return;
         }
@@ -1975,13 +1975,27 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
                 for (ExteriaReaction *known in standard) seen = seen || [known.key isEqualToString:reaction.key];
                 if (!seen) [standard addObject:reaction];
             }
-            [self finishLoad:standard error:nil completion:done];
+            [self finishReactionChoices:standard custom:YES error:nil completion:done];
             [done release];
         }];
     }];
 }
 
+/* the custom flag says whether the chat takes any custom emoji, which decides if the picker offers its emoji panel */
+- (void)finishReactionChoices:(NSArray *)items custom:(BOOL)custom error:(NSString *)error completion:(ExteriaReactionChoicesCompletion)done {
+    [self finishLoad:items error:error completion:^(NSArray *delivered, NSString *deliveredError) { done(delivered, custom, deliveredError); }];
+}
+
 - (void)loadAvailableReactionsForDialog:(ExteriaDialog *)dialog premium:(BOOL)premium completion:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    [self loadReactionChoicesForDialog:dialog premium:premium completion:^(NSArray *choices, BOOL custom, NSString *errorName) {
+        (void)custom;
+        done(choices, errorName);
+    }];
+    [done release];
+}
+
+- (void)loadReactionChoicesForDialog:(ExteriaDialog *)dialog premium:(BOOL)premium completion:(ExteriaReactionChoicesCompletion)completion {
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     if (peer.kind == 1) {
         exteria_reactions allowed;
@@ -1989,7 +2003,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
         [self loadReactionCatalogWithPolicy:allowed all:YES custom:YES premium:premium completion:completion];
         return;
     }
-    ExteriaListCompletion done = [completion copy];
+    ExteriaReactionChoicesCompletion done = [completion copy];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         if (peer.kind == 2) {
             *request = exteria_tl_new_obj(arena, "messages.getFullChat");
@@ -2015,7 +2029,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
             }
             custom = exteria_reaction_policy_custom(result->value);
         }
-        if (error) [self finishLoad:nil error:error completion:done];
+        if (error) [self finishReactionChoices:nil custom:NO error:error completion:done];
         else [self loadReactionCatalogWithPolicy:allowed all:all custom:custom premium:premium completion:done];
         [done release];
     }];

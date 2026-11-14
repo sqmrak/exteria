@@ -124,6 +124,8 @@ static UILabel *ExteriaPersonLabel(UIFont *font, NSInteger alignment) {
     _avatar.seed = seed;
     _avatar.initials = initials;
     _avatar.deleted = NO;
+    /* a reused cell must not keep the glyph an earlier row put in its picture */
+    _avatar.showsSymbol = NO;
     [_avatar setPhoto:photo cache:avatars];
     NSArray *badges = nil;
     _name.text = ExteriaNameWithBadges(name, ExteriaBadgeDocument(0, _premium), _developer, &badges);
@@ -146,6 +148,11 @@ static UILabel *ExteriaPersonLabel(UIFont *font, NSInteger alignment) {
     _mutual = NO;
     self.accessibilityLabel = subtitle.length ? [NSString stringWithFormat:@"%@, %@", name, subtitle] : name;
     [self setNeedsLayout];
+}
+
+- (void)showAvatarSymbol:(ExteriaSymbol)symbol {
+    _avatar.symbol = symbol;
+    _avatar.showsSymbol = YES;
 }
 
 - (void)layoutSubviews {

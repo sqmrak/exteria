@@ -483,6 +483,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     int32_t _startMessageId;
     NSArray *_menuReactions;
     BOOL _menuReactionsLoading;
+    /* the chat takes any custom emoji as a reaction, not only the ones in _menuReactions */
+    BOOL _menuCustomAllowed;
     /* the identities the account may write as in this supergroup, once the server listed more than itself */
     NSArray *_sendAsOptions;
     BOOL _sendAsRequested;
@@ -2578,7 +2580,12 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
         if (!chat) return;
         NSString *selected = ExteriaChatQuickReaction();
         long long document = exteria_quick_reaction_document(selected.UTF8String);
-        if (document && chat->_premiumKnown && chat->_premium) {
+        /* a chat that lists its reactions answers REACTION_INVALID to a custom emoji that is not among them */
+        BOOL permitted = chat->_menuCustomAllowed;
+        for (ExteriaReaction *choice in chat->_menuReactions) {
+            if (choice.row.kind == EXTERIA_REACTION_CUSTOM && choice.row.document_id == document) permitted = YES;
+        }
+        if (document && permitted && chat->_premiumKnown && chat->_premium) {
             exteria_reaction row;
             memset(&row, 0, sizeof(row));
             row.kind = EXTERIA_REACTION_CUSTOM;
@@ -4014,6 +4021,41 @@ static NSString *const ExteriaListenedKey = @"exteria.voice.listened";
         NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:chat->_dialog.peerKind], @"kind", [NSNumber numberWithLongLong:chat->_dialog.peerId], @"peer",
                               [NSNumber numberWithInt:chat->_dialog.topicId], @"topic", [NSNumber numberWithInt:newest], @"maxId", [NSNumber numberWithBool:toEnd], @"toEnd", nil];
         ExteriaDialogsApplyingRead([NSArray arrayWithObject:chat->_dialog], info);
+    }];
+}
+
+/* "3 reactions" and the first three who reacted; a tap opens the whole list. the faces come from the first page of that list, which the page asks for again when it opens */
+- (void)fillReactorsLineOfMenu:(ExteriaMessageMenu *)menu message:(ExteriaMessage *)message {
+    NSInteger total = 0;
+    for (ExteriaReaction *reaction in message.reactions) total += reaction.count;
+    if (total <= 0) return;
+    ExteriaWeakReference *weak = _weak;
+    int32_t messageId = message.messageId;
+    [menu setReactorsText:[NSString stringWithFormat:NSLocalizedString([@"chat.msg.reactions." stringByAppendingString:ExteriaPluralForm(total)], nil), (int)total]];
+    menu.reactorsHandler = ^{
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        ExteriaReactionPeopleController *page = [[[ExteriaReactionPeopleController alloc] initWithSession:chat->_session dialog:chat->_dialog messageId:messageId avatars:chat->_avatars media:chat->_media] autorelease];
+        [chat.navigationController pushViewController:page animated:YES];
+    };
+    ExteriaMessageMenu *shown = menu;
+    [_session loadReactorsOfMessageId:messageId ofDialog:_dialog offset:nil completion:^(NSArray *items, NSDictionary *people, NSString *next, NSString *errorName) {
+        (void)next;
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) { NSLog(@"exteria: the first reactors of message %d could not be loaded: %@", (int)messageId, errorName); return; }
+        NSMutableArray *faces = [NSMutableArray array];
+        NSMutableSet *seen = [NSMutableSet set];
+        for (NSDictionary *entry in items) {
+            NSNumber *key = [entry objectForKey:@"peer"];
+            if (!key || [seen containsObject:key]) continue;
+            [seen addObject:key];
+            ExteriaPerson *person = [people objectForKey:key];
+            if (!person) person = [chat->_people objectForKey:key];
+            if (person) [faces addObject:person];
+            if (faces.count == 3) break;
+        }
+        [shown setReactorsPeople:faces cache:chat->_avatars];
     }];
 }
 
@@ -5476,9 +5518,10 @@ static void ExteriaRedrawTree(UIView *view) {
     if (!again || token != again->_reactionPickerToken || !again->_reactionPicker) return;
     /* the picker opened before the account was known as Premium or not, and its custom emoji wear locks until it is told */
     [again->_reactionPicker attachSession:again->_session media:again->_media premium:premium];
-    [again->_session loadAvailableReactionsForDialog:again->_dialog premium:premium completion:^(NSArray *choices, NSString *errorName) {
+    [again->_session loadReactionChoicesForDialog:again->_dialog premium:premium completion:^(NSArray *choices, BOOL customAllowed, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
         if (!chat || token != chat->_reactionPickerToken || !chat->_reactionPicker) return;
+        [chat->_reactionPicker setCustomAllowed:customAllowed];
         if (!choices) {
             [chat->_reactionPicker setFailure:[chat failureTextForError:errorName]];
             return;
@@ -6159,7 +6202,6 @@ static const ExteriaMessageActionRow ExteriaMessageActionRows[] = {
     {EXTERIA_ACTION_REMIND, ExteriaSymbolClock, @"chat.msg.remind", NO},
     {EXTERIA_ACTION_SELECT, ExteriaSymbolCheck, @"chat.msg.select", NO},
     {EXTERIA_ACTION_EDIT_HISTORY, ExteriaSymbolClock, @"chat.msg.edithistory", NO},
-    {EXTERIA_ACTION_REACTORS, ExteriaSymbolHeartOutline, @"chat.reactors.title", NO},
     {EXTERIA_ACTION_DETAILS, ExteriaSymbolInfo, @"chat.msg.details", NO},
     {EXTERIA_ACTION_REPORT, ExteriaSymbolReport, @"chat.msg.report", YES},
 };
@@ -6195,10 +6237,11 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     [self whenPremiumKnown:^(BOOL premium) {
         ExteriaChatController *chat = weak.target;
         if (!chat) return;
-        [chat->_session loadAvailableReactionsForDialog:chat->_dialog premium:premium completion:^(NSArray *choices, NSString *errorName) {
+        [chat->_session loadReactionChoicesForDialog:chat->_dialog premium:premium completion:^(NSArray *choices, BOOL customAllowed, NSString *errorName) {
             ExteriaChatController *again = weak.target;
             if (!again) return;
             again->_menuReactionsLoading = NO;
+            again->_menuCustomAllowed = customAllowed;
             if (!choices) {
                 NSLog(@"exteria: the reactions for the menu did not load: %@", errorName);
                 return;
@@ -6305,6 +6348,8 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
             if (current) [shown setReactions:[chat menuReactionsForMessage:current]];
         }];
     }
+    /* the line of the reactions stands under the one about reading, and its faces are the first people of the list the server gives */
+    if (mask & EXTERIA_ACTION_REACTORS) [self fillReactorsLineOfMenu:menu message:message];
     /* a message of ours in a private chat says whether it was read and when */
     if (message.outgoing && message.messageId > 0 && (_dialog.kind == EXTERIA_DIALOG_USER || _dialog.kind == EXTERIA_DIALOG_BOT) && !_dialog.saved) {
         BOOL read = message.messageId <= [self readOutboxMaxId];

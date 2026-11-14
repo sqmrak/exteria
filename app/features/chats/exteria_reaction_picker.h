@@ -22,6 +22,7 @@
 @property (nonatomic, assign) BOOL anchorOutgoing;
 /* the sets come from the session; a free account sees them with a lock */
 - (void)attachSession:(ExteriaSession *)session media:(ExteriaMediaCache *)media premium:(BOOL)premium;
+- (void)setCustomAllowed:(BOOL)allowed;
 - (void)setReactions:(NSArray *)reactions;
 - (void)setFailure:(NSString *)error;
 - (void)setLoading;

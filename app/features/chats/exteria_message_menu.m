@@ -85,6 +85,10 @@
     void (^_headerHandler)(void);
     NSArray *_headerPeople;
     ExteriaAvatarCache *_headerCache;
+    /* the line under it that counts the reactions of the message, with the first of those who reacted at its right end */
+    NSString *_reactorsText;
+    NSArray *_reactorsPeople;
+    void (^_reactorsHandler)(void);
 }
 @end
 
@@ -97,6 +101,7 @@
 @synthesize moreReactionsHandler = _moreReactionsHandler;
 @synthesize dismissHandler = _dismissHandler;
 @synthesize headerHandler = _headerHandler;
+@synthesize reactorsHandler = _reactorsHandler;
 @synthesize media = _media;
 
 - (void)dealloc {
@@ -122,6 +127,9 @@
     [_headerHandler release];
     [_headerPeople release];
     [_headerCache release];
+    [_reactorsText release];
+    [_reactorsPeople release];
+    [_reactorsHandler release];
     [super dealloc];
 }
 
@@ -184,6 +192,21 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     [_headerCache release];
     _headerCache = [cache retain];
     if (!_card || !_headerText.length) return;
+    [self rebuildAnimated:NO];
+}
+
+- (void)setReactorsText:(NSString *)text {
+    [_reactorsText release];
+    _reactorsText = [text copy];
+    if (_card) [self rebuildAnimated:NO];
+}
+
+- (void)setReactorsPeople:(NSArray *)people cache:(ExteriaAvatarCache *)cache {
+    [_reactorsPeople release];
+    _reactorsPeople = [people copy];
+    [_headerCache release];
+    _headerCache = [cache retain];
+    if (!_card || !_reactorsText.length) return;
     [self rebuildAnimated:NO];
 }
 
@@ -252,6 +275,48 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
 
 - (void)rowUp:(UIButton *)row { row.backgroundColor = [UIColor clearColor]; }
 
+/* a line of the top of the card: a mark, a text, and at the right end the first three faces, each over the edge of the one before, as in the other clients; a tap runs action */
+- (UIView *)headerLineWithMark:(UIImage *)markImage text:(NSString *)text people:(NSArray *)people action:(SEL)action width:(CGFloat)width
+                       outMark:(UIImageView **)outMark outLabel:(UILabel **)outLabel {
+    UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, width, HEADER_HEIGHT)] autorelease];
+    UIImageView *mark = [[[UIImageView alloc] initWithImage:markImage] autorelease];
+    mark.frame = CGRectMake(16, (HEADER_HEIGHT - mark.image.size.height) / 2, mark.image.size.width, mark.image.size.height);
+    [header addSubview:mark];
+    CGFloat textX = CGRectGetMaxX(mark.frame) + 10;
+    NSUInteger faces = MIN(people.count, (NSUInteger)3);
+    CGFloat faceSide = 24, faceStep = 16;
+    CGFloat facesWidth = faces ? faceSide + (CGFloat)(faces - 1) * faceStep : 0;
+    CGFloat textRoom = width - textX - 12 - (faces ? facesWidth + 8 : 0);
+    for (NSUInteger i = 0; i < faces; ++i) {
+        ExteriaPerson *person = [people objectAtIndex:i];
+        ExteriaAvatarView *face = [[[ExteriaAvatarView alloc] initWithFrame:CGRectMake(width - 14 - facesWidth + (CGFloat)i * faceStep, (HEADER_HEIGHT - faceSide) / 2, faceSide, faceSide)] autorelease];
+        face.circular = YES;
+        face.seed = (NSUInteger)(person.userId % 1000003);
+        face.initials = person.initials;
+        face.deleted = person.deleted;
+        face.userInteractionEnabled = NO;
+        [face setPhoto:person.photo cache:_headerCache];
+        [header addSubview:face];
+    }
+    UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(textX, 0, textRoom, HEADER_HEIGHT)] autorelease];
+    label.backgroundColor = [UIColor clearColor];
+    label.font = ExteriaMenuClassic() ? [UIFont boldSystemFontOfSize:15] : ExteriaFontMedium(15.5);
+    label.textColor = ExteriaMenuText();
+    label.text = text;
+    label.adjustsFontSizeToFitWidth = YES;
+    [header addSubview:label];
+    if (action) {
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+        button.frame = header.bounds;
+        button.accessibilityLabel = text;
+        [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+        [header addSubview:button];
+    }
+    if (outMark) *outMark = mark;
+    if (outLabel) *outLabel = label;
+    return header;
+}
+
 /* the card: header, rows and glyph row, with a band between each part, built again whenever its content or the open "More" changes */
 - (UIView *)buildCardWithMaxHeight:(CGFloat)maxHeight {
     CGFloat width = MIN(CARD_WIDTH, self.bounds.size.width - 2 * EDGE);
@@ -264,46 +329,25 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
     _headerLabel = nil;
     _headerView = nil;
     if (_headerText.length) {
-        UIView *header = [[[UIView alloc] initWithFrame:CGRectMake(0, y, width, HEADER_HEIGHT)] autorelease];
+        UIImageView *mark = nil;
+        UILabel *label = nil;
+        UIView *header = [self headerLineWithMark:ExteriaCheckImage(_headerRead, 18, ExteriaMenuText()) text:_headerText people:_headerPeople
+                                          action:_headerHandler ? @selector(headerTapped) : NULL width:width outMark:&mark outLabel:&label];
+        header.frame = CGRectMake(0, y, width, HEADER_HEIGHT);
         _headerView = [header retain];
-        UIImageView *mark = [[[UIImageView alloc] initWithImage:ExteriaCheckImage(_headerRead, 18, ExteriaMenuText())] autorelease];
-        mark.frame = CGRectMake(16, (HEADER_HEIGHT - mark.image.size.height) / 2, mark.image.size.width, mark.image.size.height);
         _headerMark = [mark retain];
-        [header addSubview:mark];
-        CGFloat textX = CGRectGetMaxX(mark.frame) + 10;
-        /* the first three readers stand at the right end, each over the edge of the one before, as in the other clients */
-        NSUInteger faces = MIN(_headerPeople.count, (NSUInteger)3);
-        CGFloat faceSide = 24, faceStep = 16;
-        CGFloat facesWidth = faces ? faceSide + (CGFloat)(faces - 1) * faceStep : 0;
-        CGFloat textRoom = width - textX - 12 - (faces ? facesWidth + 8 : 0);
-        for (NSUInteger i = 0; i < faces; ++i) {
-            ExteriaPerson *person = [_headerPeople objectAtIndex:i];
-            ExteriaAvatarView *face = [[[ExteriaAvatarView alloc] initWithFrame:CGRectMake(width - 14 - facesWidth + (CGFloat)i * faceStep, (HEADER_HEIGHT - faceSide) / 2, faceSide, faceSide)] autorelease];
-            face.circular = YES;
-            face.seed = (NSUInteger)(person.userId % 1000003);
-            face.initials = person.initials;
-            face.deleted = person.deleted;
-            face.userInteractionEnabled = NO;
-            [face setPhoto:person.photo cache:_headerCache];
-            [header addSubview:face];
-        }
-        UILabel *label = [[[UILabel alloc] initWithFrame:CGRectMake(textX, 0, textRoom, HEADER_HEIGHT)] autorelease];
-        label.backgroundColor = [UIColor clearColor];
-        label.font = ExteriaMenuClassic() ? [UIFont boldSystemFontOfSize:15] : ExteriaFontMedium(15.5);
-        label.textColor = ExteriaMenuText();
-        label.text = _headerText;
-        label.adjustsFontSizeToFitWidth = YES;
         _headerLabel = [label retain];
-        [header addSubview:label];
-        if (_headerHandler) {
-            UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-            button.frame = header.bounds;
-            button.accessibilityLabel = _headerText;
-            [button addTarget:self action:@selector(headerTapped) forControlEvents:UIControlEventTouchUpInside];
-            [header addSubview:button];
-        }
         [content addSubview:header];
         y += HEADER_HEIGHT;
+    }
+    if (_reactorsText.length) {
+        UIView *line = [self headerLineWithMark:ExteriaSymbolImage(ExteriaSymbolHeartOutline, 20, ExteriaMenuText()) text:_reactorsText people:_reactorsPeople
+                                        action:_reactorsHandler ? @selector(reactorsTapped) : NULL width:width outMark:NULL outLabel:NULL];
+        line.frame = CGRectMake(0, y, width, HEADER_HEIGHT);
+        [content addSubview:line];
+        y += HEADER_HEIGHT;
+    }
+    if (_headerText.length || _reactorsText.length) {
         UIView *band = [self bandOfWidth:width];
         band.frame = CGRectMake(0, y, width, BAND_HEIGHT);
         [content addSubview:band];
@@ -714,6 +758,11 @@ static void ExteriaConcealCard(UIView *card, BOOL towardTop, void (^done)(void))
 
 - (void)headerTapped {
     void (^handler)(void) = [_headerHandler retain];
+    [self leaveThen:^{ if (handler) handler(); [handler release]; }];
+}
+
+- (void)reactorsTapped {
+    void (^handler)(void) = [_reactorsHandler retain];
     [self leaveThen:^{ if (handler) handler(); [handler release]; }];
 }
 

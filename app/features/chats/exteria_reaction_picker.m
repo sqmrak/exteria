@@ -32,6 +32,7 @@
     ExteriaSession *_session;
     ExteriaMediaCache *_media;
     BOOL _premium;
+    BOOL _customAllowed;
     NSArray *_reactions;
     NSArray *_buttons;
     CGRect _anchorRect;
@@ -123,7 +124,29 @@
     _media = [media retain];
     _premium = premium;
     _sets.showsLocks = !premium;
-    if (_sets || !session || !media) return;
+    [self buildSetsIfAllowed];
+}
+
+/* a chat that lists its reactions takes only those, so its picker has no emoji panel to pick others from; the server answers REACTION_INVALID for them */
+- (void)setCustomAllowed:(BOOL)allowed {
+    _customAllowed = allowed;
+    if (allowed) {
+        [self buildSetsIfAllowed];
+        return;
+    }
+    _sets.delegate = nil;
+    [_sets removeFromSuperview];
+    [_sets release];
+    _sets = nil;
+    _scroll.hidden = !_buttons.count;
+    [self setNeedsLayout];
+}
+
+- (void)buildSetsIfAllowed {
+    ExteriaSession *session = _session;
+    ExteriaMediaCache *media = _media;
+    BOOL premium = _premium;
+    if (_sets || !_customAllowed || !session || !media) return;
     _sets = [[ExteriaCustomEmojiPicker alloc] initWithSession:session media:media];
     _sets.delegate = self;
     _sets.leadingSymbol = ExteriaSymbolSmiley;
@@ -132,6 +155,8 @@
     _sets.hasLeading = YES;
     /* the strip goes under the reactions' own content in z order, so the grid of the reactions can lie over the empty body of the picker */
     [_card insertSubview:_sets belowSubview:_scroll];
+    /* the load answers after the picker is on screen, so the strip is prepared here and not in didMoveToWindow */
+    if (self.window) [_sets prepare];
     [self setNeedsLayout];
 }
 

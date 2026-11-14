@@ -96,7 +96,8 @@ static void test_reaction_people(void) {
     CHECK_EQ_INT(rows[1].peer_kind, 3);
     CHECK_EQ_INT(rows[1].date, 0);
     CHECK_EQ_INT(rows[1].reaction.kind, EXTERIA_REACTION_PAID);
-    CHECK(!strcmp(next, "next"));
+    /* two of fifty is the last page, whatever offset the server names */
+    CHECK_EQ_INT(next[0], 0);
     CHECK_EQ_INT(exteria_reaction_people_parse(answer, rows, 1, &count, next, sizeof(next)), EXTERIA_E_LIMIT);
     CHECK_EQ_INT(count, 0);
     i32(b, "date", -1);
@@ -104,6 +105,23 @@ static void test_reaction_people(void) {
     CHECK_EQ_INT(count, 0);
     CHECK_EQ_INT(next[0], 0);
     CHECK_EQ_INT(exteria_reaction_people_parse(obj("boolTrue"), rows, 2, &count, next, sizeof(next)), EXTERIA_E_MALFORMED);
+    /* a full page keeps the offset: the next one may hold more */
+    {
+        exteria_tl_value *full = obj("messages.messageReactionsList"), *many = exteria_tl_new_vec(&arena, EXTERIA_REACTION_PEOPLE_PAGE);
+        exteria_reaction_person page[EXTERIA_REACTION_PEOPLE_PAGE];
+        for (uint32_t i = 0; i < EXTERIA_REACTION_PEOPLE_PAGE; ++i) {
+            exteria_tl_value *item = obj("messagePeerReaction");
+            set(item, "peer_id", peer("peerUser", "user_id", 100 + i));
+            i32(item, "date", 1);
+            set(item, "reaction", emoji("👍"));
+            CHECK_EQ_INT(exteria_tl_vec_set(many, i, item), EXTERIA_OK);
+        }
+        set(full, "reactions", many);
+        str(full, "next_offset", "more");
+        CHECK_EQ_INT(exteria_reaction_people_parse(full, page, EXTERIA_REACTION_PEOPLE_PAGE, &count, next, sizeof(next)), EXTERIA_OK);
+        CHECK_EQ_INT(count, EXTERIA_REACTION_PEOPLE_PAGE);
+        CHECK(!strcmp(next, "more"));
+    }
 }
 
 static void test_parse(void) {

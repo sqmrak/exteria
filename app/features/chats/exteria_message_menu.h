@@ -30,6 +30,10 @@
 @property (nonatomic, copy) void (^headerHandler)(void);
 /* the first of those who read the message (ExteriaPerson), shown as small pictures at the right end of the header; the cache gives their photos */
 - (void)setHeaderPeople:(NSArray *)people cache:(ExteriaAvatarCache *)cache;
+/* the line under the header that counts the reactions, tapped to see who made them; nil text takes it away, and the people are the first of them (ExteriaPerson) */
+@property (nonatomic, copy) void (^reactorsHandler)(void);
+- (void)setReactorsText:(NSString *)text;
+- (void)setReactorsPeople:(NSArray *)people cache:(ExteriaAvatarCache *)cache;
 /* the cache the pill takes the lottie of each reaction from; without it the reactions stay still pictures */
 @property (nonatomic, retain) ExteriaMediaCache *media;
 
