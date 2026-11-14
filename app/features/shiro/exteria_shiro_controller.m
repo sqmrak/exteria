@@ -202,6 +202,8 @@ static NSString *ExteriaShiroStateKey(ExteriaShiroState state, ExteriaShiroFailu
 }
 
 - (void)shiroChanged {
+    /* a card that is on its way out starts no timer: it would keep the card alive after it is gone */
+    if (_closing) return;
     ExteriaShiroState state = _shiro.state;
     ExteriaShiroPowerState power = ExteriaShiroPowerOff;
     if (state == ExteriaShiroStateRegistering || state == ExteriaShiroStateConnecting) power = ExteriaShiroPowerWorking;
@@ -237,10 +239,15 @@ static NSString *ExteriaShiroStateKey(ExteriaShiroState state, ExteriaShiroFailu
                                ExteriaShiroByteText(stats.bytesOut), seconds / 60 % 100, seconds % 60];
 }
 
+/* the timer holds its target, so while it runs the screen lives on in the run loop even after it was closed, and letting the timer go can be what lets the screen go: the screen
+   is kept for the rest of this call, and the ivar is cleared before the release, or the dealloc inside it released the timer a second time and the app trapped in CoreFoundation
+   when the VPN was turned off from elsewhere */
 - (void)stopStatsTimer {
-    [_statsTimer invalidate];
-    [_statsTimer release];
+    [[self retain] autorelease];
+    NSTimer *timer = _statsTimer;
     _statsTimer = nil;
+    [timer invalidate];
+    [timer release];
 }
 
 - (void)closePressed {

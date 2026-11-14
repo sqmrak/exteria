@@ -487,6 +487,7 @@ static void ExteriaClassicShiroTween(CALayer *layer, NSString *path, id from, id
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_statsTimer invalidate];
     [_statsTimer release];
+    _statsTimer = nil;
     [_shiro release];
     [_backdrop release];
     [_foxes release];
@@ -570,11 +571,19 @@ static void ExteriaClassicShiroTween(CALayer *layer, NSString *path, id from, id
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self activate];
+    [self shiroChanged];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self shiroChanged];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [self deactivate];
+    /* a screen that is gone has no figures to keep, and its timer would keep the screen */
+    [self stopStatsTimer];
 }
 
 - (void)activate {
@@ -741,7 +750,8 @@ static NSString *ExteriaClassicShiroStateKey(ExteriaShiroState state, ExteriaShi
     _cardTitle.textColor = failed ? ExteriaClassicShiroError() : ExteriaClassicShiroInk();
     _cardSubtitle.text = NSLocalizedString(@"shiro.endpoint", nil);
     if (state == ExteriaShiroStateUp) {
-        if (!_statsTimer) _statsTimer = [[NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(refreshStats) userInfo:nil repeats:YES] retain];
+        /* only a screen that is shown runs the timer, which holds the screen */
+        if (!_statsTimer && self.view.window) _statsTimer = [[NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(refreshStats) userInfo:nil repeats:YES] retain];
         [self refreshStats];
     } else {
         [self stopStatsTimer];
@@ -776,10 +786,15 @@ static UIImage *ExteriaClassicShiroChevron(UIColor *color) {
     _detail.text = [NSString stringWithFormat:@"↓ %@   ↑ %@   %02llu:%02llu", ExteriaShiroByteText(stats.bytesIn), ExteriaShiroByteText(stats.bytesOut), seconds / 60 % 100, seconds % 60];
 }
 
+/* the timer holds its target, so while it runs the screen lives on in the run loop even after it was closed, and letting the timer go can be what lets the screen go: the screen
+   is kept for the rest of this call, and the ivar is cleared before the release, or the dealloc inside it released the timer a second time and the app trapped in CoreFoundation
+   when the VPN was turned off from elsewhere */
 - (void)stopStatsTimer {
-    [_statsTimer invalidate];
-    [_statsTimer release];
+    [[self retain] autorelease];
+    NSTimer *timer = _statsTimer;
     _statsTimer = nil;
+    [timer invalidate];
+    [timer release];
 }
 
 - (void)turnOff {
