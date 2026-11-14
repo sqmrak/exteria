@@ -266,7 +266,7 @@ void exteria_dialog_peer_read(exteria_dialog_row *row, const exteria_tl_value *u
     else fill_chat(row, chats);
 }
 
-static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, const exteria_tl_value *users, int64_t self_id) {
+static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, const exteria_tl_value *users, const exteria_tl_value *chats, int64_t self_id) {
     const exteria_tl_value *from;
     exteria_peer sender;
     exteria_media_info media;
@@ -288,6 +288,15 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
                 exteria_photo_ref_read(user, 1, sender.id, &row->sender_photo);
             }
         }
+    } else if (exteria_peer_from_tl(from, &sender) == EXTERIA_OK && sender.kind != 1 && row->kind != EXTERIA_DIALOG_USER && row->kind != EXTERIA_DIALOG_BOT) {
+        /* a message sent as a channel or as the group itself carries a chat in from_id; its title is the name, even when our own account sent it */
+        const exteria_tl_value *source = find_entity(chats, sender.id);
+        row->sender_is_self = 0;
+        if (source) {
+            copy_text(row->sender, sizeof(row->sender), source, "title");
+            row->sender_id = sender.id;
+            exteria_photo_ref_read(source, sender.kind, sender.id, &row->sender_photo);
+        }
     } else {
         row->sender_is_self = row->outgoing;
     }
@@ -307,8 +316,9 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
     read_text_emoji(row, m);
     exteria_media_classify_sized(exteria_tl_get(m, "media"), DIALOG_THUMB_TARGET, &media);
     row->preview = media.kind;
-    /* a photo is its own picture; a video, gif or round video shows the thumbnail the server keeps beside it */
-    if (media.kind == EXTERIA_PREVIEW_PHOTO) row->thumb = media.ref;
+    /* a photo is its own picture; a video, gif or round video shows the thumbnail the server keeps beside it. a spoiler is blurred until it is tapped, and the list has no tap, so it shows no picture */
+    if (media.spoiler) memset(&row->thumb, 0, sizeof(row->thumb));
+    else if (media.kind == EXTERIA_PREVIEW_PHOTO) row->thumb = media.ref;
     else if (media.kind == EXTERIA_PREVIEW_VIDEO || media.kind == EXTERIA_PREVIEW_GIF || media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE) row->thumb = media.preview;
     /* a caption wins over the sticker emoji or file name that would stand in for it */
     if (!row->text[0]) {
@@ -387,6 +397,7 @@ exteria_status exteria_search_parse(const exteria_tl_value *answer, int64_t self
         !exteria_tl_is(answer, EXTERIA_TL_ID_messages_channelMessages)) return EXTERIA_E_MALFORMED;
     if (exteria_tl_get_vec(answer, "messages", &messages) != EXTERIA_OK || exteria_tl_get_vec(answer, "chats", &chats) != EXTERIA_OK ||
         exteria_tl_get_vec(answer, "users", &users) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    chats = exteria_tl_get(answer, "chats");
     for (i = 0; i < messages->u.vec.count && n < cap; ++i) {
         const exteria_tl_value *m = messages->u.vec.items[i];
         exteria_dialog_row *row = &rows[n];
@@ -405,7 +416,7 @@ exteria_status exteria_search_parse(const exteria_tl_value *answer, int64_t self
             fill_chat(row, chats);
         }
         row->top_message = id;
-        fill_message(row, m, users, self_id);
+        fill_message(row, m, users, chats, self_id);
         ++n;
     }
     if (exteria_tl_get_i32(answer, "next_rate", &rate) == EXTERIA_OK && next_rate) *next_rate = rate;
@@ -413,7 +424,7 @@ exteria_status exteria_search_parse(const exteria_tl_value *answer, int64_t self
     return EXTERIA_OK;
 }
 
-exteria_status exteria_dialog_message_row(const exteria_tl_value *message, const exteria_tl_value *users, int64_t self_id,
+exteria_status exteria_dialog_message_row(const exteria_tl_value *message, const exteria_tl_value *users, const exteria_tl_value *chats, int64_t self_id,
                                           exteria_dialog_kind kind, exteria_dialog_row *row) {
     exteria_peer peer;
     int32_t id = 0;
@@ -426,7 +437,7 @@ exteria_status exteria_dialog_message_row(const exteria_tl_value *message, const
     row->peer_id = peer.id;
     row->kind = kind;
     row->top_message = id;
-    fill_message(row, message, users, self_id);
+    fill_message(row, message, users, chats, self_id);
     return EXTERIA_OK;
 }
 
@@ -504,7 +515,7 @@ exteria_status exteria_dialogs_parse(const exteria_tl_value *answer, int64_t sel
         exteria_peer_notify_read(settings, &row->notify);
         if (exteria_tl_get_i32(d, "top_message", &value) == EXTERIA_OK && value > 0) {
             row->top_message = value;
-            fill_message(row, saved_list ? find_saved_message(messages, peer.kind, peer.id, value) : find_message(messages, peer.kind, peer.id, value), users, self_id);
+            fill_message(row, saved_list ? find_saved_message(messages, peer.kind, peer.id, value) : find_message(messages, peer.kind, peer.id, value), users, chats, self_id);
             if (row->outgoing && exteria_tl_get_i32(d, "read_outbox_max_id", &value) == EXTERIA_OK) row->read = value >= row->top_message;
         }
         ++n;
@@ -560,7 +571,7 @@ exteria_status exteria_topics_request(exteria_arena *arena, int32_t peer_kind, i
 
 exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteria_dialog_row *forum, int64_t self_id, int32_t now,
                                     exteria_dialog_row *rows, size_t cap, size_t *count) {
-    const exteria_tl_value *topics, *messages, *users;
+    const exteria_tl_value *topics, *messages, *users, *chats;
     size_t n = 0;
     uint32_t i;
     if (count) *count = 0;
@@ -568,6 +579,7 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
     if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_forumTopics)) return EXTERIA_E_MALFORMED;
     if (exteria_tl_get_vec(answer, "topics", &topics) != EXTERIA_OK || exteria_tl_get_vec(answer, "messages", &messages) != EXTERIA_OK ||
         exteria_tl_get_vec(answer, "users", &users) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    chats = exteria_tl_get(answer, "chats");
     for (i = 0; i < topics->u.vec.count && n < cap; ++i) {
         const exteria_tl_value *t = topics->u.vec.items[i], *settings;
         exteria_dialog_row *row = &rows[n];
@@ -599,7 +611,7 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
         exteria_peer_notify_read(settings, &row->notify);
         if (exteria_tl_get_i32(t, "top_message", &value) == EXTERIA_OK && value > 0) {
             row->top_message = value;
-            fill_message(row, find_message(messages, forum->peer_kind, forum->peer_id, value), users, self_id);
+            fill_message(row, find_message(messages, forum->peer_kind, forum->peer_id, value), users, chats, self_id);
             if (row->outgoing && row->read_outbox_max_id > 0) row->read = row->read_outbox_max_id >= row->top_message;
         }
         ++n;

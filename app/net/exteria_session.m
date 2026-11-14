@@ -1425,12 +1425,12 @@ static void ExteriaClientFoldersChanged(void *ctx) {
 NSString *const ExteriaNewMessageDidArriveNotification = @"ExteriaNewMessageDidArrive";
 NSString *const ExteriaDialogReadNotification = @"ExteriaDialogRead";
 
-static void ExteriaClientNewMessage(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users) {
+static void ExteriaClientNewMessage(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users, const exteria_tl_value *chats) {
     ExteriaSession *session = (ExteriaSession *)ctx;
     exteria_dialog_row row;
-    if (exteria_dialog_message_row(message, users, session->_account, EXTERIA_DIALOG_USER, &row) != EXTERIA_OK) return;
+    if (exteria_dialog_message_row(message, users, chats, session->_account, EXTERIA_DIALOG_USER, &row) != EXTERIA_OK) return;
     ExteriaDialog *asUser = [[ExteriaDialog alloc] initWithRow:&row];
-    if (exteria_dialog_message_row(message, users, session->_account, EXTERIA_DIALOG_GROUP, &row) != EXTERIA_OK) {
+    if (exteria_dialog_message_row(message, users, chats, session->_account, EXTERIA_DIALOG_GROUP, &row) != EXTERIA_OK) {
         [asUser release];
         return;
     }

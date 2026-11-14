@@ -93,7 +93,7 @@ static void test_live_message_row(void) {
     m = message(peer("peerChat", "chat_id", 11), 7, 100, "hello");
     set(m, "from_id", peer("peerUser", "user_id", 6));
     /* a group names the sender and carries the id, date and text of the message and nothing of the chat itself */
-    CHECK_EQ_INT(exteria_dialog_message_row(m, vec_of(u, 1), SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_dialog_message_row(m, vec_of(u, 1), NULL, SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
     CHECK_EQ_INT(row.peer_kind, 2);
     CHECK_EQ_INT(row.peer_id, 11);
     CHECK_EQ_INT(row.top_message, 7);
@@ -102,28 +102,44 @@ static void test_live_message_row(void) {
     CHECK_EQ_INT(row.unread_count, 0);
     CHECK(strcmp(row.text, "hello") == 0);
     CHECK(strcmp(row.sender, "Bob") == 0);
+    /* a message sent as a channel names the channel, also when our own account sent it */
+    {
+        exteria_tl_value *c[1], *as_channel;
+        c[0] = obj("channel");
+        set_i64(c[0], "id", 12);
+        set_str(c[0], "title", "Exteria News");
+        as_channel = message(peer("peerChat", "chat_id", 11), 9, 102, "post");
+        set(as_channel, "from_id", peer("peerChannel", "channel_id", 12));
+        set_flag(as_channel, "out");
+        CHECK_EQ_INT(exteria_dialog_message_row(as_channel, NULL, vec_of(c, 1), SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
+        CHECK(strcmp(row.sender, "Exteria News") == 0);
+        CHECK_EQ_INT(row.sender_id, 12);
+        CHECK_EQ_INT(row.sender_is_self, 0);
+        CHECK_EQ_INT(exteria_dialog_message_row(as_channel, NULL, NULL, SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
+        CHECK(row.sender[0] == 0);
+    }
     /* a private chat names nobody */
-    CHECK_EQ_INT(exteria_dialog_message_row(m, vec_of(u, 1), SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_dialog_message_row(m, vec_of(u, 1), NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_OK);
     CHECK(row.sender[0] == 0);
     /* a message that came alone has no users to name the sender from, and still makes a row */
-    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, NULL, SELF, EXTERIA_DIALOG_GROUP, &row), EXTERIA_OK);
     CHECK(row.sender[0] == 0);
     CHECK(strcmp(row.text, "hello") == 0);
     /* our own message is outgoing */
     m = message(peer("peerUser", "user_id", 6), 8, 101, "mine");
     set_flag(m, "out");
     set(m, "from_id", peer("peerUser", "user_id", SELF));
-    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_OK);
     CHECK_EQ_INT(row.outgoing, 1);
     CHECK_EQ_INT(row.sender_is_self, 1);
     CHECK_EQ_INT(row.peer_kind, 1);
     /* an empty message, a missing id or peer, and a null row are refused */
     noid = obj("message");
     set(noid, "peer_id", peer("peerUser", "user_id", 6));
-    CHECK_EQ_INT(exteria_dialog_message_row(noid, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
-    CHECK_EQ_INT(exteria_dialog_message_row(obj("messageEmpty"), NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
-    CHECK_EQ_INT(exteria_dialog_message_row(NULL, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
-    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, SELF, EXTERIA_DIALOG_USER, NULL), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_dialog_message_row(noid, NULL, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dialog_message_row(obj("messageEmpty"), NULL, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dialog_message_row(NULL, NULL, NULL, SELF, EXTERIA_DIALOG_USER, &row), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_dialog_message_row(m, NULL, NULL, SELF, EXTERIA_DIALOG_USER, NULL), EXTERIA_E_ARG);
 }
 
 static exteria_tl_value *custom_emoji(int32_t offset, int32_t length, int64_t document) {
