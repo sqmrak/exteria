@@ -15,10 +15,13 @@
 #import "exteria_gift_screen.h"
 #import "exteria_custom_emoji.h"
 #import "exteria_pill_tabs_view.h"
+#import "exteria_platform.h"
+#import "exteria_shape.h"
 #import "exteria_person.h"
 #import "exteria_session_bots.h"
 #import "exteria_settings_pages.h"
 #import "exteria_string_drawing.h"
+#import "exteria_team_picture.h"
 #import "exteria_theme.h"
 #import "exteria_weak_reference.h"
 
@@ -204,8 +207,12 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     UIImageView *_appIcon;
     NSMutableArray *_marks;
     long long _userId;
+    CAShapeLayer *_morphMask;
 }
 @property (nonatomic, assign) long long userId;
+/* the picture of the lead takes the outlines of the Material shapes one after another, as the power button of Shiro does: it holds one, springs into the next and turns slowly;
+   picture is the square one, not cut to any shape */
+- (void)morphPicture:(UIImage *)picture;
 - (id)initWithName:(NSString *)name role:(NSString *)role made:(NSString *)made picture:(UIImage *)picture appIcon:(UIImage *)icon marks:(NSUInteger)marks;
 @end
 
@@ -285,6 +292,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_morphMask release];
     [_picture release];
     [_name release];
     [_role release];
@@ -493,6 +502,8 @@ static UIImage *ExteriaRoundIcon(CGFloat side) {
     UIImage *icon = lead && person->appIcon ? ExteriaBundledPicture(person->appIcon) : nil;
     ExteriaCreditView *view = [[[ExteriaCreditView alloc] initWithName:name role:role made:made picture:ExteriaCachedShapedPicture(identifier, picture, ExteriaThemeIsClassic() ? 0 : person->lobes, ExteriaThemeIsClassic() ? 0 : person->depth, LEAD_TILE)
                                                                   appIcon:icon marks:ExteriaMarksOfId(person->userId)] autorelease];
+    /* the lead's picture is not one wavy outline but all of the Material shapes in turn; the classic style has no such shapes */
+    if (lead && !ExteriaThemeIsClassic()) [view morphPicture:picture];
     [view addTarget:self action:@selector(creditTapped:) forControlEvents:UIControlEventTouchUpInside];
     view.userId = person->userId;
     return [ExteriaSettingsRow viewRowWithView:view height:^CGFloat(CGFloat width) { (void)width; return made ? 80 : 62; }];
