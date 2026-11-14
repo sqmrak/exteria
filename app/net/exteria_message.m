@@ -224,6 +224,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize serviceValue = _serviceValue;
 @synthesize state = _state;
 @synthesize pendingSend = _pendingSend;
+@synthesize localPoster = _localPoster;
 @synthesize text = _text;
 @synthesize forwardName = _forwardName;
 @synthesize postAuthor = _postAuthor;
@@ -509,11 +510,16 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     return message;
 }
 
+- (UIImage *)localPreview {
+    return _pendingSend && _pendingSend->preview ? _pendingSend->preview : _localPoster;
+}
+
 - (void)dealloc {
     [_expandedQuotes release];
     [_listenedDate release];
     [_markup release];
     [_pendingSend release];
+    [_localPoster release];
     [_replyQuote release];
     [_sendQuote release];
     [_text release];

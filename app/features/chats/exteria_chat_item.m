@@ -557,7 +557,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     }
     /* what stands in the bubble above the text */
     BOOL picture = exteria_media_uses_picture(media.kind, media.file != nil, media.previewFile != nil,
-                                            message.pendingSend && message.pendingSend->preview);
+                                            message.localPreview != nil);
     if (once) {
         NSString *title = nil, *detail = nil;
         ExteriaViewOnceCaptions(message, &title, &detail);

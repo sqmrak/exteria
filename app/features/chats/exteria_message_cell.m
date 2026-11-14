@@ -1318,7 +1318,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     CGFloat side = ExteriaPictureSide(item);
     NSUInteger token = _token;
     /* a photo or video on its way up shows its own small picture, so the bubble is the picture from the first moment and not a file line */
-    UIImage *local = item.message.pendingSend ? item.message.pendingSend->preview : nil;
+    UIImage *local = item.message.localPreview;
     if (local && !file && !preview) {
         _picture.image = local;
         [_spoilerCover setNeedsDisplay];
@@ -1946,7 +1946,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         ExteriaMaskCorners(view, frame.size, top && left ? topRadius : near, top && right ? topRadius : near, bottom && right ? radius : near, bottom && left ? radius : near);
         ExteriaMedia *media = message.media;
         ExteriaRemoteFile *file = media.kind == EXTERIA_PREVIEW_PHOTO ? media.file : media.previewFile;
-        UIImage *local = message.pendingSend ? message.pendingSend->preview : nil;
+        UIImage *local = message.localPreview;
         CGFloat side = frame.size.width * ExteriaScreenScale();
         if (local && !file) {
             view.image = local;

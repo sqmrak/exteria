@@ -258,6 +258,7 @@ typedef enum {
     BOOL _reactionsPossible;
     BOOL _hasReactions;
     ExteriaOutgoing *_pendingSend;
+    UIImage *_localPoster;
     ExteriaPoll *_poll;
 }
 
@@ -268,6 +269,10 @@ typedef enum {
 + (ExteriaMessage *)pendingOutgoing:(ExteriaOutgoing *)outgoing randomId:(long long)randomId date:(int32_t)date;
 /* what has to be sent for a pending message, nil for text and stickers */
 @property (nonatomic, readonly, retain) ExteriaOutgoing *pendingSend;
+/* the first frame of a video of ours that the server has numbered but not yet given a thumbnail of, kept from the send so the bubble does not turn grey when the pending copy goes */
+@property (nonatomic, retain) UIImage *localPoster;
+/* what the bubble shows for a picture of ours while the server has none: the picture of the send, or the poster kept after it */
+- (UIImage *)localPreview;
 + (ExteriaMessage *)pendingText:(NSString *)text randomId:(long long)randomId date:(int32_t)date;
 /* with the custom emoji entities the person typed, so the pending bubble draws them as the server's copy will */
 + (ExteriaMessage *)pendingText:(NSString *)text entities:(NSArray *)entities randomId:(long long)randomId date:(int32_t)date;

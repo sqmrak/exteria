@@ -441,6 +441,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     NSString *_replyQuote;
     int32_t _replyQuoteOffset;
     int32_t _editingId;
+    /* the first frames of the videos sent from this screen, by the id the server gave them */
+    NSMutableDictionary *_posters;
     int32_t _deleteId;
     BOOL _editBusy;
     ExteriaSelectionBar *_selectionBar;
@@ -668,6 +670,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_retry release];
     [_server release];
     [_local release];
+    [_posters release];
     [_people release];
     [_senderLookups release];
     [_selfPerson release];
@@ -3916,6 +3919,12 @@ static NSString *const ExteriaListenedKey = @"exteria.voice.listened";
 
 - (void)keepUploadedMediaOf:(ExteriaMessage *)local server:(ExteriaMessage *)server {
     ExteriaOutgoing *sent = local.pendingSend;
+    /* the server makes the thumbnail of a video some moments after the send, and the copy that replaces the pending one has none until then */
+    if (sent && sent->kind == ExteriaOutgoingVideo && sent->preview && server.messageId > 0) {
+        if (!_posters) _posters = [[NSMutableDictionary alloc] init];
+        [_posters setObject:sent->preview forKey:[NSNumber numberWithInt:server.messageId]];
+        server.localPoster = sent->preview;
+    }
     if (!sent || !sent->path || sent->viewOnce || sent->kind == ExteriaOutgoingPhoto) return;
     exteria_media_ref ref = server.media.ref;
     if (ref.source != EXTERIA_MEDIA_SOURCE_DOCUMENT || !server.media.file) {
@@ -3937,6 +3946,8 @@ static NSString *const ExteriaListenedKey = @"exteria.voice.listened";
         if (_dialog.saved) [message placeInSavedMessagesOfUser:_dialog.peerId];
         if (_dialog.savedSource && ![self message:message isFromSavedSource:_dialog.savedSource]) continue;
         [_server setObject:message forKey:[NSNumber numberWithInt:message.messageId]];
+        UIImage *poster = [_posters objectForKey:[NSNumber numberWithInt:message.messageId]];
+        if (poster) message.localPoster = poster;
     }
     /* a message sent from here is replaced by the server's copy of it as soon as that arrives */
     for (ExteriaMessage *local in [[_local copy] autorelease]) {
