@@ -1,0 +1,3 @@
+"""android.text.style: the span classes live in android.text"""
+
+from android.text import (AbsoluteSizeSpan, BackgroundColorSpan, CharacterStyle, ClickableSpan, ForegroundColorSpan, ReplacementSpan, StrikethroughSpan, StyleSpan, UnderlineSpan, URLSpan, AlignmentSpan, BulletSpan, DrawableMarginSpan, DynamicDrawableSpan, EasyEditSpan, IconMarginSpan, ImageSpan, LeadingMarginSpan, LineBackgroundSpan, LineHeightSpan, LocaleSpan, MaskFilterSpan, MetricAffectingSpan, ParagraphStyle, QuoteSpan, RelativeSizeSpan, ScaleXSpan, SpellCheckSpan, SubscriptSpan, SuggestionRangeSpan, SuggestionSpan, SuperscriptSpan, TabStopSpan, TextAppearanceSpan, TtsSpan, UpdateAppearance, UpdateLayout, WrapTogetherSpan)  # noqa: F401

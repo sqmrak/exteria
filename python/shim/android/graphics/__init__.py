@@ -5,11 +5,25 @@ import json
 
 import _exteria
 from android import _ui
-from java.lang import IllegalArgumentException, Object
+from android.graphics._geometry import Matrix, Path, PathMeasure, Point, PointF, Rect, RectF  # noqa: F401
+from android.graphics._canvas import (BitmapShader, Canvas, LinearGradient, PorterDuffXfermode, RadialGradient,  # noqa: F401
+                                      Shader, SweepGradient)
+from java.lang import IllegalArgumentException, IllegalStateException, Object
 
 
 def _argb(color):
     return int(color) & 0xFFFFFFFF
+
+
+class PixelFormat:
+    UNKNOWN = 0
+    TRANSLUCENT = -3
+    TRANSPARENT = -2
+    OPAQUE = -1
+    RGBA_8888 = 1
+    RGBX_8888 = 2
+    RGB_888 = 3
+    RGB_565 = 4
 
 
 class Color:
@@ -106,11 +120,74 @@ class Paint(Object):
     def setStrokeJoin(self, join):
         self._join = join
 
+    _anti_alias = False
+    _underline = False
+    _strike = False
+    _fake_bold = False
+    _shadow = None
+    _miter = 4.0
+    _text_scale_x = 1.0
+    _text_skew_x = 0.0
+
     def setAntiAlias(self, value):
-        pass
+        # the rasterizer always antialiases; the flag is kept so a program reads back what it set
+        self._anti_alias = bool(value)
+
+    def isAntiAlias(self):
+        return self._anti_alias
+
+    def setUnderlineText(self, value):
+        self._underline = bool(value)
+
+    def isUnderlineText(self):
+        return self._underline
+
+    def setStrikeThruText(self, value):
+        self._strike = bool(value)
+
+    def isStrikeThruText(self):
+        return self._strike
+
+    def setFakeBoldText(self, value):
+        self._fake_bold = bool(value)
+
+    def isFakeBoldText(self):
+        return self._fake_bold
+
+    def setStrokeMiter(self, value):
+        self._miter = float(value)
+
+    def getStrokeMiter(self):
+        return self._miter
+
+    def setTextScaleX(self, value):
+        self._text_scale_x = float(value)
+
+    def getTextScaleX(self):
+        return self._text_scale_x
+
+    def setTextSkewX(self, value):
+        self._text_skew_x = float(value)
+
+    def getTextSkewX(self):
+        return self._text_skew_x
+
+    def setShadowLayer(self, radius, dx, dy, color):
+        """the shadow of drawn text is the text again at (dx, dy) in the color; the radius is kept but the shadow is not blurred"""
+        self._shadow = (float(radius), float(dx), float(dy), int(color) & 0xFFFFFFFF)
+
+    def clearShadowLayer(self):
+        self._shadow = None
+
+    def setSubpixelText(self, value):
+        self._subpixel = bool(value)
+
+    setDither = setLinearText = setHinting = setFontFeatureSettings = setSubpixelText
+
+    _filter_bitmap = False
 
     def setFilterBitmap(self, value):
-        pass
+        self._filter_bitmap = bool(value)
 
     def setColorFilter(self, color_filter):
         if color_filter is not None and not isinstance(color_filter, ColorFilter):
@@ -121,38 +198,130 @@ class Paint(Object):
     def getColorFilter(self):
         return getattr(self, "_filter", None)
 
+    # text and shader state: kept as set and read back, the way a plugin that sizes its own text expects. measuring asks
+    # the app for the real width of the string in the typeface of the paint
+    _text_size = 12.0
+    _typeface = None
+    _align = "LEFT"
+    _shader = None
+    _xfermode = None
+    _path_effect = None
+    _letter_spacing = 0.0
 
-class Rect(Object):
-    def __init__(self, left=0, top=0, right=0, bottom=0):
-        self.left, self.top, self.right, self.bottom = left, top, right, bottom
+    class Align:
+        LEFT = "LEFT"
+        CENTER = "CENTER"
+        RIGHT = "RIGHT"
 
-    def width(self):
-        return self.right - self.left
+    def setTextSize(self, size):
+        self._text_size = float(size)
 
-    def height(self):
-        return self.bottom - self.top
+    def getTextSize(self):
+        return self._text_size
 
+    def setTypeface(self, typeface):
+        self._typeface = typeface
+        return typeface
 
-class RectF(Object):
-    def __init__(self, left=0.0, top=0.0, right=0.0, bottom=0.0):
-        if isinstance(left, (Rect, RectF)):
-            left, top, right, bottom = left.left, left.top, left.right, left.bottom
-        self.left, self.top, self.right, self.bottom = float(left), float(top), float(right), float(bottom)
+    def getTypeface(self):
+        return self._typeface
 
-    def width(self):
-        return self.right - self.left
+    def setTextAlign(self, align):
+        self._align = align
 
-    def height(self):
-        return self.bottom - self.top
+    def getTextAlign(self):
+        return self._align
 
-    def centerX(self):
-        return (self.left + self.right) / 2
+    def setShader(self, shader):
+        self._shader = shader
+        return shader
 
-    def centerY(self):
-        return (self.top + self.bottom) / 2
+    def getShader(self):
+        return self._shader
 
-    def set(self, left, top, right, bottom):
-        self.left, self.top, self.right, self.bottom = float(left), float(top), float(right), float(bottom)
+    def setXfermode(self, mode):
+        self._xfermode = mode
+        return mode
+
+    def getXfermode(self):
+        return self._xfermode
+
+    def setPathEffect(self, effect):
+        self._path_effect = effect
+        return effect
+
+    def setLetterSpacing(self, spacing):
+        self._letter_spacing = float(spacing)
+
+    def getLetterSpacing(self):
+        return self._letter_spacing
+
+    def getAlpha(self):
+        return (self._color >> 24) & 255
+
+    def getStyle(self):
+        return self._style
+
+    def getStrokeWidth(self):
+        return self._stroke
+
+    def getStrokeCap(self):
+        return getattr(self, "_cap", Paint.Cap.BUTT)
+
+    def getStrokeJoin(self):
+        return getattr(self, "_join", Paint.Join.MITER)
+
+    def set(self, other):
+        self.__dict__.update(other.__dict__)
+
+    def reset(self):
+        self.__dict__.clear()
+        Paint.__init__(self)
+
+    def _bold(self):
+        return self._fake_bold or bool(self._typeface is not None and getattr(self._typeface, "bold", False))
+
+    def measureText(self, text, start=None, end=None):
+        if start is not None:
+            text = str(text)[start:end]
+        text = str(text)
+        if not text:
+            return 0.0
+        width = _ui.measure_text(text, self._text_size, self._bold(), 100000)[0]
+        return float(width) + self._letter_spacing * len(text) * self._text_size
+
+    def getFontMetrics(self, metrics=None):
+        height = float(_ui.measure_text("A", self._text_size, self._bold(), 100000)[1])
+        result = metrics if metrics is not None else Paint.FontMetrics()
+        result.top = -height * 0.95
+        result.ascent = -height * 0.8
+        result.descent = height * 0.2
+        result.bottom = height * 0.25
+        result.leading = 0.0
+        return result.descent - result.ascent if metrics is not None else result
+
+    def ascent(self):
+        return self.getFontMetrics().ascent
+
+    def descent(self):
+        return self.getFontMetrics().descent
+
+    def getFontSpacing(self):
+        metrics = self.getFontMetrics()
+        return metrics.bottom - metrics.top
+
+    def getTextBounds(self, text, start, end, bounds):
+        text = str(text)[start:end]
+        metrics = self.getFontMetrics()
+        bounds.set(0, int(metrics.ascent), int(round(self.measureText(text))), int(metrics.descent))
+
+    class FontMetrics(Object):
+        def __init__(self):
+            self.top = self.ascent = self.descent = self.bottom = self.leading = 0.0
+
+    class FontMetricsInt(Object):
+        def __init__(self):
+            self.top = self.ascent = self.descent = self.bottom = self.leading = 0
 
 
 class PorterDuff(Object):
@@ -227,11 +396,6 @@ class ColorMatrixColorFilter(ColorFilter):
         return min(1.0, max(0.0, m[18]))
 
 
-class Point(Object):
-    def __init__(self, x=0, y=0):
-        self.x, self.y = x, y
-
-
 class Bitmap(Object):
     class Config:
         ARGB_8888 = "ARGB_8888"
@@ -293,6 +457,27 @@ class Bitmap(Object):
         other._pixels[:] = self._pixels
         return other
 
+    def compress(self, format, quality, stream):
+        """a picture made in python is written as PNG to any OutputStream. JPEG and WEBP need an encoder python does not have; the
+        app encodes only the pictures it decoded itself"""
+        import struct
+        import zlib
+        if format != Bitmap.CompressFormat.PNG:
+            raise NotImplementedError("a bitmap made in python is compressed as PNG; %s needs an encoder the app only has for "
+                                      "the pictures it decoded" % (format,))
+
+        def chunk(kind, data):
+            body = kind + data
+            return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+        rows = b"".join(b"\x00" + bytes(self._pixels[y * self._w * 4:(y + 1) * self._w * 4]) for y in range(self._h))
+        png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", self._w, self._h, 8, 6, 0, 0, 0))
+               + chunk(b"IDAT", zlib.compress(rows, 6)) + chunk(b"IEND", b""))
+        from dexvm.jio import to_java_bytes
+        data = to_java_bytes(png)
+        stream.write(data, 0, len(data))
+        return True
+
     def _fill(self, left, top, right, bottom, color):
         left, top = max(0, int(left)), max(0, int(top))
         right, bottom = min(self._w, int(right)), min(self._h, int(bottom))
@@ -306,25 +491,6 @@ class Bitmap(Object):
 
     def _base64(self):
         return base64.b64encode(bytes(self._pixels)).decode("ascii")
-
-
-class Canvas(Object):
-    def __init__(self, bitmap=None):
-        self._bitmap = bitmap
-
-    def drawRect(self, *args):
-        if isinstance(args[0], Rect):
-            rect, paint = args[0], args[1]
-            left, top, right, bottom = rect.left, rect.top, rect.right, rect.bottom
-        else:
-            left, top, right, bottom, paint = args
-        self._bitmap._fill(round(left), round(top), round(right), round(bottom), paint._color)
-
-    def drawColor(self, color):
-        self._bitmap.eraseColor(color)
-
-    def drawPoint(self, x, y, paint):
-        self._bitmap._fill(round(x), round(y), round(x) + 1, round(y) + 1, paint._color)
 
 
 def _blend_channel(mode, src, dst):
@@ -450,6 +616,47 @@ def _create_scaled(source, width, height, _filter=True):
 Bitmap.createScaledBitmap = staticmethod(_create_scaled)
 
 
+class Picture(Object):
+    """a recording of drawing calls. the shim keeps the pixels of the drawing and not the calls, so a picture drawn at another size is
+    scaled and not drawn again; beginRecording sizes the pixels, and one over MAX_PIXELS is an IllegalArgumentException"""
+
+    MAX_PIXELS = 16 * 1024 * 1024
+
+    def __init__(self, source=None):
+        self._bitmap = source._bitmap if source is not None else None
+        self._w = source._w if source is not None else 0
+        self._h = source._h if source is not None else 0
+        self._recording = False
+
+    def beginRecording(self, width, height):
+        width, height = int(width), int(height)
+        if width < 0 or height < 0 or width * height > Picture.MAX_PIXELS:
+            raise IllegalArgumentException("a picture of %d by %d is not recordable" % (width, height))
+        if self._recording:
+            raise IllegalStateException("the picture is already recording")
+        self._w, self._h = width, height
+        self._bitmap = Bitmap(max(width, 1), max(height, 1))
+        self._recording = True
+        return Canvas(self._bitmap)
+
+    def endRecording(self):
+        if not self._recording:
+            raise IllegalStateException("the picture is not recording")
+        self._recording = False
+
+    def getWidth(self):
+        return self._w
+
+    def getHeight(self):
+        return self._h
+
+    def draw(self, canvas):
+        if self._recording:
+            raise IllegalStateException("the picture is still recording")
+        if self._bitmap is not None and self._w and self._h:
+            canvas.drawBitmap(self._bitmap, 0, 0, None)
+
+
 class BitmapFactory(Object):
     """decodes the picture the person chose in the picker of the app (see android.content.ContentResolver). the app reads the file and
     shrinks it while it decodes, to 2048 points on the long side, so a photo of the camera does not fill the memory of an old phone"""
@@ -470,6 +677,23 @@ class BitmapFactory(Object):
         return _NativeBitmap(reply["handle"], reply["w"], reply["h"])
 
     @staticmethod
+    def decodeByteArray(data, offset, length, options=None):
+        """the picture in the bytes, decoded by the app: the bytes go to a file in the cache folder of the plugin and are decoded like a file"""
+        import os
+        import tempfile
+        from android.content import Context
+        from android.view import View  # noqa: F401  keeps the shim packages imported in one order
+        raw = bytes(b & 0xFF for b in data[offset:offset + length])
+        folder = Context().getCacheDir().getPath()
+        handle, path = tempfile.mkstemp(dir=folder, prefix="decode-")
+        try:
+            with os.fdopen(handle, "wb") as out:
+                out.write(raw)
+            return BitmapFactory.decodeFile(path, options)
+        finally:
+            os.unlink(path)
+
+    @staticmethod
     def decodeStream(stream, outside_padding=None, options=None):
         from android.content import _PickedStream
         from android_utils import log
@@ -487,3 +711,63 @@ class BitmapFactory(Object):
             log("BitmapFactory.decodeStream: %s" % error)
             return None
         return _NativeBitmap(reply["handle"], reply["w"], reply["h"])
+
+
+class RenderEffect(Object):
+    """an effect a view applies to itself and what it holds (API 31). making one takes no part of the app; View.setRenderEffect asks the app for the
+    kinds it can draw: a blur, alone or chained with another blur. the other kinds are values a plugin can build and hand around, and setRenderEffect
+    names the kind it cannot show"""
+
+    def __init__(self, kind, inner=None, **fields):
+        self._kind = kind
+        self._inner = inner
+        self.__dict__.update(fields)
+
+    @staticmethod
+    def createBlurEffect(radius_x, radius_y, *rest):
+        # (rx, ry, tileMode) or (rx, ry, inner, tileMode)
+        if len(rest) not in (1, 2):
+            raise IllegalArgumentException("createBlurEffect takes a tile mode and an optional inner effect")
+        inner = rest[0] if len(rest) == 2 else None
+        if float(radius_x) < 0 or float(radius_y) < 0:
+            raise IllegalArgumentException("a blur radius is not negative")
+        return RenderEffect("blur", inner, rx=float(radius_x), ry=float(radius_y), tile=rest[-1])
+
+    @staticmethod
+    def createOffsetEffect(dx, dy, inner=None):
+        return RenderEffect("offset", inner, dx=float(dx), dy=float(dy))
+
+    @staticmethod
+    def createColorFilterEffect(color_filter, inner=None):
+        return RenderEffect("color filter", inner, color_filter=color_filter)
+
+    @staticmethod
+    def createBlendModeEffect(destination, source, mode):
+        return RenderEffect("blend mode", None, destination=destination, source=source, mode=mode)
+
+    @staticmethod
+    def createChainEffect(outer, inner):
+        if outer is None or inner is None:
+            raise IllegalArgumentException("a chain needs both effects")
+        return RenderEffect("chain", None, outer=outer, first=inner)
+
+    @staticmethod
+    def createShaderEffect(shader):
+        return RenderEffect("shader", None, shader=shader)
+
+    @staticmethod
+    def createBitmapEffect(bitmap, src, dst):
+        return RenderEffect("bitmap", None, bitmap=bitmap)
+
+    def _blur_radius(self):
+        """the blur the app draws for this effect, in pixels; UnsupportedOperationException names the first kind it cannot draw"""
+        from java.lang import UnsupportedOperationException
+        radius = 0.0
+        if self._inner is not None:
+            radius += self._inner._blur_radius()
+        if self._kind == "chain":
+            return self.outer._blur_radius() + self.first._blur_radius()
+        if self._kind != "blur":
+            raise UnsupportedOperationException("RenderEffect of the kind '%s' is not drawn by the app, only a blur is" % self._kind)
+        # a blur of different radii in x and y is drawn with the larger one: the stack blur of the app is round
+        return radius + max(self.rx, self.ry)

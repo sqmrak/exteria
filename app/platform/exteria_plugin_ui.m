@@ -18,9 +18,16 @@
 #import "exteria_plugin_audio.h"
 #import "exteria_plugin_music.h"
 #import "exteria_plugin_story.h"
+#import "exteria_plugin_tabs.h"
+#import "exteria_plugin_progress.h"
 #import "exteria_date_time_picker.h"
 #import "exteria_plugins.h"
+#import "exteria_notifier.h"
+#import "exteria_plugin_settings_controller.h"
+#import "exteria_link_router.h"
+#import "exteria_string_drawing.h"
 #import "exteria_theme.h"
+#include "exteria_stack_blur.h"
 #include "exteria_surface.h"
 #include "exteria_tl_schema.h"
 
@@ -36,6 +43,7 @@ typedef struct {
     CGRect frame;
     BOOL oval;
     CGFloat clip;
+    CGFloat blur;
 } PluginState;
 
 /* the part of CMMotionManager used here. CoreMotion is weak linked and found by name, so the compiler needs these types to read a BOOL as a BOOL */
@@ -66,6 +74,8 @@ static void forward_touch(UIView *view, long long viewId, int action, NSSet *tou
 @public
     ExteriaEmojiLabel *label;
     CALayer *tint;
+    CALayer *blur;
+    NSMutableArray *blurHidden;
     PluginState state;
 }
 @end
@@ -87,6 +97,8 @@ static void forward_touch(UIView *view, long long viewId, int action, NSSet *tou
 - (void)dealloc {
     [label release];
     [tint release];
+    [blur release];
+    [blurHidden release];
     [super dealloc];
 }
 
@@ -221,6 +233,64 @@ static void apply_tint(ExteriaPluginView *view, unsigned long long argb) {
     [CATransaction commit];
 }
 
+/* View.setRenderEffect with a blur: the view and what it holds are drawn once into a picture, blurred with the stack blur of the app and shown by a layer over them, the
+   real layers stay under it for touches. the picture is a quarter of the size at most 512 points a side, so a large view costs what a small one does. it is taken when
+   the effect is set and again whenever a property of the view arrives; a child that changes by itself shows blurred only from the next one. radius 0 takes the layer away */
+static void apply_blur(ExteriaPluginView *view, CGFloat radius) {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (view->blur) {
+        [view->blur removeFromSuperlayer];
+        [view->blur release];
+        view->blur = nil;
+        for (CALayer *under in view->blurHidden) under.hidden = NO;
+        [view->blurHidden removeAllObjects];
+    }
+    CGSize size = state_of(view)->frame.size;
+    if (radius > 0 && size.width >= 1 && size.height >= 1) {
+        CGFloat scale = MIN(0.25f, 512 / MAX(size.width, size.height));
+        size_t width = MAX(1, (size_t)ceil(size.width * scale)), height = MAX(1, (size_t)ceil(size.height * scale));
+        NSMutableData *pixels = [NSMutableData dataWithLength:width * height * 4];
+        CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+        CGContextRef context = CGBitmapContextCreate(pixels.mutableBytes, width, height, 8, width * 4, space, kCGImageAlphaPremultipliedLast);
+        CGColorSpaceRelease(space);
+        if (context) {
+            CGContextScaleCTM(context, (CGFloat)width / size.width, (CGFloat)height / size.height);
+            CGContextTranslateCTM(context, 0, size.height);
+            CGContextScaleCTM(context, 1, -1);
+            /* the layer draws top down on ios, so the flip above puts the picture upright */
+            [view.layer renderInContext:context];
+            CGContextRelease(context);
+            uint32_t steps = (uint32_t)MIN((CGFloat)EXTERIA_STACK_BLUR_RADIUS_MAX, MAX(1, ceil(radius * scale)));
+            if (exteria_stack_blur_rgba(pixels.mutableBytes, pixels.length, (uint32_t)width, (uint32_t)height, steps) == EXTERIA_OK) {
+                NSData *copy = [pixels copy];
+                CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)copy);
+                CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
+                CGImageRef image = CGImageCreate(width, height, 8, 32, width * 4, rgb, kCGImageAlphaPremultipliedLast | kCGBitmapByteOrderDefault, provider, NULL, false, kCGRenderingIntentDefault);
+                CGColorSpaceRelease(rgb);
+                CGDataProviderRelease(provider);
+                [copy release];
+                if (image) {
+                    /* only the layers that were showing: a child the plugin hid stays hidden when the blur goes */
+                    if (!view->blurHidden) view->blurHidden = [[NSMutableArray alloc] init];
+                    for (CALayer *under in view.layer.sublayers) {
+                        if (under.hidden) continue;
+                        under.hidden = YES;
+                        [view->blurHidden addObject:under];
+                    }
+                    view->blur = [[CALayer alloc] init];
+                    view->blur.contents = (id)image;
+                    view->blur.contentsGravity = kCAGravityResize;
+                    view->blur.frame = CGRectMake(0, 0, size.width, size.height);
+                    [view.layer addSublayer:view->blur];
+                    CGImageRelease(image);
+                }
+            }
+        }
+    }
+    [CATransaction commit];
+}
+
 /* clipToOutline with a round rect: the picture on the layer and the children are cut at the corners */
 static void apply_clip(ExteriaPluginView *view) {
     CGFloat clip = state_of(view)->clip;
@@ -332,6 +402,11 @@ static void apply_props(UIView *view, NSDictionary *props) {
         if ([tint isKindOfClass:[NSNumber class]]) apply_tint(flat, [tint unsignedLongLongValue]);
     }
     if (moved) apply_geometry(view);
+    if (flat) {
+        id blur = [props objectForKey:@"blur"];
+        if ([blur isKindOfClass:[NSNumber class]]) st->blur = MAX(0, [blur doubleValue]);
+        if (st->blur > 0 || flat->blur) apply_blur(flat, st->blur);
+    }
 }
 
 static int base64_value(unsigned char c) {
@@ -696,6 +771,80 @@ static exteria_status fail(NSString **failure, NSString *text, exteria_status st
     return status;
 }
 
+/* the largest picture a line of text is drawn into: a plugin that draws text on a canvas asks for it a line at a time, and the pixels
+   travel to python as base64 */
+#define EXTERIA_TEXT_IMAGE_PIXELS (1024 * 1024)
+#define EXTERIA_TEXT_IMAGE_LENGTH 4096
+
+static NSString *base64_text(const uint8_t *bytes, size_t length) {
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    NSMutableData *out = [NSMutableData dataWithLength:(length + 2) / 3 * 4];
+    char *p = [out mutableBytes];
+    for (size_t i = 0; i < length; i += 3) {
+        uint32_t chunk = (uint32_t)bytes[i] << 16;
+        if (i + 1 < length) chunk |= (uint32_t)bytes[i + 1] << 8;
+        if (i + 2 < length) chunk |= bytes[i + 2];
+        *p++ = alphabet[(chunk >> 18) & 63];
+        *p++ = alphabet[(chunk >> 12) & 63];
+        *p++ = i + 1 < length ? alphabet[(chunk >> 6) & 63] : '=';
+        *p++ = i + 2 < length ? alphabet[chunk & 63] : '=';
+    }
+    return [[[NSString alloc] initWithData:out encoding:NSASCIIStringEncoding] autorelease];
+}
+
+/* one line of text as an 8 bit coverage mask, drawn with the font of the app at the given size. python tints it with the paint of the canvas */
+static exteria_status text_image(NSDictionary *request, NSDictionary **reply, NSString **failure) {
+    NSString *text = [request objectForKey:@"text"];
+    if (![text isKindOfClass:[NSString class]] || !text.length) return fail(failure, @"no text", EXTERIA_E_ARG);
+    if (text.length > EXTERIA_TEXT_IMAGE_LENGTH) return fail(failure, @"text is too long to draw", EXTERIA_E_ARG);
+    CGFloat size = num(request, @"size", 14);
+    if (size < 1 || size > 512) return fail(failure, @"text size out of range", EXTERIA_E_ARG);
+    UIFont *font = font_of(size, [[request objectForKey:@"bold"] boolValue]);
+    CGSize fit = ExteriaStringSize(text, font);
+    size_t width = (size_t)ceil(fit.width) + 2;
+    size_t height = (size_t)ceil(fit.height) + 2;
+    if (width * height > EXTERIA_TEXT_IMAGE_PIXELS) return fail(failure, @"text picture is too large", EXTERIA_E_ARG);
+    uint8_t *pixels = calloc(width * height, 1);
+    if (!pixels) return fail(failure, @"no memory for the text picture", EXTERIA_E_NOMEM);
+    /* an alpha only context: whatever is drawn in it leaves its coverage */
+    CGContextRef context = CGBitmapContextCreate(pixels, width, height, 8, width, NULL, kCGImageAlphaOnly);
+    if (!context) {
+        free(pixels);
+        return fail(failure, @"no context for the text picture", EXTERIA_E_NOMEM);
+    }
+    CGContextTranslateCTM(context, 0, height);
+    CGContextScaleCTM(context, 1, -1);
+    CGContextSetAlpha(context, 1);
+    UIGraphicsPushContext(context);
+    [[UIColor blackColor] set];
+    ExteriaDrawStringAt(text, font, CGPointMake(1, 1));
+    UIGraphicsPopContext();
+    CGContextRelease(context);
+    NSString *encoded = base64_text(pixels, width * height);
+    free(pixels);
+    *reply = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithUnsignedInt:(unsigned)width], @"w", [NSNumber numberWithUnsignedInt:(unsigned)height], @"h",
+              [NSNumber numberWithDouble:font.ascender + 1], @"ascent", [NSNumber numberWithDouble:fabs(font.descender)], @"descent", encoded, @"alpha", nil];
+    return EXTERIA_OK;
+}
+
+/* an address a plugin asks the app to open: the link router of the main screen takes it, as for a tap on a link in a chat. only the web and
+   telegram schemes pass: the router hands every other scheme to the system, and a plugin has no business starting other apps */
+#define CLIPBOARD_BYTES_MAX (1024 * 1024)
+
+static exteria_status open_url(NSDictionary *request, NSString **failure) {
+    NSString *text = [request objectForKey:@"url"];
+    if (![text isKindOfClass:[NSString class]] || !text.length || text.length > 4096) return fail(failure, @"no address", EXTERIA_E_ARG);
+    NSURL *url = [NSURL URLWithString:text];
+    NSString *scheme = [[url scheme] lowercaseString];
+    BOOL web = [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
+    if (!url || !(web || [scheme isEqualToString:@"tg"]) || (web && ![[url host] length])) return fail(failure, @"only http, https and tg addresses open", EXTERIA_E_ARG);
+    NSDictionary *info = [NSDictionary dictionaryWithObject:text forKey:@"url"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaOpenLinkNotification object:nil userInfo:info];
+    });
+    return EXTERIA_OK;
+}
+
 exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSDictionary **reply, NSString **failure) {
     *reply = [NSDictionary dictionary];
     if ([name isEqualToString:@"ui.apply"]) {
@@ -720,6 +869,57 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         probe.text = text;
         CGSize fit = [probe sizeThatFits:CGSizeMake(width, 100000)];
         *reply = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:(int)ceil(fit.width)], @"w", [NSNumber numberWithInt:(int)ceil(fit.height)], @"h", nil];
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"ui.text_image"]) return text_image(request, reply, failure);
+    if ([name isEqualToString:@"app.open_url"]) return open_url(request, failure);
+    if ([name isEqualToString:@"app.notice"]) {
+        /* on screen the app shows its own banner, a notice of the system would not show there; off screen the system notification center shows it */
+        NSString *key = [request objectForKey:@"key"];
+        NSString *title = [request objectForKey:@"title"];
+        NSString *text = [request objectForKey:@"text"];
+        if (![key isKindOfClass:[NSString class]] || !key.length || key.length > 128 || ![title isKindOfClass:[NSString class]] || title.length > 256 ||
+            ![text isKindOfClass:[NSString class]] || text.length > 4096) return fail(failure, @"a notice needs a key, a title up to 256 characters and a text up to 4096", EXTERIA_E_ARG);
+        if (!ExteriaNotifyEnabled()) return fail(failure, @"the notifications are switched off in the app", EXTERIA_E_STATE);
+        if ([[UIApplication sharedApplication] applicationState] == UIApplicationStateActive) {
+            show_banner(title.length ? [NSString stringWithFormat:@"%@: %@", title, text] : text);
+            return EXTERIA_OK;
+        }
+        if (!ExteriaNotifyPluginNotice(key, title, text)) return fail(failure, @"the notifications are switched off in the app", EXTERIA_E_STATE);
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.notice_cancel"]) {
+        NSString *key = [request objectForKey:@"key"];
+        if (![key isKindOfClass:[NSString class]] || !key.length || key.length > 128) return fail(failure, @"no key", EXTERIA_E_ARG);
+        ExteriaNotifyPluginNoticeCancel(key);
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.notices_enabled"]) {
+        *reply = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:ExteriaNotifyEnabled()] forKey:@"value"];
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.plugin_settings"]) {
+        /* the page the plugins list opens on a tap: only for a plugin that runs and built settings. it is pushed after this call returns, as the page
+           asks the plugin for its rows and python is still inside the call that wants it opened */
+        NSString *pluginId = [request objectForKey:@"plugin"];
+        if (![pluginId isKindOfClass:[NSString class]] || !pluginId.length) return fail(failure, @"no plugin", EXTERIA_E_ARG);
+        ExteriaPluginEntry *found = nil;
+        for (ExteriaPluginEntry *entry in ExteriaPluginsList()) if ([entry.pluginId isEqualToString:pluginId]) found = entry;
+        if (!found) return fail(failure, @"no such plugin", EXTERIA_E_NOTFOUND);
+        if (!found.enabled || !found.hasSettings) return fail(failure, @"the plugin is off or has no settings page", EXTERIA_E_STATE);
+        UINavigationController *navigation = top_controller().navigationController;
+        if (!navigation) return fail(failure, @"no screen to open the settings on", EXTERIA_E_STATE);
+        NSString *title = found.name ? found.name : pluginId;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [navigation pushViewController:[[[ExteriaPluginSettingsController alloc] initWithPluginId:pluginId title:title items:nil] autorelease] animated:YES];
+        });
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"app.clipboard_set"]) {
+        /* the pasteboard is shared with every app, so a plugin may write to it and no service reads it back */
+        NSString *text = [request objectForKey:@"text"];
+        if (![text isKindOfClass:[NSString class]] || [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > CLIPBOARD_BYTES_MAX) return fail(failure, @"no text, or more than 1 MiB of it", EXTERIA_E_ARG);
+        [[UIPasteboard generalPasteboard] setString:text];
         return EXTERIA_OK;
     }
     if ([name isEqualToString:@"ui.toast"]) {
@@ -809,6 +1009,13 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         if ([controller isKindOfClass:[ExteriaChatController class]]) {
             ExteriaDialog *dialog = [(ExteriaChatController *)controller openDialog];
             NSMutableDictionary *info = [NSMutableDictionary dictionaryWithObjectsAndKeys:@"chat", @"kind", [NSNumber numberWithLongLong:dialog.peerId], @"dialog", [NSNumber numberWithBool:dialog.discussion], @"discussion", nil];
+            /* the id the android client uses: a user is positive, a group or a channel is the plain id with a minus; a topic and the kind of the chat come with it */
+            [info setObject:[NSNumber numberWithLongLong:dialog.peerKind == 1 ? dialog.peerId : -dialog.peerId] forKey:@"signed"];
+            [info setObject:[NSNumber numberWithInt:dialog.topicId] forKey:@"topic"];
+            [info setObject:[NSNumber numberWithInt:dialog.peerKind] forKey:@"peer_kind"];
+            [info setObject:[NSNumber numberWithBool:dialog.kind == EXTERIA_DIALOG_CHANNEL] forKey:@"broadcast"];
+            [info setObject:[NSNumber numberWithBool:dialog.admin] forKey:@"admin"];
+            [info setObject:[NSNumber numberWithBool:dialog.saved] forKey:@"saved"];
             NSString *title = dialog.title ? dialog.title : @"";
             NSArray *words = [title componentsSeparatedByString:@" "];
             NSDictionary *party = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:dialog.peerId], @"id", [words objectAtIndex:0], @"first_name", title, @"title", nil];
@@ -879,10 +1086,39 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         if (![token isKindOfClass:[NSNumber class]]) return fail(failure, @"no token", EXTERIA_E_ARG);
         NSMutableDictionary *info = [NSMutableDictionary dictionaryWithDictionary:request];
         [info setObject:[name substringFromIndex:[@"account." length]] forKey:@"op"];
+        BOOL channelDelete = [name isEqualToString:@"account.delete"] && [[request objectForKey:@"channel"] isKindOfClass:[NSNumber class]];
+        if ([name isEqualToString:@"account.chat_page"] || channelDelete) {
+            /* these work on the chat that is open, the one the plugin saw as the last fragment, and on nothing else: the app finds its access hash and its topic there */
+            UIViewController *controller = top_controller();
+            ExteriaDialog *open = [controller isKindOfClass:[ExteriaChatController class]] ? [(ExteriaChatController *)controller openDialog] : nil;
+            NSNumber *wanted = [request objectForKey:channelDelete ? @"channel" : @"dialog"];
+            long long signedId = open ? (open.peerKind == 1 ? open.peerId : -open.peerId) : 0;
+            if (!open || ![wanted isKindOfClass:[NSNumber class]] || [wanted longLongValue] != signedId || (!channelDelete && [[request objectForKey:@"topic"] intValue] != open.topicId) || (channelDelete && open.peerKind != 3)) {
+                return fail(failure, @"the chat is not open", EXTERIA_E_NOTFOUND);
+            }
+            [info setObject:open forKey:@"openDialog"];
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaPluginAccountNotification object:nil userInfo:info];
         });
         return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"peer.known"]) {
+        NSNumber *dialog = [request objectForKey:@"dialog"];
+        if (![dialog isKindOfClass:[NSNumber class]]) return fail(failure, @"no chat", EXTERIA_E_ARG);
+        long long own = g_own_user;
+        *reply = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:[dialog longLongValue] == own || ExteriaPluginKnowsDialog([dialog longLongValue])] forKey:@"value"];
+        return EXTERIA_OK;
+    }
+    if ([name hasPrefix:@"progress."]) {
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginProgressService(name, request, reply, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
+    }
+    if ([name hasPrefix:@"tabs."]) {
+        NSString *reason = nil;
+        exteria_status status = ExteriaPluginTabsService(name, request, reply, &reason);
+        return status == EXTERIA_OK ? status : fail(failure, reason, status);
     }
     if ([name isEqualToString:@"page.cards"]) {
         id alpha = [request objectForKey:@"alpha"];
@@ -1004,7 +1240,7 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
         BOOL muted = NO;
         if ([controller isKindOfClass:[ExteriaChatController class]]) {
             ExteriaDialog *dialog = [(ExteriaChatController *)controller openDialog];
-            muted = dialog.peerId == [[request objectForKey:@"dialog"] longLongValue] && dialog.muted;
+            muted = llabs(dialog.peerId) == llabs([[request objectForKey:@"dialog"] longLongValue]) && dialog.muted;
         }
         *reply = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:muted] forKey:@"value"];
         return EXTERIA_OK;
@@ -1016,7 +1252,7 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
             return fail(failure, @"the chat is not open", EXTERIA_E_NOTFOUND);
         }
         ExteriaChatController *chat = (ExteriaChatController *)controller;
-        if ([chat openDialog].peerId != [[request objectForKey:@"peer"] longLongValue]) return fail(failure, @"only the open chat can be written to", EXTERIA_E_NOTFOUND);
+        if (llabs([chat openDialog].peerId) != llabs([[request objectForKey:@"peer"] longLongValue])) return fail(failure, @"only the open chat can be written to", EXTERIA_E_NOTFOUND);
         [chat sendPluginText:text replyTo:(int32_t)[[request objectForKey:@"reply"] intValue]];
         return EXTERIA_OK;
     }
@@ -1031,7 +1267,7 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
             return fail(failure, @"the chat is not open", EXTERIA_E_NOTFOUND);
         }
         ExteriaChatController *chat = (ExteriaChatController *)controller;
-        if ([chat openDialog].peerId != [[request objectForKey:@"peer"] longLongValue]) return fail(failure, @"only the open chat can be written to", EXTERIA_E_NOTFOUND);
+        if (llabs([chat openDialog].peerId) != llabs([[request objectForKey:@"peer"] longLongValue])) return fail(failure, @"only the open chat can be written to", EXTERIA_E_NOTFOUND);
         if (!ExteriaPluginsPathInCache(path)) return fail(failure, @"a photo can only be sent from the plugin files folder", EXTERIA_E_ARG);
         NSString *reason = [chat sendPluginPhotoAtPath:path caption:[caption isKindOfClass:[NSString class]] ? caption : nil replyTo:(int32_t)[[request objectForKey:@"reply"] intValue]];
         return reason ? fail(failure, reason, EXTERIA_E_IO) : EXTERIA_OK;
@@ -1042,6 +1278,8 @@ exteria_status ExteriaPluginUIService(NSString *name, NSDictionary *request, NSD
 void ExteriaPluginUIReset(void) {
     ExteriaPluginAudioReset();
     ExteriaPluginMusicReset();
+    ExteriaPluginTabsReset();
+    ExteriaPluginProgressReset();
     ExteriaPluginSheetCloseAll();
     [g_motion stopAccelerometerUpdates];
     for (UIView *child in [[g_overlay.subviews copy] autorelease]) [child removeFromSuperview];
