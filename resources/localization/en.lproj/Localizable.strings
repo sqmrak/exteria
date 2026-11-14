@@ -2267,6 +2267,8 @@
 "chat.service.sharing.still.enabled" = "Copying and forwarding remain allowed";
 "chat.service.sharing.disabled" = "%@ disabled copying and forwarding";
 "chat.service.sharing.enabled" = "%@ allowed copying and forwarding";
+"chat.service.poll.added" = "%@ added \"%@\" to the poll";
+"chat.service.poll.removed" = "%@ removed \"%@\" from the poll";
 "gifts.card.from" = "Gift from %@";
 "gifts.card.out" = "Your gift";
 "gifts.card.view" = "View";

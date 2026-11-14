@@ -1959,6 +1959,23 @@ static void test_service_summary(void) {
     set(action, "new_value", obj("boolTrue"));
     CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_SHARING_TOGGLE + 1);
     CHECK_EQ_INT(value, 2);
+    {
+        exteria_tl_value *answer = obj("pollAnswer"), *words = obj("textWithEntities");
+        set_str(words, "text", "Option B");
+        set(words, "entities", vec_of(NULL, 0));
+        set(answer, "text", words);
+        action = obj("messageActionPollDeleteAnswer");
+        set(action, "answer", answer);
+        CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_POLL_ANSWER_REMOVED + 1);
+        CHECK(!strcmp(text, "Option B"));
+        action = obj("messageActionPollAppendAnswer");
+        set(action, "answer", answer);
+        CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_POLL_ANSWER_ADDED + 1);
+        CHECK(!strcmp(text, "Option B"));
+        action = obj("messageActionPollDeleteAnswer");
+        CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_POLL_ANSWER_REMOVED + 1);
+        CHECK_EQ_INT(text[0], 0);
+    }
     action = obj("messageActionEmpty");
     CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_OTHER + 1);
     CHECK(!strcmp(text, "Empty"));

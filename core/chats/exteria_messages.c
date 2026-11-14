@@ -515,6 +515,11 @@ uint8_t exteria_service_summary(const exteria_tl_value *action, char *text, size
             kind == EXTERIA_SERVICE_TOPIC_CREATE || kind == EXTERIA_SERVICE_MIGRATED) copy_text(text, cap, action, "title", 0);
         if (kind == EXTERIA_SERVICE_TOPIC_EDIT && exteria_tl_has(action, "title")) copy_text(text, cap, action, "title", 0);
         if (kind == EXTERIA_SERVICE_CUSTOM) copy_text(text, cap, action, "message", 1);
+        if (kind == EXTERIA_SERVICE_POLL_ANSWER_ADDED || kind == EXTERIA_SERVICE_POLL_ANSWER_REMOVED) {
+            /* the answer is a pollAnswer whose text is a textWithEntities; the line quotes the words only */
+            const exteria_tl_value *answer = exteria_tl_get(action, "answer"), *words = answer ? exteria_tl_get(answer, "text") : NULL;
+            if (words) copy_text(text, cap, words, "text", 0);
+        }
         if (kind == EXTERIA_SERVICE_THEME) {
             const exteria_tl_value *theme = exteria_tl_get(action, "theme");
             if (theme) copy_text(text, cap, theme, "emoticon", 0);
