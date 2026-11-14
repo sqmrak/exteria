@@ -22,6 +22,7 @@ extern NSString *const ExteriaDialogsChangedNotification;
     BOOL _verified;
     BOOL _muted;
     BOOL _giftsAvailable;
+    BOOL _canViewStats;
     BOOL _creator;
     BOOL _signatures;
     uint32_t _adminRights;
@@ -52,6 +53,8 @@ extern NSString *const ExteriaDialogsChangedNotification;
 @property (nonatomic, readonly) BOOL verified;
 @property (nonatomic, readonly) BOOL muted;
 @property (nonatomic, readonly) BOOL giftsAvailable;
+/* the server lets this account read the statistics of the channel */
+@property (nonatomic, readonly) BOOL canViewStats;
 /* the signed in account made the channel and holds every right */
 @property (nonatomic, readonly) BOOL creator;
 /* posts carry the name of the admin who wrote them */

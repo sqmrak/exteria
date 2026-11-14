@@ -161,6 +161,7 @@ static NSString *ExteriaSymbolMaskName(ExteriaSymbol symbol) {
     case ExteriaSymbolShareOut: return @"symbol_shareout";
     case ExteriaSymbolLinkStory: return @"symbol_link2";
     case ExteriaSymbolHammer: return nil;
+    case ExteriaSymbolStatistics: return nil;
     case ExteriaSymbolCameraPlus: return nil;
     case ExteriaSymbolBlur: return nil;
     case ExteriaSymbolPipette: return nil;
@@ -198,6 +199,20 @@ static UIImage *ExteriaHammerImage(CGFloat side, UIColor *color) {
     [claw addCurveToPoint:CGPointMake(8, 6.9) controlPoint1:CGPointMake(4.6, 6.8) controlPoint2:CGPointMake(6, 6.4)];
     [claw closePath];
     [claw fill];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
+/* three rounded bars that rise from left to right, on a grid of 24 units */
+static UIImage *ExteriaStatisticsImage(CGFloat side, UIColor *color) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    [color setFill];
+    CGContextScaleCTM(context, side / 24, side / 24);
+    [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(3.5, 12.5, 4.6, 8) cornerRadius:1.4] fill];
+    [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(9.7, 7.5, 4.6, 13) cornerRadius:1.4] fill];
+    [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(15.9, 3.5, 4.6, 17) cornerRadius:1.4] fill];
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return image;
@@ -330,6 +345,7 @@ static CGImageRef ExteriaCreateScaledMask(NSString *name, size_t side) {
 /* the mask filled with color; a bitmap on every system, so the glyphs look the same from ios 5 to the newest release */
 static UIImage *ExteriaRenderSymbolImage(ExteriaSymbol symbol, CGFloat pointSize, UIColor *color) {
     if (symbol == ExteriaSymbolHammer) return ExteriaHammerImage(pointSize, color);
+    if (symbol == ExteriaSymbolStatistics) return ExteriaStatisticsImage(pointSize, color);
     if (symbol == ExteriaSymbolCameraPlus) return ExteriaCameraPlusImage(pointSize, color);
     if (symbol == ExteriaSymbolBlur) return ExteriaBlurImage(pointSize, color);
     if (symbol == ExteriaSymbolPipette) return ExteriaVectorImage(pointSize, color, "M11.793,7.207L11.293,6.707C10.902,6.317 10.902,5.683 11.293,5.293C11.683,4.902 12.317,4.902 12.707,5.293L13.707,6.293L16.439,3.561C17.025,2.975 17.975,2.975 18.561,3.561L20.439,5.439C21.025,6.025 21.025,6.975 20.439,7.561L17.707,10.293L18.707,11.293C19.098,11.683 19.098,12.317 18.707,12.707C18.317,13.098 17.683,13.098 17.293,12.707L16.793,12.207L8.879,20.121C8.316,20.684 7.553,21 6.757,21H4C3.448,21 3,20.552 3,20V17.243C3,16.447 3.316,15.684 3.879,15.121L5.06,16.302C4.81,16.552 4.67,16.89 4.67,17.243V19.33H6.757C7.11,19.33 7.448,19.19 7.698,18.941L15.612,11.026L12.974,8.388L5.06,16.302L3.879,15.121L11.793,7.207Z", 24, 0);

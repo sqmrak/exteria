@@ -161,7 +161,26 @@ typedef enum {
     ExteriaSymbolPlayerNote,
     /* Material Symbols from Google (tools/material, resources/icons/material_*) */
     ExteriaSymbolMaterialMic,
-    ExteriaSymbolMaterialVideocam
+    ExteriaSymbolMaterialVideocam,
+    ExteriaSymbolMaterialLyrics,
+    ExteriaSymbolMaterialCheck,
+    ExteriaSymbolMaterialDoneAll,
+    ExteriaSymbolMaterialSchedule,
+    ExteriaSymbolMaterialError,
+    ExteriaSymbolMaterialCloseOutlined,
+    /* drawn by code: three bars of rising height, the statistics of a post */
+    ExteriaSymbolStatistics,
+    /* the playback speed of the exteraless story menu: the gauge of the row, and the 0.2x, 0.5x, 1x, 1.5x and 2x of its choices */
+    ExteriaSymbolSpeed,
+    ExteriaSymbolSpeedVerySlow,
+    ExteriaSymbolSpeedSlow,
+    ExteriaSymbolSpeedNormal,
+    ExteriaSymbolSpeedFast,
+    ExteriaSymbolSpeedVeryFast,
+    /* the rows of the exteraless story menu that the chat menu has no glyph for: a picture with a copy mark, the arrow out of a box, and the link of a story */
+    ExteriaSymbolCopyPhoto,
+    ExteriaSymbolShareOut,
+    ExteriaSymbolLinkStory
 } ExteriaSymbol;
 
 /* the glyph in one color, a square of pointSize points; every symbol is a mask cut drawables, so the look is the

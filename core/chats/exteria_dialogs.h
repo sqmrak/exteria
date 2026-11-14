@@ -75,6 +75,7 @@ typedef struct exteria_dialog_row {
     /* the settings the chat sets itself, which stand over those of its kind; muted above is only its own mute */
     exteria_peer_notify notify;
     uint8_t can_post;       /* a broadcast channel the account may post in: its creator, or an admin allowed to post */
+    uint8_t admin;          /* a broadcast channel the account owns or is an admin of, with any rights: the statistics of its posts are open to it */
     uint8_t send_ban;       /* a group the account may not write in, as exteria_send_ban says why */
     int32_t send_ban_until; /* unix time a personal ban ends; zero is for good */
     uint8_t unread_mark;

@@ -1324,42 +1324,75 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
             }];
             return;
         }
-        NSNumber *key = [NSNumber numberWithInt:file.dc];
-        ExteriaMediaLink *link = [_links objectForKey:key];
-        if (!link && exteria_dc_host(file.dc)) {
-            link = [[[ExteriaMediaLink alloc] initWithDc:file.dc directory:_directory deviceModel:_deviceModel
-                                           systemVersion:_systemVersion appVersion:_appVersion langCode:_langCode] autorelease];
-            link.shiro = _shiro;
-            [_links setObject:link forKey:key];
-        }
+        ExteriaMediaLink *link = [self workerLinkForDc:file.dc];
         if (!link) {
             dispatch_async(dispatch_get_main_queue(), ^{ done(nil, @"INTERNAL"); [done release]; });
             return;
         }
-        int32_t dc = file.dc;
-        [link downloadFile:file offset:offset limit:limit ranged:ranged authorizer:^(ExteriaAuthorizationDelivery deliver) {
-            ExteriaAuthorizationDelivery deliverCopy = [deliver copy];
-            [self post:^{
-                [self submit:"auth.exportAuthorization" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
-                    return exteria_tl_set_i32(arena, request, "dc_id", dc);
-                } handler:^(const exteria_mt_rpc_result *result) {
-                    int64_t authId = 0;
-                    const uint8_t *bytes = NULL;
-                    size_t len = 0;
-                    if (result->status == EXTERIA_OK && exteria_tl_get_i64(result->value, "id", &authId) == EXTERIA_OK &&
-                        exteria_tl_get_bytes(result->value, "bytes", &bytes, &len) == EXTERIA_OK) {
-                        deliverCopy(authId, [NSData dataWithBytes:bytes length:len], nil);
-                    } else {
-                        deliverCopy(0, nil, result->status == EXTERIA_OK ? @"INTERNAL" : ExteriaRpcErrorName(result));
-                    }
-                    [deliverCopy release];
-                }];
-            }];
-        } completion:^(NSData *data, NSString *error) {
+        [link downloadFile:file offset:offset limit:limit ranged:ranged authorizer:[self workerAuthorizerForDc:file.dc] completion:^(NSData *data, NSString *error) {
             done(data, error);
             [done release];
         }];
     }];
+}
+
+/* worker only: the link to another data center, made at first use; nil when the app has no address for it */
+- (ExteriaMediaLink *)workerLinkForDc:(int32_t)dc {
+    NSNumber *key = [NSNumber numberWithInt:dc];
+    ExteriaMediaLink *link = [_links objectForKey:key];
+    if (!link && exteria_dc_host(dc)) {
+        link = [[[ExteriaMediaLink alloc] initWithDc:dc directory:_directory deviceModel:_deviceModel
+                                       systemVersion:_systemVersion appVersion:_appVersion langCode:_langCode] autorelease];
+        link.shiro = _shiro;
+        [_links setObject:link forKey:key];
+    }
+    return link;
+}
+
+/* the link signs in on its data center with an authorization this connection exports for it */
+- (ExteriaAuthorizer)workerAuthorizerForDc:(int32_t)dc {
+    return [[^(ExteriaAuthorizationDelivery deliver) {
+        ExteriaAuthorizationDelivery deliverCopy = [deliver copy];
+        [self post:^{
+            [self submit:"auth.exportAuthorization" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
+                return exteria_tl_set_i32(arena, request, "dc_id", dc);
+            } handler:^(const exteria_mt_rpc_result *result) {
+                int64_t authId = 0;
+                const uint8_t *bytes = NULL;
+                size_t len = 0;
+                if (result->status == EXTERIA_OK && exteria_tl_get_i64(result->value, "id", &authId) == EXTERIA_OK &&
+                    exteria_tl_get_bytes(result->value, "bytes", &bytes, &len) == EXTERIA_OK) {
+                    deliverCopy(authId, [NSData dataWithBytes:bytes length:len], nil);
+                } else {
+                    deliverCopy(0, nil, result->status == EXTERIA_OK ? @"INTERNAL" : ExteriaRpcErrorName(result));
+                }
+                [deliverCopy release];
+            }];
+        }];
+    } copy] autorelease];
+}
+
+- (void)invokeBuilt:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build onDc:(int32_t)dc
+            handler:(void (^)(const exteria_mt_rpc_result *result))handler {
+    exteria_status (^builder)(exteria_arena *, exteria_tl_value **) = [build copy];
+    void (^answer)(const exteria_mt_rpc_result *) = [handler copy];
+    [self post:^{
+        if (dc == _dc) {
+            [self invokeBuilt:builder handler:answer];
+            return;
+        }
+        ExteriaMediaLink *link = [self workerLinkForDc:dc];
+        if (!link) {
+            exteria_mt_rpc_result failed;
+            memset(&failed, 0, sizeof(failed));
+            failed.status = EXTERIA_E_STATE;
+            answer(&failed);
+            return;
+        }
+        [link invokeBuilt:builder handler:answer authorizer:[self workerAuthorizerForDc:dc]];
+    }];
+    [builder release];
+    [answer release];
 }
 
 - (void)signOut:(void (^)(NSString *errorName))completion {

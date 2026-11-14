@@ -77,6 +77,7 @@
 #import "exteria_session_profile.h"
 #import "exteria_reaction_picker.h"
 #import "exteria_reaction_people_controller.h"
+#import "exteria_message_stats_controller.h"
 #import "exteria_back_swipe.h"
 #import "exteria_round_recorder.h"
 #import "exteria_voice_recorder.h"
@@ -6123,6 +6124,12 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message) {
     context.message_id = message.messageId;
     context.broadcast = _dialog.kind == EXTERIA_DIALOG_CHANNEL;
     context.can_post = _channelFull ? _channelFull.dialog.canPost : _dialog.canPost;
+    context.admin = _channelFull ? _channelFull.dialog.admin : _dialog.admin;
+    context.can_view_stats = _channelFull.canViewStats;
+    context.music_saveable = message.media.kind == EXTERIA_PREVIEW_AUDIO && message.media.file && message.media.ref.ref_len;
+    context.forwarded = message.forwarded;
+    context.views = message.views;
+    context.forwards = message.forwards;
     context.outgoing = message.outgoing;
     context.service = message.service;
     context.has_text = message.text.length > 0;
@@ -6140,7 +6147,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message) {
     return context;
 }
 
-/* the actions use bits up to 1 << 26 and the menu keeps 0xFFFF for "More", so tags from 1 << 30 are free for the rows of plugins */
+/* the actions use bits up to 1 << 27 and the menu keeps 0xFFFF for "More", so tags from 1 << 30 are free for the rows of plugins */
 #define PLUGIN_MENU_TAG 0x40000000u
 
 typedef struct { uint32_t action; ExteriaSymbol symbol; NSString *key; BOOL destructive; } ExteriaMessageActionRow;
@@ -6157,6 +6164,8 @@ static const ExteriaMessageActionRow ExteriaMessageActionIcons[] = {
 /* the text rows under the line about the message; the first few show and the rest wait behind "More" */
 static const ExteriaMessageActionRow ExteriaMessageActionRows[] = {
     {EXTERIA_ACTION_EDIT, ExteriaSymbolCompose, @"chat.msg.edit", NO},
+    {EXTERIA_ACTION_SAVE_MUSIC, ExteriaSymbolMusic, @"music.add", NO},
+    {EXTERIA_ACTION_STATISTICS, ExteriaSymbolStatistics, @"chat.msg.stats", NO},
     {EXTERIA_ACTION_PIN, ExteriaSymbolPin, @"chat.msg.pin", NO},
     {EXTERIA_ACTION_UNPIN, ExteriaSymbolUnpin, @"chat.msg.unpin", NO},
     {EXTERIA_ACTION_COPY_LINK, ExteriaSymbolLink, @"profile.qr.copy", NO},
@@ -6489,8 +6498,8 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     case EXTERIA_ACTION_PIN: [self pinMessage:message unpin:NO]; break;
     case EXTERIA_ACTION_UNPIN: [self pinMessage:message unpin:YES]; break;
     case EXTERIA_ACTION_DETAILS: [self showDetailsOfMessage:message]; break;
-    case EXTERIA_ACTION_REACTORS: {
-        ExteriaReactionPeopleController *page = [[[ExteriaReactionPeopleController alloc] initWithSession:_session dialog:_dialog messageId:message.messageId media:_media] autorelease];
+    case EXTERIA_ACTION_STATISTICS: {
+        ExteriaMessageStatsController *page = [[[ExteriaMessageStatsController alloc] initWithSession:_session dialog:_dialog message:message avatars:_avatars] autorelease];
         [self.navigationController pushViewController:page animated:YES];
         break;
     }

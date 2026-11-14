@@ -76,6 +76,12 @@ typedef struct exteria_action_context {
     uint8_t translate_wanted;   /* the translate button is on in the settings and the language of the words is not one the person left alone */
     uint8_t saved_chat;         /* the chat is the favorites, where saving a message again would only copy it onto itself */
     uint8_t sender_user;        /* the message was written by a person the app can search for (a user with a hash) */
+    uint8_t admin;              /* the account owns or administers the broadcast channel */
+    uint8_t can_view_stats;     /* the server named the statistics readable by this account, which it does not for an admin of a small channel or one without the right */
+    uint8_t forwarded;          /* the message carries a forward header */
+    uint8_t music_saveable;     /* the message is a song with a file the server can put on the profile */
+    int32_t views;              /* what the server counted for a channel post */
+    int32_t forwards;
 } exteria_action_context;
 
 /* the actions that apply, as a mask of exteria_message_action; a message not sent yet can only be copied, a

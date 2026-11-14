@@ -116,6 +116,9 @@ uint32_t exteria_message_actions_for(const exteria_action_context *c) {
                                             c->media == EXTERIA_PREVIEW_FILE || c->media == EXTERIA_PREVIEW_AUDIO)) mask |= EXTERIA_ACTION_EDIT;
     if (may_write) mask |= c->pinned_now ? EXTERIA_ACTION_UNPIN : EXTERIA_ACTION_PIN;
     if (c->outgoing || c->saved_chat || (c->broadcast && c->can_post)) mask |= EXTERIA_ACTION_DELETE;
+    if (c->music_saveable && c->media == EXTERIA_PREVIEW_AUDIO) mask |= EXTERIA_ACTION_SAVE_MUSIC;
+    /* the server keeps statistics for a post once somebody saw or forwarded it, and shows them only to admins it flags with can_view_stats */
+    if (c->broadcast && c->peer_kind == 3 && c->admin && c->can_view_stats && (c->views > 0 || c->forwards > 0)) mask |= EXTERIA_ACTION_STATISTICS;
     return mask;
 }
 

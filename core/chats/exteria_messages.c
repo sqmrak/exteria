@@ -848,6 +848,8 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     copy_text(out->post_author, sizeof(out->post_author), m, "post_author", 0);
     exteria_tl_get_i32(m, "views", &out->views);
     if (out->views < 0) out->views = 0;
+    exteria_tl_get_i32(m, "forwards", &out->forwards);
+    if (out->forwards < 0) out->forwards = 0;
     read_comments(exteria_tl_get(m, "replies"), out);
     if (exteria_tl_has(m, "via_bot_id")) exteria_tl_get_i64(m, "via_bot_id", &out->via_bot_id);
     out->has_markup = exteria_tl_has(m, "reply_markup") ? 1 : 0;

@@ -1,4 +1,5 @@
 #import "exteria_session.h"
+#import "exteria_media_link.h"
 
 #include "exteria_mt_client.h"
 #include "exteria_store.h"
@@ -39,6 +40,13 @@ void ExteriaApprovePaidMessages(ExteriaSession *session, const exteria_peer_ref 
 /* queues a request that the core built whole; the handler runs on the worker and must copy what it keeps */
 - (void)invokeBuilt:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build
             handler:(void (^)(const exteria_mt_rpc_result *result))handler;
+/* the same on another data center, such as the one that keeps the statistics of a channel; the handler runs on the link's thread there, so it
+   copies what it keeps and does not touch the session, and a data center without an address answers a failed result */
+- (void)invokeBuilt:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build onDc:(int32_t)dc
+            handler:(void (^)(const exteria_mt_rpc_result *result))handler;
+/* worker only: the link to another data center, and the block that signs it in */
+- (ExteriaMediaLink *)workerLinkForDc:(int32_t)dc;
+- (ExteriaAuthorizer)workerAuthorizerForDc:(int32_t)dc;
 /* hands a finished load to the main thread, and queues the client restart when the key was revoked */
 - (void)finishLoad:(NSArray *)items error:(NSString *)error completion:(ExteriaListCompletion)done;
 /* a revoked key in an error name queues the client restart; worker only */

@@ -203,6 +203,7 @@ typedef enum {
     long long _fromChannel;
     long long _targetId;
     int32_t _views;
+    int32_t _forwards;
     BOOL _hasComments;
     int32_t _comments;
     long long _discussionId;
@@ -301,6 +302,7 @@ typedef enum {
 @property (nonatomic, readonly) long long fromChannel;
 /* a channel post's counters: how many saw it, zero when the server did not count */
 @property (nonatomic, readonly) int32_t views;
+@property (nonatomic, readonly) int32_t forwards;
 /* the post has a comment thread; how many comments it has, the discussion group it lives in, and the user ids (NSNumber) of the
    newest commenters, at most three */
 @property (nonatomic, readonly) BOOL hasComments;

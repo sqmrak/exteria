@@ -246,6 +246,7 @@ static void fill_chat(exteria_dialog_row *row, const exteria_tl_value *chats) {
     if (row->kind == EXTERIA_DIALOG_CHANNEL) {
         const exteria_tl_value *rights = exteria_tl_get(chat, "admin_rights");
         row->can_post = exteria_tl_has(chat, "creator") || (rights && exteria_tl_has(rights, "post_messages")) ? 1 : 0;
+        row->admin = exteria_tl_has(chat, "creator") || rights ? 1 : 0;
     }
     if (row->kind == EXTERIA_DIALOG_GROUP) read_send_ban(row, chat);
     if (exteria_tl_has(chat, "verified")) row->verified = 1;

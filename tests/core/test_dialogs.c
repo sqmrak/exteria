@@ -377,11 +377,15 @@ static void test_channel_posting_rights(void) {
     CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 2, m, 2, c, 2, u, 1), SELF, 0, rows, 2, &count), EXTERIA_OK);
     CHECK_EQ_INT(rows[0].can_post, 1);
     CHECK_EQ_INT(rows[1].can_post, 0);
+    /* the owner and an admin read the statistics, a reader does not */
+    CHECK_EQ_INT(rows[0].admin, 1);
+    CHECK_EQ_INT(rows[1].admin, 0);
     /* an admin may post only with the right to */
     set_flag(rights, "delete_messages");
     set(c[1], "admin_rights", rights);
     CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 2, m, 2, c, 2, u, 1), SELF, 0, rows, 2, &count), EXTERIA_OK);
     CHECK_EQ_INT(rows[1].can_post, 0);
+    CHECK_EQ_INT(rows[1].admin, 1);
     set_flag(rights, "post_messages");
     CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 2, m, 2, c, 2, u, 1), SELF, 0, rows, 2, &count), EXTERIA_OK);
     CHECK_EQ_INT(rows[1].can_post, 1);

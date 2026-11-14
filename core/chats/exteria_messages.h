@@ -184,6 +184,7 @@ typedef struct exteria_message_row {
     uint8_t has_markup;         /* buttons or a keyboard came with it; exteria_markup_read of the message's reply_markup tells which */
     uint8_t has_reactions;
     int32_t views;              /* how many saw a channel post, zero when the server did not count */
+    int32_t forwards;           /* how many times a channel post was forwarded, zero when the server did not count */
     uint8_t has_comments;       /* a channel post that has a comment thread in its discussion group */
     int32_t comments;           /* the comments so far */
     int64_t discussion_id;      /* the discussion group (a channel id), zero when unknown */

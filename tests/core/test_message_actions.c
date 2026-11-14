@@ -428,6 +428,53 @@ static void test_broadcast(void) {
     CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_EDIT);
 }
 
+static void test_save_music(void) {
+    exteria_action_context c = sent_text();
+    c.media = EXTERIA_PREVIEW_AUDIO;
+    /* a song with a file the server can keep offers the profile, next to the usual rows */
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_SAVE_MUSIC));
+    c.music_saveable = 1;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_SAVE_MUSIC);
+    CHECK(exteria_message_actions_for(&c) & (EXTERIA_ACTION_REPLY | EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_SELECT));
+    /* a voice message or a photo is not a song, whatever the flag says; one not sent yet has only its words to copy */
+    c.media = EXTERIA_PREVIEW_VOICE;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_SAVE_MUSIC));
+    c.media = EXTERIA_PREVIEW_AUDIO;
+    c.message_id = 0;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_SAVE_MUSIC));
+}
+
+static void test_statistics(void) {
+    exteria_action_context c = sent_text();
+    c.peer_kind = 3;
+    c.broadcast = 1;
+    c.views = 10;
+    /* a reader never sees them, and neither does an admin of another channel */
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS));
+    c.admin = 1;
+    /* the server may still refuse an admin, as in a channel too small for statistics */
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS));
+    c.can_view_stats = 1;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS);
+    /* an admin with no right to post still reads the statistics */
+    c.can_post = 0;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS);
+    /* a post nobody saw or forwarded has none yet; either count is enough */
+    c.views = 0;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS));
+    c.forwards = 3;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS);
+    /* a post forwarded into the channel has statistics of its own there; a group and a message not sent yet have none */
+    c.forwarded = 1;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS);
+    c.forwarded = 0;
+    c.broadcast = 0;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS));
+    c.broadcast = 1;
+    c.message_id = 0;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_STATISTICS));
+}
+
 static void test_unsent_and_service(void) {
     exteria_action_context c = sent_text();
     /* a message still on its way can only be copied */
@@ -734,6 +781,8 @@ int main(void) {
     test_sharing_expiry();
     test_rules();
     test_broadcast();
+    test_statistics();
+    test_save_music();
     test_gallery_and_selection();
     test_bookmark_and_transcribe();
     test_read_date();

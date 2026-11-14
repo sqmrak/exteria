@@ -10,7 +10,7 @@ sources, all copied unchanged apart from scaling:
   phone video                          twelve demo/Resources/IntroPhone.mp4, the original telegram red phone
   flag svgs                            flag-icons 7.5.0 (lipis, mit), flags/4x3
   symbols, the tab icons among them    res/drawable-* of the reference tree, the msg_, menu_, input_ and ic_ drawables of SYMBOL_ICONS
-  tools/material                       Material Symbols Rounded, filled, 24 dp (google, apache 2.0, see resources/licenses/MaterialSymbols.txt), the glyphs of the modern player strip
+  tools/material                       Material Symbols Rounded, 24 dp, weight 400 (google, apache 2.0, see resources/licenses/MaterialSymbols.txt), the glyphs of the modern player strip and sheet
   resources/fonts                      Inter 4.1 (rsms, ofl), extras/ttf
   resources/fonts fallbacks            Noto Sans Math, Symbols, Symbols2 (notofonts, ofl) and Unifont 16.0.01, unifont and
                                        unifont_upper otf (unifoundry.com, ofl), the upstream files; see Fallback-LICENSE.txt

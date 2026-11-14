@@ -32,6 +32,9 @@
     BOOL ranged;
     long long offset;
     int32_t limit;
+    /* a request that is no file part: built on the link's thread, and its answer is handed to the block there too */
+    exteria_status (^build)(exteria_arena *arena, exteria_tl_value **request);
+    void (^answer)(const exteria_mt_rpc_result *result);
 }
 @end
 
@@ -39,6 +42,8 @@
 - (void)dealloc {
     [file release];
     [completion release];
+    [build release];
+    [answer release];
     [super dealloc];
 }
 @end
@@ -194,6 +199,14 @@ static uint64_t ExteriaMediaNowMs(void) {
 #pragma mark downloads
 
 static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error) {
+    if (job->answer) {
+        /* the link could not carry the request; the block sees what any lost connection shows, so its error name is OFFLINE */
+        exteria_mt_rpc_result failed;
+        memset(&failed, 0, sizeof(failed));
+        failed.status = EXTERIA_E_STATE;
+        job->answer(&failed);
+        return;
+    }
     ExteriaDownloadCompletion done = [job->completion retain];
     NSData *delivered = [[data copy] autorelease];
     NSString *deliveredError = [[error copy] autorelease];
@@ -215,6 +228,18 @@ static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error
     job->limit = limit;
     job->file = [file retain];
     job->completion = [completion copy];
+    [self enqueueJob:job authorizer:authorizer];
+}
+
+- (void)invokeBuilt:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build
+            handler:(void (^)(const exteria_mt_rpc_result *result))handler authorizer:(ExteriaAuthorizer)authorizer {
+    ExteriaMediaJob *job = [[[ExteriaMediaJob alloc] init] autorelease];
+    job->build = [build copy];
+    job->answer = [handler copy];
+    [self enqueueJob:job authorizer:authorizer];
+}
+
+- (void)enqueueJob:(ExteriaMediaJob *)job authorizer:(ExteriaAuthorizer)authorizer {
     ExteriaAuthorizer authorize = [authorizer copy];
     if (![self ensureStarted]) {
         ExteriaFinishJob(job, nil, @"INTERNAL");
@@ -241,16 +266,22 @@ static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error
     uint64_t id = 0;
     exteria_status status = _clientLive ? EXTERIA_OK : EXTERIA_E_STATE;
     exteria_arena_init(&arena, 64u * 1024u);
-    request = status == EXTERIA_OK ? exteria_tl_new_obj(&arena, "upload.getFile") : NULL;
-    if (status == EXTERIA_OK && !request) status = EXTERIA_E_NOMEM;
-    if (status == EXTERIA_OK) status = [job->file buildLocation:&arena into:&location];
-    if (status == EXTERIA_OK) status = exteria_tl_set(request, "location", location);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i64(&arena, request, "offset", job->offset);
-    if (status == EXTERIA_OK) status = exteria_tl_set_i32(&arena, request, "limit", job->limit);
+    if (job->build) {
+        request = NULL;
+        if (status == EXTERIA_OK) status = job->build(&arena, &request);
+        if (status == EXTERIA_OK && !request) status = EXTERIA_E_NOMEM;
+    } else {
+        request = status == EXTERIA_OK ? exteria_tl_new_obj(&arena, "upload.getFile") : NULL;
+        if (status == EXTERIA_OK && !request) status = EXTERIA_E_NOMEM;
+        if (status == EXTERIA_OK) status = [job->file buildLocation:&arena into:&location];
+        if (status == EXTERIA_OK) status = exteria_tl_set(request, "location", location);
+        if (status == EXTERIA_OK) status = exteria_tl_set_i64(&arena, request, "offset", job->offset);
+        if (status == EXTERIA_OK) status = exteria_tl_set_i32(&arena, request, "limit", job->limit);
+    }
     if (status == EXTERIA_OK) status = exteria_client_request(&_client, request, RPC_TIMEOUT_MS, &id);
     exteria_arena_free(&arena);
     if (status != EXTERIA_OK) {
-        NSLog(@"exteria: file request failed: %s", exteria_status_name(status));
+        NSLog(@"exteria: request on dc %d failed: %s", (int)_dc, exteria_status_name(status));
         ExteriaFinishJob(job, nil, @"INTERNAL");
         return;
     }
@@ -260,6 +291,18 @@ static void ExteriaFinishJob(ExteriaMediaJob *job, NSData *data, NSString *error
 }
 
 - (void)fileResult:(const exteria_mt_rpc_result *)result forJob:(ExteriaMediaJob *)job {
+    if (job->answer) {
+        /* a key that never signed in on this data center is signed in once, as for a file part */
+        if (result->status != EXTERIA_OK && !job->retried && _authorizer &&
+            [ExteriaDownloadErrorName(result) isEqualToString:@"AUTH_KEY_UNREGISTERED"]) {
+            job->retried = YES;
+            [_waiting addObject:job];
+            if (!_authorizing) [self authorize];
+            return;
+        }
+        job->answer(result);
+        return;
+    }
     if (result->status == EXTERIA_OK) {
         const uint8_t *bytes;
         size_t len;

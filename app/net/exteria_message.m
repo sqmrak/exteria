@@ -201,6 +201,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize fromId = _fromId;
 @synthesize fromChannel = _fromChannel;
 @synthesize views = _views;
+@synthesize forwards = _forwards;
 @synthesize hasComments = _hasComments;
 @synthesize comments = _comments;
 @synthesize discussionId = _discussionId;
@@ -390,6 +391,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_fromId = row->from_id;
     message->_fromChannel = row->from_channel;
     message->_views = row->views;
+    message->_forwards = row->forwards;
     message->_hasComments = row->has_comments;
     message->_comments = row->comments;
     message->_discussionId = row->discussion_id;
