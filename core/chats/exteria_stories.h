@@ -18,6 +18,7 @@ typedef struct exteria_story_row {
     int32_t date;
     int32_t expire_date;
     int32_t views;
+    int32_t reactions;      /* how many reactions the story has gathered, 0 when the server gave none */
     uint8_t skipped;        /* the server sent only the header, getStoriesByID gives the content */
     uint8_t pinned;
     uint8_t close_friends;
@@ -113,6 +114,11 @@ exteria_status exteria_story_publish_photo_audience_request(exteria_arena *arena
                                                             const exteria_story_audience *audience, exteria_tl_value **out);
 exteria_status exteria_story_edit_audience_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, const char *caption, int set_audience,
                                                    const exteria_story_audience *audience, exteria_tl_value **out);
+/* stories.exportStoryLink of one story of a user or channel, and the address in the exportedStoryLink it answers (capacity cap, at most 255 bytes kept) */
+exteria_status exteria_story_link_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, exteria_tl_value **out);
+exteria_status exteria_story_link_parse(const exteria_tl_value *answer, char *link, size_t cap);
+/* stories.togglePeerStoriesHidden: the stories of a user or channel leave the strip for the archive section (hidden) or come back to it */
+exteria_status exteria_story_hide_peer_request(exteria_arena *arena, const exteria_peer_ref *peer, int hidden, exteria_tl_value **out);
 /* stories.editStory of one of our stories: a NULL caption leaves the text alone, an empty one takes it off; set_privacy 0 leaves the audience alone */
 exteria_status exteria_story_edit_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, const char *caption, int set_privacy,
                                           exteria_story_privacy privacy, exteria_tl_value **out);
@@ -123,11 +129,14 @@ typedef struct exteria_story_viewer {
     int64_t user_id;
     int32_t date;
     uint8_t blocked;    /* they cannot see our stories */
+    uint8_t reacted;    /* they reacted, and the reaction is in reaction */
+    exteria_reaction reaction;
 } exteria_story_viewer;
 exteria_status exteria_story_viewers_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t story_id, const char *offset, exteria_tl_value **out);
-/* the viewers in rows (a viewer that is a forward or a repost of the story carries no user and is left out), the next offset in next, and the whole number of views */
+/* the viewers in rows (a viewer that is a forward or a repost of the story carries no user and is left out), the next offset in next, the whole number of views in total
+   and the whole number of reactions in reactions (either may be NULL) */
 exteria_status exteria_story_viewers_parse(const exteria_tl_value *answer, exteria_story_viewer *rows, size_t capacity, size_t *count, char *next, size_t next_capacity,
-                                           int32_t *total);
+                                           int32_t *total, int32_t *reactions);
 exteria_status exteria_story_delete_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count,
                                             exteria_tl_value **out);
 /* pinned keeps the story on the profile after it expires, unpinned leaves it only in the archive */

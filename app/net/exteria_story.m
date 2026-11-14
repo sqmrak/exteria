@@ -82,6 +82,7 @@ static uint16_t ExteriaFillStoryUsers(NSArray *people, exteria_story_user *users
 - (int32_t)date { return _row.date; }
 - (int32_t)expireDate { return _row.expire_date; }
 - (int32_t)views { return _row.views; }
+- (int32_t)reactions { return _row.reactions; }
 - (BOOL)outgoing { return _row.out; }
 - (BOOL)pinned { return _row.pinned; }
 - (BOOL)closeFriends { return _row.close_friends; }

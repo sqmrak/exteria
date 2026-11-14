@@ -87,6 +87,8 @@
 - (void)giftGrid:(ExteriaGiftGridView *)grid didSelectIndex:(NSUInteger)index {
     (void)grid;
     if (index >= _feed.items.count) return;
+    /* a second tap while a viewer is up or rising would stack another viewer on the first, and both would play the same story's sound */
+    if (self.presentedViewController) return;
     ExteriaStoryViewerController *viewer = [[[ExteriaStoryViewerController alloc] initWithSession:self.session owner:_owner stories:_feed.items index:index
                                                                                           avatars:self.avatars media:self.media] autorelease];
     [self presentViewController:viewer animated:YES completion:nil];

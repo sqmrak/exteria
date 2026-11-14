@@ -37,6 +37,8 @@
 @property (nonatomic, readonly) int32_t date;
 @property (nonatomic, readonly) int32_t expireDate;
 @property (nonatomic, readonly) int32_t views;
+/* how many reactions the story has gathered */
+@property (nonatomic, readonly) int32_t reactions;
 @property (nonatomic, readonly) BOOL outgoing;
 @property (nonatomic, readonly) BOOL pinned;
 @property (nonatomic, readonly) BOOL closeFriends;
@@ -93,10 +95,10 @@ typedef void (^ExteriaStoriesCompletion)(ExteriaStoryPeer *peer, NSArray *storie
 - (void)loadStoriesOfDialog:(ExteriaDialog *)dialog completion:(ExteriaStoriesCompletion)completion;
 /* marks everything up to storyId seen, and counts the view; a failure only shows in the log, the next open says it again */
 - (void)markStoriesSeenOfDialog:(ExteriaDialog *)dialog upTo:(int32_t)storyId;
-/* a page of the people who looked at one of our stories, newest first: each item holds @"peer" (the user id), @"date" and @"blocked"; people is keyed by user id as the other lists are,
-   next is the offset of the following page or nil at the end, total the whole count of views */
+/* a page of the people who looked at one of our stories, newest first: each item holds @"peer" (the user id), @"date", @"blocked" and, when they reacted, @"reaction" (an ExteriaReaction); people is keyed by user id as the other lists are,
+   next is the offset of the following page or nil at the end, total the whole count of views, reactions the whole count of reactions */
 - (void)loadViewersOfStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
-                completion:(void (^)(NSArray *items, NSDictionary *people, NSString *next, int32_t total, NSString *errorName))completion;
+                completion:(void (^)(NSArray *items, NSDictionary *people, NSString *next, int32_t total, int32_t reactions, NSString *errorName))completion;
 /* a nil reaction takes ours back */
 - (void)reactToStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog reaction:(ExteriaReaction *)reaction
           completion:(void (^)(NSString *errorName))completion;
@@ -106,6 +108,11 @@ typedef void (^ExteriaStoriesCompletion)(ExteriaStoryPeer *peer, NSArray *storie
 /* sends the story of owner into the chat target as a message that opens it; the completion is the one of a send, with the id of the new message */
 - (void)forwardStory:(int32_t)storyId ofDialog:(ExteriaDialog *)owner toDialog:(ExteriaDialog *)target randomId:(long long)randomId
           completion:(ExteriaSendCompletion)completion;
+
+/* the public address of one story, from the server; the completion gets the link or an error name */
+- (void)loadLinkOfStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *link, NSString *errorName))completion;
+/* hidden takes the stories of the poster out of the strip into the archive section of the other clients, and false brings them back */
+- (void)setStoriesOfDialog:(ExteriaDialog *)dialog hidden:(BOOL)hidden completion:(void (^)(NSString *errorName))completion;
 
 /* our own pinned stories, newest first, and one page of our archive of expired ones before beforeId (zero for the newest);
    ExteriaStory items, empty on the last page */

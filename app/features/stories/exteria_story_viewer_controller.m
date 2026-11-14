@@ -21,6 +21,10 @@
 #import "exteria_alert.h"
 #import "exteria_popup_menu.h"
 #import "exteria_story.h"
+#import "exteria_translate_sheet.h"
+#import "exteria_translate_config.h"
+#import "exteria_translator.h"
+#import "exteria_video_stage.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_time.h"
@@ -40,6 +44,13 @@
 #define TURN_SECONDS 0.2
 #define TURN_ANGLE (M_PI / 2.2)
 #define TURN_DEPTH 900.0
+
+/* the speeds of the story menu of the reference tree: 0.2x, 0.5x, 1x, 1.5x and 2x */
+enum { SPEED_COUNT = 5, SPEED_NORMAL = 2 };
+static const float kStorySpeeds[SPEED_COUNT] = {0.2f, 0.5f, 1.0f, 1.5f, 2.0f};
+static const ExteriaSymbol kStorySpeedSymbols[SPEED_COUNT] = {ExteriaSymbolSpeedVerySlow, ExteriaSymbolSpeedSlow, ExteriaSymbolSpeedNormal, ExteriaSymbolSpeedFast, ExteriaSymbolSpeedVeryFast};
+static NSString *const kStorySpeedKeys[SPEED_COUNT] = {@"story.speed.veryslow", @"story.speed.slow", @"story.speed.normal", @"story.speed.fast", @"story.speed.veryfast"};
+
 /* the classic chrome is the black translucent bar of the old photo viewer: a bar of 44 points with the progress groove under it */
 #define CLASSIC_BAR 44.0
 #define CLASSIC_HEADER 58.0
@@ -133,6 +144,8 @@
     NSUInteger _musicRequest;
     /* the sound of the stories, the video's and the track's, stays off for the rest of the viewing once it is turned off */
     BOOL _muted;
+    /* the choice of the speed menu, kept for the rest of the viewing as the other clients keep it */
+    NSUInteger _speedIndex;
     ExteriaEmojiLabel *_caption;
     UIView *_bottom;
     /* the pill that holds the words of the reply, and the text view inside it: a UITextField drew nothing of what was typed in it on any system */
@@ -182,6 +195,7 @@
     _gated = [[NSMutableDictionary alloc] init];
     _startStory = NSNotFound;
     _classic = ExteriaThemeIsClassic();
+    _speedIndex = SPEED_NORMAL;
     return self;
 }
 
@@ -828,6 +842,13 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _notice.hidden = text.length == 0;
 }
 
+/* what the line under a story of ours says: the views and, once there are some, the reactions */
+static NSString *ExteriaStoryCountsText(ExteriaStory *story) {
+    NSString *views = [NSString stringWithFormat:NSLocalizedString(@"story.views", nil), (int)story.views];
+    if (story.reactions <= 0) return views;
+    return [NSString stringWithFormat:@"%@  \u00B7  %@", views, [NSString stringWithFormat:NSLocalizedString(@"story.reactions", nil), (int)story.reactions]];
+}
+
 - (void)showStoryAtIndex:(NSUInteger)index {
     NSArray *stories = [self storiesOfCurrentPeer];
     if (index >= stories.count) { [self stepToNextPeer]; return; }
@@ -850,7 +871,7 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
     _time.text = ExteriaListTimeText(_current.date);
     _caption.text = _current.caption;
     _caption.hidden = _current.caption.length == 0;
-    _views.text = _current.views ? [[NSString stringWithFormat:NSLocalizedString(@"story.views", nil), (int)_current.views] stringByAppendingString:@"  \u203A"] : NSLocalizedString(@"story.noviews", nil);
+    _views.text = _current.views ? [ExteriaStoryCountsText(_current) stringByAppendingString:@"  \u203A"] : NSLocalizedString(@"story.noviews", nil);
     [self refreshHeart];
     [self markSeen];
     [self.view setNeedsLayout];
@@ -923,6 +944,18 @@ static UIColor *ExteriaStoryClassicPattern(BOOL fill) {
 
 - (void)playFileAtPath:(NSString *)path {
     NSString *slot = [NSString stringWithFormat:@"story-%p", self];
+    /* a second load of the same story must not leave the first player sounding behind the new one */
+    if (_player) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+        [_player pause];
+        ((AVPlayerLayer *)_videoView.layer).player = nil;
+        [_player release];
+        _player = nil;
+        [_item release];
+        _item = nil;
+        [_videoURL release];
+        _videoURL = nil;
+    }
     _videoURL = [ExteriaPlayableLink(path, @"mp4", slot) retain];
     if (!_videoURL) { [self showFailure]; return; }
     _item = [[AVPlayerItem playerItemWithURL:_videoURL] retain];
@@ -1084,6 +1117,10 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
         }
         NSError *error = nil;
         Class playerClass = NSClassFromString(@"AVAudioPlayer");
+        /* a player that is already there keeps sounding when its owner is overwritten, and two copies of one track play over each other */
+        [me->_music stop];
+        [me->_music release];
+        me->_music = nil;
         me->_music = playerClass ? [[playerClass alloc] initWithContentsOfURL:[NSURL fileURLWithPath:path] error:&error] : nil;
         if (!me->_music) {
             NSLog(@"exteria: the music of story %d cannot be played: %@", (int)storyId, error);
@@ -1103,42 +1140,259 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
     _music = nil;
 }
 
-- (void)menuTapped {
-    if (_current.outgoing) { [self ownMenuTapped]; return; }
-    ExteriaSymbol symbols[1] = {ExteriaSymbolClose};
-    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:[NSArray arrayWithObject:NSLocalizedString(@"story.close", nil)] symbols:symbols
-                                                                 handler:^(NSUInteger index) { (void)index; [self close]; }] autorelease];
-    CGPoint anchor = [_menu.superview convertPoint:CGPointMake(CGRectGetMaxX(_menu.frame) - 6, CGRectGetMaxY(_menu.frame) - 8) toView:self.view];
-    [menu showInView:self.view anchor:anchor];
+typedef enum {
+    StoryMenuCaption,
+    StoryMenuPrivacy,
+    StoryMenuPin,
+    StoryMenuDelete,
+    StoryMenuSpeed,
+    StoryMenuArchive,
+    StoryMenuSave,
+    StoryMenuCopyLink,
+    StoryMenuCopyPicture,
+    StoryMenuShare,
+    StoryMenuTranslate,
+    StoryMenuClose
+} StoryMenuAction;
+
+/* the rows of the story menu of the reference tree, in its order: what a story of ours can manage, then speed, archive, save, link, copy, share and translate. what the poster closed to
+   forwarding (save, link, copy, share) is left out of a story of somebody else, as the reference tree does */
+- (NSArray *)menuActions {
+    ExteriaStory *story = _current;
+    BOOL own = story.outgoing, video = story.media.kind == EXTERIA_PREVIEW_VIDEO, open = own || !story.noForwards;
+    NSMutableArray *actions = [NSMutableArray array];
+    if (own) [actions addObjectsFromArray:[NSArray arrayWithObjects:[NSNumber numberWithInt:StoryMenuCaption], [NSNumber numberWithInt:StoryMenuPrivacy],
+                                           [NSNumber numberWithInt:StoryMenuPin], [NSNumber numberWithInt:StoryMenuDelete], nil]];
+    if (video) [actions addObject:[NSNumber numberWithInt:StoryMenuSpeed]];
+    ExteriaDialog *owner = [self peer].owner;
+    BOOL archivable = !own && owner && !owner.saved && ((owner.kind == EXTERIA_DIALOG_CHANNEL || owner.kind == EXTERIA_DIALOG_GROUP) ? !owner.left : owner.contact);
+    if (archivable) [actions addObject:[NSNumber numberWithInt:StoryMenuArchive]];
+    if (open) {
+        [actions addObject:[NSNumber numberWithInt:StoryMenuSave]];
+        [actions addObject:[NSNumber numberWithInt:StoryMenuCopyLink]];
+        [actions addObject:[NSNumber numberWithInt:StoryMenuCopyPicture]];
+        [actions addObject:[NSNumber numberWithInt:StoryMenuShare]];
+    }
+    if (!own && story.caption.length) [actions addObject:[NSNumber numberWithInt:StoryMenuTranslate]];
+    [actions addObject:[NSNumber numberWithInt:StoryMenuClose]];
+    return actions;
 }
 
-#pragma mark own story
-
-/* the menu of a story of ours: its text, who sees it, the profile or the archive, and the end of it */
-- (void)ownMenuTapped {
+- (void)menuTapped {
     ExteriaStory *story = _current;
+    if (!story) return;
+    NSArray *actions = [self menuActions];
+    BOOL pinned = story.pinned, video = story.media.kind == EXTERIA_PREVIEW_VIDEO;
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:actions.count];
+    ExteriaSymbol *symbols = calloc(actions.count, sizeof(*symbols));
+    if (!symbols) { NSLog(@"exteria: no memory for the story menu"); return; }
+    for (NSUInteger i = 0; i < actions.count; ++i) {
+        NSString *title = nil;
+        switch ((StoryMenuAction)[[actions objectAtIndex:i] intValue]) {
+        case StoryMenuCaption: symbols[i] = ExteriaSymbolCompose; title = NSLocalizedString(@"story.manage.caption", nil); break;
+        case StoryMenuPrivacy: symbols[i] = ExteriaSymbolLock; title = NSLocalizedString(@"story.manage.privacy", nil); break;
+        case StoryMenuPin:
+            symbols[i] = pinned ? ExteriaSymbolArchive : ExteriaSymbolPin;
+            title = NSLocalizedString(pinned ? @"story.manage.archive" : @"story.manage.profile", nil);
+            break;
+        case StoryMenuDelete: symbols[i] = ExteriaSymbolTrash; title = NSLocalizedString(@"story.manage.delete", nil); break;
+        case StoryMenuSpeed: symbols[i] = ExteriaSymbolSpeed; title = [self speedRowTitle]; break;
+        case StoryMenuArchive: symbols[i] = ExteriaSymbolArchive; title = NSLocalizedString(@"story.archive", nil); break;
+        case StoryMenuSave: symbols[i] = ExteriaSymbolGallery; title = NSLocalizedString(@"media.save", nil); break;
+        case StoryMenuCopyLink: symbols[i] = ExteriaSymbolLinkStory; title = NSLocalizedString(@"story.link", nil); break;
+        case StoryMenuCopyPicture:
+            symbols[i] = ExteriaSymbolCopyPhoto;
+            title = NSLocalizedString(video ? @"story.copyframe" : @"chat.msg.copyphoto", nil);
+            break;
+        case StoryMenuShare: symbols[i] = ExteriaSymbolShareOut; title = NSLocalizedString(@"media.share", nil); break;
+        case StoryMenuTranslate: symbols[i] = ExteriaSymbolTranslate; title = NSLocalizedString(@"tr.translate", nil); break;
+        case StoryMenuClose: symbols[i] = ExteriaSymbolClose; title = NSLocalizedString(@"story.close", nil); break;
+        }
+        [titles addObject:title];
+    }
     int32_t storyId = story.storyId;
-    BOOL pinned = story.pinned;
-    ExteriaSymbol symbols[5] = {ExteriaSymbolCompose, ExteriaSymbolLock, pinned ? ExteriaSymbolArchive : ExteriaSymbolPin, ExteriaSymbolTrash, ExteriaSymbolClose};
-    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"story.manage.caption", nil), NSLocalizedString(@"story.manage.privacy", nil),
-                       NSLocalizedString(pinned ? @"story.manage.archive" : @"story.manage.profile", nil), NSLocalizedString(@"story.manage.delete", nil),
-                       NSLocalizedString(@"story.close", nil), nil];
     ExteriaWeakReference *weak = _weak;
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
         ExteriaStoryViewerController *me = weak.target;
-        if (!me || me->_closed) return;
-        if (index < 4) [me pause];
-        switch (index) {
-        case 0: [me editCaptionOfStory:story]; break;
-        case 1: [me chooseAudienceOfStory:story]; break;
-        case 2: [me runManagement:^(void (^done)(NSString *)) { [me->_session setStory:storyId pinned:!pinned completion:done]; } stayOn:storyId]; break;
-        case 3: [me confirmDeleteOfStory:storyId]; break;
-        default: [me close]; break;
+        if (!me || me->_closed || index >= actions.count) return;
+        /* the story that was open when the menu came is the one it acts on, and a turn to the next one while it was open leaves nothing to do */
+        if (me->_current != story) return;
+        StoryMenuAction action = (StoryMenuAction)[[actions objectAtIndex:index] intValue];
+        switch (action) {
+        case StoryMenuCaption: [me pause]; [me editCaptionOfStory:story]; break;
+        case StoryMenuPrivacy: [me pause]; [me chooseAudienceOfStory:story]; break;
+        case StoryMenuPin: [me pause]; [me runManagement:^(void (^done)(NSString *)) { [me->_session setStory:storyId pinned:!pinned completion:done]; } stayOn:storyId]; break;
+        case StoryMenuDelete: [me pause]; [me confirmDeleteOfStory:storyId]; break;
+        case StoryMenuSpeed: [me chooseSpeed]; break;
+        case StoryMenuArchive: [me archiveStoriesOfOwner]; break;
+        case StoryMenuSave: [me saveStory]; break;
+        case StoryMenuCopyLink: [me copyLinkOfStory:story]; break;
+        case StoryMenuCopyPicture: [me copyPictureOfStory]; break;
+        case StoryMenuShare: [me shareTapped]; break;
+        case StoryMenuTranslate: [me translateCaptionOfStory:story]; break;
+        case StoryMenuClose: [me close]; break;
         }
     }] autorelease];
-    CGPoint anchor = [_menu.superview convertPoint:CGPointMake(CGRectGetMaxX(_menu.frame) - 6, CGRectGetMaxY(_menu.frame) - 8) toView:self.view];
-    [menu showInView:self.view anchor:anchor];
+    free(symbols);
+    [menu showInView:self.view anchor:[self menuAnchor]];
 }
+
+- (CGPoint)menuAnchor {
+    return [_menu.superview convertPoint:CGPointMake(CGRectGetMaxX(_menu.frame) - 6, CGRectGetMaxY(_menu.frame) - 8) toView:self.view];
+}
+
+#pragma mark menu actions
+
+/* the library takes the plain form of a fragmented video, and a plain one is pinned by a hard link without a copy; the story stays open while it is written */
+- (void)saveStory {
+    if (_current.media.kind != EXTERIA_PREVIEW_VIDEO) {
+        if (!_image.image) { [self toast:NSLocalizedString(@"media.save.failed", nil)]; return; }
+        [self retain];
+        UIImageWriteToSavedPhotosAlbum(_image.image, self, @selector(story:didFinishSavingWithError:contextInfo:), NULL);
+        return;
+    }
+    NSString *source = _videoStarted ? _videoURL.path : nil;
+    if (!source) { [self toast:NSLocalizedString(@"story.save.waiting", nil)]; return; }
+    NSString *temporary = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-save-%08x.mp4", arc4random()]];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaStageVideoAsync(source, temporary, ^(BOOL staged, NSError *error) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed || !staged || !UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(temporary)) {
+            if (!staged) NSLog(@"exteria: cannot stage story video: %@", error);
+            [[NSFileManager defaultManager] removeItemAtPath:temporary error:NULL];
+            if (me && !me->_closed) [me toast:NSLocalizedString(@"media.save.failed", nil)];
+            return;
+        }
+        [me retain];
+        UISaveVideoAtPathToSavedPhotosAlbum(temporary, me, @selector(story:didFinishSavingWithError:contextInfo:), (void *)[temporary copy]);
+    });
+}
+
+/* the context of a video is the staged file, which is removed here whether or not the library took it */
+- (void)story:(id)item didFinishSavingWithError:(NSError *)error contextInfo:(void *)context {
+    (void)item;
+    if (context) {
+        NSString *temporary = (NSString *)context;
+        [[NSFileManager defaultManager] removeItemAtPath:temporary error:NULL];
+        [temporary release];
+    }
+    if (error) NSLog(@"exteria: cannot save story: %@", error);
+    if (!_closed) [self toast:NSLocalizedString(error ? @"media.save.failed" : @"media.saved", nil)];
+    [self release];
+}
+
+- (void)copyLinkOfStory:(ExteriaStory *)story {
+    ExteriaDialog *owner = [self peer].owner;
+    if (!owner) return;
+    int32_t storyId = story.storyId;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadLinkOfStory:storyId ofDialog:owner completion:^(NSString *link, NSString *errorName) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed) return;
+        if (!link) {
+            NSLog(@"exteria: story link failed: %@", errorName);
+            [me toast:NSLocalizedString(@"story.link.failed", nil)];
+            return;
+        }
+        [UIPasteboard generalPasteboard].string = link;
+        [me toast:NSLocalizedString(@"chat.link.copied", nil)];
+    }];
+}
+
+/* a photo is the picture on the screen; a video gives the frame under the playhead */
+- (void)copyPictureOfStory {
+    if (_current.media.kind != EXTERIA_PREVIEW_VIDEO) {
+        if (!_image.image) { [self toast:NSLocalizedString(@"media.save.failed", nil)]; return; }
+        [UIPasteboard generalPasteboard].image = _image.image;
+        [self toast:NSLocalizedString(@"story.copied", nil)];
+        return;
+    }
+    if (!_videoStarted || !_item.asset) { [self toast:NSLocalizedString(@"story.save.waiting", nil)]; return; }
+    AVAssetImageGenerator *generator = [[[AVAssetImageGenerator alloc] initWithAsset:_item.asset] autorelease];
+    generator.appliesPreferredTrackTransform = YES;
+    ExteriaWeakReference *weak = _weak;
+    [generator generateCGImagesAsynchronouslyForTimes:[NSArray arrayWithObject:[NSValue valueWithCMTime:_player.currentTime]]
+                                    completionHandler:^(CMTime requested, CGImageRef image, CMTime actual, AVAssetImageGeneratorResult result, NSError *error) {
+        (void)requested; (void)actual;
+        UIImage *frame = result == AVAssetImageGeneratorSucceeded && image ? [UIImage imageWithCGImage:image] : nil;
+        if (!frame) NSLog(@"exteria: cannot take the frame of a story: %@", error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ExteriaStoryViewerController *me = weak.target;
+            if (!me || me->_closed) return;
+            if (!frame) { [me toast:NSLocalizedString(@"media.save.failed", nil)]; return; }
+            [UIPasteboard generalPasteboard].image = frame;
+            [me toast:NSLocalizedString(@"story.copied", nil)];
+        });
+    }];
+}
+
+/* the poster leaves the strip, and with it this viewing; the other clients keep the stories in an archive section that this app does not list, so the way back is there */
+- (void)archiveStoriesOfOwner {
+    ExteriaDialog *owner = [self peer].owner;
+    if (!owner) return;
+    ExteriaWeakReference *weak = _weak;
+    [_session setStoriesOfDialog:owner hidden:YES completion:^(NSString *errorName) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed) return;
+        if (errorName) {
+            NSLog(@"exteria: stories.togglePeerStoriesHidden failed: %@", errorName);
+            [me toast:NSLocalizedString(@"story.archive.failed", nil)];
+            return;
+        }
+        [me close];
+    }];
+}
+
+/* the sheet of the chat on the modern style and its alert on the classic one; the story waits for either to leave */
+- (void)translateCaptionOfStory:(ExteriaStory *)story {
+    NSString *text = story.caption;
+    if (!text.length) return;
+    ExteriaWeakReference *weak = _weak;
+    [self pause];
+    void (^resumeStory)(void) = ^{
+        ExteriaStoryViewerController *me = weak.target;
+        if (me && !me->_closed) [me resume];
+    };
+    if (!_classic) {
+        [ExteriaTranslateSheet presentInView:self.view text:text entities:nil session:_session context:nil closed:resumeStory];
+        return;
+    }
+    [self toast:NSLocalizedString(@"tr.translating", nil)];
+    [ExteriaTranslateJob translateText:text entities:nil to:ExteriaTranslateTargetLanguage() context:nil session:_session
+                             completion:^(ExteriaTranslation *translation, NSString *failure) {
+        NSString *words = translation.text;
+        ExteriaShowAlert(NSLocalizedString(@"tr.sheet.title", nil), translation ? words : failure,
+                         translation ? [NSArray arrayWithObjects:NSLocalizedString(@"tr.sheet.close", nil), NSLocalizedString(@"tr.copy", nil), nil]
+                                     : [NSArray arrayWithObject:NSLocalizedString(@"tr.sheet.close", nil)], 0, NO,
+                         ^(NSInteger index, NSString *entered) {
+            (void)entered;
+            if (translation && index == 1) [UIPasteboard generalPasteboard].string = words;
+            resumeStory();
+        });
+    }];
+}
+
+#pragma mark speed
+
+- (NSString *)speedRowTitle {
+    return [NSString stringWithFormat:NSLocalizedString(@"story.speed.row", nil), NSLocalizedString(kStorySpeedKeys[_speedIndex], nil)];
+}
+
+/* the menu of the five speeds, hung from the same dots as the menu that opened it */
+- (void)chooseSpeed {
+    NSMutableArray *titles = [NSMutableArray arrayWithCapacity:SPEED_COUNT];
+    for (NSUInteger i = 0; i < SPEED_COUNT; ++i) [titles addObject:NSLocalizedString(kStorySpeedKeys[i], nil)];
+    ExteriaWeakReference *weak = _weak;
+    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:kStorySpeedSymbols handler:^(NSUInteger index) {
+        ExteriaStoryViewerController *me = weak.target;
+        if (!me || me->_closed || index >= SPEED_COUNT) return;
+        me->_speedIndex = index;
+        if (me->_videoStarted && !me->_paused && !me->_editing) [me playVideo];
+    }] autorelease];
+    [menu showInView:self.view anchor:[self menuAnchor]];
+}
+
+#pragma mark own story
 
 - (void)editCaptionOfStory:(ExteriaStory *)story {
     int32_t storyId = story.storyId;
@@ -1255,7 +1509,7 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
             _videoView.hidden = NO;
             _image.hidden = YES;
             [self applyMute];
-            if (!_paused) [_player play];
+            if (!_paused) [self playVideo];
         }
         double now = CMTimeGetSeconds(_player.currentTime);
         _elapsed = now > 0 ? now : 0;
@@ -1274,6 +1528,20 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
     fill.frame = CGRectMake(0, 0, segment.bounds.size.width * (CGFloat)[self progress], segment.bounds.size.height);
 }
 
+/* play starts the item at rate 1, so the chosen speed is set after every start; a rate the item cannot hold is said and left at 1 */
+- (void)playVideo {
+    [_player play];
+    float speed = kStorySpeeds[_speedIndex];
+    if (speed == 1.0f) return;
+    if ((speed < 1.0f && !_item.canPlaySlowForward) || (speed > 1.0f && !_item.canPlayFastForward)) {
+        NSLog(@"exteria: story video cannot play at %.1fx", speed);
+        _speedIndex = SPEED_NORMAL;
+        [self toast:NSLocalizedString(@"story.speed.unsupported", nil)];
+        return;
+    }
+    _player.rate = speed;
+}
+
 - (void)pause {
     _paused = YES;
     [_player pause];
@@ -1282,7 +1550,7 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
 
 - (void)resume {
     _paused = NO;
-    if (_videoStarted && !_editing) [_player play];
+    if (_videoStarted && !_editing) [self playVideo];
     [self syncMusic];
 }
 
@@ -1482,7 +1750,7 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
     ExteriaStory *story = _current;
     ExteriaStoryPeer *peer = [self peer];
     if (!story || !story.outgoing || !peer || !story.views || _editing) return;
-    ExteriaStoryViewersController *page = [[[ExteriaStoryViewersController alloc] initWithSession:_session dialog:peer.owner storyId:story.storyId views:story.views] autorelease];
+    ExteriaStoryViewersController *page = [[[ExteriaStoryViewersController alloc] initWithSession:_session dialog:peer.owner storyId:story.storyId views:story.views reactions:story.reactions avatars:_avatars media:_media] autorelease];
     [self pause];
     [self presentViewController:[page presentableNavigation] animated:YES completion:nil];
 }
@@ -1595,7 +1863,7 @@ static CATransform3D ExteriaStoryCubeFace(CGFloat pivot, CGFloat angle) {
 - (void)textViewDidEndEditing:(UITextView *)field {
     (void)field;
     _editing = NO;
-    if (!_paused && _videoStarted) [_player play];
+    if (!_paused && _videoStarted) [self playVideo];
     [self syncMusic];
 }
 

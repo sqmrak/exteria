@@ -124,8 +124,8 @@
 }
 
 - (void)loadViewersOfStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog offset:(NSString *)offset
-                completion:(void (^)(NSArray *, NSDictionary *, NSString *, int32_t, NSString *))completion {
-    void (^done)(NSArray *, NSDictionary *, NSString *, int32_t, NSString *) = [completion copy];
+                completion:(void (^)(NSArray *, NSDictionary *, NSString *, int32_t, int32_t, NSString *))completion {
+    void (^done)(NSArray *, NSDictionary *, NSString *, int32_t, int32_t, NSString *) = [completion copy];
     NSString *cursor = [offset copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
@@ -135,12 +135,12 @@
         NSMutableArray *items = nil;
         NSDictionary *people = nil;
         NSString *next = nil;
-        int32_t total = 0;
+        int32_t total = 0, reactionTotal = 0;
         if (!error) {
             exteria_story_viewer rows[EXTERIA_STORY_VIEWERS_PAGE];
             size_t count = 0;
             char nextOffset[EXTERIA_STORY_VIEWERS_OFFSET_MAX];
-            exteria_status status = exteria_story_viewers_parse(result->value, rows, EXTERIA_STORY_VIEWERS_PAGE, &count, nextOffset, sizeof(nextOffset), &total);
+            exteria_status status = exteria_story_viewers_parse(result->value, rows, EXTERIA_STORY_VIEWERS_PAGE, &count, nextOffset, sizeof(nextOffset), &total, &reactionTotal);
             /* a page that names itself as the next one would be asked for forever */
             if (status == EXTERIA_OK && nextOffset[0] && (!count || (cursor.length && !strcmp(cursor.UTF8String, nextOffset)))) nextOffset[0] = 0;
             if (status != EXTERIA_OK) {
@@ -149,8 +149,10 @@
             } else {
                 items = [NSMutableArray arrayWithCapacity:count];
                 for (size_t i = 0; i < count; ++i) {
-                    [items addObject:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:rows[i].user_id], @"peer", [NSNumber numberWithInt:rows[i].date], @"date",
-                                      [NSNumber numberWithBool:rows[i].blocked != 0], @"blocked", nil]];
+                    NSMutableDictionary *entry = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:rows[i].user_id], @"peer", [NSNumber numberWithInt:rows[i].date], @"date",
+                                                  [NSNumber numberWithBool:rows[i].blocked != 0], @"blocked", nil];
+                    if (rows[i].reacted) [entry setObject:[ExteriaReaction reactionWithRow:&rows[i].reaction] forKey:@"reaction"];
+                    [items addObject:entry];
                 }
                 people = ExteriaPeopleOfAnswer(self, result->value);
                 if (nextOffset[0]) next = [NSString stringWithUTF8String:nextOffset];
@@ -161,7 +163,7 @@
         NSDictionary *names = [[people copy] autorelease];
         NSString *following = [[next copy] autorelease];
         NSString *problem = [[error copy] autorelease];
-        [self deliverMain:^{ done(delivered, names, following, total, problem); [done release]; }];
+        [self deliverMain:^{ done(delivered, names, following, total, reactionTotal, problem); [done release]; }];
     }];
     [cursor release];
 }
@@ -204,6 +206,36 @@
         NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
         [self noteRpcError:error];
         [self deliverMain:^{ done(error); [done release]; }];
+    }];
+}
+
+- (void)loadLinkOfStory:(int32_t)storyId ofDialog:(ExteriaDialog *)dialog completion:(void (^)(NSString *link, NSString *errorName))completion {
+    void (^done)(NSString *, NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_story_link_request(arena, &peer, storyId, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *link = nil, *error = nil;
+        char buffer[256];
+        if (result->status != EXTERIA_OK) error = ExteriaRpcErrorName(result);
+        else if (exteria_story_link_parse(result->value, buffer, sizeof(buffer)) == EXTERIA_OK) link = [NSString stringWithUTF8String:buffer];
+        else error = @"MALFORMED";
+        [self noteRpcError:error];
+        NSString *deliveredLink = [[link copy] autorelease], *deliveredError = [[error copy] autorelease];
+        [self deliverMain:^{ done(deliveredLink, deliveredError); [done release]; }];
+    }];
+}
+
+- (void)setStoriesOfDialog:(ExteriaDialog *)dialog hidden:(BOOL)hidden completion:(void (^)(NSString *errorName))completion {
+    void (^done)(NSString *) = [completion copy];
+    exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_story_hide_peer_request(arena, &peer, hidden, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = result->status == EXTERIA_OK ? nil : ExteriaRpcErrorName(result);
+        [self noteRpcError:error];
+        NSString *delivered = [[error copy] autorelease];
+        [self deliverMain:^{ done(delivered); [done release]; }];
     }];
 }
 

@@ -1,6 +1,9 @@
 #import "exteria_story_viewers_controller.h"
 
+#import "exteria_people_avatars.h"
 #import "exteria_person.h"
+#import "exteria_reaction_people_controller.h"
+#import "exteria_user_profile_controller.h"
 #import "exteria_theme.h"
 #import "exteria_time.h"
 #import "exteria_weak_reference.h"
@@ -14,6 +17,10 @@
     ExteriaDialog *_dialog;
     int32_t _storyId;
     int32_t _views;
+    int32_t _reactions;
+    ExteriaAvatarCache *_avatars;
+    ExteriaMediaCache *_media;
+    ExteriaPeopleAvatars *_faces;
     NSMutableArray *_viewers;
     NSMutableDictionary *_people;
     NSMutableSet *_offsets;
@@ -27,13 +34,17 @@
 
 @implementation ExteriaStoryViewersController
 
-- (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog storyId:(int32_t)storyId views:(int32_t)views {
+- (id)initWithSession:(ExteriaSession *)session dialog:(ExteriaDialog *)dialog storyId:(int32_t)storyId views:(int32_t)views reactions:(int32_t)reactions
+              avatars:(ExteriaAvatarCache *)avatars media:(ExteriaMediaCache *)media {
     self = [super init];
     if (!self) return nil;
     _session = [session retain];
     _dialog = [dialog retain];
     _storyId = storyId;
     _views = views;
+    _reactions = reactions;
+    _avatars = [avatars retain];
+    _media = [media retain];
     _viewers = [[NSMutableArray alloc] init];
     _people = [[NSMutableDictionary alloc] init];
     _offsets = [[NSMutableSet alloc] init];
@@ -43,6 +54,10 @@
 }
 
 - (void)dealloc {
+    [_faces invalidate];
+    [_faces release];
+    [_avatars release];
+    [_media release];
     [_weak clear];
     [_weak release];
     [_session release];
@@ -90,7 +105,20 @@
         NSString *name = person.name.length ? person.name : [NSString stringWithFormat:@"ID %@", key];
         int32_t date = [[entry objectForKey:@"date"] intValue];
         NSString *time = date > 0 ? ExteriaMediaTimeText(date) : nil;
-        [rows addObject:[ExteriaSettingsRow rowWithTitle:name subtitle:time value:nil tap:nil]];
+        if (!_faces) {
+            ExteriaWeakReference *again = _weak;
+            _faces = [[ExteriaPeopleAvatars alloc] initWithCache:_avatars changed:^{ [(ExteriaStoryViewersController *)again.target rebuild]; }];
+        }
+        UIImage *face = [_faces imageForKey:[NSString stringWithFormat:@"%@", key] initials:person.initials seed:(NSUInteger)([key longLongValue] % 1000003) deleted:person.deleted photo:person.photo];
+        ExteriaWeakReference *tapped = _weak;
+        ExteriaSettingsRow *row = [ExteriaSettingsRow rowWithTileImage:face title:name subtitle:time tap:person ? ^{ [(ExteriaStoryViewersController *)tapped.target openPerson:person]; } : nil];
+        /* a custom reaction has no picture until its document is here, and the row is made again then */
+        ExteriaReaction *reaction = [entry objectForKey:@"reaction"];
+        if (reaction) {
+            row.trailingImage = ExteriaReactionRowImage(reaction);
+            row.trailingImageUnclipped = YES;
+        }
+        [rows addObject:row];
     }
     ExteriaWeakReference *weak = _weak;
     if (_loading) {
@@ -107,9 +135,18 @@
         [rows addObject:[ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"story.viewers.empty", nil) value:nil tap:nil]];
     }
     /* the count the server gave says how many looked, also when the list shows fewer, since people who hid their views or left are not all named */
-    NSString *footer = _views > 0 ? [NSString stringWithFormat:NSLocalizedString(@"story.views", nil), (int)_views] : nil;
+    NSMutableArray *counts = [NSMutableArray array];
+    if (_views > 0) [counts addObject:[NSString stringWithFormat:NSLocalizedString(@"story.views", nil), (int)_views]];
+    if (_reactions > 0) [counts addObject:[NSString stringWithFormat:NSLocalizedString(@"story.reactions", nil), (int)_reactions]];
+    NSString *footer = counts.count ? [counts componentsJoinedByString:@"\n"] : nil;
     self.sections = [NSArray arrayWithObject:[ExteriaSettingsSection sectionWithHeader:nil footer:footer rows:rows]];
     [self reloadSettings];
+}
+
+/* the profile of the person who looked, in the same navigation as this page */
+- (void)openPerson:(ExteriaPerson *)person {
+    ExteriaUserProfileController *profile = [[[ExteriaUserProfileController alloc] initWithSession:_session dialog:[ExteriaDialog dialogWithPerson:person] avatars:_avatars media:_media stickers:nil] autorelease];
+    [self.navigationController pushViewController:profile animated:YES];
 }
 
 - (void)loadNext {
@@ -119,7 +156,7 @@
     [_error release]; _error = nil;
     [self rebuild];
     ExteriaWeakReference *weak = _weak;
-    [_session loadViewersOfStory:_storyId ofDialog:_dialog offset:cursor completion:^(NSArray *items, NSDictionary *people, NSString *next, int32_t total, NSString *errorName) {
+    [_session loadViewersOfStory:_storyId ofDialog:_dialog offset:cursor completion:^(NSArray *items, NSDictionary *people, NSString *next, int32_t total, int32_t reactions, NSString *errorName) {
         ExteriaStoryViewersController *page = weak.target;
         if (!page) return;
         page->_loading = NO;
@@ -133,6 +170,8 @@
             [page->_people addEntriesFromDictionary:people];
             [page->_viewers addObjectsFromArray:items];
             if (total > 0) page->_views = total;
+            if (reactions > 0) page->_reactions = reactions;
+            ExteriaLoadReactionDocuments(items, page->_session, page->_media, ^{ [(ExteriaStoryViewersController *)weak.target rebuild]; });
             [page->_next release];
             page->_next = [next copy];
         }

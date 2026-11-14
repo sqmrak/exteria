@@ -104,6 +104,7 @@ static void test_story_read(void) {
     str(item, "caption", "hello");
     flag(item, "pinned");
     i32(views, "views_count", 12);
+    i32(views, "reactions_count", 4);
     set(item, "views", views);
     str(reaction, "emoticon", "❤");
     set(item, "sent_reaction", reaction);
@@ -111,6 +112,7 @@ static void test_story_read(void) {
     CHECK(!strcmp(row.caption, "hello"));
     CHECK_EQ_INT(row.pinned, 1);
     CHECK_EQ_INT(row.views, 12);
+    CHECK_EQ_INT(row.reactions, 4);
     CHECK_EQ_INT(row.reacted, 1);
     CHECK(!strcmp(row.reaction.emoji, "❤"));
 
@@ -331,6 +333,31 @@ static void test_manage(void) {
     CHECK_EQ_INT(exteria_story_row_privacy(&row), EXTERIA_STORY_CLOSE_FRIENDS);
 }
 
+static void test_link_and_hide(void) {
+    exteria_peer_ref user = {1, 7, 9, 0, 0};
+    exteria_peer_ref none = {0, 0, 0, 0, 0};
+    exteria_tl_value *request = NULL, *answer = obj("exportedStoryLink");
+    char link[256], small[8];
+    CHECK_EQ_INT(exteria_story_link_request(&arena, &user, 12, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_exportStoryLink);
+    CHECK_EQ_INT(exteria_story_link_request(&arena, &user, 0, &request), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_story_link_request(&arena, &none, 12, &request), EXTERIA_E_ARG);
+    str(answer, "link", "https://t.me/name/s/12");
+    CHECK_EQ_INT(exteria_story_link_parse(answer, link, sizeof(link)), EXTERIA_OK);
+    CHECK_EQ_INT(strcmp(link, "https://t.me/name/s/12"), 0);
+    CHECK_EQ_INT(exteria_story_link_parse(answer, small, sizeof(small)), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(small[0], 0);
+    str(answer, "link", "");
+    CHECK_EQ_INT(exteria_story_link_parse(answer, link, sizeof(link)), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_story_link_parse(obj("exportedMessageLink"), link, sizeof(link)), EXTERIA_E_MALFORMED);
+    CHECK_EQ_INT(exteria_story_link_parse(answer, NULL, 0), EXTERIA_E_ARG);
+    CHECK_EQ_INT(exteria_story_hide_peer_request(&arena, &user, 1, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_togglePeerStoriesHidden);
+    CHECK_EQ_INT(exteria_story_hide_peer_request(&arena, &user, 0, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_stories_togglePeerStoriesHidden);
+    CHECK_EQ_INT(exteria_story_hide_peer_request(&arena, &none, 1, &request), EXTERIA_E_ARG);
+}
+
 static void test_requests(void) {
     exteria_peer_ref peers[] = {{1, 5, 7, 0, 0}, {3, 7, 9, 0, 0}, {1, 1, 0, 1, 0}};
     exteria_peer_ref bad = {1, 5, 0, 0, 0};
@@ -421,6 +448,48 @@ static void test_requests(void) {
     CHECK(request == NULL);
 }
 
+static exteria_tl_value *viewer(int64_t user_id, int32_t date, const char *emoji) {
+    exteria_tl_value *v = obj("storyView");
+    i64(v, "user_id", user_id);
+    i32(v, "date", date);
+    if (emoji) {
+        exteria_tl_value *reaction = obj("reactionEmoji");
+        str(reaction, "emoticon", emoji);
+        set(v, "reaction", reaction);
+    }
+    return v;
+}
+
+static void test_viewers(void) {
+    exteria_tl_value *items[3], *list = obj("stories.storyViewsList");
+    exteria_story_viewer rows[4];
+    char next[EXTERIA_STORY_VIEWERS_OFFSET_MAX];
+    size_t count = 0;
+    int32_t total = -1, reactions = -1;
+    items[0] = viewer(11, 300, "❤");
+    items[1] = viewer(12, 200, NULL);
+    items[2] = obj("storyViewPublicForward");
+    i32(list, "count", 3);
+    i32(list, "views_count", 3);
+    i32(list, "forwards_count", 0);
+    i32(list, "reactions_count", 1);
+    set(list, "views", vec_of(items, 3));
+    set(list, "chats", vec_of(NULL, 0));
+    set(list, "users", vec_of(NULL, 0));
+    CHECK_EQ_INT(exteria_story_viewers_parse(list, rows, 4, &count, next, sizeof(next), &total, &reactions), EXTERIA_OK);
+    /* the forward names no user and is left out */
+    CHECK_EQ_INT(count, 2);
+    CHECK_EQ_INT(total, 3);
+    CHECK_EQ_INT(reactions, 1);
+    CHECK_EQ_INT(rows[0].user_id, 11);
+    CHECK_EQ_INT(rows[0].reacted, 1);
+    CHECK(!strcmp(rows[0].reaction.emoji, "❤"));
+    CHECK_EQ_INT(rows[1].reacted, 0);
+    CHECK_EQ_INT(exteria_story_viewers_parse(list, rows, 4, &count, next, sizeof(next), NULL, NULL), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_story_viewers_parse(list, rows, 1, &count, next, sizeof(next), &total, &reactions), EXTERIA_E_LIMIT);
+    CHECK_EQ_INT(exteria_story_viewers_parse(obj("boolTrue"), rows, 4, &count, next, sizeof(next), &total, &reactions), EXTERIA_E_MALFORMED);
+}
+
 int main(void) {
     exteria_arena_init(&arena, 16u * 1024u * 1024u);
     test_story_read();
@@ -430,6 +499,8 @@ int main(void) {
     test_requests();
     test_send_photo();
     test_manage();
+    test_link_and_hide();
+    test_viewers();
     exteria_arena_free(&arena);
     return test_finish("test_stories");
 }

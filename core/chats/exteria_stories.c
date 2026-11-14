@@ -52,6 +52,7 @@ exteria_status exteria_story_read(const exteria_tl_value *item, exteria_story_ro
     copy_caption(out->caption, sizeof(out->caption), item);
     views = exteria_tl_get(item, "views");
     if (views && exteria_tl_get_i32(views, "views_count", &value) == EXTERIA_OK && value > 0) out->views = value;
+    if (views && exteria_tl_get_i32(views, "reactions_count", &value) == EXTERIA_OK && value > 0) out->reactions = value;
     if (exteria_tl_has(item, "sent_reaction") &&
         exteria_reaction_parse(exteria_tl_get(item, "sent_reaction"), &out->reaction) == EXTERIA_OK) out->reacted = 1;
     return EXTERIA_OK;
@@ -222,17 +223,19 @@ exteria_status exteria_story_viewers_request(exteria_arena *arena, const exteria
 }
 
 exteria_status exteria_story_viewers_parse(const exteria_tl_value *answer, exteria_story_viewer *rows, size_t capacity, size_t *count, char *next, size_t next_capacity,
-                                           int32_t *total) {
+                                           int32_t *total, int32_t *reactions) {
     const exteria_tl_value *views;
     const uint8_t *offset;
     size_t length, kept = 0;
     if (count) *count = 0;
     if (next && next_capacity) next[0] = 0;
     if (total) *total = 0;
+    if (reactions) *reactions = 0;
     if (!rows || !capacity || !count || !next || !next_capacity) return EXTERIA_E_ARG;
     if (!exteria_tl_is(answer, EXTERIA_TL_ID_stories_storyViewsList) || exteria_tl_get_vec(answer, "views", &views) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
     if (views->u.vec.count > capacity) return EXTERIA_E_LIMIT;
     if (total) exteria_tl_get_i32(answer, "views_count", total);
+    if (reactions) exteria_tl_get_i32(answer, "reactions_count", reactions);
     if (exteria_tl_has(answer, "next_offset")) {
         if (exteria_tl_get_bytes(answer, "next_offset", &offset, &length) != EXTERIA_OK || !offset || length >= next_capacity || length >= EXTERIA_STORY_VIEWERS_OFFSET_MAX ||
             memchr(offset, 0, length)) return EXTERIA_E_MALFORMED;
@@ -250,6 +253,7 @@ exteria_status exteria_story_viewers_parse(const exteria_tl_value *answer, exter
             return EXTERIA_E_MALFORMED;
         }
         row.blocked = exteria_tl_has(item, "blocked") ? 1 : 0;
+        if (exteria_tl_has(item, "reaction") && exteria_reaction_parse(exteria_tl_get(item, "reaction"), &row.reaction) == EXTERIA_OK) row.reacted = 1;
         rows[kept++] = row;
     }
     *count = kept;
@@ -495,6 +499,40 @@ exteria_status exteria_story_edit_request(exteria_arena *arena, const exteria_pe
     if ((int)privacy < 0 || (int)privacy > EXTERIA_STORY_CLOSE_FRIENDS) return EXTERIA_E_ARG;
     base_audience(&audience, privacy);
     return exteria_story_edit_audience_request(arena, peer, id, caption, set_privacy, &audience, out);
+}
+
+exteria_status exteria_story_link_request(exteria_arena *arena, const exteria_peer_ref *peer, int32_t id, exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!out || id <= 0) return EXTERIA_E_ARG;
+    status = peer_request(arena, "stories.exportStoryLink", peer, &request);
+    if (status == EXTERIA_OK) status = exteria_tl_set_i32(arena, request, "id", id);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_story_link_parse(const exteria_tl_value *answer, char *link, size_t cap) {
+    const uint8_t *data;
+    size_t len;
+    if (link && cap) link[0] = 0;
+    if (!link || cap < 2) return EXTERIA_E_ARG;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_exportedStoryLink) || exteria_tl_get_bytes(answer, "link", &data, &len) != EXTERIA_OK || !len) return EXTERIA_E_MALFORMED;
+    if (len >= cap || len > 255) return EXTERIA_E_LIMIT;
+    memcpy(link, data, len);
+    link[len] = 0;
+    return EXTERIA_OK;
+}
+
+exteria_status exteria_story_hide_peer_request(exteria_arena *arena, const exteria_peer_ref *peer, int hidden, exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!out) return EXTERIA_E_ARG;
+    status = peer_request(arena, "stories.togglePeerStoriesHidden", peer, &request);
+    if (status == EXTERIA_OK) status = exteria_tl_set(request, "hidden", exteria_tl_new_obj(arena, hidden ? "boolTrue" : "boolFalse"));
+    if (status == EXTERIA_OK) *out = request;
+    return status;
 }
 
 exteria_status exteria_story_delete_request(exteria_arena *arena, const exteria_peer_ref *peer, const int32_t *ids, size_t count,
