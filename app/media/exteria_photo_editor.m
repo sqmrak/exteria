@@ -233,6 +233,8 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
     CGRect _crop;
     BOOL _cropping;
     NSDictionary *_stroke;
+    NSMutableArray *_pending;
+    NSMutableArray *_trail;
     CGRect _selection;
     UIEdgeInsets _insets;
     CGFloat _scale;
@@ -241,6 +243,10 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
 @property (nonatomic, assign) CGRect crop;
 @property (nonatomic, assign) BOOL cropping;
 @property (nonatomic, retain) NSDictionary *stroke;
+/* the strokes committed since the picture on screen was rendered: a render takes a while on an old phone, and the next stroke starts before it ends */
+@property (nonatomic, readonly) NSMutableArray *pending;
+/* where the finger has been since it touched down, in canvas points: a pan is only recognized after about ten points of travel, and a short line never gets that far */
+@property (nonatomic, readonly) NSArray *trail;
 @property (nonatomic, assign) CGRect selection;
 /* the room the picture keeps clear of the edges of the canvas, which is where the bars stand */
 @property (nonatomic, assign) UIEdgeInsets insets;
@@ -252,20 +258,35 @@ static UIImage *ExteriaPhotoRender(UIImage *source, NSArray *operations, CGFloat
 @synthesize image = _image, crop = _crop, cropping = _cropping, stroke = _stroke, selection = _selection, insets = _insets, scale = _scale;
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
-    if (self) _scale = 1;
+    if (self) { _scale = 1; _pending = [[NSMutableArray alloc] init]; _trail = [[NSMutableArray alloc] init]; }
     return self;
 }
-- (void)dealloc { [_image release]; [_stroke release]; [super dealloc]; }
+- (void)dealloc { [_image release]; [_stroke release]; [_pending release]; [_trail release]; [super dealloc]; }
+- (void)logTouches:(NSSet *)touches event:(UIEvent *)event {
+    if (event.allTouches.count != 1) { [_trail removeAllObjects]; return; }
+    if (_trail.count < EDIT_POINTS_MAX) [_trail addObject:[NSValue valueWithCGPoint:[[touches anyObject] locationInView:self]]];
+}
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+    [_trail removeAllObjects];
+    [self logTouches:touches event:event];
+    [super touchesBegan:touches withEvent:event];
+}
+- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
+    [self logTouches:touches event:event];
+    [super touchesMoved:touches withEvent:event];
+}
 - (CGRect)imageRect { return ExteriaPhotoFit(_image.size, UIEdgeInsetsInsetRect(self.bounds, _insets)); }
 - (void)drawRect:(CGRect)rect {
     CGRect imageRect = self.imageRect;
     if (CGRectIsEmpty(imageRect)) return;
     CGContextRef context = UIGraphicsGetCurrentContext();
     CGFloat unit = 1 / MAX(0.2, _scale);
-    if (_stroke) {
+    NSMutableArray *strokes = [NSMutableArray arrayWithArray:_pending];
+    if (_stroke) [strokes addObject:_stroke];
+    for (NSDictionary *stroke in strokes) {
         CGContextSaveGState(context);
         CGContextTranslateCTM(context, imageRect.origin.x, imageRect.origin.y);
-        ExteriaPhotoDrawStroke(_stroke, imageRect.size);
+        ExteriaPhotoDrawStroke(stroke, imageRect.size);
         CGContextRestoreGState(context);
     }
     if (!CGRectIsEmpty(_selection)) {
@@ -932,7 +953,10 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
 }
 - (void)append:(NSDictionary *)operation {
     if (_operations.count >= EDIT_OPERATIONS_MAX) { [self notice:@"media.edit.limit"]; return; }
-    [_operations addObject:operation]; [self requestRender];
+    [_operations addObject:operation];
+    NSString *kind = [operation objectForKey:@"kind"];
+    if ([kind isEqualToString:@"stroke"] || [kind isEqualToString:@"blur"]) { [_canvas.pending addObject:operation]; [_canvas setNeedsDisplay]; }
+    [self requestRender];
 }
 /* undo takes back what this visit to a tool added: the strokes kept by an earlier visit are not its to remove, and crop and text have nothing to take back before they are applied */
 - (BOOL)undoAvailable {
@@ -1135,7 +1159,8 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture {
     if (_exporting) return NO;
     if (gesture == _pinch || gesture == _zoomPan) return YES;
-    return (_mode == 1 || _mode == 3) && !_rendering;
+    /* a stroke may start while the last one is still being rendered, it is shown from the canvas until the render has it */
+    return (_mode == 1 && !_rendering) || _mode == 3;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)a shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)b {
     return a == _pinch || b == _pinch || a == _zoomPan || b == _zoomPan;
@@ -1144,6 +1169,11 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     CGRect rect = _canvas.imageRect;
     if (rect.size.width <= 0 || rect.size.height <= 0) return CGPointZero;
     return CGPointMake(MAX(0, MIN(1, (point.x - rect.origin.x) / rect.size.width)), MAX(0, MIN(1, (point.y - rect.origin.y) / rect.size.height)));
+}
+- (NSArray *)trailPoints {
+    NSMutableArray *points = [NSMutableArray array];
+    for (NSValue *value in _canvas.trail) [points addObject:[NSValue valueWithCGPoint:[self normalized:[value CGPointValue]]]];
+    return points;
 }
 - (NSDictionary *)stroke {
     /* a blurred band is wider than a line of ink to hide the same thing, so the brush is three times the size the slider shows; while it is drawn it shows as a pale band */
@@ -1173,7 +1203,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
         } else if (drawing) {
             _movingText = _mode == 3 && _selectedText >= 0 && [self textAtPoint:point] == _selectedText;
             if (_movingText) _moveOriginal = [[[_operations objectAtIndex:(NSUInteger)_selectedText] objectForKey:@"point"] CGPointValue];
-            if (!_movingText) { if (_mode == 3) [self selectText:-1]; [_points release]; _points = [[NSMutableArray alloc] init]; }
+            if (!_movingText) { if (_mode == 3) [self selectText:-1]; [_points release]; _points = [[NSMutableArray alloc] initWithArray:[self trailPoints]]; }
         }
     }
     if (_mode == 1) {
@@ -1214,7 +1244,8 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
             if (_movingText && pan.state != UIGestureRecognizerStateEnded) [self updateSelectedText:@"point" value:[NSValue valueWithCGPoint:_moveOriginal]];
             _movingText = NO;
             if (pan.state == UIGestureRecognizerStateEnded && _points.count && (_points.count >= 2 || !_arrow)) [self append:[self stroke]];
-            if (pan.state != UIGestureRecognizerStateEnded) _canvas.stroke = nil;
+            _canvas.stroke = nil;
+            [_canvas setNeedsDisplay];
             [_points release]; _points = nil;
         }
     }
@@ -1259,7 +1290,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     [self selectText:_selectedText]; [self requestRender];
 }
 - (void)tapped:(UITapGestureRecognizer *)tap {
-    if (_mode != 3 || _exporting || _rendering) return;
+    if (_mode != 3 || _exporting) return;
     if (_pipette) {
         UIColor *color = [self colorAtCanvasPoint:[tap locationInView:_canvas]];
         if (color) [self setPaintColor:color];
@@ -1270,13 +1301,16 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     NSInteger selected = [self textAtPoint:point];
     if (selected >= 0) { [self selectText:selected]; return; }
     if (_selectedText >= 0) { [self selectText:-1]; return; }
-    if (_arrow || _points) return;
-    _points = [[NSMutableArray alloc] initWithObjects:[NSValue valueWithCGPoint:point], nil];
+    if (_points) return;
+    NSMutableArray *trail = [NSMutableArray arrayWithArray:[self trailPoints]];
+    if (!trail.count) [trail addObject:[NSValue valueWithCGPoint:point]];
+    if (_arrow && trail.count < 2) return;
+    _points = [[NSMutableArray alloc] initWithArray:trail];
     [self append:[self stroke]];
     [_points release]; _points = nil;
 }
 - (void)held:(UILongPressGestureRecognizer *)hold {
-    if (hold.state != UIGestureRecognizerStateBegan || _mode != 3 || _exporting || _rendering || _pipette || _points) return;
+    if (hold.state != UIGestureRecognizerStateBegan || _mode != 3 || _exporting || _pipette || _points) return;
     _textPoint = [self normalized:[hold locationInView:_canvas]];
     NSInteger selected = [self textAtPoint:_textPoint];
     if (selected >= 0) [self selectText:selected]; else [self selectText:-1];
@@ -1339,9 +1373,10 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
             if (me && !me->_closed) {
                 me->_rendering = NO;
                 if (me->_generation == generation) {
+                    [me->_canvas.pending removeAllObjects];
                     if (image) {
                         BOOL reshaped = !CGSizeEqualToSize(me->_canvas.image.size, image.size);
-                        me->_canvas.image = image; me->_photo.image = image; me->_canvas.stroke = nil;
+                        me->_canvas.image = image; me->_photo.image = image;
                         if (reshaped) { me->_zoom = 1; me->_offsetX = me->_offsetY = 0; [me applyStageAnimated:NO]; }
                         [me layoutPhoto];
                         if (me->_selectedText >= 0) [me selectText:me->_selectedText];
