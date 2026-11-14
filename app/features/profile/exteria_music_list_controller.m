@@ -481,7 +481,7 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
     /* the card follows the player on its own */
     if (!shown || _card) return;
     _panelTitle.text = ExteriaTrackTitle(player.track);
-    _panelPerformer.text = player.state == ExteriaMusicStateFailed ? NSLocalizedString(@"music.failed", nil) : ExteriaTrackPerformer(player.track);
+    _panelPerformer.text = player.state == ExteriaMusicStateFailed ? player.failureText : ExteriaTrackPerformer(player.track);
     BOOL playing = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading;
     [_toggle setImage:ExteriaSymbolImage(playing ? ExteriaSymbolPause : ExteriaSymbolPlay, 32, ExteriaColorTitle()) forState:UIControlStateNormal];
     _toggle.accessibilityLabel = NSLocalizedString(playing ? @"music.pause" : @"music.play", nil);
@@ -519,7 +519,13 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
     if (dock.hidden) return;
     CGFloat side = MIN(width - 16, 460);
     dock.frame = CGRectMake(CGRectGetMidX(body) - side / 2, CGRectGetMaxY(body) - panelHeight - MAX(insets.bottom, 8), side, panelHeight);
-    if (_card) return;
+    if (_card) {
+        /* the card is shown for the first time with an empty frame when a song already plays as the screen opens, and its keys and labels were placed for a width
+           of nothing; on ios 5.1.1 it was not laid out again when this frame arrived, and the keys stood left of the screen, so the layout is forced here */
+        [_card setNeedsLayout];
+        [_card layoutIfNeeded];
+        return;
+    }
     _panelTitle.frame = CGRectMake(16, 10, side - 32, 22);
     _panelPerformer.frame = CGRectMake(16, 32, side - 32, 18);
     _slider.frame = CGRectMake(16, 54, side - 32, 22);

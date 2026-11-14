@@ -35,6 +35,16 @@ typedef enum {
     ExteriaMusicStateFailed     /* the file did not arrive or this system cannot play its format */
 } ExteriaMusicState;
 
+/* why a song is in the failed state, for the line the person reads */
+typedef enum {
+    ExteriaMusicFailureNone,
+    ExteriaMusicFailureDownload,    /* the file did not arrive, or the message has none */
+    ExteriaMusicFailureOpen,        /* the file could not be given to the player */
+    ExteriaMusicFailureAudio,       /* the system kept the sound for another app or a call */
+    ExteriaMusicFailureFormat,      /* this system has no decoder for the format, or the player never got ready with it */
+    ExteriaMusicFailureDamaged      /* the app's own decoder rejected the data */
+} ExteriaMusicFailure;
+
 /* the player of a song that was taken out of the music player (detachPlayback) and plays on by itself until it is finished or its file ends. a plugin that
    mixes one song into the next holds these, see exteria_plugin_music.h */
 @interface ExteriaMusicGhost : NSObject
@@ -57,6 +67,9 @@ typedef enum {
 
 @property (nonatomic, readonly) ExteriaMedia *track;
 @property (nonatomic, readonly) ExteriaMusicState state;
+/* the reason of the failed state, and its words in the language of the app */
+@property (nonatomic, readonly) ExteriaMusicFailure failure;
+- (NSString *)failureText;
 /* the share of the file that has arrived while loading, 0 when the size is not known */
 @property (nonatomic, readonly) float loadProgress;
 /* seconds into the song, and its length (the tags' when the file does not say yet) */

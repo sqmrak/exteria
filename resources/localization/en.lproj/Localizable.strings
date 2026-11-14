@@ -506,6 +506,11 @@
 "music.title" = "Music";
 "music.empty" = "No music on this profile.";
 "music.failed" = "Cannot play this file";
+"music.failed.download" = "The file could not be downloaded";
+"music.failed.open" = "The file could not be opened";
+"music.failed.audio" = "The sound is in use by another app or a call";
+"music.failed.format" = "This iOS version cannot play the format of the file";
+"music.failed.damaged" = "The file is damaged and cannot be read";
 "music.play" = "Play";
 "music.pause" = "Pause";
 "music.stop" = "Stop";

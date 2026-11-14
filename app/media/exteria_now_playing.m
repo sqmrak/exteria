@@ -76,11 +76,12 @@ void ExteriaRemoteControlsClaim(void) {
     if (!window) return;
     if (!ExteriaRemoteResponderView) {
         ExteriaRemoteResponderView = [[ExteriaRemoteResponder alloc] initWithFrame:CGRectZero];
-        ExteriaRemoteResponderView.hidden = YES;
+        /* a hidden view is refused as first responder on ios 6, so it stays visible and clear */
+        ExteriaRemoteResponderView.alpha = 0;
         ExteriaRemoteResponderView.userInteractionEnabled = NO;
     }
     if (ExteriaRemoteResponderView.superview != window) [window addSubview:ExteriaRemoteResponderView];
-    if (!ExteriaRemoteResponderView.isFirstResponder) [ExteriaRemoteResponderView becomeFirstResponder];
+    if (!ExteriaRemoteResponderView.isFirstResponder && ![ExteriaRemoteResponderView becomeFirstResponder]) NSLog(@"exteria: the remote events found no responder");
 }
 
 static void ExteriaWatchKeyboard(void) {

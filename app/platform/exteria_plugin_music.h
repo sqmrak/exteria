@@ -14,12 +14,19 @@
    music.pause              pauses a playing song, without asking the plugin again
    music.cleanup            lets the player of the current song go
    music.detach             takes the player of the current song out to fade it; it keeps its playback number
+   music.play_docs (docs, index)   plays songs that python names by their documents (see ExteriaPluginSongOfJSON) as the queue, starting at index
    music.player (id, op)    op volume (value 0 to 1), release or state, for the current playback or a player that was taken out
 
 
    a song that starts or a song that is paused asks the plugins first (exteria_host.music_play, music_pause), so a hook on playMessage or pauseMessage runs
    before the music player acts, as the hook runs before the android one does */
 exteria_status ExteriaPluginMusicService(NSString *name, NSDictionary *request, NSDictionary **reply, NSString **failure);
+
+@class ExteriaMediaCache;
+/* the cache the songs of a plugin are fetched with, the one of the main screen */
+void ExteriaPluginMusicSetMedia(ExteriaMediaCache *media);
+/* the main screen that goes lets its cache go, unless a newer screen has set its own */
+void ExteriaPluginMusicForgetMedia(ExteriaMediaCache *media);
 
 /* puts the routes on the music player; they cost nothing while no plugin runs */
 void ExteriaPluginMusicInstall(void);

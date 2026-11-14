@@ -231,7 +231,7 @@ static ExteriaMusicKey *ExteriaCardKey(UIColor *fill, CGFloat radius, id target,
     BOOL failed = state == ExteriaMusicStateFailed;
 
     _title.text = ExteriaTrackTitle(player.track);
-    _performer.text = failed ? NSLocalizedString(@"music.failed", nil) : ExteriaTrackPerformer(player.track);
+    _performer.text = failed ? player.failureText : ExteriaTrackPerformer(player.track);
     _performer.textColor = failed ? ExteriaColorBadgeRed() : ExteriaColorSecondary();
     UIImage *cover = player.cover;
     _coverImage.image = cover;

@@ -507,6 +507,11 @@
 "music.title" = "Музыка";
 "music.empty" = "В профиле нет музыки.";
 "music.failed" = "Не удаётся воспроизвести файл";
+"music.failed.download" = "Не удалось загрузить файл";
+"music.failed.open" = "Не удаётся открыть файл";
+"music.failed.audio" = "Звук занят другим приложением или звонком";
+"music.failed.format" = "Эта версия iOS не поддерживает формат файла";
+"music.failed.damaged" = "Файл повреждён и не читается";
 "music.play" = "Играть";
 "music.pause" = "Пауза";
 "music.stop" = "Остановить";

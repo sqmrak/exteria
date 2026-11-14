@@ -2,11 +2,28 @@
 
 #import "exteria_music_player.h"
 #import "exteria_plugins.h"
+#import "exteria_plugin_account.h"
+#import "exteria_media_cache.h"
 
 /* a plugin that never gives a taken player back must not leave sounds playing: the oldest one is finished when there are this many */
 #define GHOSTS_MAX 4
+/* the longest queue a plugin may start in one call */
+#define QUEUE_MAX 500
 
 static NSMutableDictionary *g_ghosts;
+static ExteriaMediaCache *g_media;
+
+void ExteriaPluginMusicForgetMedia(ExteriaMediaCache *media) {
+    if (media != g_media) return;
+    [g_media release];
+    g_media = nil;
+}
+
+void ExteriaPluginMusicSetMedia(ExteriaMediaCache *media) {
+    if (media == g_media) return;
+    [g_media release];
+    g_media = [media retain];
+}
 
 static exteria_status refuse(NSString **failure, NSString *text, exteria_status status) {
     if (failure) *failure = text;
@@ -142,6 +159,23 @@ exteria_status ExteriaPluginMusicService(NSString *name, NSDictionary *request, 
         NSNumber *index = [request objectForKey:@"index"];
         if (![index isKindOfClass:[NSNumber class]] || [index unsignedIntegerValue] >= count) return refuse(failure, @"the queue has no such song", EXTERIA_E_NOTFOUND);
         [player startQueueIndex:[index unsignedIntegerValue]];
+        *reply = [NSDictionary dictionaryWithObject:[NSNumber numberWithUnsignedInteger:player.playbackId] forKey:@"id"];
+        return EXTERIA_OK;
+    }
+    if ([name isEqualToString:@"music.play_docs"]) {
+        NSArray *docs = [request objectForKey:@"docs"];
+        NSNumber *index = [request objectForKey:@"index"];
+        if (![docs isKindOfClass:[NSArray class]] || !docs.count || docs.count > QUEUE_MAX || ![index isKindOfClass:[NSNumber class]] || [index unsignedIntegerValue] >= docs.count) {
+            return refuse(failure, @"a queue of songs and the place to start are needed", EXTERIA_E_ARG);
+        }
+        if (!g_media) return refuse(failure, @"the music player has no cache to fetch with before the main screen is up", EXTERIA_E_STATE);
+        NSMutableArray *queue = [NSMutableArray arrayWithCapacity:docs.count];
+        for (id doc in docs) {
+            ExteriaMedia *song = [doc isKindOfClass:[NSDictionary class]] ? ExteriaPluginSongOfJSON(doc) : nil;
+            if (!song || !song.file) return refuse(failure, @"a document names no song", EXTERIA_E_ARG);
+            [queue addObject:song];
+        }
+        [player playTrack:[queue objectAtIndex:[index unsignedIntegerValue]] queue:queue media:g_media];
         *reply = [NSDictionary dictionaryWithObject:[NSNumber numberWithUnsignedInteger:player.playbackId] forKey:@"id"];
         return EXTERIA_OK;
     }

@@ -188,6 +188,7 @@ static BOOL ExteriaSetPlayerVolume(AVPlayer *player, AVPlayerItem *item, float v
     NSUInteger _index;
     ExteriaMediaCache *_media;
     ExteriaMusicState _state;
+    ExteriaMusicFailure _failure;
     float _loadProgress;
     AVPlayer *_player;
     AVPlayerItem *_item;
@@ -225,6 +226,7 @@ static BOOL ExteriaSetPlayerVolume(AVPlayer *player, AVPlayerItem *item, float v
 @synthesize queueIndex = _index;
 @synthesize track = _track;
 @synthesize state = _state;
+@synthesize failure = _failure;
 @synthesize loadProgress = _loadProgress;
 @synthesize queue = _queue;
 @synthesize media = _media;
@@ -479,10 +481,23 @@ static BOOL ExteriaSetPlayerVolume(AVPlayer *player, AVPlayerItem *item, float v
     _seeking = NO;
 }
 
-- (void)fail:(NSString *)reason {
+- (void)fail:(NSString *)reason failure:(ExteriaMusicFailure)failure {
     NSLog(@"exteria: song %@ does not play: %@", _track.file.key, reason);
     [self releasePlayer];
+    _failure = failure;
     [self setState:ExteriaMusicStateFailed];
+}
+
+- (NSString *)failureText {
+    switch (_failure) {
+    case ExteriaMusicFailureDownload: return NSLocalizedString(@"music.failed.download", nil);
+    case ExteriaMusicFailureOpen: return NSLocalizedString(@"music.failed.open", nil);
+    case ExteriaMusicFailureAudio: return NSLocalizedString(@"music.failed.audio", nil);
+    case ExteriaMusicFailureFormat: return NSLocalizedString(@"music.failed.format", nil);
+    case ExteriaMusicFailureDamaged: return NSLocalizedString(@"music.failed.damaged", nil);
+    case ExteriaMusicFailureNone: break;
+    }
+    return NSLocalizedString(@"music.failed", nil);
 }
 
 /* the link under the name given, in a folder that is emptied first; a video that is fragmented is written there in its plain form instead, which the player of an old
@@ -551,7 +566,22 @@ NSURL *ExteriaNamedLink(NSString *path, NSString *name, NSString *slot) {
     while ([stem lengthOfBytesUsingEncoding:NSUTF8StringEncoding] + (extension.length ? extension.length + 1 : 0) > LINK_NAME_BYTES_MAX && stem.length > 1) {
         stem = [stem substringToIndex:stem.length - 1];
     }
-    return ExteriaLinkNamed(path, extension.length ? [stem stringByAppendingPathExtension:extension] : stem, slot, NO);
+    NSString *alias = extension.length ? [stem stringByAppendingPathExtension:extension] : stem;
+    NSURL *url = ExteriaLinkNamed(path, alias, slot, NO);
+    if (!url) return nil;
+    /* another app gets this file through the system and cannot follow a symbolic link out of our container, so Copy to and Open in did nothing; the link made when the
+       hard link was refused is replaced by a copy */
+    NSFileManager *files = [NSFileManager defaultManager];
+    NSDictionary *attributes = [files attributesOfItemAtPath:url.path error:NULL];
+    if ([[attributes fileType] isEqualToString:NSFileTypeSymbolicLink]) {
+        NSError *error = nil;
+        [files removeItemAtPath:url.path error:NULL];
+        if (![files copyItemAtPath:path toPath:url.path error:&error]) {
+            NSLog(@"exteria: cannot copy %@ for another app: %@", path, error);
+            return nil;
+        }
+    }
+    return url;
 }
 
 /* a voice note is Ogg Opus, which no system here plays; the decoder writes the samples as they come, so the
@@ -608,8 +638,12 @@ static NSString *ExteriaDecodeVoice(NSString *path, NSString **error) {
 }
 
 - (void)playItemAtURL:(NSURL *)url {
-    if (!url || ![self takeAudioSession]) {
-        [self fail:@"the file cannot be opened"];
+    if (!url) {
+        [self fail:@"the file cannot be opened" failure:ExteriaMusicFailureOpen];
+        return;
+    }
+    if (![self takeAudioSession]) {
+        [self fail:@"the audio session was refused" failure:ExteriaMusicFailureAudio];
         return;
     }
     [self releasePlayer];
@@ -675,7 +709,7 @@ static BOOL ExteriaIsFlac(NSString *path) {
                 _flacJob = nil;
                 if (status != EXTERIA_OK) {
                     [[NSFileManager defaultManager] removeItemAtPath:directory error:NULL];
-                    [self fail:[NSString stringWithFormat:@"FLAC decode: %s", exteria_status_name(status)]];
+                    [self fail:[NSString stringWithFormat:@"FLAC decode: %s", exteria_status_name(status)] failure:ExteriaMusicFailureDamaged];
                     return;
                 }
                 [self playItemAtURL:[NSURL fileURLWithPath:wav]];
@@ -697,7 +731,7 @@ static BOOL ExteriaIsFlac(NSString *path) {
             reason = [[reason copy] autorelease];
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (token != _token) return;
-                if (!wav) [self fail:reason];
+                if (!wav) [self fail:reason failure:ExteriaMusicFailureDamaged];
                 else [self playItemAtURL:[NSURL fileURLWithPath:wav]];
             });
             [pool drain];
@@ -713,11 +747,11 @@ static BOOL ExteriaIsFlac(NSString *path) {
     (void)timer;
     if (!_item) return;
     if (_item.status == AVPlayerItemStatusFailed) {
-        [self fail:[_item.error description]];
+        [self fail:[_item.error description] failure:ExteriaMusicFailureFormat];
         return;
     }
     if (_item.status == AVPlayerItemStatusUnknown && ++_waitTicks > READY_TICKS) {
-        [self fail:@"the file never became ready"];
+        [self fail:@"the file never became ready" failure:ExteriaMusicFailureFormat];
         return;
     }
     /* ios 5 and 6 set the volume through the audio track, which an item has once it is ready */
@@ -773,9 +807,10 @@ static BOOL ExteriaIsFlac(NSString *path) {
     _cover = nil;
     ExteriaRemoteFile *file = track.file;
     if (!file) {
-        [self fail:@"nothing to fetch"];
+        [self fail:@"nothing to fetch" failure:ExteriaMusicFailureDownload];
         return;
     }
+    _failure = ExteriaMusicFailureNone;
     [self setState:ExteriaMusicStateLoading];
     NSUInteger token = _token;
     [_media loadCoverForTrack:track maxSide:COVER_SIDE completion:^(UIImage *image) {
@@ -792,7 +827,7 @@ static BOOL ExteriaIsFlac(NSString *path) {
         if (token != _token) return;
         _pathRequest = 0;
         if (!path) {
-            [self fail:@"the file did not arrive"];
+            [self fail:@"the file did not arrive" failure:ExteriaMusicFailureDownload];
             return;
         }
         [self beginPlaybackAtPath:path];
@@ -866,7 +901,7 @@ static BOOL ExteriaIsFlac(NSString *path) {
         break;
     case ExteriaMusicStatePaused:
         if (![self takeAudioSession]) {
-            [self fail:@"the audio session was refused"];
+            [self fail:@"the audio session was refused" failure:ExteriaMusicFailureAudio];
             return;
         }
         _state = ExteriaMusicStatePlaying;
