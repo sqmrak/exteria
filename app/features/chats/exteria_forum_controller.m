@@ -5,6 +5,7 @@
 #import "exteria_animation.h"
 #import "exteria_avatar_view.h"
 #import "exteria_chat_controller.h"
+#import "exteria_next_chat_hint.h"
 #import "exteria_community_badge.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_dialog_cell.h"
@@ -120,6 +121,7 @@
     ExteriaStickerLibrary *_stickers;
     ExteriaWeakReference *_weak;
     NSArray *_topics;
+    NSMutableSet *_topicsSeen;
     NSDate *_loadedAt;
     BOOL _loading;
     BOOL _loaded;
@@ -170,6 +172,10 @@
     return self;
 }
 
+- (BOOL)showsForum:(ExteriaDialog *)forum {
+    return forum.peerKind == _forum.peerKind && forum.peerId == _forum.peerId;
+}
+
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_weak clear];
@@ -185,6 +191,7 @@
     [_avatars release];
     [_media release];
     [_stickers release];
+    [_topicsSeen release];
     [_topics release];
     [_loadedAt release];
     [_closeHandler release];
@@ -552,8 +559,13 @@
     }
     ExteriaDialog *topic = [_topics objectAtIndex:(NSUInteger)indexPath.row];
     ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:_session dialog:topic avatars:_avatars media:_media stickers:_stickers] autorelease];
-    /* reading changed the counts of the topics, so they load again once the person is back */
     ExteriaWeakReference *weak = _weak;
+    /* a topic goes on to the next one with unread messages when the list is pulled past its end, as a channel goes on to the next channel; the topics gone through are forgotten
+       when another one is opened from the list */
+    [_topicsSeen release];
+    _topicsSeen = [[NSMutableSet alloc] init];
+    chat.nextChatProvider = ^ExteriaDialog *(ExteriaDialog *current) { return [ExteriaNextChatHint nextUnreadTopicIn:_topics after:current seen:_topicsSeen]; };
+    /* reading changed the counts of the topics, so they load again once the person is back */
     chat.closeHandler = ^{
         ExteriaForumController *screen = weak.target;
         if (!screen) return;

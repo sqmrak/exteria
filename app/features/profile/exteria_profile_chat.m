@@ -9,7 +9,8 @@ void ExteriaProfileShowChat(UIViewController *profile, ExteriaSession *session, 
     NSUInteger at = [stack indexOfObject:profile];
     if (at != NSNotFound && at > 0) {
         UIViewController *below = [stack objectAtIndex:at - 1];
-        if ([below isKindOfClass:[ExteriaChatController class]] && [(ExteriaChatController *)below showsDialog:dialog]) {
+        if (forum && ([below isKindOfClass:[ExteriaForumController class]] || [below isKindOfClass:[ExteriaTopicsController class]] ||
+                      [below isKindOfClass:[ExteriaClassicTopicsController class]]) && [(id)below showsForum:dialog]) {
             [navigation popViewControllerAnimated:YES];
             return;
         }

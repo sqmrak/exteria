@@ -1080,7 +1080,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     [root addSubview:_reactionBadge];
     [self loadUnreadReactions];
     _nextHint = [[ExteriaNextChatHint alloc] init];
-    [root addSubview:_nextHint];
+    /* the hint sits in the list at the end of its content, in the space a pull past the last message opens */
+    [_table addSubview:_nextHint];
 
     if (classic && _pinnedList) {
         self.title = NSLocalizedString(@"chat.pinned.list", nil);
@@ -2908,9 +2909,6 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     _pinnedText.frame = CGRectMake(pinnedX, 24, width - pinnedX - pinnedRight, 18);
     _toEnd.frame = CGRectMake(CGRectGetMaxX(column) - 56, inputY - contextHeight - 56, 44, 44);
     [self placeReactionJump];
-    CGSize hintSize = [_nextHint sizeThatFits:CGSizeMake(width, 0)];
-    _nextHint.frame = CGRectMake(CGRectGetMidX(column) - hintSize.width / 2, inputY - contextHeight - hintSize.height - 12, hintSize.width, hintSize.height);
-    _toast.frame = CGRectMake(CGRectGetMidX(column) - 60, headerHeight + pinnedHeight + 10, 120, 28);
     headerHeight += pinnedHeight;
     CGFloat voiceHeight = _voiceBar.hidden ? 0 : VOICE_HEIGHT;
     _voiceBar.frame = CGRectMake(left, headerHeight, width, voiceHeight);
@@ -5116,17 +5114,35 @@ static void ExteriaRedrawTree(UIView *view) {
     [self markReadIfNeeded];
 }
 
-/* pulling past the end of a channel offers the next channel with unread posts; letting go far enough opens it */
+/* pulling past the end of a channel, or of a topic of a forum, offers the next one with unread messages; letting go far enough opens it */
 - (void)showNextChatHintForOverscroll:(CGFloat)over scrollView:(UIScrollView *)scrollView {
-    if (_dialog.kind != EXTERIA_DIALOG_CHANNEL || !_nextChatProvider || _pinnedList || _updatingItems || !scrollView.dragging || over <= 0 || !_stickToBottom) {
+    BOOL eligible = _dialog.kind == EXTERIA_DIALOG_CHANNEL || [self isForumTopic];
+    if (!eligible || !_nextChatProvider || _pinnedList || _updatingItems || !scrollView.dragging || over <= 0 || !_stickToBottom) {
         if (_nextHint.progress > 0) _nextHint.progress = 0;
         return;
     }
     if (!_nextDialog) {
         _nextDialog = [_nextChatProvider(_dialog) retain];
-        if (_nextDialog) [_nextHint setTitle:_nextDialog.title unread:_nextDialog.unreadCount];
+        if (_nextDialog) [self fillNextHint];
     }
-    _nextHint.progress = _nextDialog ? over / [ExteriaNextChatHint pullDistance] : 0;
+    if (!_nextDialog) return;
+    _nextHint.frame = CGRectMake(0, scrollView.contentSize.height, scrollView.bounds.size.width, [ExteriaNextChatHint pullDistance]);
+    _nextHint.progress = over / [ExteriaNextChatHint pullDistance];
+}
+
+/* a topic carries its own icon; the picture of a channel comes from the avatar cache, and the hint shows its first letter until it lands */
+- (void)fillNextHint {
+    ExteriaDialog *next = _nextDialog;
+    UIImage *icon = nil;
+    if (next.topicId > 0) icon = ExteriaTopicIconImage(next);
+    else if (next.photo) icon = [_avatars cachedImageForPhoto:next.photo];
+    [_nextHint setTitle:next.title unread:next.unreadCount icon:icon];
+    if (icon || next.topicId > 0 || !next.photo) return;
+    ExteriaWeakReference *weak = _weak;
+    [_avatars loadImageForPhoto:next.photo completion:^(UIImage *image) {
+        ExteriaChatController *chat = weak.target;
+        if (chat && image && chat->_nextDialog == next) [chat->_nextHint setIcon:image];
+    }];
 }
 
 - (void)openNextChat {

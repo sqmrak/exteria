@@ -18,4 +18,7 @@
 /* the archive button on top of the column opens the archive; without the handler the button is not shown */
 @property (nonatomic, copy) void (^archiveHandler)(void);
 
+/* whether this screen is the topics of that forum, so a profile opened from it can go back instead of stacking another */
+- (BOOL)showsForum:(ExteriaDialog *)forum;
+
 @end

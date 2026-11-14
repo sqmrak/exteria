@@ -15,6 +15,7 @@
     ExteriaStickerLibrary *_stickers;
     ExteriaWeakReference *_weak;
     NSArray *_topics;
+    NSMutableSet *_topicsSeen;
     UILabel *_status;
     BOOL _loading;
     BOOL _loaded;
@@ -50,6 +51,10 @@
     if (ExteriaDialogsApplyingRead(_topics, note.userInfo) && [self isViewLoaded]) [self.tableView reloadData];
 }
 
+- (BOOL)showsForum:(ExteriaDialog *)forum {
+    return forum.peerKind == _forum.peerKind && forum.peerId == _forum.peerId;
+}
+
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogReadNotification object:nil];
     [_weak clear];
@@ -63,6 +68,7 @@
     [_avatars release];
     [_media release];
     [_stickers release];
+    [_topicsSeen release];
     [_topics release];
     [_status release];
     [_closeHandler release];
@@ -162,6 +168,11 @@
     ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:_session dialog:_forum.saved ? [_forum savedDialogFromSource:row] : row
                                                                           avatars:_avatars media:_media stickers:_stickers] autorelease];
     chat.hidesBottomBarWhenPushed = YES;
+    /* a topic goes on to the next one with unread messages when the list is pulled past its end, as a channel goes on to the next channel; the topics gone through are forgotten
+       when another one is opened from the list */
+    [_topicsSeen release];
+    _topicsSeen = [[NSMutableSet alloc] init];
+    chat.nextChatProvider = ^ExteriaDialog *(ExteriaDialog *current) { return _forum.saved ? nil : [ExteriaNextChatHint nextUnreadTopicIn:_topics after:current seen:_topicsSeen]; };
     /* reading changed the counts of the topics, so they load again once the person is back */
     chat.closeHandler = ^{ [self reload]; };
     [self.navigationController pushViewController:chat animated:YES];

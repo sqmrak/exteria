@@ -11,4 +11,7 @@
 /* runs once when the person leaves for the list, so the list can show what reading changed */
 @property (nonatomic, copy) void (^closeHandler)(void);
 
+/* whether this screen is the topics of that forum, so a profile opened from it can go back instead of stacking another */
+- (BOOL)showsForum:(ExteriaDialog *)forum;
+
 @end

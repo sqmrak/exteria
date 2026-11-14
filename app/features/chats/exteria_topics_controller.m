@@ -1,6 +1,7 @@
 #import "exteria_topics_controller.h"
 
 #import "exteria_chat_controller.h"
+#import "exteria_next_chat_hint.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_dialog_cell.h"
 #import "exteria_draft.h"
@@ -9,6 +10,7 @@
 @interface ExteriaTopicsController () {
     ExteriaDialog *_forum;
     NSArray *_topics;
+    NSMutableSet *_topicsSeen;
     ExteriaMediaCache *_media;
     ExteriaStickerLibrary *_stickers;
     ExteriaWeakReference *_weak;
@@ -52,12 +54,17 @@
     if (ExteriaDialogsApplyingRead(_topics, note.userInfo) && self.isViewLoaded) [self reloadTable];
 }
 
+- (BOOL)showsForum:(ExteriaDialog *)forum {
+    return forum.peerKind == _forum.peerKind && forum.peerId == _forum.peerId;
+}
+
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDraftDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogReadNotification object:nil];
     [_weak clear];
     [_weak release];
     [_forum release];
+    [_topicsSeen release];
     [_topics release];
     [_media release];
     [_stickers release];
@@ -124,6 +131,11 @@
     if (_forum.saved) topic = [_forum savedDialogFromSource:topic];
     ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:self.session dialog:topic avatars:self.avatars
                                                                            media:_media stickers:_stickers] autorelease];
+    /* a topic goes on to the next one with unread messages when the list is pulled past its end, as a channel goes on to the next channel; the topics gone through are forgotten
+       when another one is opened from the list */
+    [_topicsSeen release];
+    _topicsSeen = [[NSMutableSet alloc] init];
+    chat.nextChatProvider = ^ExteriaDialog *(ExteriaDialog *current) { return _forum.saved ? nil : [ExteriaNextChatHint nextUnreadTopicIn:_topics after:current seen:_topicsSeen]; };
     /* reading changed the counts of the topics, so they load again once the person is back */
     chat.closeHandler = ^{ [self reloadDiscardingRunning]; };
     [self.navigationController pushViewController:chat animated:YES];
