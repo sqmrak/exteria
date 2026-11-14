@@ -33,6 +33,7 @@
 #import "exteria_wave.h"
 #import "exteria_chat_settings.h"
 #import "exteria_theme.h"
+#import "exteria_blur.h"
 #import "exteria_classic_bubble.h"
 #import "exteria_imported_theme.h"
 #import "exteria_burn_effect.h"
@@ -820,7 +821,8 @@ static float ExteriaSpoilerRandom(void) {
     [self setNeedsDisplay];
 }
 
-/* the picture shrunk to a few dozen points and drawn large again with smoothing, which is a blur that costs nothing at draw time */
+/* the picture shrunk to a few dozen points, box blurred, and drawn large again; the shrunk picture alone shows as blocks when it is stretched, which reads as
+   pixelation and not as a blur */
 - (UIImage *)blurredPlate {
     UIImage *image = _source.image;
     if (!image || !ExteriaLiteEnabled(EXTERIA_LITE_CHAT_BLUR)) return nil;
@@ -834,6 +836,7 @@ static float ExteriaSpoilerRandom(void) {
     [image drawInRect:CGRectMake(0, 0, small.width, small.height)];
     UIImage *made = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
+    if (made) made = ExteriaBoxBlurredImage(made, 2, 2);
     [_blurred release];
     _blurred = [made retain];
     [_blurredFrom release];

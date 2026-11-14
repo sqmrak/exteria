@@ -23,7 +23,7 @@ static void ExteriaBoxPass(const uint8_t *from, uint8_t *to, size_t lines, size_
     }
 }
 
-static UIImage *ExteriaBoxBlurred(UIImage *image, int r, int passes) {
+UIImage *ExteriaBoxBlurredImage(UIImage *image, int r, int passes) {
     CGImageRef source = image.CGImage;
     size_t w = CGImageGetWidth(source), h = CGImageGetHeight(source);
     if (!source || w < 2 || h < 2) return image;
@@ -73,7 +73,7 @@ UIView *ExteriaBlurBackdrop(UIView *host, CGRect bounds) {
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     if (!image) return nil;
-    image = ExteriaBoxBlurred(image, 2, 2);
+    image = ExteriaBoxBlurredImage(image, 2, 2);
     UIImageView *picture = [[[UIImageView alloc] initWithImage:image] autorelease];
     picture.frame = bounds;
     return picture;
