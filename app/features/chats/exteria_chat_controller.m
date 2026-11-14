@@ -922,6 +922,10 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     if (_dialog.kind == EXTERIA_DIALOG_CHANNEL && !_dialog.canPost) {
         _input.writable = NO;
         _input.readOnlyNote = NSLocalizedString(@"chat.readonly", nil);
+    } else if (_dialog.deleted && _dialog.peerKind == 1) {
+        /* a deleted account takes no messages: the server refuses them, and the one sent here stayed in the chat as failed */
+        _input.writable = NO;
+        _input.readOnlyNote = NSLocalizedString(@"chat.deleted.readonly", nil);
     } else if (_dialog.replies) {
         /* nobody writes to the chat of the replies; it is read, like a channel */
         _input.writable = NO;

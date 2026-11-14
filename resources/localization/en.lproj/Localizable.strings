@@ -203,6 +203,7 @@
 "chats.readall" = "Read All";
 "chats.replies" = "Replies";
 "chat.replies.readonly" = "You cannot write in this chat";
+"chat.deleted.readonly" = "This account was deleted, so you cannot write to it";
 "chat.replies.open" = "Open chat";
 "chat.replies.unavailable" = "The chat could not be opened";
 "chat.unsupported" = "Exteria does not support this message format :(";

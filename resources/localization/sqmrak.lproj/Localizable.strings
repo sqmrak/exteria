@@ -204,6 +204,7 @@
 "chats.readall" = "прочитать всё";
 "chats.replies" = "ответы";
 "chat.replies.readonly" = "писать в этот чат нельзя";
+"chat.deleted.readonly" = "аккаунт удалён, писать нельзя";
 "chat.replies.open" = "открыть чат";
 "chat.replies.unavailable" = "не удалось открыть чат";
 "chat.unsupported" = "exteria не поддерживает данный формат сообщений :(";
