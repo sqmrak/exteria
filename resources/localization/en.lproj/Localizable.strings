@@ -750,6 +750,9 @@
 "chat.msg.transcribing" = "Listening...";
 "chat.msg.transcribe.premium" = "Telegram does the transcription for Premium accounts, or a few times for free";
 "chat.msg.transcribe.empty" = "No speech was found in this message";
+"chat.msg.transcribe.long" = "Voice messages longer than two minutes are not transcribed by the AI provider";
+"chat.msg.transcribe.unreadable" = "The voice message could not be read for the transcription";
+"chat.msg.transcribe.ai" = "Transcribing with the AI provider of the translator";
 "chat.msg.more" = "More";
 "chat.msg.read" = "Read";
 "chat.msg.readat" = "Read %@";

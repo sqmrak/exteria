@@ -753,6 +753,9 @@
 "chat.msg.transcribing" = "слушаю...";
 "chat.msg.transcribe.premium" = "расшифровку делает telegram для premium или несколько раз бесплатно";
 "chat.msg.transcribe.empty" = "в этом сообщении не нашлось речи :D";
+"chat.msg.transcribe.long" = "голосовые длиннее двух минут ии-провайдер не расшифровывает";
+"chat.msg.transcribe.unreadable" = "не удалось прочитать голосовое сообщение для расшифровки";
+"chat.msg.transcribe.ai" = "расшифровка через ии-провайдера переводчика";
 "chat.msg.more" = "ещё";
 "chat.msg.read" = "прочитано";
 "chat.msg.readat" = "прочитано %@";

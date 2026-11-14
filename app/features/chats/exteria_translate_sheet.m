@@ -78,6 +78,7 @@
     NSString *_failure;
     ExteriaTranslateJob *_job;
     ExteriaWeakReference *_weak;
+    void (^_closed)(void);
     BOOL _showOriginal;
     BOOL _closing;
     UIEdgeInsets _insets;
@@ -87,12 +88,17 @@
 @implementation ExteriaTranslateSheet
 
 + (void)presentInView:(UIView *)host text:(NSString *)text entities:(NSArray *)entities session:(ExteriaSession *)session context:(NSString *)context {
+    [self presentInView:host text:text entities:entities session:session context:context closed:nil];
+}
+
++ (void)presentInView:(UIView *)host text:(NSString *)text entities:(NSArray *)entities session:(ExteriaSession *)session context:(NSString *)context closed:(void (^)(void))closed {
     ExteriaTranslateSheet *sheet = [[[ExteriaTranslateSheet alloc] initWithFrame:host.bounds] autorelease];
     sheet.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     sheet->_text = [text copy];
     sheet->_entities = [entities copy];
     sheet->_session = [session retain];
     sheet->_context = [context copy];
+    sheet->_closed = [closed copy];
     sheet->_target = [ExteriaTranslateTargetLanguage() copy];
     sheet->_weak = [[ExteriaWeakReference referenceTo:sheet] retain];
     sheet->_showOriginal = ExteriaTranslateOriginalMode() == 2;
@@ -110,6 +116,7 @@
 }
 
 - (void)dealloc {
+    [_closed release];
     [_weak clear];
     [_weak release];
     [_job cancel];
@@ -376,6 +383,7 @@
     ExteriaAnimateView(_card, CGAffineTransformMakeTranslation(0, self.bounds.size.height - (_card.center.y - _card.bounds.size.height / 2)), 1, ExteriaPopupCurve(NO), ^(BOOL finished) {
         (void)finished;
         [self removeFromSuperview];
+        if (_closed) _closed();
         [self release];
     });
 }

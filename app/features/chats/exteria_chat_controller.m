@@ -29,6 +29,7 @@
 #import "exteria_connecting_label.h"
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_topic_icon.h"
+#import "exteria_voice_transcriber.h"
 #import "exteria_developers.h"
 #import "exteria_mini_player.h"
 #import "exteria_next_chat_hint.h"
@@ -488,6 +489,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     /* the identity the person picked on this screen, which outranks what the full channel said before the pick (that answer does not change) */
     ExteriaSendAsOption *_sendAsPicked;
     NSMutableDictionary *_transcripts;
+    ExteriaVoiceTranscriber *_voiceJob;
     /* the reactors already asked for through the message of their reaction, so a user is asked for once per screen */
     NSMutableSet *_reactorLookups;
     /* the full users they came back as; a later history answer carries the min object again and must not take their photo away */
@@ -574,6 +576,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_searchHits release];
     [_searchQuery release];
     [_historyPerson release];
+    [_voiceJob cancel];
+    [_voiceJob release];
     [_transcripts release];
     [_reactorLookups release];
     [_reactorPeople release];
@@ -7125,6 +7129,8 @@ static NSDate *ExteriaReminderDate(NSUInteger choice) {
         if (!chat) return;
         if (errorName) {
             NSLog(@"exteria: transcription of message %d failed: %@", (int)messageId, errorName);
+            /* an account without Premium that has an AI provider set for the translator has its voice notes written by that provider */
+            if ([errorName isEqualToString:@"PREMIUM_ACCOUNT_REQUIRED"] && [chat transcribeWithProviderMessageId:messageId]) return;
             ExteriaGiftAlert(nil, [errorName isEqualToString:@"PREMIUM_ACCOUNT_REQUIRED"] ? NSLocalizedString(@"chat.msg.transcribe.premium", nil)
                                                                                       : ExteriaGiftErrorText(errorName));
             return;
@@ -7138,6 +7144,35 @@ static NSDate *ExteriaReminderDate(NSUInteger choice) {
             ExteriaGiftAlert(nil, NSLocalizedString(@"chat.msg.transcribe.empty", nil));
         }
     }];
+}
+
+- (BOOL)transcribeWithProviderMessageId:(int32_t)messageId {
+    ExteriaMessage *message = [self messageWithId:messageId];
+    if (!message || message.media.kind != EXTERIA_PREVIEW_VOICE || !message.media.file || ![ExteriaVoiceTranscriber isConfigured]) return NO;
+    [self toast:NSLocalizedString(@"chat.msg.transcribe.ai", nil)];
+    ExteriaWeakReference *weak = _weak;
+    [_voiceJob cancel];
+    [_voiceJob release];
+    _voiceJob = nil;
+    [_media loadPathForFile:message.media.file size:message.media.size progress:nil completion:^(NSString *path) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (!path) {
+            ExteriaGiftAlert(nil, NSLocalizedString(@"chat.msg.transcribe.unreadable", nil));
+            return;
+        }
+        chat->_voiceJob = [[ExteriaVoiceTranscriber transcribeVoiceAtPath:path completion:^(NSString *text, NSString *failure) {
+            ExteriaChatController *owner = weak.target;
+            if (!owner) return;
+            if (failure) {
+                ExteriaGiftAlert(nil, failure);
+                return;
+            }
+            if (text.length) [owner showTranscript:text ofMessageId:messageId];
+            else ExteriaGiftAlert(nil, NSLocalizedString(@"chat.msg.transcribe.empty", nil));
+        }] retain];
+    }];
+    return YES;
 }
 
 /* the words go under the voice message; its item is built again to carry them */
