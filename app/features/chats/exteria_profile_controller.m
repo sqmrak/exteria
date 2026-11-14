@@ -49,7 +49,6 @@
 #define ACTION_HEIGHT 70.0
 #define ACTION_GAP 8.0
 #define INFO_ROW 62.0
-#define CARD_ROW 52.0
 #define GAP 14.0
 #define SEND_HEIGHT 48.0
 
@@ -149,8 +148,6 @@
     ExteriaProfileHeroView *_hero;
     ExteriaProfileAction *_settingsAction;
     ExteriaInfoCardView *_info;
-    UIView *_signOutCard;
-    UIButton *_signOut;
     UIActivityIndicatorView *_spinner;
     ExteriaPillTabsView *_tabs;
     UILabel *_empty;
@@ -328,8 +325,6 @@
     [_settingsAction release];
     for (int i = 0; i < 3; ++i) [_feeds[i] release];
     [_info release];
-    [_signOutCard release];
-    [_signOut release];
     [_spinner release];
     _folderBar.delegate = nil;
     [_folderBar release];
@@ -412,21 +407,6 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _info.copyHandler = ^{ [(ExteriaProfileController *)infoMe.target toast:NSLocalizedString(@"profile.copied", nil)]; };
     [_head addSubview:_info];
 
-    _signOutCard = [[UIView alloc] init];
-    _signOutCard.backgroundColor = ExteriaColorCard();
-    _signOutCard.layer.cornerRadius = 14;
-    _signOutCard.layer.masksToBounds = YES;
-    [_head addSubview:_signOutCard];
-    _signOut = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
-    [_signOut setTitle:NSLocalizedString(@"profile.signout", nil) forState:UIControlStateNormal];
-    [_signOut setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
-    [_signOut setTitleColor:ExteriaColorMuted() forState:UIControlStateDisabled];
-    [_signOut addTarget:self action:@selector(confirmSignOut) forControlEvents:UIControlEventTouchUpInside];
-    [_signOutCard addSubview:_signOut];
-    _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
-    _spinner.hidesWhenStopped = YES;
-    [_signOutCard addSubview:_spinner];
-
     _tabs = [[ExteriaPillTabsView alloc] initWithTitles:[NSArray arrayWithObjects:NSLocalizedString(@"profile.tab.stories", nil),
                                                          NSLocalizedString(@"profile.tab.archive", nil), NSLocalizedString(@"gifts.title", nil), nil]];
     ExteriaWeakReference *me = _weak;
@@ -467,8 +447,11 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [_moreButton setImage:ExteriaSymbolImage(ExteriaSymbolEllipsis, 24, ExteriaColorTitle()) forState:UIControlStateNormal];
     [_moreButton addTarget:self action:@selector(showMenu) forControlEvents:UIControlEventTouchUpInside];
     _moreButton.accessibilityLabel = NSLocalizedString(@"profile.more", nil);
-    _moreButton.hidden = YES;
     [root addSubview:_moreButton];
+    /* the sign out runs behind the dots, so its wait is shown in their place */
+    _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:ExteriaThemeIsDark() ? UIActivityIndicatorViewStyleWhite : UIActivityIndicatorViewStyleGray];
+    _spinner.hidesWhenStopped = YES;
+    [root addSubview:_spinner];
 
     _send = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     _send.backgroundColor = ExteriaColorAccent();
@@ -514,7 +497,6 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     NSString *text = NSLocalizedString(ExteriaChatFlagGet(ExteriaChatFlagGhostOffline) ? @"profile.offline.question" : @"profile.online", nil);
     _status.text = text;
     _barStatus.text = text;
-    _moreButton.hidden = ![self hasMenu];
     [self layoutHead];
 }
 
@@ -609,7 +591,6 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [infoRows addObjectsFromArray:ExteriaIdentityRows(_person.userId, _person.photo)];
     [_info setRows:infoRows];
     [_info setStarsBalance:_starsImage caption:NSLocalizedString(@"profile.stars", nil)];
-    _moreButton.hidden = ![self hasMenu];
     _music.savedTrack = _full.music;
     [self refreshChannelCard];
     [self layoutHead];
@@ -778,11 +759,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         _info.frame = CGRectMake(x, y, contentWidth, height);
         y += height + GAP;
     }
-    _signOutCard.frame = CGRectMake(x, y, contentWidth, CARD_ROW);
-    _signOut.titleLabel.font = ExteriaFontRegular(17);
-    _signOut.frame = _signOutCard.bounds;
-    _spinner.center = CGPointMake(contentWidth - 28, CARD_ROW / 2);
-    y += CARD_ROW + GAP + 4;
+    y += 4;
     _tabs.frame = CGRectMake(x, y, contentWidth, 40);
     y += 40 + 12;
     CGFloat folders = _tab == 2 ? [_folderBar height] : 0;
@@ -822,6 +799,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _toast.frame = CGRectMake(CGRectGetMidX(column) - 80, barHeight + 12, 160, 28);
     _qrButton.frame = CGRectMake(left + 6, insets.top, 48, BAR_HEIGHT);
     _moreButton.frame = CGRectMake(edge - 54, insets.top, 48, BAR_HEIGHT);
+    _spinner.center = _moreButton.center;
     [self layoutHead];
 }
 
@@ -870,18 +848,14 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [self.navigationController pushViewController:chat animated:YES];
 }
 
-/* the dots show when there is something under them: the link of the username, the peek at being online, a photo to remove */
-- (BOOL)hasMenu {
-    return _person.username.length > 0 || _person.photo != nil || ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
-}
-
+/* the dots hold what is only needed now and then: the link of the username, the peek at being online, a photo to remove, and the sign out */
 - (void)showMenu {
+    if (_working) return;
     BOOL hasLink = _person.username.length > 0;
     BOOL ghost = ExteriaChatFlagGet(ExteriaChatFlagGhostOffline);
     BOOL hasPhoto = _person.photo != nil;
-    if (!hasLink && !ghost && !hasPhoto) return;
     NSMutableArray *titles = [NSMutableArray array];
-    ExteriaSymbol symbols[3];
+    ExteriaSymbol symbols[4];
     NSUInteger count = 0;
     if (hasLink) {
         [titles addObject:NSLocalizedString(@"profile.qr.copy", nil)];
@@ -895,6 +869,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         [titles addObject:NSLocalizedString(@"profile.photo.delete", nil)];
         symbols[count++] = ExteriaSymbolTrash;
     }
+    [titles addObject:NSLocalizedString(@"profile.signout", nil)];
+    symbols[count++] = ExteriaSymbolLogout;
     ExteriaWeakReference *me = _weak;
     ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols
                                                               handler:^(NSUInteger index) {
@@ -902,7 +878,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         NSUInteger at = 0;
         if (hasLink && index == at++) [profile copyLink];
         else if (ghost && index == at++) [profile peekOnline];
-        else if (hasPhoto && index == at) [profile confirmDeletePhoto];
+        else if (hasPhoto && index == at++) [profile confirmDeletePhoto];
+        else [profile confirmSignOut];
     }] autorelease];
     [menu showInView:self.view anchor:CGPointMake(CGRectGetMaxX(_moreButton.frame) - 6, CGRectGetMaxY(_moreButton.frame) - 8)];
 }
@@ -1069,11 +1046,11 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
 
 - (void)signOutNow {
     _working = YES;
-    _signOut.enabled = NO;
+    _moreButton.hidden = YES;
     [_spinner startAnimating];
     [_delegate profileController:self requestsSignOut:^(NSString *errorName) {
         _working = NO;
-        _signOut.enabled = YES;
+        _moreButton.hidden = NO;
         [_spinner stopAnimating];
         if (!errorName) return;
         Class alertClass = ExteriaAlertClass();
