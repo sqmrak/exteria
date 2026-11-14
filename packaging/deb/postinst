@@ -61,13 +61,27 @@ refresh_app_cache() {
   "$UICACHE" -p "$APP" || "$UICACHE"
 }
 
-# backgrounding avoids an ios 6 uicache deadlock while the old app is still alive
-( refresh_app_cache >/dev/null 2>&1 || true ) </dev/null &
-
 # ios 5 and 6 register the app after uicache but keep drawing the icon springboard loaded
-# blank until it restarts; the delay lets dpkg record the configured state first
+# blank until it restarts. uicache of those systems has no -p and rebuilds every app, so it
+# outlasts a fixed delay and a springboard started before it returns loads the blank icon again;
+# the restart waits for uicache, then for dpkg (the parent of this script) to record the
+# configured state, at most a minute
+RESPRING=0
 if [ -z "$JBROOT" ] && [ -f "$INSTALL_CACHE" ] && [ "${EXTERIA_SKIP_RESPRING:-0}" != "1" ]; then
-  ( sleep 3; "$KILLALL" -9 SpringBoard >/dev/null 2>&1 || true ) </dev/null >/dev/null 2>&1 &
+  RESPRING=1
 fi
+DPKG_PID=$PPID
+
+# backgrounding avoids an ios 6 uicache deadlock while the old app is still alive
+(
+  refresh_app_cache || true
+  [ "$RESPRING" = 1 ] || exit 0
+  WAITED=0
+  while [ "$WAITED" -lt 60 ] && kill -0 "$DPKG_PID" 2>/dev/null; do
+    sleep 1
+    WAITED=$((WAITED + 1))
+  done
+  "$KILLALL" -9 SpringBoard || true
+) </dev/null >/dev/null 2>&1 &
 
 exit 0
