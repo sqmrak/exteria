@@ -1411,6 +1411,7 @@
 "chatset.theme.day.short" = "Day";
 "chatset.theme.night.short" = "Night";
 "chatset.wallpaper" = "Change Theme and Wallpaper";
+"chatset.wallpaper.chat" = "Wallpaper of This Chat";
 "chatset.wallpaper.gallery" = "Select from gallery";
 "chatset.wallpaper.reset" = "Standard wallpaper";
 "chatset.wallpaper.colors" = "Wallpaper";

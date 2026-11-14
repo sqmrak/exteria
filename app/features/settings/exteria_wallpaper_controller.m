@@ -1,8 +1,17 @@
 #import "exteria_wallpaper_controller.h"
 
+#import "exteria_animation.h"
+#import "exteria_avatar_cache.h"
 #import "exteria_chat_preview_view.h"
+#import "exteria_chat_settings.h"
+#import "exteria_customization_views.h"
+#import "exteria_developers.h"
+#import "exteria_person.h"
+#import "exteria_pill_tabs_view.h"
+#import "exteria_shape.h"
 #import "exteria_gift_screen.h"
 #import "exteria_profile_photo_picker.h"
+#import "exteria_session.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
 #import "exteria_tint_editor.h"
@@ -20,18 +29,45 @@
     /* the classic style makes every page again after a change of the color, and the new table starts at the top; the offset of the old one is brought back */
     CGFloat _restoreOffset;
     BOOL _restoresOffset;
+    /* the chat the page edits the wallpaper of, zero for every chat */
+    int32_t _peerKind;
+    long long _peerId;
+    ExteriaSession *_session;
 }
 @end
 
 @implementation ExteriaWallpaperController
+@synthesize session = _session;
 
 
 - (id)init {
+    return [self initWithPeerKind:0 peerId:0];
+}
+
+- (id)initWithPeerKind:(int32_t)peerKind peerId:(long long)peerId {
     self = [super init];
     if (!self) return nil;
+    _peerKind = peerId ? peerKind : 0;
+    _peerId = peerId;
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
-    self.pageTitle = NSLocalizedString(@"chatset.wallpaper", nil);
+    self.pageTitle = NSLocalizedString(_peerId ? @"chatset.wallpaper.chat" : @"chatset.wallpaper", nil);
     return self;
+}
+
+/* what the page reads and writes: the wallpaper of its chat, or the one of every chat */
+- (ExteriaWallpaperSetting)stored {
+    if (!_peerId) return ExteriaWallpaperStored();
+    ExteriaWallpaperSetting setting = ExteriaWallpaperStoredForChat(_peerKind, _peerId);
+    /* a chat without a wallpaper of its own starts from the colors of every chat, but not from their photo, which is a file this chat does not have */
+    if (setting.kind == ExteriaWallpaperPhoto && !ExteriaWallpaperChatHasOwn(_peerKind, _peerId)) setting.kind = ExteriaWallpaperStandard;
+    return setting;
+}
+
+/* a setting taken from the stored one or a preset belongs to this page's chat */
+- (void)store:(ExteriaWallpaperSetting)setting {
+    setting.chatKind = _peerKind;
+    setting.chatId = _peerId;
+    ExteriaWallpaperStore(setting);
 }
 
 - (void)dealloc {
@@ -41,6 +77,12 @@
     [_preview release];
     [_grid release];
     [_picker release];
+    [_tabs release];
+    [_shapes release];
+    [_customPreview release];
+    [_classicPreview release];
+    [_session release];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
     [super dealloc];
 }
 
@@ -68,11 +110,13 @@
 }
 
 - (UIViewController *)controllerAfterThemeChange {
-    ExteriaWallpaperController *again = [[[ExteriaWallpaperController alloc] init] autorelease];
+    ExteriaWallpaperController *again = [[[ExteriaWallpaperController alloc] initWithPeerKind:_peerKind peerId:_peerId] autorelease];
     if ([self isViewLoaded]) {
         again->_restoreOffset = self.table.contentOffset.y;
         again->_restoresOffset = YES;
     }
+    again->_tab = _tab;
+    again.session = _session;
     return again;
 }
 
@@ -92,6 +136,8 @@
 - (void)buildThemedViews {
     [_preview release];
     _preview = [[ExteriaChatPreviewView alloc] init];
+    _preview.wallpaperPeerKind = _peerKind;
+    _preview.wallpaperPeerId = _peerId;
     ExteriaWeakReference *previewWeak = _weak;
     _preview.heightHandler = ^{ [(ExteriaWallpaperController *)previewWeak.target updateRowHeights]; };
     [_picker release];
@@ -105,9 +151,14 @@
     _grid.standardHandler = ^{
         ExteriaWallpaperController *me = weak.target;
         if (!me) return;
-        ExteriaWallpaperSetting standard = ExteriaWallpaperStored();
-        standard.kind = ExteriaWallpaperStandard;
-        ExteriaWallpaperStore(standard);
+        /* the standard tile of a chat is the way back to the wallpaper every chat wears */
+        if (me->_peerId) {
+            ExteriaWallpaperClearChat(me->_peerKind, me->_peerId);
+        } else {
+            ExteriaWallpaperSetting standard = ExteriaWallpaperStored();
+            standard.kind = ExteriaWallpaperStandard;
+            ExteriaWallpaperStore(standard);
+        }
         [me rebuild];
     };
     _grid.chooseHandler = ^(NSUInteger index) {
@@ -161,8 +212,7 @@
 }
 
 /* the index of the gradient the stored wallpaper is, NSNotFound when it is none of them (a photo, or the standard wallpaper) */
-static NSUInteger ExteriaChosenPreset(void) {
-    ExteriaWallpaperSetting stored = ExteriaWallpaperStored();
+static NSUInteger ExteriaChosenPreset(ExteriaWallpaperSetting stored) {
     if (stored.kind != ExteriaWallpaperColors) return NSNotFound;
     for (NSUInteger i = 0; i < ExteriaWallpaperPresetCount(); ++i) {
         ExteriaWallpaperSetting preset = ExteriaWallpaperPreset(i);
@@ -173,8 +223,15 @@ static NSUInteger ExteriaChosenPreset(void) {
 
 - (void)rebuild {
     ExteriaWeakReference *weak = _weak;
-    ExteriaWallpaperSetting setting = ExteriaWallpaperStored();
+    ExteriaWallpaperSetting setting = [self stored];
+    BOOL tabbed = !_peerId;
+    if (tabbed && _tab == 1) {
+        self.sections = [self customizationSections];
+        [self reloadSettings];
+        return;
+    }
     NSMutableArray *sections = [NSMutableArray array];
+    if (tabbed) [sections addObject:[self tabsSection]];
 
     ExteriaChatPreviewView *preview = _preview;
     ExteriaSettingsRow *picture = [ExteriaSettingsRow viewRowWithView:preview height:^CGFloat(CGFloat width) { return [preview heightForWidth:width]; }];
@@ -188,48 +245,57 @@ static NSUInteger ExteriaChosenPreset(void) {
     _picker.brightness = brightness;
     UIControl<ExteriaTintControl> *picker = _picker;
     ExteriaSettingsRow *tint = [ExteriaSettingsRow viewRowWithView:picker height:^CGFloat(CGFloat width) { (void)width; return picker.preferredHeight; }];
-    [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.tint.header", nil) footer:nil rows:[NSArray arrayWithObject:tint]]];
+    /* the color of the app is the app's, not the chat's */
+    if (!_peerId) [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.tint.header", nil) footer:nil rows:[NSArray arrayWithObject:tint]]];
 
     ExteriaWallpaperGridView *grid = _grid;
-    grid.chosenIndex = ExteriaChosenPreset();
+    grid.chosenIndex = ExteriaChosenPreset(setting);
     grid.photoChosen = setting.kind == ExteriaWallpaperPhoto;
-    grid.standardChosen = setting.kind == ExteriaWallpaperStandard;
+    grid.standardChosen = _peerId ? !ExteriaWallpaperChatHasOwn(_peerKind, _peerId) : setting.kind == ExteriaWallpaperStandard;
     ExteriaSettingsRow *tiles = [ExteriaSettingsRow viewRowWithView:grid height:^CGFloat(CGFloat width) { (void)width; return [ExteriaWallpaperGridView height]; }];
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"chatset.wallpaper.colors", nil) footer:nil rows:[NSArray arrayWithObject:tiles]]];
 
     if (setting.kind == ExteriaWallpaperColors) {
         NSMutableArray *options = [NSMutableArray array];
         [options addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.wallpaper.pattern", nil) subtitle:nil on:setting.pattern != 0 toggle:^(BOOL on) {
-            ExteriaWallpaperSetting next = ExteriaWallpaperStored();
+            ExteriaWallpaperController *me = weak.target;
+            if (!me) return;
+            ExteriaWallpaperSetting next = [me stored];
             next.pattern = on ? 1 : 0;
-            ExteriaWallpaperStore(next);
-            [(ExteriaWallpaperController *)weak.target rebuild];
+            [me store:next];
+            [me rebuild];
         }]];
         if (setting.pattern) {
             [options addObject:[ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.wallpaper.intensity", nil) format:@"%.0f%%" value:(float)setting.intensity
                                                               minimum:0 maximum:100 change:^(float value) {
-                ExteriaWallpaperSetting next = ExteriaWallpaperStored();
+                ExteriaWallpaperController *me = weak.target;
+                if (!me) return;
+                ExteriaWallpaperSetting next = [me stored];
                 int intensity = (int)(value + 0.5f);
                 if (intensity == next.intensity) return;
                 next.intensity = intensity;
-                ExteriaWallpaperStore(next);
+                [me store:next];
             }]];
         }
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:options]];
     } else if (setting.kind == ExteriaWallpaperPhoto) {
         NSMutableArray *options = [NSMutableArray array];
         [options addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.wallpaper.blur", nil) subtitle:nil on:setting.blur != 0 toggle:^(BOOL on) {
-            ExteriaWallpaperSetting next = ExteriaWallpaperStored();
+            ExteriaWallpaperController *me = weak.target;
+            if (!me) return;
+            ExteriaWallpaperSetting next = [me stored];
             next.blur = on ? 1 : 0;
-            ExteriaWallpaperStore(next);
+            [me store:next];
         }]];
         [options addObject:[ExteriaSettingsRow sliderRowWithTitle:NSLocalizedString(@"chatset.wallpaper.dim", nil) format:@"%.0f%%" value:(float)setting.dim
                                                           minimum:0 maximum:100 change:^(float value) {
-            ExteriaWallpaperSetting next = ExteriaWallpaperStored();
+            ExteriaWallpaperController *me = weak.target;
+            if (!me) return;
+            ExteriaWallpaperSetting next = [me stored];
             int dim = (int)(value + 0.5f);
             if (dim == next.dim) return;
             next.dim = dim;
-            ExteriaWallpaperStore(next);
+            [me store:next];
         }]];
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:options]];
     }
@@ -239,9 +305,11 @@ static NSUInteger ExteriaChosenPreset(void) {
 
 - (void)pickPhoto {
     ExteriaWeakReference *weak = _weak;
+    int32_t peerKind = _peerKind;
+    long long peerId = _peerId;
     [ExteriaProfilePhotoPicker pickWholeFrom:self picked:^(NSString *path) {
         ExteriaWallpaperController *me = weak.target;
-        BOOL used = path && ExteriaWallpaperUsePhotoAtPath(path);
+        BOOL used = path && ExteriaWallpaperUsePhotoAtPathForChat(path, peerKind, peerId);
         if (path) [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
         if (!used) {
             NSLog(@"exteria: the wallpaper photo could not be prepared");

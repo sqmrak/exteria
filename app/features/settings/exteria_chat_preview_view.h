@@ -17,6 +17,9 @@ typedef enum {
 /* runs when the preview comes out taller or shorter than the row it sits in was told, so the table makes the row
    follow it */
 @property (nonatomic, copy) void (^heightHandler)(void);
+/* the chat whose own wallpaper the preview draws, set before the view is laid out; zero for the wallpaper every chat wears */
+@property (nonatomic, assign) int32_t wallpaperPeerKind;
+@property (nonatomic, assign) long long wallpaperPeerId;
 /* the height the preview takes at this width, for the text size now set */
 - (CGFloat)heightForWidth:(CGFloat)width;
 - (void)setQuickReaction:(NSString *)value display:(NSString *)display;

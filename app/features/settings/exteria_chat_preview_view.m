@@ -120,6 +120,8 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
 @implementation ExteriaChatPreviewView
 
 @synthesize heightHandler = _heightHandler;
+@synthesize wallpaperPeerKind = _wallpaperPeerKind;
+@synthesize wallpaperPeerId = _wallpaperPeerId;
 
 - (id)initWithFrame:(CGRect)frame {
     return [self initWithTalk:ExteriaChatPreviewTalkSettings];
@@ -251,7 +253,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
     BOOL out = bubble->outgoing;
     /* a quote with no color of its own is the plain one of the settings of chats: the link color, with no plate */
     BOOL plain = bubble->quoteColorId < 0;
-    UIColor *tint = !plain && ExteriaChatFlagGet(ExteriaChatFlagReplyColors) && !ExteriaThemeIsClassic()
+    UIColor *tint = !plain && ExteriaChatFlagGet(ExteriaChatFlagReplyColors)
         ? ExteriaNameColor(bubble->quoteColorId, 0, ExteriaThemeIsDark()) : ExteriaColorBubbleLink(out);
     bubble->quotePlate.backgroundColor = !plain && ExteriaChatFlagGet(ExteriaChatFlagReplyBackground) ? ExteriaMixedColor(bubbleColor, tint, 0.3) : [UIColor clearColor];
     bubble->quoteBar.backgroundColor = tint;
@@ -293,7 +295,7 @@ static const ExteriaPreviewLine ExteriaPreviewQuickReaction[PREVIEW_ITEMS] = {
 - (void)applyWallpaper {
     CGFloat width = self.bounds.size.width > 1 ? self.bounds.size.width : 320;
     _wallpaperWidth = width;
-    ExteriaApplyChatWallpaperSized(_wallpaper, ExteriaThemeIsDark(), CGSizeMake(width, WALLPAPER_HEIGHT));
+    ExteriaApplyChatWallpaperSizedForChat(_wallpaper, ExteriaThemeIsDark(), CGSizeMake(width, WALLPAPER_HEIGHT), _wallpaperPeerKind, _wallpaperPeerId);
 }
 
 - (void)settingsChanged {

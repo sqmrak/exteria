@@ -241,6 +241,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
 
     UIImageView *_wallpaper;
     NSString *_channelWallpaperSignature;
+    BOOL _channelFullFailed;
     NSUInteger _codeCopyToken;
     ExteriaMiniPlayer *_miniPlayer;
     ExteriaFallingView *_snow;
@@ -865,7 +866,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 
     BOOL classic = ExteriaThemeIsClassic();
     _wallpaper = [[UIImageView alloc] init];
-    ExteriaApplyChatWallpaper(_wallpaper, ExteriaThemeIsDark());
+    ExteriaApplyChatWallpaperForChat(_wallpaper, ExteriaThemeIsDark(), _dialog.peerKind, _dialog.peerId);
     [root addSubview:_wallpaper];
     /* the song that plays follows the person into the chat, with the buttons to change it; the strip has no height while nothing plays */
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
@@ -1644,10 +1645,23 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }];
 }
 
+/* the wallpaper settings changed: this chat wears its own wallpaper, or the one of every chat, or the background the server gave it, whichever stands now */
+- (void)wallpaperDidChange {
+    if (!self.isViewLoaded) return;
+    ExteriaApplyChatWallpaperForChat(_wallpaper, ExteriaThemeIsDark(), _dialog.peerKind, _dialog.peerId);
+    [_channelWallpaperSignature release];
+    _channelWallpaperSignature = nil;
+    if (ExteriaWallpaperChatHasOwn(_dialog.peerKind, _dialog.peerId)) return;
+    [self applyKeptChannelWallpaper];
+    if (_channelFull) [self applyChannelWallpaper:_channelFull.wallpaper];
+}
+
 /* the background kept from the last visit is painted before the full channel answers, so a chat that has one does not open in the default and change under the eyes */
 - (void)applyKeptChannelWallpaper {
-    if (!self.isViewLoaded || _channelWallpaperSignature) return;
-    CGSize size = _wallpaper.bounds.size.width > 1 ? _wallpaper.bounds.size : [UIScreen mainScreen].bounds.size;
+    if (!self.isViewLoaded || _channelWallpaperSignature || ExteriaWallpaperChatHasOwn(_dialog.peerKind, _dialog.peerId)) return;
+    /* the screen, as the wallpaper of every chat uses it: the view bounds are not known yet when the kept one is read, and a size taken from them after layout never
+       matched the one asked at the next open, so the kept background was thrown away and the chat stayed plain until the network answered */
+    CGSize size = [UIScreen mainScreen].bounds.size;
     NSString *signature = nil;
     UIImage *kept = ExteriaCachedChatWallpaper(_dialog.peerKind, _dialog.peerId, size, nil, &signature);
     if (!kept) return;
@@ -1658,18 +1672,21 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
 /* the background the admins gave the channel replaces the one of the app in this chat; a picture waits for its file and then takes the place. what is made is kept, and
    a paper that is the one already shown is left alone */
 - (void)applyChannelWallpaper:(exteria_chat_wallpaper)paper {
-    if (!self.isViewLoaded) return;
+    /* the wallpaper the person picked for this chat stands over the one the server gave it */
+    if (!self.isViewLoaded || ExteriaWallpaperChatHasOwn(_dialog.peerKind, _dialog.peerId)) return;
     if (!paper.present) {
         /* the admins took the background away: the kept one goes, and the default comes back */
         ExteriaDropChatWallpaper(_dialog.peerKind, _dialog.peerId);
         if (_channelWallpaperSignature) {
             [_channelWallpaperSignature release];
             _channelWallpaperSignature = nil;
-            ExteriaApplyChatWallpaper(_wallpaper, ExteriaThemeIsDark());
+            ExteriaApplyChatWallpaperForChat(_wallpaper, ExteriaThemeIsDark(), _dialog.peerKind, _dialog.peerId);
         }
         return;
     }
-    CGSize size = _wallpaper.bounds.size.width > 1 ? _wallpaper.bounds.size : [UIScreen mainScreen].bounds.size;
+    /* the screen, as the wallpaper of every chat uses it: the view bounds are not known yet when the kept one is read, and a size taken from them after layout never
+       matched the one asked at the next open, so the kept background was thrown away and the chat stayed plain until the network answered */
+    CGSize size = [UIScreen mainScreen].bounds.size;
     BOOL picture = paper.has_file && !paper.pattern;
     ExteriaRemoteFile *file = picture ? [ExteriaRemoteFile fileForMedia:&paper.file] : nil;
     NSString *signature = ExteriaChatWallpaperSignature(&paper, file.key);
@@ -1719,8 +1736,10 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         if (!chat) return;
         if (!channel) {
             NSLog(@"exteria: channel %lld did not load in full: %@", chat->_dialog.peerId, errorName);
+            chat->_channelFullFailed = YES;
             return;
         }
+        chat->_channelFullFailed = NO;
         [chat->_channelFull release];
         chat->_channelFull = [channel retain];
         [chat applyChannelWallpaper:channel.wallpaper];
@@ -2342,7 +2361,7 @@ enum { ExteriaChatAlertClear = 9101, ExteriaChatAlertDelete, ExteriaChatAlertDel
                                                                                                              channel:chat->_dialog.kind == EXTERIA_DIALOG_CHANNEL
                                                                                                                topic:chat->_dialog.topicId title:chat->_dialog.title] autorelease] animated:YES];
             break;
-        case ExteriaChatMenuWallpaper: [chat.navigationController pushViewController:[[[ExteriaWallpaperController alloc] init] autorelease] animated:YES]; break;
+        case ExteriaChatMenuWallpaper: [chat.navigationController pushViewController:[[[ExteriaWallpaperController alloc] initWithPeerKind:chat->_dialog.peerKind peerId:chat->_dialog.peerId] autorelease] animated:YES]; break;
         case ExteriaChatMenuClear: [chat askWithMessage:NSLocalizedString(@"chat.clear.confirm", nil) action:NSLocalizedString(@"chat.menu.clear", nil) tag:ExteriaChatAlertClear]; break;
         case ExteriaChatMenuClearSaved: [chat askWithMessage:NSLocalizedString(@"chat.clearsaved.confirm", nil) action:NSLocalizedString(@"chat.menu.clearsaved", nil) tag:ExteriaChatAlertClearSaved]; break;
         case ExteriaChatMenuBookmarks:

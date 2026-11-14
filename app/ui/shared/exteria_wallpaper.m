@@ -4,6 +4,7 @@
 #include <string.h>
 
 #import "exteria_platform.h"
+#import "exteria_chat_settings.h"
 #import "exteria_theme.h"
 #import "exteria_imported_theme.h"
 #import "exteria_wave.h"
@@ -40,17 +41,23 @@ static NSInteger ExteriaClampInt(NSInteger value, NSInteger low, NSInteger high)
     return value < low ? low : (value > high ? high : value);
 }
 
+/* the keys of the wallpaper of one chat carry the chat after the name, the keys of every chat are the ones the app always had */
+static NSString *ExteriaScopeSuffix(int32_t chatKind, long long chat) {
+    return chat ? [NSString stringWithFormat:@".chat%d_%lld", (int)chatKind, chat] : @"";
+}
+
 /* each tone keeps its own wallpaper: the night keys carry a suffix, the day ones are the keys the app always had */
-static NSString *ExteriaToneKey(NSString *key, BOOL dark) {
-    return dark ? [key stringByAppendingString:@".dark"] : key;
+static NSString *ExteriaToneKey(NSString *key, BOOL dark, int32_t chatKind, long long chat) {
+    NSString *scoped = [key stringByAppendingString:ExteriaScopeSuffix(chatKind, chat)];
+    return dark ? [scoped stringByAppendingString:@".dark"] : scoped;
 }
 
-static BOOL ExteriaToneHasKey(NSString *key, BOOL dark) {
-    return [[NSUserDefaults standardUserDefaults] objectForKey:ExteriaToneKey(key, dark)] != nil;
+static BOOL ExteriaToneHasKey(NSString *key, BOOL dark, int32_t chatKind, long long chat) {
+    return [[NSUserDefaults standardUserDefaults] objectForKey:ExteriaToneKey(key, dark, chatKind, chat)] != nil;
 }
 
-static NSInteger ExteriaToneInteger(NSString *key, BOOL dark, NSInteger fallback) {
-    return ExteriaStoredInteger(ExteriaToneKey(key, dark), fallback);
+static NSInteger ExteriaToneInteger(NSString *key, BOOL dark, int32_t chatKind, long long chat, NSInteger fallback) {
+    return ExteriaStoredInteger(ExteriaToneKey(key, dark, chatKind, chat), fallback);
 }
 
 /* how light a gradient is, 0 to 1, by the middle of its two colors */
@@ -69,21 +76,25 @@ static BOOL ExteriaColorsFitTone(uint32_t top, uint32_t bottom, BOOL dark) {
     return dark ? lightness <= 0.45 : lightness >= 0.4;
 }
 
-static ExteriaWallpaperSetting ExteriaWallpaperStoredForTone(BOOL dark) {
+static ExteriaWallpaperSetting ExteriaWallpaperStoredForTone(BOOL dark, int32_t chatKind, long long chat) {
     ExteriaWallpaperSetting setting;
-    /* the night had no keys of its own before: what the day keys hold stands for it when it is a dark gradient */
-    BOOL own = dark ? ExteriaToneHasKey(ExteriaWallpaperKindKey, YES) : YES;
+    memset(&setting, 0, sizeof(setting));
+    setting.chatKind = chat ? chatKind : 0;
+    setting.chatId = chat;
+    /* the night had no keys of its own before: what the day keys hold stands for it when it is a dark gradient. a chat never had keys but its own */
+    BOOL own = dark && !chat ? ExteriaToneHasKey(ExteriaWallpaperKindKey, YES, 0, 0) : YES;
     BOOL keysDark = dark && own;
-    NSInteger kind = own ? ExteriaToneInteger(ExteriaWallpaperKindKey, keysDark, ExteriaWallpaperStandard) : ExteriaStoredInteger(ExteriaWallpaperKindKey, ExteriaWallpaperStandard);
+    NSInteger kind = ExteriaToneInteger(ExteriaWallpaperKindKey, keysDark, setting.chatKind, chat, ExteriaWallpaperStandard);
+    if (!own) kind = ExteriaStoredInteger(ExteriaWallpaperKindKey, ExteriaWallpaperStandard);
     setting.kind = kind == ExteriaWallpaperColors || kind == ExteriaWallpaperPhoto ? (ExteriaWallpaperKind)kind : ExteriaWallpaperStandard;
     BOOL source = keysDark;
-    setting.top = (uint32_t)(ExteriaToneInteger(ExteriaWallpaperTopKey, source, 0xD6E2EE) & 0xFFFFFF);
-    setting.bottom = (uint32_t)(ExteriaToneInteger(ExteriaWallpaperBottomKey, source, 0xC1D2E7) & 0xFFFFFF);
-    setting.angle = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperAngleKey, source, 45), 0, 359);
-    setting.pattern = ExteriaToneInteger(ExteriaWallpaperPatternKey, source, 1) ? 1 : 0;
-    setting.intensity = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperIntensityKey, source, 50), 0, 100);
-    setting.blur = ExteriaToneInteger(ExteriaWallpaperBlurKey, source, 0) ? 1 : 0;
-    setting.dim = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperDimKey, source, 0), 0, 100);
+    setting.top = (uint32_t)(ExteriaToneInteger(ExteriaWallpaperTopKey, source, setting.chatKind, chat, 0xD6E2EE) & 0xFFFFFF);
+    setting.bottom = (uint32_t)(ExteriaToneInteger(ExteriaWallpaperBottomKey, source, setting.chatKind, chat, 0xC1D2E7) & 0xFFFFFF);
+    setting.angle = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperAngleKey, source, setting.chatKind, chat, 45), 0, 359);
+    setting.pattern = ExteriaToneInteger(ExteriaWallpaperPatternKey, source, setting.chatKind, chat, 1) ? 1 : 0;
+    setting.intensity = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperIntensityKey, source, setting.chatKind, chat, 50), 0, 100);
+    setting.blur = ExteriaToneInteger(ExteriaWallpaperBlurKey, source, setting.chatKind, chat, 0) ? 1 : 0;
+    setting.dim = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperDimKey, source, setting.chatKind, chat, 0), 0, 100);
     if (setting.kind == ExteriaWallpaperColors && !ExteriaColorsFitTone(setting.top, setting.bottom, dark)) setting.kind = ExteriaWallpaperStandard;
     /* the photo of the day is the one the app always kept; the night has a file of its own, so legacy keys never lend a photo to it */
     if (setting.kind == ExteriaWallpaperPhoto && dark && !own) setting.kind = ExteriaWallpaperStandard;
@@ -91,34 +102,46 @@ static ExteriaWallpaperSetting ExteriaWallpaperStoredForTone(BOOL dark) {
 }
 
 ExteriaWallpaperSetting ExteriaWallpaperStored(void) {
-    return ExteriaWallpaperStoredForTone(ExteriaThemeIsDark());
+    return ExteriaWallpaperStoredForTone(ExteriaThemeIsDark(), 0, 0);
+}
+
+BOOL ExteriaWallpaperChatHasOwn(int32_t peerKind, long long peerId) {
+    return peerId && ExteriaWallpaperStoredForTone(ExteriaThemeIsDark(), peerKind, peerId).kind != ExteriaWallpaperStandard;
+}
+
+ExteriaWallpaperSetting ExteriaWallpaperStoredForChat(int32_t peerKind, long long peerId) {
+    if (!peerId) return ExteriaWallpaperStored();
+    if (ExteriaWallpaperChatHasOwn(peerKind, peerId)) return ExteriaWallpaperStoredForTone(ExteriaThemeIsDark(), peerKind, peerId);
+    ExteriaWallpaperSetting setting = ExteriaWallpaperStored();
+    setting.chatKind = peerKind;
+    setting.chatId = peerId;
+    return setting;
 }
 
 void ExteriaWallpaperStore(ExteriaWallpaperSetting setting) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     BOOL dark = ExteriaThemeIsDark();
-    [defaults setInteger:setting.kind forKey:ExteriaToneKey(ExteriaWallpaperKindKey, dark)];
-    [defaults setInteger:setting.top & 0xFFFFFF forKey:ExteriaToneKey(ExteriaWallpaperTopKey, dark)];
-    [defaults setInteger:setting.bottom & 0xFFFFFF forKey:ExteriaToneKey(ExteriaWallpaperBottomKey, dark)];
-    [defaults setInteger:ExteriaClampInt(setting.angle, 0, 359) forKey:ExteriaToneKey(ExteriaWallpaperAngleKey, dark)];
-    [defaults setInteger:setting.pattern ? 1 : 0 forKey:ExteriaToneKey(ExteriaWallpaperPatternKey, dark)];
-    [defaults setInteger:ExteriaClampInt(setting.intensity, 0, 100) forKey:ExteriaToneKey(ExteriaWallpaperIntensityKey, dark)];
-    [defaults setInteger:setting.blur ? 1 : 0 forKey:ExteriaToneKey(ExteriaWallpaperBlurKey, dark)];
-    [defaults setInteger:ExteriaClampInt(setting.dim, 0, 100) forKey:ExteriaToneKey(ExteriaWallpaperDimKey, dark)];
+    int32_t chatKind = setting.chatId ? setting.chatKind : 0;
+    long long chat = setting.chatId;
+    [defaults setInteger:setting.kind forKey:ExteriaToneKey(ExteriaWallpaperKindKey, dark, chatKind, chat)];
+    [defaults setInteger:setting.top & 0xFFFFFF forKey:ExteriaToneKey(ExteriaWallpaperTopKey, dark, chatKind, chat)];
+    [defaults setInteger:setting.bottom & 0xFFFFFF forKey:ExteriaToneKey(ExteriaWallpaperBottomKey, dark, chatKind, chat)];
+    [defaults setInteger:ExteriaClampInt(setting.angle, 0, 359) forKey:ExteriaToneKey(ExteriaWallpaperAngleKey, dark, chatKind, chat)];
+    [defaults setInteger:setting.pattern ? 1 : 0 forKey:ExteriaToneKey(ExteriaWallpaperPatternKey, dark, chatKind, chat)];
+    [defaults setInteger:ExteriaClampInt(setting.intensity, 0, 100) forKey:ExteriaToneKey(ExteriaWallpaperIntensityKey, dark, chatKind, chat)];
+    [defaults setInteger:setting.blur ? 1 : 0 forKey:ExteriaToneKey(ExteriaWallpaperBlurKey, dark, chatKind, chat)];
+    [defaults setInteger:ExteriaClampInt(setting.dim, 0, 100) forKey:ExteriaToneKey(ExteriaWallpaperDimKey, dark, chatKind, chat)];
     ExteriaDefaultsSaveSoon();
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaWallpaperDidChangeNotification object:nil];
 }
 
-static NSString *ExteriaWallpaperPhotoPathForTone(BOOL dark) {
+static NSString *ExteriaWallpaperPhotoPathForTone(BOOL dark, int32_t chatKind, long long chat) {
     NSArray *roots = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    return [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:dark ? @"wallpaper-dark.jpg" : @"wallpaper.jpg"];
+    NSString *name = chat ? [NSString stringWithFormat:@"wallpaper-chat%d_%lld%@.jpg", (int)chatKind, chat, dark ? @"-dark" : @""] : (dark ? @"wallpaper-dark.jpg" : @"wallpaper.jpg");
+    return [[[roots objectAtIndex:0] stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:name];
 }
 
-static NSString *ExteriaWallpaperPhotoPath(void) {
-    return ExteriaWallpaperPhotoPathForTone(ExteriaThemeIsDark());
-}
-
-BOOL ExteriaWallpaperUsePhotoAtPath(NSString *path) {
+static BOOL ExteriaWallpaperUsePhoto(NSString *path, int32_t chatKind, long long chat) {
     UIImage *photo = [UIImage imageWithContentsOfFile:path];
     if (!photo) return NO;
     /* a photo from the library is shrunk once, to what any screen shows, and kept as a jpeg */
@@ -132,19 +155,44 @@ BOOL ExteriaWallpaperUsePhotoAtPath(NSString *path) {
         UIGraphicsEndImageContext();
     }
     NSData *data = UIImageJPEGRepresentation(kept, 0.85);
-    NSString *target = ExteriaWallpaperPhotoPath();
+    NSString *target = ExteriaWallpaperPhotoPathForTone(ExteriaThemeIsDark(), chatKind, chat);
     NSError *error = nil;
     [[NSFileManager defaultManager] createDirectoryAtPath:[target stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:NULL];
     if (!data || ![data writeToFile:target options:NSDataWritingAtomic error:&error]) {
         NSLog(@"exteria: the wallpaper photo was not kept: %@", error);
         return NO;
     }
-    ExteriaWallpaperSetting setting = ExteriaWallpaperStored();
+    ExteriaWallpaperSetting setting = ExteriaWallpaperStoredForChat(chatKind, chat);
     setting.kind = ExteriaWallpaperPhoto;
     setting.blur = 0;
     setting.dim = 0;
     ExteriaWallpaperStore(setting);
     return YES;
+}
+
+BOOL ExteriaWallpaperUsePhotoAtPath(NSString *path) {
+    return ExteriaWallpaperUsePhoto(path, 0, 0);
+}
+
+BOOL ExteriaWallpaperUsePhotoAtPathForChat(NSString *path, int32_t peerKind, long long peerId) {
+    return peerId ? ExteriaWallpaperUsePhoto(path, peerKind, peerId) : ExteriaWallpaperUsePhoto(path, 0, 0);
+}
+
+void ExteriaWallpaperClearChat(int32_t peerKind, long long peerId) {
+    if (!peerId) return;
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *const keys[] = {ExteriaWallpaperKindKey, ExteriaWallpaperTopKey, ExteriaWallpaperBottomKey, ExteriaWallpaperAngleKey, ExteriaWallpaperPatternKey,
+                              ExteriaWallpaperIntensityKey, ExteriaWallpaperBlurKey, ExteriaWallpaperDimKey};
+    for (int tone = 0; tone < 2; ++tone) {
+        for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) [defaults removeObjectForKey:ExteriaToneKey(keys[i], tone == 1, peerKind, peerId)];
+        NSError *error = nil;
+        NSString *file = ExteriaWallpaperPhotoPathForTone(tone == 1, peerKind, peerId);
+        if ([[NSFileManager defaultManager] fileExistsAtPath:file] && ![[NSFileManager defaultManager] removeItemAtPath:file error:&error]) {
+            NSLog(@"exteria: the wallpaper photo of a chat was not removed: %@", error);
+        }
+    }
+    ExteriaDefaultsSaveSoon();
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaWallpaperDidChangeNotification object:nil];
 }
 
 #pragma mark presets
@@ -303,7 +351,7 @@ static UIImage *ExteriaColorsImage(ExteriaWallpaperSetting setting, CGSize size)
 }
 
 static UIImage *ExteriaPhotoImage(ExteriaWallpaperSetting setting, CGSize size) {
-    UIImage *photo = [UIImage imageWithContentsOfFile:ExteriaWallpaperPhotoPath()];
+    UIImage *photo = [UIImage imageWithContentsOfFile:ExteriaWallpaperPhotoPathForTone(ExteriaThemeIsDark(), setting.chatId ? setting.chatKind : 0, setting.chatId)];
     if (!photo) return nil;
     UIImage *source = photo;
     if (setting.blur) {
@@ -415,8 +463,14 @@ static UIImage *ExteriaSizedWallpaper(ExteriaWallpaperSetting setting, CGSize si
             [cache removeAllObjects];
         }];
     });
-    NSString *key = [NSString stringWithFormat:@"%@|%.1fx%.1f|t%lu", [[NSData dataWithBytes:&setting length:sizeof(setting)] description], (double)size.width, (double)size.height,
-                     (unsigned long)ExteriaThemeRevision()];
+    /* a new photo for the same setting is a new picture, and the notification that empties this cache reaches it after the screens that ask for the picture have asked */
+    NSString *stamp = @"";
+    if (setting.kind == ExteriaWallpaperPhoto) {
+        NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:ExteriaWallpaperPhotoPathForTone(ExteriaThemeIsDark(), setting.chatId ? setting.chatKind : 0, setting.chatId) error:NULL];
+        stamp = [[attributes fileModificationDate] description];
+    }
+    NSString *key = [NSString stringWithFormat:@"%@|%.1fx%.1f|t%lu|%@", [[NSData dataWithBytes:&setting length:sizeof(setting)] description], (double)size.width, (double)size.height,
+                     (unsigned long)ExteriaThemeRevision(), stamp];
     UIImage *image = [cache objectForKey:key];
     if (!image) {
         image = ExteriaWallpaperImage(setting, size);
@@ -436,9 +490,22 @@ void ExteriaApplyChatWallpaper(UIImageView *view, BOOL dark) {
 }
 
 void ExteriaApplyChatWallpaperSized(UIImageView *view, BOOL dark, CGSize size) {
+    ExteriaApplyChatWallpaperSizedForChat(view, dark, size, 0, 0);
+}
+
+void ExteriaApplyChatWallpaperForChat(UIImageView *view, BOOL dark, int32_t peerKind, long long peerId) {
+    ExteriaApplyChatWallpaper(view, dark);
+    if (!peerId || !ExteriaWallpaperChatHasOwn(peerKind, peerId)) return;
+    /* the wallpaper picked for this chat alone takes the place of the one every chat wears */
+    ExteriaWallpaperSetting own = ExteriaWallpaperStoredForChat(peerKind, peerId);
+    UIImage *picture = ExteriaSizedWallpaper(own, [UIScreen mainScreen].bounds.size);
+    if (picture) view.image = picture;
+}
+
+void ExteriaApplyChatWallpaperSizedForChat(UIImageView *view, BOOL dark, CGSize size, int32_t peerKind, long long peerId) {
     BOOL classic = ExteriaThemeIsClassic();
     ExteriaApplyWallpaperStyle(view, classic, dark);
-    ExteriaWallpaperSetting setting = ExteriaWallpaperStored();
+    ExteriaWallpaperSetting setting = ExteriaWallpaperStoredForChat(peerKind, peerId);
     /* a preview a few hundred points wide does not need the picture of the whole screen, which cost a full repaint of the pattern at every step of a slider */
     if (setting.kind != ExteriaWallpaperStandard) view.image = ExteriaSizedWallpaper(setting, size);
 }
@@ -480,17 +547,16 @@ static UIImage *ExteriaImportedWallpaperGradientImage(const uint32_t values[4], 
     return image;
 }
 
-/* the hue the bundled pictures are drawn in, the purple of the palette */
+/* the hue the bundled pictures are drawn in, the purple of the palette; the linen tile is a little bluer */
 #define STANDARD_SEED_HUE 286.0
+#define LINEN_SEED_HUE 262.0
 
-/* the bundled picture with its hue turned to the accent of the app: the hue blend keeps the lightness and saturation of the drawing and takes only the hue of the
-   fill, so the paper and the black stay as they are and a grey accent turns the lines grey. The picture the app ships is returned while the accent is the
-   purple of the palette, and the turned one is kept per tone until the palette changes */
-static UIImage *ExteriaStandardWallpaperImage(BOOL dark) {
-    UIImage *original = [UIImage imageNamed:dark ? @"chat_bg_dark.jpg" : @"chat_bg_light.jpg"];
-    if (!original) return nil;
-    UIColor *seed = [UIColor colorWithHue:(CGFloat)(STANDARD_SEED_HUE / 360.0) saturation:1 brightness:1 alpha:1];
-    UIColor *accent = ExteriaThemeFollowAccent(seed, STANDARD_SEED_HUE);
+/* a bundled picture with its hue turned: the hue blend keeps the lightness and saturation of the drawing and takes only the hue of the fill, so the paper and the black
+   stay as they are and a grey accent turns the lines grey. ownHue below zero follows the accent of the app and returns the picture as shipped while the accent is the
+   seed purple; zero and up is a hue the person chose. the turned picture is kept per name, hue and palette */
+static UIImage *ExteriaTurnedImage(UIImage *original, NSString *name, CGFloat seedHue, NSInteger ownHue) {
+    UIColor *seed = [UIColor colorWithHue:(CGFloat)(seedHue / 360.0) saturation:1 brightness:1 alpha:1];
+    UIColor *accent = ownHue >= 0 ? [UIColor colorWithHue:(CGFloat)(ownHue / 360.0) saturation:1 brightness:1 alpha:1] : ExteriaThemeFollowAccent(seed, seedHue);
     CGFloat seedRed = 0, seedGreen = 0, seedBlue = 0, red = 0, green = 0, blue = 0;
     if (![seed getRed:&seedRed green:&seedGreen blue:&seedBlue alpha:NULL] || ![accent getRed:&red green:&green blue:&blue alpha:NULL]) return original;
     if (fabs(seedRed - red) + fabs(seedGreen - green) + fabs(seedBlue - blue) < 0.005) return original;
@@ -498,10 +564,10 @@ static UIImage *ExteriaStandardWallpaperImage(BOOL dark) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         cache = [[NSCache alloc] init];
-        cache.countLimit = 2;
+        cache.countLimit = 6;
     });
-    NSString *key = [NSString stringWithFormat:@"%d|%lu", dark ? 1 : 0, (unsigned long)ExteriaThemeRevision()];
-    UIImage *turned = [cache objectForKey:key];
+    NSString *key = [NSString stringWithFormat:@"%@|%ld|%lu", name, (long)ownHue, (unsigned long)ExteriaThemeRevision()];
+    UIImage *turned = [[[cache objectForKey:key] retain] autorelease];
     if (turned) return turned;
     UIGraphicsBeginImageContextWithOptions(original.size, YES, original.scale);
     CGRect rect = CGRectMake(0, 0, original.size.width, original.size.height);
@@ -515,6 +581,43 @@ static UIImage *ExteriaStandardWallpaperImage(BOOL dark) {
     return turned;
 }
 
+static UIImage *ExteriaStandardWallpaperImage(BOOL dark) {
+    NSString *name = dark ? @"chat_bg_dark.jpg" : @"chat_bg_light.jpg";
+    UIImage *original = [UIImage imageNamed:name];
+    return original ? ExteriaTurnedImage(original, name, STANDARD_SEED_HUE, -1) : nil;
+}
+
+/* the linen of the classic chat as the customization has it: the tile as it is, or laid over the plain color of the chat at the strength the person chose, or no tile at all */
+UIColor *ExteriaClassicLinenColor(BOOL dark) {
+    NSInteger strength = ExteriaClassicTextureStyle() == 1 ? 0 : ExteriaClassicTextureStrength();
+    NSString *linenName = dark ? @"chat_linen_dark.png" : @"chat_linen_light.png";
+    UIImage *linen = strength > 0 ? [UIImage imageNamed:linenName] : nil;
+    if (!linen) return ExteriaColorChatBackground();
+    /* the tile follows the accent of the app, or the hue the person set for it */
+    NSInteger ownHue = ExteriaClassicTextureHue();
+    linen = ExteriaTurnedImage(linen, linenName, LINEN_SEED_HUE, ownHue);
+    if (strength >= 100) return [UIColor colorWithPatternImage:linen];
+    static NSCache *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 6;
+    });
+    NSString *key = [NSString stringWithFormat:@"%d|%ld|%ld|%lu", dark ? 1 : 0, (long)strength, (long)ownHue, (unsigned long)ExteriaThemeRevision()];
+    UIImage *tile = [[[cache objectForKey:key] retain] autorelease];
+    if (!tile) {
+        UIGraphicsBeginImageContextWithOptions(linen.size, YES, linen.scale);
+        CGRect rect = CGRectMake(0, 0, linen.size.width, linen.size.height);
+        [ExteriaColorChatBackground() setFill];
+        UIRectFill(rect);
+        [linen drawInRect:rect blendMode:kCGBlendModeNormal alpha:strength / 100.0f];
+        tile = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        if (tile) [cache setObject:tile forKey:key];
+    }
+    return tile ? [UIColor colorWithPatternImage:tile] : ExteriaColorChatBackground();
+}
+
 void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
     uint32_t values[4] = {0};
     int angle = 90;
@@ -523,8 +626,7 @@ void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
     view.image = classic || importedColors || importedBackground ? nil : ExteriaStandardWallpaperImage(dark);
     if (importedColors) view.image = ExteriaImportedWallpaperGradientImage(values, importedColors, angle, [UIScreen mainScreen].bounds.size);
     /* the classic wallpaper is a linen tile, laid as a pattern so the system repeats it at any size */
-    UIImage *linen = classic ? [UIImage imageNamed:dark ? @"chat_linen_dark.png" : @"chat_linen_light.png"] : nil;
-    view.backgroundColor = linen ? [UIColor colorWithPatternImage:linen] : ExteriaColorChatBackground();
+    view.backgroundColor = classic ? ExteriaClassicLinenColor(dark) : ExteriaColorChatBackground();
     view.contentMode = UIViewContentModeScaleAspectFill;
     view.clipsToBounds = YES;
 }

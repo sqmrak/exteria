@@ -244,6 +244,7 @@ static NSString *ExteriaNightStateText(void) {
                                                  value:nil tap:^{
         ExteriaChatSettingsController *me = weak.target;
         ExteriaWallpaperController *wallpapers = [[[ExteriaWallpaperController alloc] init] autorelease];
+        wallpapers.session = me->_session;
         [me.navigationController pushViewController:wallpapers animated:YES];
     }]];
     [looks addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolApps tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"tabedit.title", nil) subtitle:nil value:nil tap:^{

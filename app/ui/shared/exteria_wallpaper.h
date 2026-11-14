@@ -29,6 +29,9 @@ typedef struct {
     /* the photo, blurred and dimmed by 0 to 100 percent */
     int blur;
     int dim;
+    /* the chat (peer kind and id) the setting belongs to, zero for the wallpaper every chat wears; the store, the photo file and the picture follow it */
+    int32_t chatKind;
+    long long chatId;
 } ExteriaWallpaperSetting;
 
 /* posted on the main thread when the wallpaper changes */
@@ -36,6 +39,18 @@ extern NSString *const ExteriaWallpaperDidChangeNotification;
 
 ExteriaWallpaperSetting ExteriaWallpaperStored(void);
 void ExteriaWallpaperStore(ExteriaWallpaperSetting setting);
+/* the wallpaper of one chat alone. a chat has its own when the person picked one for it, and it stands over the one of every chat; without one this is the setting of every chat,
+   with the chat set on it, so a screen that edits it starts from what the chat shows */
+ExteriaWallpaperSetting ExteriaWallpaperStoredForChat(int32_t peerKind, long long peerId);
+BOOL ExteriaWallpaperChatHasOwn(int32_t peerKind, long long peerId);
+/* the chat wears the wallpaper of every chat again: its settings and its photo are gone, for the day and for the night */
+void ExteriaWallpaperClearChat(int32_t peerKind, long long peerId);
+/* the same as ExteriaWallpaperUsePhotoAtPath, for one chat */
+BOOL ExteriaWallpaperUsePhotoAtPathForChat(NSString *path, int32_t peerKind, long long peerId);
+/* ExteriaApplyChatWallpaper and ExteriaApplyChatWallpaperSized for a chat: its own wallpaper when it has one */
+void ExteriaApplyChatWallpaperForChat(UIImageView *view, BOOL dark, int32_t peerKind, long long peerId);
+void ExteriaApplyChatWallpaperSizedForChat(UIImageView *view, BOOL dark, CGSize size, int32_t peerKind, long long peerId);
+
 /* the photo is copied into the app's own folder and becomes the wallpaper, with no blur and no dimming; NO when the file cannot be read or kept */
 BOOL ExteriaWallpaperUsePhotoAtPath(NSString *path);
 /* the gradients the picker offers, as pairs of colors with their direction: the light ones in the day theme, the dark ones in the night theme */
@@ -61,3 +76,6 @@ UIImage *ExteriaCachedChatWallpaper(int32_t peerKind, long long peerId, CGSize s
 void ExteriaStoreChatWallpaper(int32_t peerKind, long long peerId, CGSize size, NSString *signature, UIImage *image);
 /* the chat has no background of its own any more */
 void ExteriaDropChatWallpaper(int32_t peerKind, long long peerId);
+
+/* the background color of the classic chat: the linen of the customization, its tile laid at the chosen strength over the plain color, or the plain color alone */
+UIColor *ExteriaClassicLinenColor(BOOL dark);

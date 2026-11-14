@@ -1416,6 +1416,7 @@
 "chatset.theme.day.short" = "День";
 "chatset.theme.night.short" = "Ночь";
 "chatset.wallpaper" = "Изменить тему и обои";
+"chatset.wallpaper.chat" = "Обои этого чата";
 "chatset.wallpaper.gallery" = "Выбрать из галереи";
 "chatset.wallpaper.reset" = "Стандартные обои";
 "chatset.wallpaper.colors" = "Обои";
