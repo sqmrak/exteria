@@ -131,13 +131,13 @@
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:message rows:rows]];
     if (_updater.state == ExteriaUpdaterWorking) {
         ExteriaSettingsRow *progress = [ExteriaSettingsRow viewRowWithView:[self progressCard] height:^CGFloat(CGFloat width) { (void)width; return 76; }];
-        ExteriaSettingsRow *cancel = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolClose title:NSLocalizedString(@"release.cancel", nil) destructive:NO tap:^{
+        ExteriaSettingsRow *cancel = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCloseMark() title:NSLocalizedString(@"release.cancel", nil) destructive:NO tap:^{
             ExteriaUpdateController *controller = weak.target;
             if (controller) [controller->_updater cancel];
         }];
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObjects:progress, cancel, nil]]];
     } else if (_updater.state == ExteriaUpdaterDone) {
-        ExteriaSettingsRow *restart = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCheck title:NSLocalizedString(@"release.restart", nil) destructive:NO tap:^{ exit(0); }];
+        ExteriaSettingsRow *restart = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCheckMark() title:NSLocalizedString(@"release.restart", nil) destructive:NO tap:^{ exit(0); }];
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"release.restart.note", nil) rows:[NSArray arrayWithObject:restart]]];
     } else {
         if (_updater.state == ExteriaUpdaterFailed) {
