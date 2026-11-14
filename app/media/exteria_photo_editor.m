@@ -63,24 +63,8 @@ static void ExteriaPhotoDrawStroke(NSDictionary *operation, CGSize size) {
     CGContextSetLineWidth(context, width);
     CGContextSetLineCap(context, kCGLineCapRound); CGContextSetLineJoin(context, kCGLineJoinRound);
     CGPoint first = [[points objectAtIndex:0] CGPointValue];
-    if ([[operation objectForKey:@"arrow"] boolValue]) {
-        /* an arrow runs straight from where the finger came down to where it is, and ends in two strokes that make the head, as the arrow of the original editor does */
-        if (points.count < 2) return;
-        CGPoint last = [[points lastObject] CGPointValue];
-        CGPoint from = CGPointMake(first.x * size.width, first.y * size.height), tip = CGPointMake(last.x * size.width, last.y * size.height);
-        CGFloat length = hypot(tip.x - from.x, tip.y - from.y);
-        if (length < 1) return;
-        /* the head is as long as the stroke is thick several times over, never more than half of the arrow */
-        CGFloat head = MIN(length * 0.5, MAX(width * 4, MIN(size.width, size.height) * 0.05));
-        CGFloat angle = atan2(tip.y - from.y, tip.x - from.x), spread = 28 * M_PI / 180;
-        CGContextMoveToPoint(context, from.x, from.y);
-        CGContextAddLineToPoint(context, tip.x, tip.y);
-        CGContextMoveToPoint(context, tip.x - head * cos(angle - spread), tip.y - head * sin(angle - spread));
-        CGContextAddLineToPoint(context, tip.x, tip.y);
-        CGContextAddLineToPoint(context, tip.x - head * cos(angle + spread), tip.y - head * sin(angle + spread));
-        CGContextStrokePath(context);
-        return;
-    }
+    BOOL arrow = [[operation objectForKey:@"arrow"] boolValue];
+    if (arrow && points.count < 2) return;
     if (points.count == 1) {
         CGContextFillEllipseInRect(context, CGRectMake(first.x * size.width - width / 2, first.y * size.height - width / 2, width, width));
     } else {
@@ -91,6 +75,26 @@ static void ExteriaPhotoDrawStroke(NSDictionary *operation, CGSize size) {
         }
         CGContextStrokePath(context);
     }
+    if (!arrow) return;
+    /* the head follows the direction of the last stretch of the line, taken from a point far enough back that finger jitter at the tip cannot turn it */
+    CGPoint last = [[points lastObject] CGPointValue];
+    CGPoint tip = CGPointMake(last.x * size.width, last.y * size.height);
+    CGFloat head = MAX(width * 4, MIN(size.width, size.height) * 0.05);
+    CGPoint back = tip;
+    BOOL found = NO;
+    for (NSInteger i = (NSInteger)points.count - 2; i >= 0 && !found; --i) {
+        CGPoint point = [[points objectAtIndex:(NSUInteger)i] CGPointValue];
+        back = CGPointMake(point.x * size.width, point.y * size.height);
+        found = hypot(tip.x - back.x, tip.y - back.y) >= head * 0.6;
+    }
+    CGFloat length = hypot(tip.x - back.x, tip.y - back.y);
+    if (length < 1) return;
+    head = MIN(head, length * 2);
+    CGFloat angle = atan2(tip.y - back.y, tip.x - back.x), spread = 28 * M_PI / 180;
+    CGContextMoveToPoint(context, tip.x - head * cos(angle - spread), tip.y - head * sin(angle - spread));
+    CGContextAddLineToPoint(context, tip.x, tip.y);
+    CGContextAddLineToPoint(context, tip.x - head * cos(angle + spread), tip.y - head * sin(angle + spread));
+    CGContextStrokePath(context);
 }
 
 static CGRect ExteriaPhotoTextRect(NSDictionary *operation, CGSize size) {
@@ -543,6 +547,9 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     _drawPan.maximumNumberOfTouches = 1; _drawPan.delegate = self; [_canvas addGestureRecognizer:_drawPan];
     UITapGestureRecognizer *tap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped:)] autorelease];
     tap.delegate = self; [_canvas addGestureRecognizer:tap];
+    /* a tap draws a dot, so text waits for a hold on the picture */
+    UILongPressGestureRecognizer *hold = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(held:)] autorelease];
+    hold.minimumPressDuration = 1.2; hold.delegate = self; [_canvas addGestureRecognizer:hold];
     _pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinched:)];
     _pinch.delegate = self; [_viewport addGestureRecognizer:_pinch];
     _zoomPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(zoomPanned:)];
@@ -824,7 +831,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
 - (BOOL)usesSlider { return _mode == 2 || _mode == 3; }
 - (void)refreshMode {
     [self stopCropAnimation];
-    _done.enabled = !_mode && !_exporting; _undo.enabled = _operations.count > 0 && !_exporting;
+    _done.enabled = !_mode && !_exporting; _undo.enabled = [self undoAvailable];
     BOOL crossfade = _canvas.cropping != (_mode == 1);
     if (crossfade && _canvas.window && !ExteriaReduceMotionEnabled()) {
         CATransition *fade = [CATransition animation]; fade.type = kCATransitionFade; fade.duration = 0.25;
@@ -926,6 +933,13 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
 - (void)append:(NSDictionary *)operation {
     if (_operations.count >= EDIT_OPERATIONS_MAX) { [self notice:@"media.edit.limit"]; return; }
     [_operations addObject:operation]; [self requestRender];
+}
+/* undo takes back what this visit to a tool added: the strokes kept by an earlier visit are not its to remove, and crop and text have nothing to take back before they are applied */
+- (BOOL)undoAvailable {
+    if (_exporting) return NO;
+    if (_mode == 2) return _operations.count > 0;
+    if (_mode) return _operations.count > _modeStart;
+    return _operations.count > 0;
 }
 - (void)undo {
     if (_exporting) return;
@@ -1038,6 +1052,8 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
     for (ExteriaEditorSwatch *swatch in _swatches) [swatch setMarked:[self color:swatch.color isNear:_color] animated:animated];
 }
 - (void)setPaintColor:(UIColor *)color {
+    /* the blur brush paints no color, so a color chosen for the pen takes the person back to it, also when it is the one already set */
+    if (_blurBrush && _selectedText < 0) { _blurBrush = NO; [self refreshBrushButtons:YES]; }
     if (color == _color) return;
     [_color release]; _color = [color retain];
     if (_currentSwatch.window) ExteriaEditorPop(_currentSwatch);
@@ -1188,9 +1204,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
         CGPoint moved = CGPointMake(MAX(0, MIN(1, _moveOriginal.x + point.x - _panStart.x)), MAX(0, MIN(1, _moveOriginal.y + point.y - _panStart.y)));
         [self updateSelectedText:@"point" value:[NSValue valueWithCGPoint:moved]];
     } else if (drawing && _points) {
-        /* an arrow keeps its first point and follows the finger with the second, however long the drag */
-        if (_arrow && _points.count >= 2) [_points replaceObjectAtIndex:_points.count - 1 withObject:[NSValue valueWithCGPoint:point]];
-        else if (_points.count < EDIT_POINTS_MAX) [_points addObject:[NSValue valueWithCGPoint:point]];
+        if (_points.count < EDIT_POINTS_MAX) [_points addObject:[NSValue valueWithCGPoint:point]];
         _canvas.stroke = [self stroke];
     }
     [_canvas setNeedsDisplay];
@@ -1199,7 +1213,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
         if (drawing) {
             if (_movingText && pan.state != UIGestureRecognizerStateEnded) [self updateSelectedText:@"point" value:[NSValue valueWithCGPoint:_moveOriginal]];
             _movingText = NO;
-            if (pan.state == UIGestureRecognizerStateEnded && _points.count && (_blurBrush || !_arrow || _points.count >= 2)) [self append:[self stroke]];
+            if (pan.state == UIGestureRecognizerStateEnded && _points.count && (_points.count >= 2 || !_arrow)) [self append:[self stroke]];
             if (pan.state != UIGestureRecognizerStateEnded) _canvas.stroke = nil;
             [_points release]; _points = nil;
         }
@@ -1252,14 +1266,21 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
         [self endPipette];
         return;
     }
-    _textPoint = [self normalized:[tap locationInView:_canvas]];
+    CGPoint point = [self normalized:[tap locationInView:_canvas]];
+    NSInteger selected = [self textAtPoint:point];
+    if (selected >= 0) { [self selectText:selected]; return; }
+    if (_selectedText >= 0) { [self selectText:-1]; return; }
+    if (_arrow || _points) return;
+    _points = [[NSMutableArray alloc] initWithObjects:[NSValue valueWithCGPoint:point], nil];
+    [self append:[self stroke]];
+    [_points release]; _points = nil;
+}
+- (void)held:(UILongPressGestureRecognizer *)hold {
+    if (hold.state != UIGestureRecognizerStateBegan || _mode != 3 || _exporting || _rendering || _pipette || _points) return;
+    _textPoint = [self normalized:[hold locationInView:_canvas]];
     NSInteger selected = [self textAtPoint:_textPoint];
-    if (selected >= 0) {
-        if (selected == _selectedText) [self addText];
-        else [self selectText:selected];
-    } else {
-        [self selectText:-1]; [self addText];
-    }
+    if (selected >= 0) [self selectText:selected]; else [self selectText:-1];
+    [self addText];
 }
 - (void)addText {
     if (_mode != 3) return;
@@ -1329,7 +1350,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
                     }
                     else { me->_enter = ExteriaPhotoEnterNone; [me notice:@"media.edit.failed"]; }
                 }
-                me->_undo.enabled = me->_operations.count > 0 && !me->_exporting;
+                me->_undo.enabled = [me undoAvailable];
                 if (me->_needsRender && !me->_exporting) [me startRender];
             }
             [image release];
@@ -1349,7 +1370,7 @@ enum { ExteriaPhotoEnterNone, ExteriaPhotoEnterRotate, ExteriaPhotoEnterFlip, Ex
         dispatch_async(dispatch_get_main_queue(), ^{
             ExteriaPhotoEditor *me = weak.target;
             if (me && !me->_closed) {
-                [me->_spinner stopAnimating]; me->_exporting = NO; me->_done.enabled = YES; me->_undo.enabled = me->_operations.count > 0; me->_tools.userInteractionEnabled = YES;
+                [me->_spinner stopAnimating]; me->_exporting = NO; me->_done.enabled = YES; me->_undo.enabled = [me undoAvailable]; me->_tools.userInteractionEnabled = YES;
                 if (!result) [me notice:@"media.edit.failed"];
                 else {
                     me->_closed = YES;
