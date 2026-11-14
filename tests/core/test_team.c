@@ -6,7 +6,7 @@
 int main(void) {
     static const int64_t expected[] = {
         INT64_C(558269829), INT64_C(8796163695), INT64_C(5561372449), INT64_C(6198068395),
-        INT64_C(8510741400), INT64_C(6392973712), INT64_C(749971450), INT64_C(5191291829), INT64_C(5586697397),
+        INT64_C(8510741400), INT64_C(6392973712), INT64_C(5191291829), INT64_C(5586697397),
         INT64_C(7118797604), INT64_C(8256044236), INT64_C(1415625115), INT64_C(588487063)
     };
     size_t official = 0;
@@ -21,6 +21,9 @@ int main(void) {
     CHECK_EQ_INT(exteria_team_marks(INT64_C(659976684)), 0);
     CHECK(exteria_team_member_for_id(INT64_C(659976684)) == NULL);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(8190976381)), 0);
+    /* shizotoaster left the official testers and wears no mark at all */
+    CHECK_EQ_INT(exteria_team_marks(INT64_C(749971450)), 0);
+    CHECK(exteria_team_member_for_id(INT64_C(749971450)) == NULL);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(1415625115)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(558269829)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(5586697397)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
@@ -47,6 +50,6 @@ int main(void) {
     }
     CHECK_EQ_INT(exteria_team_marks(INT64_C(8604942411)), ExteriaMarkVideoFix);
     CHECK(!exteria_team_is_developer(INT64_C(8604942411)));
-    CHECK_EQ_INT((int)official, 13);
+    CHECK_EQ_INT((int)official, 12);
     return test_finish("test_team");
 }

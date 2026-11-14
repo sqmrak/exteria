@@ -14,7 +14,6 @@ static const exteria_team_member members[] = {
     {INT64_C(6198068395), "inraxx", OFF, 1},
     {INT64_C(8510741400), "LimeDev", DEV | OFF, 1},
     {INT64_C(6392973712), "Lineysom", OFF, 1},
-    {INT64_C(749971450), "shizotoaster", OFF, 1},
     {INT64_C(5191291829), "loveiOS6", DEV | OFF, 1},
     {INT64_C(5586697397), "xaxaxaxaxxaxaxaxaxaxaxaxaxaxa", OFF | SEER, 1},
     {INT64_C(7118797604), "merwleem", OFF | MANAGER | PROMO, 1},
