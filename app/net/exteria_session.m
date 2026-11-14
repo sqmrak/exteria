@@ -187,6 +187,8 @@
     ExteriaTypingBoard *_typing;
     ExteriaForumSummaries *_forumSummaries;
     NSMutableDictionary *_readOutbox;
+    /* main thread only: failed sends by chat, see keepUnsentMessage:forDialog: */
+    NSMutableDictionary *_unsent;
     /* worker only: the random ids of pending messages whose upload the person stopped, read by the next step of that upload */
     NSMutableSet *_cancelledSends;
     ExteriaCallEngine *_calls;
@@ -342,6 +344,7 @@ static NSString *ExteriaMachineName(void) {
     free(_cAppVersion);
     free(_cLangCode);
     [_readOutbox release];
+    [_unsent release];
     [_cancelledSends release];
     [super dealloc];
 }

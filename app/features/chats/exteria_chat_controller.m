@@ -526,6 +526,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     _weak = [[ExteriaWeakReference referenceTo:self] retain];
     _server = [[NSMutableDictionary alloc] init];
     _local = [[NSMutableArray alloc] init];
+    /* a message that failed while this chat was closed, or when it was left, is still the person's to send again or delete */
+    [_local addObjectsFromArray:[session takeUnsentMessagesForDialog:dialog]];
     _people = [[NSMutableDictionary alloc] init];
     [_people setObject:[self chatAsPerson] forKey:[NSNumber numberWithLongLong:0]];
     _items = [[NSArray alloc] init];
@@ -553,6 +555,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
         ExteriaOutgoing *sent = message.pendingSend;
         if (message.state == ExteriaMessageStateSent && sent && sent->temporary && sent->path)
             [[NSFileManager defaultManager] removeItemAtPath:sent->path error:NULL];
+        if (message.state == ExteriaMessageStateFailed) [_session keepUnsentMessage:message forDialog:_dialog];
     }
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sharingExpiryReached) object:nil];
     [self stopFollowingBottom];
@@ -8013,9 +8016,18 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 - (void)dispatchLocal:(ExteriaMessage *)message {
     ExteriaWeakReference *weak = _weak;
     message.state = ExteriaMessageStateSending;
+    ExteriaSession *session = _session;
+    ExteriaDialog *dialog = _dialog;
     ExteriaSendCompletion done = ^(int32_t messageId, NSString *errorName) {
         ExteriaChatController *chat = weak.target;
-        if (!chat) return;
+        if (!chat) {
+            /* the chat was left while this went up, and a send that fails now would vanish with its screen */
+            if (errorName) {
+                message.state = ExteriaMessageStateFailed;
+                [session keepUnsentMessage:message forDialog:dialog];
+            }
+            return;
+        }
         [chat didSend:message messageId:messageId error:errorName];
     };
     ExteriaOutgoing *out = message.pendingSend;
