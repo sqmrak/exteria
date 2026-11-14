@@ -151,9 +151,13 @@ BOOL ExteriaBackgroundLinkWanted(void) {
 }
 
 /* the notification center of ios 10 and later, nil before; every call to it goes by name, since the sdk of the armv7 slice does not have it */
-- (id)userNotificationCenter {
+static id user_notification_center(void) {
     Class center = NSClassFromString(@"UNUserNotificationCenter");
     return center ? [center performSelector:NSSelectorFromString(@"currentNotificationCenter")] : nil;
+}
+
+- (id)userNotificationCenter {
+    return user_notification_center();
 }
 
 /* ios 8 asks before a local notification may show or the badge may change, and ios 10 moved the question to the notification center; the
@@ -465,7 +469,7 @@ static NSString *ExteriaBannerSoundFile(const exteria_notify_sound *sound) {
     return @"";
 }
 
-- (void)presentWithCenter:(id)center title:(NSString *)title body:(NSString *)body userInfo:(NSDictionary *)info sound:(NSString *)sound {
+static void present_with_center(id center, NSString *title, NSString *body, NSDictionary *info, NSString *sound) {
     Class contentClass = NSClassFromString(@"UNMutableNotificationContent");
     Class soundClass = NSClassFromString(@"UNNotificationSound");
     Class requestClass = NSClassFromString(@"UNNotificationRequest");
@@ -480,7 +484,7 @@ static NSString *ExteriaBannerSoundFile(const exteria_notify_sound *sound) {
     }
     if (info) [content setValue:info forKey:@"userInfo"];
     NSNumber *kind = [info objectForKey:@"kind"], *peer = [info objectForKey:@"peer"], *mid = [info objectForKey:@"mid"];
-    NSString *identifier = @"exteria.more";
+    NSString *identifier = [[info objectForKey:@"identifier"] isKindOfClass:[NSString class]] ? [info objectForKey:@"identifier"] : @"exteria.more";
     if (kind && peer) {
         identifier = [NSString stringWithFormat:@"exteria.%@.%@.%@", kind, peer, mid ? mid : @0];
         [content setValue:[NSString stringWithFormat:@"%@.%@", kind, peer] forKey:@"threadIdentifier"];
@@ -493,10 +497,14 @@ static NSString *ExteriaBannerSoundFile(const exteria_notify_sound *sound) {
     ((void (*)(id, SEL, id, void (^)(NSError *)))objc_msgSend)(center, NSSelectorFromString(@"addNotificationRequest:withCompletionHandler:"), request, added);
 }
 
-- (void)present:(NSString *)title body:(NSString *)body userInfo:(NSDictionary *)info sound:(NSString *)sound application:(UIApplication *)application {
-    id center = [self userNotificationCenter];
+- (void)presentWithCenter:(id)center title:(NSString *)title body:(NSString *)body userInfo:(NSDictionary *)info sound:(NSString *)sound {
+    present_with_center(center, title, body, info, sound);
+}
+
+static void present_notice(NSString *title, NSString *body, NSDictionary *info, NSString *sound, UIApplication *application) {
+    id center = user_notification_center();
     if (center) {
-        [self presentWithCenter:center title:title body:body userInfo:info sound:sound];
+        present_with_center(center, title, body, info, sound);
         return;
     }
     UILocalNotification *notification = [[[UILocalNotification alloc] init] autorelease];
@@ -510,6 +518,26 @@ static NSString *ExteriaBannerSoundFile(const exteria_notify_sound *sound) {
     if (sound) notification.soundName = sound.length ? sound : UILocalNotificationDefaultSoundName;
     notification.userInfo = info;
     [application presentLocalNotificationNow:notification];
+}
+
+- (void)present:(NSString *)title body:(NSString *)body userInfo:(NSDictionary *)info sound:(NSString *)sound application:(UIApplication *)application {
+    present_notice(title, body, info, sound, application);
+}
+
+BOOL ExteriaNotifyPluginNotice(NSString *key, NSString *title, NSString *body) {
+    if (!ExteriaNotifyEnabled()) return NO;
+    /* the key names the notice for a later take-back; a tap on it only opens the app, since it names no chat */
+    NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:key, @"plugin_notice", [@"exteria.plugin." stringByAppendingString:key], @"identifier", nil];
+    present_notice(title, body, info, @"", [UIApplication sharedApplication]);
+    return YES;
+}
+
+void ExteriaNotifyPluginNoticeCancel(NSString *key) {
+    id center = user_notification_center();
+    if (!center) return;
+    /* a notice on screen can be taken back from ios 10; before that the system keeps it until the person clears it */
+    NSArray *identifiers = [NSArray arrayWithObject:[@"exteria.plugin." stringByAppendingString:key]];
+    ((void (*)(id, SEL, NSArray *))objc_msgSend)(center, NSSelectorFromString(@"removeDeliveredNotificationsWithIdentifiers:"), identifiers);
 }
 
 /* the reminder of what is still unread, a notification that fires after the interval of the settings and is taken

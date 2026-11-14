@@ -25,6 +25,12 @@ BOOL ExteriaBackgroundLinkWanted(void);
 /* posted on the main thread when a notification was tapped or launched the app; userInfo has "kind" and "peer" as numbers */
 extern NSString *const ExteriaOpenChatNotification;
 
+/* a notice a plugin asked for, shown as the app shows its own: the system notification center. NO when the person switched the notifications off.
+   key is the plugin's own name for the notice (a repeat with the same key replaces it on ios 10 and later) */
+BOOL ExteriaNotifyPluginNotice(NSString *key, NSString *title, NSString *body);
+/* takes a notice back from the screen of the person where the system allows it (ios 10 and later) */
+void ExteriaNotifyPluginNoticeCancel(NSString *key);
+
 /* notifications of a closed or sleeping app, the way OneGram does them on ios 5 and 6 */
 @interface ExteriaNotifier : NSObject
 
