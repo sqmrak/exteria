@@ -1,6 +1,7 @@
 #import "exteria_status_label.h"
 #import "exteria_classic_chats_controller.h"
 #import "exteria_chats_controller.h"
+#import "exteria_chats_menu.h"
 #import "exteria_main_controller.h"
 #import "exteria_split_controller.h"
 
@@ -87,7 +88,8 @@
     /* the selection was begun by the button of the bar and waits for the first pick, where one begun by a long press on a row has a pick already and ends when the last is taken back */
     BOOL _selectionPersistent;
     UIBarButtonItem *_savedLeft;
-    UIBarButtonItem *_savedRight;
+    NSArray *_savedRight;
+    ExteriaChatsMenu *_chatsMenu;
     void (^_unreadHandler)(NSInteger);
 }
 @end
@@ -218,6 +220,7 @@
     [_selection release];
     [_savedLeft release];
     [_savedRight release];
+    [_chatsMenu release];
     [super dealloc];
 }
 
@@ -622,12 +625,36 @@
     }
 }
 
+/* the menu hangs from the right end of the bar, under the dots */
+- (void)showChatsMenu {
+    if (!_chatsMenu) {
+        ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+        _chatsMenu = [[ExteriaChatsMenu alloc] initWithSession:_session host:self avatars:_avatars media:_media stickers:_stickers refresh:^{
+            ExteriaClassicChatsController *list = weak.target;
+            if (!list) return;
+            list->_loading = NO;
+            [list reload];
+        }];
+    }
+    UIView *host = self.navigationController.view;
+    CGRect bar = [host convertRect:self.navigationController.navigationBar.bounds fromView:self.navigationController.navigationBar];
+    [_chatsMenu showInView:host anchor:CGPointMake(CGRectGetMaxX(bar) - 10, CGRectGetMaxY(bar) - 4)];
+}
+
 /* the main list takes three choices of the appearance page: the VPN button, the field of search, and the words of the title; the archive list keeps its own */
 - (void)syncChromeWithSettings {
     if (_folderId != 0 || _selection) return;
     BOOL hideVpn = ExteriaChatFlagGet(ExteriaChatFlagHideVpnButton);
-    if (hideVpn) self.navigationItem.rightBarButtonItem = nil;
-    else if (!self.navigationItem.rightBarButtonItem) self.navigationItem.rightBarButtonItem = [[[ExteriaShiroBarItem alloc] initWithShiro:_session.shiro host:self] autorelease];
+    /* the three dots stand at the right edge and the VPN button left of them, where the modern list has them; the first item of the array is the one at the edge */
+    NSArray *items = self.navigationItem.rightBarButtonItems;
+    BOOL hasVpn = items.count > 1;
+    if (!items.count || hasVpn == hideVpn) {
+        UIBarButtonItem *dots = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolEllipsis, 22, [UIColor whiteColor]) style:UIBarButtonItemStyleBordered
+                                                                 target:self action:@selector(showChatsMenu)] autorelease];
+        dots.accessibilityLabel = NSLocalizedString(@"chats.menu", nil);
+        if (hideVpn) self.navigationItem.rightBarButtonItems = [NSArray arrayWithObject:dots];
+        else self.navigationItem.rightBarButtonItems = [NSArray arrayWithObjects:dots, [[[ExteriaShiroBarItem alloc] initWithShiro:_session.shiro host:self] autorelease], nil];
+    }
     BOOL hideSearch = ExteriaChatFlagGet(ExteriaChatFlagHideSearchBar);
     _search.hidden = hideSearch;
     _searchButton.hidden = hideSearch;
@@ -1041,7 +1068,7 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     _selectionPersistent = YES;
     [self refreshConnectionTitle];
     _savedLeft = [self.navigationItem.leftBarButtonItem retain];
-    _savedRight = [self.navigationItem.rightBarButtonItem retain];
+    _savedRight = [self.navigationItem.rightBarButtonItems retain];
     self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(endSelection)] autorelease];
     self.tableView.allowsMultipleSelection = YES;
     [self updateSelectionBar];
@@ -1052,7 +1079,7 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     _selection = [[NSMutableSet alloc] init];
     [self refreshConnectionTitle];
     _savedLeft = [self.navigationItem.leftBarButtonItem retain];
-    _savedRight = [self.navigationItem.rightBarButtonItem retain];
+    _savedRight = [self.navigationItem.rightBarButtonItems retain];
     self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(endSelection)] autorelease];
     self.tableView.allowsMultipleSelection = YES;
     [_selection addObject:ExteriaClassicKey([_shown objectAtIndex:(NSUInteger)path.row])];
@@ -1071,7 +1098,7 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     for (NSIndexPath *path in rows) [self.tableView deselectRowAtIndexPath:path animated:YES];
     [rows release];
     self.navigationItem.leftBarButtonItem = _savedLeft;
-    self.navigationItem.rightBarButtonItems = _savedRight ? [NSArray arrayWithObject:_savedRight] : nil;
+    self.navigationItem.rightBarButtonItems = _savedRight;
     [_savedLeft release];
     _savedLeft = nil;
     [_savedRight release];

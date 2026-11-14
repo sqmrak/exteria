@@ -15,6 +15,7 @@
 #import "exteria_table_update.h"
 #import "exteria_bookmarks_controller.h"
 #import "exteria_chat_controller.h"
+#import "exteria_chats_menu.h"
 #import "exteria_chat_peek.h"
 #import "exteria_force_touch.h"
 #import "exteria_quick_actions.h"
@@ -67,6 +68,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     /* the channels the feed of unread channels has shown since the person opened one from this list */
     NSMutableSet *_feedSeen;
     BOOL _vpnHidden;
+    ExteriaChatsMenu *_chatsMenu;
     ExteriaDialogCell *_openCell;
     ExteriaChatListStyle _listStyle;
     ExteriaChatSwipe _swipe;
@@ -422,6 +424,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_folders release];
     [_header release];
     _miniPlayer.changeHandler = nil;
+    [_chatsMenu release];
     [_miniPlayer release];
     [_search release];
     [_media release];
@@ -885,33 +888,14 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
 #pragma mark menu
 
 - (void)showMenu:(UIView *)button {
-    BOOL dark = ExteriaThemeIsDark();
-    /* the list of proxies is one tap away only while one is on, which is when the connection may need it changed */
-    exteria_proxy proxy;
-    BOOL proxyEnabled = NO;
-    exteria_status proxyStatus = ExteriaProxyRead(&proxy, &proxyEnabled);
-    exteria_wipe(&proxy, sizeof(proxy));
-    if (proxyStatus != EXTERIA_OK) NSLog(@"exteria: proxy settings unavailable: %s", exteria_status_name(proxyStatus));
-    NSMutableArray *titles = [NSMutableArray arrayWithObjects:NSLocalizedString(dark ? @"menu.day" : @"menu.night", nil), NSLocalizedString(@"menu.group", nil),
-                              NSLocalizedString(@"menu.channel", nil), NSLocalizedString(@"menu.saved", nil), NSLocalizedString(@"bookmarks.title", nil), nil];
-    ExteriaSymbol symbols[] = {dark ? ExteriaSymbolSun : ExteriaSymbolMoon, ExteriaSymbolPerson, ExteriaSymbolMegaphone, ExteriaSymbolBookmark, ExteriaSymbolStar, ExteriaSymbolLock};
-    NSUInteger proxyIndex = NSNotFound;
-    if (proxyEnabled) {
-        proxyIndex = titles.count;
-        [titles addObject:NSLocalizedString(@"proxy.title", nil)];
+    if (!_chatsMenu) {
+        ExteriaWeakReference *weak = _badgeWeak;
+        _chatsMenu = [[ExteriaChatsMenu alloc] initWithSession:self.session host:self avatars:self.avatars media:_media stickers:_stickerLibrary refresh:^{
+            [(ExteriaChatsController *)weak.target reloadDiscardingRunning];
+        }];
     }
-    ExteriaPopupMenu *menu = [[[ExteriaPopupMenu alloc] initWithTitles:titles symbols:symbols handler:^(NSUInteger index) {
-        if (index == proxyIndex) { [self openProxyList]; return; }
-        switch (index) {
-        case 0: [self toggleDayNight]; break;
-        case 1: [self askNameForMegagroup:YES]; break;
-        case 2: [self askNameForMegagroup:NO]; break;
-        case 3: [self openSavedMessages]; break;
-        default: [self openBookmarks]; break;
-        }
-    }] autorelease];
     CGPoint anchor = [button.superview convertPoint:CGPointMake(CGRectGetMaxX(button.frame) - 6, CGRectGetMaxY(button.frame) - 8) toView:self.view];
-    [menu showInView:self.view anchor:anchor];
+    [_chatsMenu showInView:self.view anchor:anchor];
 }
 
 /* the badges a developer gave himself on this phone: the names in the rows are drawn again */
@@ -923,65 +907,6 @@ NSInteger ExteriaUnreadTotal(void) { return sUnreadTotal; }
     if (!self.isViewLoaded) return;
     [self closeOpenCell];
     [self.table setContentOffset:CGPointMake(0, -self.table.contentInset.top) animated:YES];
-}
-
-/* the proxies are kept on the More page of the settings, with the switch and the link prompt */
-- (void)openProxyList {
-    [self.navigationController pushViewController:[[[ExteriaMoreSettingsController alloc] initWithSession:self.session] autorelease] animated:YES];
-}
-
-- (void)openBookmarks {
-    [self.navigationController pushViewController:[[[ExteriaBookmarksController alloc] initWithSession:self.session avatars:self.avatars media:_media
-                                                                                               stickers:_stickerLibrary] autorelease] animated:YES];
-}
-
-- (void)toggleDayNight {
-    ExteriaThemeStoreDark(!ExteriaThemeIsDark());
-    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil];
-}
-
-- (void)askNameForMegagroup:(BOOL)megagroup {
-    Class alertClass = ExteriaAlertClass();
-    id alert = [[alertClass alloc] initWithTitle:NSLocalizedString(megagroup ? @"create.group.title" : @"create.channel.title", nil) message:nil delegate:self
-                               cancelButtonTitle:NSLocalizedString(@"attach.cancel", nil) otherButtonTitles:NSLocalizedString(@"create.action", nil), nil];
-    /* the plain text input style came with ios 5 */
-    [alert setValue:[NSNumber numberWithInt:2] forKey:@"alertViewStyle"];
-    [[alert textFieldAtIndex:0] setPlaceholder:NSLocalizedString(@"create.name", nil)];
-    [alert setTag:megagroup ? 1 : 2];
-    [alert show];
-    [alert release];
-}
-
-- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
-    if (buttonIndex == alertView.cancelButtonIndex) return;
-    NSString *name = [[[alertView textFieldAtIndex:0] text] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (!name.length) return;
-    [self retain];
-    [self.session createChannelTitled:name megagroup:alertView.tag == 1 completion:^(NSString *errorName) {
-        [self autorelease];
-        if (errorName) {
-            [self showFailureText:[NSString stringWithFormat:NSLocalizedString(@"create.failed", nil), errorName]];
-            return;
-        }
-        [self reloadDiscardingRunning];
-    }];
-}
-
-- (void)openSavedMessages {
-    [self retain];
-    [self.session loadSelf:^(NSArray *items, NSString *errorName) {
-        [self autorelease];
-        ExteriaPerson *person = [items count] ? [items objectAtIndex:0] : nil;
-        ExteriaDialog *saved = person ? [ExteriaDialog savedMessagesWithPerson:person] : nil;
-        if (!saved) {
-            [self showFailureText:[errorName isEqualToString:@"TIMEOUT"] ? NSLocalizedString(@"error.offline", nil)
-                                                                         : [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName ? errorName : @"?"]];
-            return;
-        }
-        ExteriaChatController *chat = [[[ExteriaChatController alloc] initWithSession:self.session dialog:saved avatars:self.avatars media:_media stickers:_stickerLibrary] autorelease];
-        chat.closeHandler = ^{ [self reload]; };
-        [self.navigationController pushViewController:chat animated:YES];
-    }];
 }
 
 - (void)openSearch {
