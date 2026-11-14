@@ -5,6 +5,7 @@
 #import "exteria_animation.h"
 #import "exteria_dismiss_pan.h"
 #import "exteria_emoji_label.h"
+#import "exteria_lyrics_screen.h"
 #import "exteria_music_player.h"
 #import "exteria_platform.h"
 #import "exteria_remote_file.h"
@@ -173,6 +174,8 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     repeat.tag = 5; [_panel addSubview:repeat];
     UIButton *close = SheetButton(ExteriaSymbolPlayerClose, self, @selector(dismiss), @"notice.cancel");
     close.tag = 3; [_panel addSubview:close];
+    UIButton *lyrics = SheetButton(ExteriaSymbolMaterialLyrics, self, @selector(openLyrics), @"music.lyrics");
+    lyrics.tag = 6; [_panel addSubview:lyrics];
     _table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     _table.backgroundColor = [UIColor clearColor];
     /* the system draws a light line between the songs of the queue, which shows as a white stripe on the dark sheet; the rows have their own spacing */
@@ -245,6 +248,10 @@ static NSString *SheetTime(NSTimeInterval value) {
         [_table reloadData];
     }
     [self tick:nil];
+}
+/* the lyrics come up over the whole screen, with the strip of the player on top of them; the screen looks them up and says so when there are none */
+- (void)openLyrics {
+    [ExteriaLyricsScreen present];
 }
 - (void)shuffle { [[ExteriaMusicPlayer sharedPlayer] toggleShuffle]; }
 - (void)repeat { [[ExteriaMusicPlayer sharedPlayer] cycleRepeat]; }

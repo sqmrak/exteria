@@ -525,6 +525,10 @@
 "music.repeat.list" = "Повтор списка";
 "music.repeat.song" = "Повтор песни";
 "music.previous" = "Предыдущая";
+"music.lyrics" = "Текст песни";
+"music.lyrics.loading" = "Ищем текст песни…";
+"music.lyrics.none" = "Для этой песни нет текста";
+"music.lyrics.failed" = "Не удалось загрузить текст";
 "music.add" = "Добавить в профиль";
 "music.added" = "Добавлено в ваш профиль";
 "music.remove" = "Убрать";

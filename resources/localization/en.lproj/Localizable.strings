@@ -524,6 +524,10 @@
 "music.repeat.list" = "Repeat list";
 "music.repeat.song" = "Repeat song";
 "music.previous" = "Previous";
+"music.lyrics" = "Lyrics";
+"music.lyrics.loading" = "Looking for the lyrics…";
+"music.lyrics.none" = "No lyrics for this song";
+"music.lyrics.failed" = "Could not load the lyrics";
 "music.add" = "Add to profile";
 "music.added" = "Added to your profile";
 "music.remove" = "Remove";

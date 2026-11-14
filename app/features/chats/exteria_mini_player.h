@@ -12,9 +12,16 @@
 /* whether a song is the current one, which is what gives the strip its height */
 @property (nonatomic, readonly) BOOL showing;
 @property (nonatomic, copy) void (^changeHandler)(void);
-/* the strip wears the color of the bars of a chat (its header and the pinned message under it) and not the color of the cards of the chat list, so the stack of them reads as one */
-@property (nonatomic, assign) BOOL wearsBarColor;
-/* the modern card stands on the tab bar and not under a header: its upper corners are round and the gutter is above it */
-@property (nonatomic, assign) BOOL standsOnBar;
+/* the modern card is a rounded rectangle; as a pill it is rounded to half its height and floats with room around it, so inside a chat it does not hang from the header or the
+   pinned message under it */
+@property (nonatomic, assign) BOOL pill;
+/* the strip inside another screen of the player (the lyrics) does not open the sheet of the player on a tap and does not end the music with its last key: when these are set the
+   tap on the name and the last key call them instead */
+@property (nonatomic, copy) void (^openHandler)(void);
+@property (nonatomic, copy) void (^closeHandler)(void);
+
+/* the lyrics screen makes the card a Material You scheme of a color of the cover: the play key, the tile and the keys take tones of it instead of the accent, the surface is the
+   given one, and the progress is a wave. nil tone returns the card to the accent and the surface of the theme. animated crossfades; the classic strip ignores it */
+- (void)setTone:(UIColor *)tone surface:(UIColor *)surface animated:(BOOL)animated;
 
 @end

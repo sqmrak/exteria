@@ -23,6 +23,14 @@
 #define KEY_SIDE 36.0
 #define PLAY_SIDE 40.0
 #define PROGRESS_HEIGHT 3.0
+/* the progress of a card in the lyrics is a wavy line in a box 8 points high: the part that is played waves (amplitude 2, 14 points a wave, 4 points thick), a gap of 4 points
+   and the plain track that is left */
+#define WAVE_BOX 8.0
+#define WAVE_STROKE 4.0
+#define WAVE_AMPLITUDE 2.0
+#define WAVE_LENGTH 14.0
+#define WAVE_GAP 4.0
+#define WAVE_PERIOD 1.2
 /* a card narrower than this (a 320 point screen) packs its keys and tile closer, so all four keys still fit beside the text */
 #define CARD_NARROW 330.0
 #define KEY_SIDE_NARROW 32.0
@@ -77,10 +85,10 @@
 + (CGFloat)height { return ExteriaThemeIsClassic() ? STRIP_HEIGHT : CARD_HEIGHT; }
 + (CGFloat)heightForPill:(BOOL)pill { return ExteriaThemeIsClassic() || !pill ? [self height] : CARD_HEIGHT + 2 * PILL_GAP; }
 
-/* the tonal colors of the card from the accent, the way a Material You scheme makes them from its key color: a container a little off the surface, a stronger one for the
-   glyph tile, the accent itself for the play key and a dark or light ink for what stands on each */
-static UIColor *ExteriaStripContainer(UIColor *surface) {
-    return ExteriaMixedColor(surface, ExteriaColorAccent(), ExteriaThemeIsDark() ? 0.22 : 0.14);
+/* the tonal colors of the card from a key color, the way a Material You scheme makes them: a container a little off the surface, a stronger one for the glyph tile, the key
+   color itself for the play key and a dark or light ink for what stands on each. the key color is the accent, or the tonal primary of the cover in the lyrics */
+static UIColor *ExteriaStripContainer(UIColor *surface, UIColor *key) {
+    return ExteriaMixedColor(surface, key, ExteriaThemeIsDark() ? 0.22 : 0.14);
 }
 static UIColor *ExteriaStripTile(UIColor *key) {
     return ExteriaThemeIsDark() ? ExteriaMixedColor([UIColor colorWithWhite:0.12 alpha:1], key, 0.5) : ExteriaMixedColor([UIColor whiteColor], key, 0.3);
