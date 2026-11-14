@@ -1189,8 +1189,8 @@
 "chatset.uiscale.header" = "Размер интерфейса";
 "chatset.uiscale.row" = "Масштаб интерфейса";
 "chatset.colortheme.header" = "Цветовая тема";
-"chatset.theme.day" = "Переключить на дневную тему";
-"chatset.theme.night" = "Переключить на ночную тему";
+"chatset.theme.day" = "Переключить на светлую тему";
+"chatset.theme.night" = "Переключить на тёмную тему";
 "chatset.theme.settings" = "Настройки темы";
 "chatset.corners.header" = "Углы блоков с сообщениями";
 "chatset.corners.row" = "Радиус углов";
@@ -1338,7 +1338,7 @@
 "chatset.hidestickertime" = "Скрыть время на стикерах";
 "chatset.editedicon" = "Карандаш вместо слова «изм.»";
 "chatset.notail" = "Без хвостика у пузырей";
-"chatset.notail.info" = "Только в классической теме";
+"chatset.notail.info" = "Только в скевоморфической теме";
 "chatset.hideshare" = "Скрыть кнопку «поделиться» у постов";
 "chatset.noreactions.private" = "Скрыть реакции в личных чатах";
 "chatset.noreactions.groups" = "Скрыть реакции в группах";
@@ -1411,10 +1411,10 @@
 "night.sun.polarday" = "Сегодня солнце не заходит, поэтому ночная тема выключена весь день.";
 "night.sun.denied" = "Не удалось определить местоположение. Разрешите его в настройках устройства и попробуйте ещё раз.";
 "chatset.theme.modern" = "Современная";
-"chatset.theme.classic" = "Классическая";
-"chatset.theme.classic.unavailable" = "К сожалению, классическая тема работает только на iOS 10 и ниже :(";
-"chatset.theme.day.short" = "День";
-"chatset.theme.night.short" = "Ночь";
+"chatset.theme.classic" = "Скевоморфическая";
+"chatset.theme.classic.unavailable" = "К сожалению, скевоморфическая тема работает только на iOS 10 и ниже :(";
+"chatset.theme.day.short" = "Светлая";
+"chatset.theme.night.short" = "Тёмная";
 "chatset.wallpaper" = "Изменить тему и обои";
 "chatset.wallpaper.chat" = "Обои этого чата";
 "chatset.wallpaper.gallery" = "Выбрать из галереи";
@@ -2385,9 +2385,9 @@
 "developer.hide" = "Скрыть настройки разработчика";
 "developer.readall.header" = "Чаты";
 "developer.interface.header" = "Интерфейс";
-"developer.interface.footer" = "Классическая тема появляется на любой версии ios. Интерфейс планшета читается при запуске, поэтому после смены перезапусти приложение.";
-"developer.classic" = "Классическая тема на любой ios";
-"developer.classic.info" = "Показывает классическую тему на ios 11 и новее";
+"developer.interface.footer" = "Скевоморфическая тема появляется на любой версии ios. Интерфейс планшета читается при запуске, поэтому после смены перезапусти приложение.";
+"developer.classic" = "Скевоморфическая тема на любой ios";
+"developer.classic.info" = "Показывает скевоморфическую тему на ios 11 и новее";
 "developer.pad" = "Интерфейс айпада на любом устройстве";
 "developer.pad.info" = "Разделённый экран и широкие колонки на телефоне, после перезапуска";
 "developer.phone" = "Интерфейс айфона на любом устройстве";

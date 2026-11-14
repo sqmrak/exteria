@@ -1333,7 +1333,7 @@
 "chatset.hidestickertime" = "Hide time on stickers";
 "chatset.editedicon" = "Pencil instead of the word \"edited\"";
 "chatset.notail" = "No bubble tail";
-"chatset.notail.info" = "Classic theme only";
+"chatset.notail.info" = "Skeuomorphic theme only";
 "chatset.hideshare" = "Hide the share button on posts";
 "chatset.noreactions.private" = "Hide reactions in private chats";
 "chatset.noreactions.groups" = "Hide reactions in groups";
@@ -1406,8 +1406,8 @@
 "night.sun.polarday" = "The sun does not set today, so the night theme is off all day.";
 "night.sun.denied" = "The location could not be found. Allow it in the settings of the device and try again.";
 "chatset.theme.modern" = "Modern";
-"chatset.theme.classic" = "Classic";
-"chatset.theme.classic.unavailable" = "Unfortunately, the classic theme only works on iOS 10 and earlier :(";
+"chatset.theme.classic" = "Skeuomorphic";
+"chatset.theme.classic.unavailable" = "Unfortunately, the skeuomorphic theme only works on iOS 10 and earlier :(";
 "chatset.theme.day.short" = "Day";
 "chatset.theme.night.short" = "Night";
 "chatset.wallpaper" = "Change Theme and Wallpaper";
@@ -2380,9 +2380,9 @@
 "developer.hide" = "Hide the developer settings";
 "developer.readall.header" = "Chats";
 "developer.interface.header" = "Interface";
-"developer.interface.footer" = "The classic theme is offered on every ios. The tablet interface is read at launch, so restart the app after changing it.";
-"developer.classic" = "Classic theme on any ios";
-"developer.classic.info" = "Lists the classic theme on ios 11 and newer";
+"developer.interface.footer" = "The skeuomorphic theme is offered on every ios. The tablet interface is read at launch, so restart the app after changing it.";
+"developer.classic" = "Skeuomorphic theme on any ios";
+"developer.classic.info" = "Lists the skeuomorphic theme on ios 11 and newer";
 "developer.pad" = "Tablet interface on any device";
 "developer.pad.info" = "Split screen and wide columns on a phone, after a restart";
 "developer.phone" = "Phone interface on any device";
