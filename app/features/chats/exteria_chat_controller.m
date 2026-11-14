@@ -1877,6 +1877,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         }
     }
     _pinnedText.entities = lineEntities;
+    /* a pinned message that arrives after the history has loaded would otherwise show the plain emoji for good */
+    if (lineEntities.count) [self loadCustomEmoji];
     [self updatePinnedMarker];
     [self showPinnedThumbOf:message];
     [self setPinnedBarHidden:line.length == 0];
@@ -4199,17 +4201,30 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpa
     [_itemCache removeObjectsForKeys:stale];
 }
 
+static void ExteriaRedrawTree(UIView *view);
+
+- (void)addCustomEmojiOfEntities:(NSArray *)entities to:(NSMutableArray *)wanted {
+    for (ExteriaTextEntity *entity in entities) {
+        if (entity.style == ExteriaTextStyleCustomEmoji && entity.documentId) [wanted addObject:[NSNumber numberWithLongLong:entity.documentId]];
+    }
+}
+
 - (void)loadCustomEmoji {
     NSMutableArray *wanted = [NSMutableArray array];
     for (ExteriaMessage *message in [_server allValues]) {
-        for (ExteriaTextEntity *entity in message.entities) {
-            if (entity.style == ExteriaTextStyleCustomEmoji && entity.documentId) [wanted addObject:[NSNumber numberWithLongLong:entity.documentId]];
+        [self addCustomEmojiOfEntities:message.entities to:wanted];
+        /* the question and the answers of a poll carry their own entities, and the poll is drawn with the plain emoji they stand for until the pictures are here */
+        if (message.poll) {
+            [self addCustomEmojiOfEntities:message.poll.questionEntities to:wanted];
+            for (ExteriaPollAnswer *answer in message.poll.answers) [self addCustomEmojiOfEntities:answer.entities to:wanted];
         }
         for (ExteriaReaction *reaction in message.reactions) {
             long long document = reaction.row.document_id;
             if (reaction.row.kind == EXTERIA_REACTION_CUSTOM && document) [wanted addObject:[NSNumber numberWithLongLong:document]];
         }
     }
+    /* the pinned messages are not among the loaded history, and the bar under the header shows the custom emoji of the one it holds */
+    for (ExteriaMessage *pinned in _pinnedAll) [self addCustomEmojiOfEntities:pinned.entities to:wanted];
     /* the statuses that follow the names of the people who wrote */
     for (ExteriaPerson *person in [_people allValues]) {
         if (person.emojiStatus) [wanted addObject:[NSNumber numberWithLongLong:person.emojiStatus]];
@@ -4226,7 +4241,7 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpa
         [chat scheduleLiveMessages];
     } picture:^{
         ExteriaChatController *chat = weak.target;
-        if (chat) [chat redrawVisibleCells];
+        if (chat) { [chat redrawVisibleCells]; ExteriaRedrawTree(chat->_pinnedBar); }
     }];
 }
 
