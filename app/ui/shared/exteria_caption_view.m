@@ -17,7 +17,9 @@
     self.bounces = NO;
     /* ios 7 and later put 8 points above and below the words and 5 at the sides; the measure and the hint assume the ios 5 and 6 padding (the 6.1 sdk has no declaration, so the setter is reached by key), so the words sat 4 points low in a pill */
     if ([self respondsToSelector:NSSelectorFromString(@"setTextContainerInset:")]) [self setValue:[NSValue valueWithUIEdgeInsets:UIEdgeInsetsMake(TOP_PAD, SIDE_PAD - 5, TOP_PAD, SIDE_PAD - 5)] forKey:@"textContainerInset"];
-    self.autocorrectionType = UITextAutocorrectionTypeDefault;
+    /* ios 5 and 6 show the correction as a bubble under the word, and a caption stands on the keyboard, so the bubble came out under the keys where it cannot be tapped; ios 7 and later offer it in the bar above the keys */
+    BOOL bubbleUnderWord = ![self respondsToSelector:NSSelectorFromString(@"setTextContainerInset:")];
+    self.autocorrectionType = bubbleUnderWord ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault;
     _hint = [[UILabel alloc] init];
     _hint.backgroundColor = [UIColor clearColor];
     _hint.userInteractionEnabled = NO;
