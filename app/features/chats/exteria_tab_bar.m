@@ -43,6 +43,7 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
 - (void)setAvatarInitials:(NSString *)initials seed:(NSUInteger)seed photo:(ExteriaPhoto *)photo cache:(ExteriaAvatarCache *)cache;
 - (void)setActive:(BOOL)active;
 - (void)setBadge:(NSInteger)count;
+- (void)setTitle:(NSString *)title symbol:(NSNumber *)symbol;
 @end
 
 @implementation ExteriaTabItem
@@ -142,6 +143,18 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
     self.accessibilityTraits = active ? (UIAccessibilityTraitButton | UIAccessibilityTraitSelected) : UIAccessibilityTraitButton;
 }
 
+- (void)setTitle:(NSString *)title symbol:(NSNumber *)symbol {
+    _caption.text = title;
+    self.accessibilityLabel = title;
+    if (!_icon || !symbol) return;
+    _symbol = (ExteriaSymbol)[symbol intValue];
+    [_idleImage release];
+    [_activeImage release];
+    _idleImage = [ExteriaSymbolImage(_symbol, TAB_ICON_SIZE, ExteriaTabIdleColor()) retain];
+    _activeImage = [ExteriaSymbolImage(_symbol, TAB_ICON_SIZE, ExteriaTabActiveColor()) retain];
+    _icon.image = _active ? _activeImage : _idleImage;
+}
+
 - (void)setBadge:(NSInteger)count {
     _badge.hidden = count <= 0;
     _badge.text = count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count];
@@ -230,6 +243,11 @@ static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("
 - (void)setBadge:(NSInteger)count forIndex:(NSInteger)index {
     if (index < 0 || index >= (NSInteger)[_items count]) return;
     [[_items objectAtIndex:index] setBadge:count];
+}
+
+- (void)setTitle:(NSString *)title symbol:(NSNumber *)symbol forIndex:(NSInteger)index {
+    if (index < 0 || index >= (NSInteger)[_items count]) return;
+    [[_items objectAtIndex:index] setTitle:title symbol:symbol];
 }
 
 - (void)setAvatarInitials:(NSString *)initials seed:(NSUInteger)seed photo:(ExteriaPhoto *)photo cache:(ExteriaAvatarCache *)cache

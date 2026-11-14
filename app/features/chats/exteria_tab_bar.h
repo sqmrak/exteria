@@ -33,6 +33,8 @@
    shows the profile photo instead of a symbol; both arrays have one entry per tab */
 - (id)initWithTitles:(NSArray *)titles symbols:(NSArray *)symbols;
 - (void)setBadge:(NSInteger)count forIndex:(NSInteger)index;
+/* another caption and symbol for a tab (a plugin retitled it); a tab that wears the profile photo keeps its photo and takes the caption only */
+- (void)setTitle:(NSString *)title symbol:(NSNumber *)symbol forIndex:(NSInteger)index;
 /* what the avatar tab shows: the photo once the cache has it, the initials on a color until then */
 - (void)setAvatarInitials:(NSString *)initials seed:(NSUInteger)seed photo:(ExteriaPhoto *)photo cache:(ExteriaAvatarCache *)cache
                  forIndex:(NSInteger)index;

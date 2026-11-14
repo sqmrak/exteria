@@ -2,6 +2,8 @@
 #import "exteria_back_swipe.h"
 #import "exteria_plugin_account.h"
 #import "exteria_plugin_ui.h"
+#import "exteria_plugin_tabs.h"
+#import "exteria_plugin_music.h"
 #import "exteria_accounts.h"
 #import "exteria_popup_menu.h"
 #import "exteria_chat_settings.h"
@@ -141,6 +143,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [self releaseContent];
     [_pluginAccount invalidate];
     [_pluginAccount release];
+    ExteriaPluginMusicForgetMedia(_media);
     [_session release];
     [_avatars release];
     [_media release];
@@ -171,10 +174,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [_classicTabs release];
     _classicTabs = nil;
     _classicProfileItem = nil;
-    _dock.changeHandler = nil;
-    [_dock removeFromSuperview];
-    [_dock release];
-    _dock = nil;
+    ExteriaPluginTabsSetBarUp(NO);
     _tabBar.delegate = nil;
     [_tabBar removeFromSuperview];
     [_tabBar release];
@@ -209,6 +209,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(openLinkRequested:) name:ExteriaOpenLinkNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(shareFilesRequested:) name:ExteriaShareFilesNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(pluginPickRequested:) name:ExteriaPluginPickNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyPluginTabs) name:ExteriaPluginTabsNotification object:nil];
 }
 
 /* a plugin asks the person for chats (the pickers of zwylib): the picker of the app opens, the answer goes back to python */
@@ -400,9 +401,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     _classicTabs.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:_classicTabs.view];
     [_classicTabs didMoveToParentViewController:self];
-    /* the tabs other than the chats have no header of their own for the song that plays: its strip stands on the tab bar, over them */
-    if (!_dock) [self installDock];
-
+    [self pluginTabsBuilt];
     /* the profile tab, when the layout has one, wears the profile photo once it is here */
     NSInteger profileIndex = ExteriaTabIndexOfKind(_kinds, ExteriaTabProfile);
     if (profileIndex < 0) return;
@@ -461,10 +460,58 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     else if (_tabBar) [self loadProfileTab];
 }
 
+#pragma mark plugin tabs
+
+/* the titles and icons plugins gave to slots of the bar, over what the layout of the person put there; a slot without a change is as the app made it */
+- (void)applyPluginTabs {
+    for (NSInteger i = 0; i < ExteriaTabCount; ++i) {
+        NSDictionary *change = ExteriaPluginTabChange(i);
+        NSInteger kind = _kinds[i];
+        NSString *title = [change objectForKey:@"title"] ?: ExteriaTabTitle(kind);
+        /* the profile tab wears the photo of the person, so a plugin can retitle it and cannot change its picture */
+        NSNumber *symbol = kind == ExteriaTabProfile ? nil : ([change objectForKey:@"symbol"] ?: [NSNumber numberWithInt:ExteriaTabSymbol(kind)]);
+        if (_tabBar) {
+            [_tabBar setTitle:title symbol:symbol forIndex:i];
+        } else if (_classicTabs && (NSUInteger)i < _classicTabs.viewControllers.count) {
+            UITabBarItem *item = [[_classicTabs.viewControllers objectAtIndex:(NSUInteger)i] tabBarItem];
+            item.title = title;
+            if (symbol) {
+                item.image = ExteriaClassicTabImage((ExteriaSymbol)[symbol intValue]);
+                ExteriaClassicStyleTabItem(item, (ExteriaSymbol)[symbol intValue]);
+            }
+        }
+    }
+}
+
+/* the plugins that hook MainTabsActivity.createView and onResume hear of the bar here (exteria_host.fragment_event, page "tabs") */
+- (void)reportPluginTabs:(NSString *)event {
+    if (!ExteriaPluginsAreRunning()) return;
+    ExteriaPluginsCallHost(@"fragment_event", [NSArray arrayWithObjects:@"tabs", event, [NSNumber numberWithDouble:0], [NSNumber numberWithDouble:0], nil]);
+}
+
+- (void)pluginTabsBuilt {
+    ExteriaPluginTabsSetBarUp(YES);
+    [self applyPluginTabs];
+    [self reportPluginTabs:@"create"];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self reportPluginTabs:@"resume"];
+}
+
+/* a tap or a hold on a slot a plugin took over goes to the plugin and the app does nothing with it; NO when the app keeps it */
+- (BOOL)pluginTakesTab:(NSInteger)index kind:(NSString *)kind {
+    if (!ExteriaPluginsAreRunning() || ![[ExteriaPluginTabChange(index) objectForKey:kind] boolValue]) return NO;
+    ExteriaPluginsCallHost(@"tab_event", [NSArray arrayWithObjects:[NSNumber numberWithInteger:index], kind, nil]);
+    return YES;
+}
+
 /* the system tab bar swaps its screens at once; a push transition on the container of the screens, not on the bar, gives the same
    sideways slide the modern tabs have */
 - (BOOL)tabBarController:(UITabBarController *)tabs shouldSelectViewController:(UIViewController *)screen {
     NSUInteger from = tabs.selectedIndex, to = [tabs.viewControllers indexOfObject:screen];
+    if (to != NSNotFound && [self pluginTakesTab:(NSInteger)to kind:@"click"]) return NO;
     if (from == to || to == NSNotFound) return YES;
     for (UIView *container in tabs.view.subviews) {
         if ([container isKindOfClass:[UITabBar class]]) continue;
@@ -509,6 +556,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     [root addSubview:_tabBar];
     [self showTab:tab];
     [self loadProfileTab];
+    [self pluginTabsBuilt];
 }
 
 - (void)prepareBusy {
@@ -938,19 +986,25 @@ static BOOL ExteriaSwipeTabKind(NSInteger kind) {
 }
 
 - (void)tabBar:(ExteriaTabBar *)tabBar didSelectIndex:(NSInteger)index {
-    (void)tabBar;
+    if ([self pluginTakesTab:index kind:@"click"]) {
+        /* the bar marked the tab when it was tapped; the screen stays where it was */
+        tabBar.selectedIndex = _currentTab;
+        return;
+    }
     [self showTab:index];
 }
 
 /* the tab of the chats pressed again takes the list back to its top */
 - (void)tabBar:(ExteriaTabBar *)tabBar didReselectIndex:(NSInteger)index {
     (void)tabBar;
+    if ([self pluginTakesTab:index kind:@"click"]) return;
     if (index < 0 || index >= ExteriaTabCount || _kinds[index] != ExteriaTabChats) return;
     if ([_current isKindOfClass:[ExteriaChatsController class]]) [(ExteriaChatsController *)_current scrollToTopAnimated];
 }
 
 /* a finger held on the profile tab offers the accounts of the phone, as the official client does */
 - (void)tabBar:(ExteriaTabBar *)tabBar didLongPressIndex:(NSInteger)index frame:(CGRect)frame {
+    if ([self pluginTakesTab:index kind:@"hold"]) return;
     if (index < 0 || index >= ExteriaTabCount || _kinds[index] != ExteriaTabProfile) return;
     NSString *active = ExteriaAccountActive();
     NSMutableArray *titles = [NSMutableArray array], *names = [NSMutableArray array];
