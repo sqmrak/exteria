@@ -289,8 +289,10 @@ static NSString *ExteriaSupportDirectory(void) {
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
-    ExteriaPluginsEvent("resume");
     [_passcodeLock evaluateReturn];
+    /* the pad and the dissolve of the cover are drawn when this pass of the run loop ends, and a plugin hook runs python on this thread (it can wait on the gil
+       or on a worker's call into the app for seconds), which can leave the bare cover on screen; the hook goes to the next pass */
+    dispatch_async(dispatch_get_main_queue(), ^{ ExteriaPluginsEvent("resume"); });
     [_notifier applicationDidBecomeActive:application];
     /* the remote events of a song that plays need a responder in the window, which a screen that came and went in the meantime may have taken the focus from */
     ExteriaRemoteControlsClaim();
