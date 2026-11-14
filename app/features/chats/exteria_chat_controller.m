@@ -3087,6 +3087,8 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 
 static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
 #define CHAT_SCROLL_KEPT_MAX 200
+/* a list this near its end counts as at its end: the finger rule of the flag and the place kept on leaving both go by it */
+#define BOTTOM_FOLLOW_DISTANCE 80.0
 
 - (NSString *)scrollKey {
     return [NSString stringWithFormat:@"%d:%lld:%d", (int)_dialog.peerKind, _dialog.peerId, (int)_dialog.topicId];
@@ -3103,7 +3105,10 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     NSMutableDictionary *all = [NSMutableDictionary dictionaryWithDictionary:[[NSUserDefaults standardUserDefaults] dictionaryForKey:ExteriaChatScrollKey]];
     NSString *key = [self scrollKey];
     int32_t shown = 0;
-    if (!_stickToBottom) {
+    /* the flag follows only a finger, so a list that a layout, a keyboard or a new message left near its end could have it off, and the next opening was thrown back to a message
+       a page above the newest; the offset says where the list is */
+    BOOL atEnd = !_window && [self scrollLimitMax] - _table.contentOffset.y <= BOTTOM_FOLLOW_DISTANCE;
+    if (!_stickToBottom && !atEnd) {
         for (NSIndexPath *path in _table.indexPathsForVisibleRows) {
             if ((NSUInteger)path.row >= _items.count) continue;
             ExteriaMessage *message = ((ExteriaChatItem *)[_items objectAtIndex:(NSUInteger)path.row]).message;
@@ -4633,7 +4638,6 @@ static void ExteriaRedrawTree(UIView *view) {
 
 /* swaps the rows in; a change that only adds or only removes rows keeps the others and reloads those whose content
    differs */
-#define BOTTOM_FOLLOW_DISTANCE 80.0
 
 - (void)applyItems:(NSArray *)items {
     BOOL moving = _interacting || _table.dragging || _table.decelerating;
