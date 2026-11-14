@@ -267,6 +267,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     if (!self.isViewLoaded || !_dialogs.count) return;
     [self.session applyForumSummariesToDialogs:_dialogs];
     [self.session applyForumSummariesToDialogs:_mainDialogs];
+    /* a folder tab that is shown from its snapshot holds rows of its own, which the two lists above do not reach */
+    for (NSArray *snapshot in [_folderSnapshots allValues]) [self.session applyForumSummariesToDialogs:snapshot];
     [self loadBadgePictures];
     [self refreshCounts];
     [self applyFilters];
@@ -342,6 +344,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_leavingRows release];
     _leavingRows = [leaving retain];
     [self.view insertSubview:leaving aboveSubview:self.table];
+    /* reloadData makes its cells at the next layout, so with none yet the new rows had nothing to slide and stood still while the old picture left */
+    [self.table layoutIfNeeded];
     for (UITableViewCell *cell in [self.table visibleCells]) {
         if (CGRectGetMaxY(cell.frame) - self.table.contentOffset.y <= boundary) continue;
         ExteriaAnimateEnter(cell, CGAffineTransformMakeTranslation((CGFloat)direction * width, 0), 1, EXTERIA_MOTION_ENTER);
@@ -360,7 +364,10 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 /* a chat was read here: its count goes from the row now, without asking the server for the list, which can still answer with the old count or make the list wait */
 - (void)dialogRead:(NSNotification *)note {
-    if (!ExteriaDialogsApplyingRead(_dialogs, note.userInfo)) return;
+    /* the rows of the main list and of the folder tabs that are not on screen are other objects of the same chat, and would bring the old count back when their tab is opened */
+    BOOL others = ExteriaDialogsApplyingRead(_mainDialogs, note.userInfo);
+    for (NSArray *snapshot in [_folderSnapshots allValues]) if (ExteriaDialogsApplyingRead(snapshot, note.userInfo)) others = YES;
+    if (!ExteriaDialogsApplyingRead(_dialogs, note.userInfo) && !others) return;
     [self refreshCounts];
     if (self.isViewLoaded) [self reloadTable];
 }
@@ -505,8 +512,10 @@ static CGFloat ExteriaChatsHeaderTop(void) {
             [me.view setNeedsLayout];
             NSNumber *key = [NSNumber numberWithInt:me->_folders.selectedFolder.folderId];
             NSArray *known = [me->_folderSnapshots objectForKey:key];
-            if (!known) known = me->_mainDialogs;
+            /* a folder not seen yet starts empty: the main list under its tab was other chats, which the first rows of the scan then replaced on the screen */
+            if (!known) known = key.intValue ? [NSArray array] : me->_mainDialogs;
             if (!known) known = [NSArray array];
+            [me applyKnownOutboxReadsTo:known];
             if (known != me->_dialogs) {
                 [known retain];
                 [me->_dialogs release];
@@ -669,6 +678,9 @@ static CGFloat ExteriaChatsHeaderTop(void) {
         void (^show)(NSArray *) = ^(NSArray *items) {
             ExteriaChatsController *controller = weak.target;
             if (!controller || token != controller->_folderProgressToken) return;
+            /* the rows of a scan are new objects, which know nothing of the topics read meanwhile; a forum without its topic line is a shorter row than in the main list */
+            [controller.session applyForumSummariesToDialogs:items];
+            [controller applyKnownOutboxReadsTo:items];
             [controller->_folderSnapshots setObject:items forKey:key];
             [items retain];
             [controller->_dialogs release];
@@ -773,7 +785,9 @@ static NSString *ExteriaDialogListKey(ExteriaDialog *dialog) {
     _openCell = nil;
     [_dialogs release];
     _dialogs = [items retain];
+    [self applyKnownOutboxReadsTo:items];
     if (!_folderId && _folders.selectedFolder.folderId) {
+        [self.session applyForumSummariesToDialogs:items];
         if (!_usingFolderSnapshot) {
             NSNumber *key = [NSNumber numberWithInt:_folders.selectedFolder.folderId];
             [_folderSnapshots setObject:items forKey:key];

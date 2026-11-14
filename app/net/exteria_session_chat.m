@@ -1254,8 +1254,10 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
 
 - (void)refreshForumSummariesOfDialogs:(NSArray *)dialogs {
     NSUInteger started = 0;
+    BOOL capped = NO;
     for (ExteriaDialog *dialog in dialogs) {
-        if (!dialog.forum || dialog.saved || started >= FORUM_SUMMARY_READS_MAX) continue;
+        if (!dialog.forum || dialog.saved) continue;
+        if (started >= FORUM_SUMMARY_READS_MAX) { capped = YES; continue; }
         if (![[self forumSummaries] beginReadingForum:dialog.peerId topMessage:dialog.topMessage]) continue;
         ++started;
         int64_t peerId = dialog.peerId;
@@ -1278,6 +1280,8 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                 if (exteria_forum_summarize(rows, count, last, &summary) == EXTERIA_OK) {
                     [[self forumSummaries] setSummary:&summary forForum:peerId topMessage:last];
                     [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaForumSummariesDidChangeNotification object:self]; }];
+                    /* the forums past the cap of one pass were left plain; each answer that comes frees the way for the next ones, and an error does not, so a failing server is not asked in a loop */
+                    if (capped) [self refreshForumSummariesOfDialogs:dialogs];
                 }
             } else {
                 NSLog(@"exteria: the topics of forum %lld did not load for the list: %@", (long long)peerId, result->status == EXTERIA_OK ? @"answer rejected" : ExteriaRpcErrorName(result));

@@ -191,7 +191,11 @@ static void folder_cache_store(ExteriaSession *session, ExteriaChatFolder *folde
     }
 }
 - (NSArray *)sortedDialogs {
-    return [[_dialogs allValues] sortedArrayUsingComparator:^NSComparisonResult(ExteriaDialog *a, ExteriaDialog *b) {
+    NSArray *all = [_dialogs allValues];
+    /* the rows of a folder are made here and not by the chat list, so the topic line of a forum is put on them here; without it every forum of a folder tab read as a plain chat */
+    [_session applyForumSummariesToDialogs:all];
+    [_session refreshForumSummariesOfDialogs:all];
+    return [all sortedArrayUsingComparator:^NSComparisonResult(ExteriaDialog *a, ExteriaDialog *b) {
         NSUInteger ai = [_filter pinIndexForDialog:a], bi = [_filter pinIndexForDialog:b];
         if (ai != bi) return ai < bi ? NSOrderedAscending : NSOrderedDescending;
         if (a.date != b.date) return a.date > b.date ? NSOrderedAscending : NSOrderedDescending;
@@ -696,6 +700,8 @@ static void folder_cache_store(ExteriaSession *session, ExteriaChatFolder *folde
                     ExteriaDialog *dialog = [rules dialogWithRow:&row];
                     if ([rules containsDialog:dialog]) [list addObject:dialog];
                 }
+                [self applyForumSummariesToDialogs:list];
+                [self refreshForumSummariesOfDialogs:list];
                 /* the same order as a scan gives */
                 dialogs = [list sortedArrayUsingComparator:^NSComparisonResult(ExteriaDialog *a, ExteriaDialog *b) {
                     NSUInteger ai = [rules pinIndexForDialog:a], bi = [rules pinIndexForDialog:b];

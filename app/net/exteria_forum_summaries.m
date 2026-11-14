@@ -4,12 +4,14 @@
 
 /* the counts of the topics change without the last message of the forum moving, as when another device reads one */
 #define SUMMARY_MAX_AGE 60.0
+/* a read whose answer never came, as on a socket that dropped without failing the request, must not shut the forum out of its summary until the app is restarted */
+#define SUMMARY_READ_TIMEOUT 30.0
 
 @interface ExteriaForumSummaries () {
     NSMutableDictionary *_kept;
     NSMutableDictionary *_dates;
     NSMutableDictionary *_messages;
-    NSMutableSet *_reading;
+    NSMutableDictionary *_reading;
 }
 @end
 
@@ -21,7 +23,7 @@
     _kept = [[NSMutableDictionary alloc] init];
     _dates = [[NSMutableDictionary alloc] init];
     _messages = [[NSMutableDictionary alloc] init];
-    _reading = [[NSMutableSet alloc] init];
+    _reading = [[NSMutableDictionary alloc] init];
     return self;
 }
 
@@ -56,17 +58,18 @@
 - (BOOL)beginReadingForum:(int64_t)peerId topMessage:(int32_t)topMessage {
     NSNumber *key = [NSNumber numberWithLongLong:peerId];
     @synchronized (self) {
-        if ([_reading containsObject:key]) return NO;
+        NSDate *started = [_reading objectForKey:key];
+        if (started && -[started timeIntervalSinceNow] < SUMMARY_READ_TIMEOUT) return NO;
         NSDate *date = [_dates objectForKey:key];
         if (date && [[_messages objectForKey:key] intValue] == topMessage && -[date timeIntervalSinceNow] < SUMMARY_MAX_AGE) return NO;
-        [_reading addObject:key];
+        [_reading setObject:[NSDate date] forKey:key];
     }
     return YES;
 }
 
 - (void)endReadingForum:(int64_t)peerId {
     @synchronized (self) {
-        [_reading removeObject:[NSNumber numberWithLongLong:peerId]];
+        [_reading removeObjectForKey:[NSNumber numberWithLongLong:peerId]];
     }
 }
 
