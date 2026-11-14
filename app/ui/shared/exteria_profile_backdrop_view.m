@@ -8,10 +8,8 @@
 @synthesize patternImage = _patternImage;
 @synthesize patternColor = _patternColor;
 @synthesize photoRadius = _photoRadius;
-@synthesize softBottom = _softBottom;
 
 /* the band is drawn this many times smaller and stretched back, which smooths it; nothing but a small bitmap is made, as the chat wallpaper did */
-#define BLUR_SHRINK 9.0
 
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -66,12 +64,6 @@
     [self setNeedsDisplay];
 }
 
-- (void)setSoftBottom:(BOOL)soft {
-    if (soft == _softBottom) return;
-    _softBottom = soft;
-    [self setNeedsDisplay];
-}
-
 - (void)setPhotoRadius:(CGFloat)radius {
     if (radius == _photoRadius) return;
     _photoRadius = radius;
@@ -122,60 +114,10 @@
     [self drawPatternInContext:context];
 }
 
-/* a clear to opaque ramp, drawn over a layer with the destination in mode to give it that alpha along the way from one y to another */
-static void ExteriaBackdropRamp(CGContextRef context, CGFloat width, CGFloat fromY, CGFloat fromAlpha, CGFloat toY, CGFloat toAlpha) {
-    CGColorSpaceRef space = CGColorSpaceCreateDeviceGray();
-    CGFloat components[4] = {1, fromAlpha, 1, toAlpha};
-    CGGradientRef ramp = CGGradientCreateWithColorComponents(space, components, NULL, 2);
-    CGContextSaveGState(context);
-    CGContextSetBlendMode(context, kCGBlendModeDestinationIn);
-    CGContextClipToRect(context, CGRectMake(0, MIN(fromY, toY), width, fabs(toY - fromY)));
-    CGContextDrawLinearGradient(context, ramp, CGPointMake(0, fromY), CGPointMake(0, toY), 0);
-    CGContextRestoreGState(context);
-    CGGradientRelease(ramp);
-    CGColorSpaceRelease(space);
-}
-
 - (void)drawRect:(CGRect)rect {
     (void)rect;
     if (!_centerColor || !_edgeColor) return;
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    CGRect bounds = self.bounds;
-    CGFloat edge = bounds.size.height - EXTERIA_BACKDROP_BLEED;
-    CGFloat bandTop = edge - EXTERIA_BACKDROP_BLUR_BAND;
-    if (!_softBottom || bandTop < 0 || bounds.size.width < 2) {
-        [self drawGroundInContext:context];
-        return;
-    }
-    /* the whole ground is one layer, so the fade of the strip past its edge takes the blur with it */
-    CGContextBeginTransparencyLayer(context, NULL);
-    [self drawGroundInContext:context];
-    CGFloat bandHeight = bounds.size.height - bandTop;
-    CGSize small = CGSizeMake(MAX(4, ceil(bounds.size.width / BLUR_SHRINK)), MAX(4, ceil(bandHeight / BLUR_SHRINK)));
-    UIGraphicsBeginImageContextWithOptions(small, NO, 1);
-    CGContextRef shrunk = UIGraphicsGetCurrentContext();
-    CGContextScaleCTM(shrunk, small.width / bounds.size.width, small.height / bandHeight);
-    CGContextTranslateCTM(shrunk, 0, -bandTop);
-    [self drawGroundInContext:shrunk];
-    UIImage *soft = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    if (soft) {
-        CGContextSaveGState(context);
-        CGRect band = CGRectMake(0, bandTop, bounds.size.width, bandHeight);
-        CGContextClipToRect(context, band);
-        CGContextBeginTransparencyLayer(context, NULL);
-        CGContextSetInterpolationQuality(context, kCGInterpolationHigh);
-        [soft drawInRect:band];
-        /* nothing at the top of the band, almost the whole copy at the edge */
-        ExteriaBackdropRamp(context, bounds.size.width, bandTop, 0, edge, 0.96);
-        CGContextEndTransparencyLayer(context);
-        CGContextRestoreGState(context);
-    } else {
-        NSLog(@"exteria: the soft edge of the profile ground could not be made");
-    }
-    /* past the edge the ground fades out over the page behind it */
-    ExteriaBackdropRamp(context, bounds.size.width, edge, 1, bounds.size.height, 0);
-    CGContextEndTransparencyLayer(context);
+    [self drawGroundInContext:UIGraphicsGetCurrentContext()];
 }
 
 @end
