@@ -681,7 +681,7 @@ static int quiet_update(const exteria_tl_value *item) {
            exteria_tl_is(item, EXTERIA_TL_ID_updateChatUserTyping) || exteria_tl_is(item, EXTERIA_TL_ID_updateChannelUserTyping) ||
            exteria_tl_is(item, EXTERIA_TL_ID_updateUserName) || exteria_tl_is(item, EXTERIA_TL_ID_updateUserEmojiStatus) ||
            exteria_tl_is(item, EXTERIA_TL_ID_updateReadHistoryOutbox) || exteria_tl_is(item, EXTERIA_TL_ID_updateReadChannelOutbox) ||
-           exteria_tl_is(item, EXTERIA_TL_ID_updateDraftMessage);
+           exteria_tl_is(item, EXTERIA_TL_ID_updateReadChannelDiscussionOutbox) || exteria_tl_is(item, EXTERIA_TL_ID_updateDraftMessage);
 }
 
 int exteria_updates_quiet(const exteria_tl_value *updates) {

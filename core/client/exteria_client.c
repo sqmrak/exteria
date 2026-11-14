@@ -93,7 +93,7 @@ static void deliver_typing(exteria_client *c, const exteria_tl_value *item) {
 
 static void deliver_read_outbox(exteria_client *c, const exteria_tl_value *item) {
     exteria_peer peer;
-    int32_t max_id = 0;
+    int32_t max_id = 0, topic_id = 0;
     int64_t channel = 0;
     if (!c->events.read_outbox) return;
     if (exteria_tl_is(item, EXTERIA_TL_ID_updateReadHistoryOutbox)) {
@@ -102,8 +102,14 @@ static void deliver_read_outbox(exteria_client *c, const exteria_tl_value *item)
         if (exteria_tl_get_i64(item, "channel_id", &channel) != EXTERIA_OK || exteria_tl_get_i32(item, "max_id", &max_id) != EXTERIA_OK) return;
         peer.kind = 3;
         peer.id = channel;
+    } else if (exteria_tl_is(item, EXTERIA_TL_ID_updateReadChannelDiscussionOutbox)) {
+        /* a forum reports what was read of one topic here, with the id of the topic as top_msg_id; the channel wide update says nothing of a single topic */
+        if (exteria_tl_get_i64(item, "channel_id", &channel) != EXTERIA_OK || exteria_tl_get_i32(item, "top_msg_id", &topic_id) != EXTERIA_OK ||
+            exteria_tl_get_i32(item, "read_max_id", &max_id) != EXTERIA_OK || topic_id <= 0) return;
+        peer.kind = 3;
+        peer.id = channel;
     } else return;
-    if (max_id > 0 && peer.id > 0) c->events.read_outbox(c->events.ctx, peer.kind, peer.id, max_id);
+    if (max_id > 0 && peer.id > 0) c->events.read_outbox(c->events.ctx, peer.kind, peer.id, topic_id, max_id);
 }
 
 /* a read receipt that came while the socket was down arrives in the other_updates of the difference, not as a live update */
@@ -115,14 +121,15 @@ static void deliver_difference_reads(exteria_client *c, const exteria_tl_value *
 
 static void deliver_new_message(exteria_client *c, const exteria_tl_value *item, const exteria_tl_value *container) {
     const exteria_tl_value *users = container ? exteria_tl_get(container, "users") : NULL;
+    const exteria_tl_value *chats = container ? exteria_tl_get(container, "chats") : NULL;
     if (!c->events.new_message) return;
     if (exteria_tl_is(item, EXTERIA_TL_ID_updateNewMessage) || exteria_tl_is(item, EXTERIA_TL_ID_updateNewChannelMessage)) {
-        c->events.new_message(c->events.ctx, exteria_tl_get(item, "message"), users);
+        c->events.new_message(c->events.ctx, exteria_tl_get(item, "message"), users, chats);
     } else if (exteria_tl_is(item, EXTERIA_TL_ID_updateShortMessage) || exteria_tl_is(item, EXTERIA_TL_ID_updateShortChatMessage)) {
         exteria_arena arena;
         exteria_tl_value *message = NULL;
         exteria_arena_init(&arena, 65536);
-        if (exteria_updates_short_to_message(&arena, c->updates.account, item, &message) == EXTERIA_OK) c->events.new_message(c->events.ctx, message, NULL);
+        if (exteria_updates_short_to_message(&arena, c->updates.account, item, &message) == EXTERIA_OK) c->events.new_message(c->events.ctx, message, NULL, NULL);
         exteria_arena_free(&arena);
     }
 }

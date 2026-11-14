@@ -4150,7 +4150,7 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpa
 /* the ids of the developers arrive after the screen is up: the hammers of the title and of the names in the bubbles are decided again */
 /* what the dialog said when it was listed, or what an update told since */
 - (int32_t)readOutboxMaxId {
-    return MAX(_dialog.readOutboxMaxId, [_session readOutboxOfKind:_dialog.peerKind peer:_dialog.peerId]);
+    return MAX(_dialog.readOutboxMaxId, [_session readOutboxOfKind:_dialog.peerKind peer:_dialog.peerId topic:_dialog.topicId]);
 }
 
 /* the dialog is a snapshot from when the chat opened, so a person who comes online while it is open would keep the old last seen time until the chat is reopened */
@@ -4163,6 +4163,7 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpa
 
 - (void)readOutboxChanged:(NSNotification *)note {
     if ([[note.userInfo objectForKey:@"kind"] intValue] != _dialog.peerKind || [[note.userInfo objectForKey:@"peer"] longLongValue] != _dialog.peerId) return;
+    if ([[note.userInfo objectForKey:@"topic"] intValue] != _dialog.topicId) return;
     /* every read of a busy group moves this number */
     if (_loadedFirst) [self scheduleLiveMessages];
 }

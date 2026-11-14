@@ -25,7 +25,7 @@ typedef struct exteria_client_events {
     void (*typing)(void *ctx, const exteria_typing *typing);
     /* the other side read our messages of a chat up to max_id (updateReadHistoryOutbox, updateReadChannelOutbox);
        peer_kind is 1 for a user, 2 for a basic group, 3 for a channel; live only */
-    void (*read_outbox)(void *ctx, int32_t peer_kind, int64_t peer_id, int32_t max_id);
+    void (*read_outbox)(void *ctx, int32_t peer_kind, int64_t peer_id, int32_t topic_id, int32_t max_id);
     /* a person came online or went offline (updateUserStatus); seen is the time they left, zero for any other state; live only, the stored user is updated by the updates layer */
     void (*user_status)(void *ctx, int64_t user_id, exteria_presence presence, int32_t seen);
     /* the draft of a chat changed, here or on another client (updateDraftMessage); read it with exteria_draft_update_read, valid only during the callback;
@@ -33,7 +33,7 @@ typedef struct exteria_client_events {
     void (*draft)(void *ctx, const exteria_tl_value *update);
     /* a message that arrived live (updateNewMessage, updateNewChannelMessage, or a short update turned into the message it stands for); users are those of the container
        it came in, or NULL when it came alone; both are valid only during the callback */
-    void (*new_message)(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users);
+    void (*new_message)(void *ctx, const exteria_tl_value *message, const exteria_tl_value *users, const exteria_tl_value *chats);
     /* folder rules or their order changed on another client; one event per update container */
     void (*folders_changed)(void *ctx);
     /* an updateGroupCall, updateGroupCallParticipants or updateGroupCallConnection, in a push or in the answer to a request of the call; container is the Updates

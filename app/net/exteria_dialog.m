@@ -520,6 +520,8 @@ BOOL ExteriaDialogsApplyingReadOutbox(NSArray *dialogs, NSDictionary *userInfo) 
     long long peer = [[userInfo objectForKey:@"peer"] longLongValue];
     int32_t maxId = [[userInfo objectForKey:@"maxId"] intValue];
     BOOL changed = NO;
+    /* what was read in one topic of a forum says nothing of the rows of the chat list */
+    if ([[userInfo objectForKey:@"topic"] intValue] != 0) return NO;
     for (ExteriaDialog *dialog in dialogs) {
         if (dialog.folder || dialog.community || dialog.topicId || dialog.peerKind != kind || dialog.peerId != peer) continue;
         if ([dialog applyReadOutboxUpTo:maxId]) changed = YES;

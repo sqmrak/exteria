@@ -234,17 +234,40 @@ NSString *const ExteriaUserStatusDidChangeNotification = @"ExteriaUserStatusDidC
 NSString *const ExteriaUploadProgressNotification = @"ExteriaUploadProgress";
 NSString *const ExteriaOwnProfileDidChangeNotification = @"ExteriaOwnProfileDidChange";
 
-- (int32_t)readOutboxOfKind:(int32_t)kind peer:(long long)peer {
-    return [[_readOutbox objectForKey:[NSString stringWithFormat:@"%d:%lld", (int)kind, peer]] intValue];
+- (int32_t)readOutboxOfKind:(int32_t)kind peer:(long long)peer topic:(int32_t)topic {
+    return [[_readOutbox objectForKey:[NSString stringWithFormat:@"%d:%lld:%d", (int)kind, peer, (int)topic]] intValue];
 }
 
-- (void)noteReadOutbox:(int32_t)maxId ofKind:(int32_t)kind peer:(long long)peer {
+static NSString *ExteriaUnsentKey(ExteriaDialog *dialog) {
+    return [NSString stringWithFormat:@"%d:%lld:%d", (int)dialog.peerKind, dialog.peerId, (int)dialog.topicId];
+}
+
+- (void)keepUnsentMessage:(ExteriaMessage *)message forDialog:(ExteriaDialog *)dialog {
+    if (!message || !dialog) return;
+    if (!_unsent) _unsent = [[NSMutableDictionary alloc] init];
+    NSString *key = ExteriaUnsentKey(dialog);
+    NSMutableArray *held = [_unsent objectForKey:key];
+    if (!held) {
+        held = [NSMutableArray array];
+        [_unsent setObject:held forKey:key];
+    }
+    if (![held containsObject:message]) [held addObject:message];
+}
+
+- (NSArray *)takeUnsentMessagesForDialog:(ExteriaDialog *)dialog {
+    NSString *key = ExteriaUnsentKey(dialog);
+    NSArray *held = [[[_unsent objectForKey:key] copy] autorelease];
+    [_unsent removeObjectForKey:key];
+    return held ? held : [NSArray array];
+}
+
+- (void)noteReadOutbox:(int32_t)maxId ofKind:(int32_t)kind peer:(long long)peer topic:(int32_t)topic {
     if (!_readOutbox) _readOutbox = [[NSMutableDictionary alloc] init];
-    NSString *key = [NSString stringWithFormat:@"%d:%lld", (int)kind, peer];
+    NSString *key = [NSString stringWithFormat:@"%d:%lld:%d", (int)kind, peer, (int)topic];
     if ([[_readOutbox objectForKey:key] intValue] >= maxId) return;
     [_readOutbox setObject:[NSNumber numberWithInt:maxId] forKey:key];
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaReadOutboxDidChangeNotification object:self
-        userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:kind], @"kind", [NSNumber numberWithLongLong:peer], @"peer", [NSNumber numberWithInt:maxId], @"maxId", nil]];
+        userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithInt:kind], @"kind", [NSNumber numberWithLongLong:peer], @"peer", [NSNumber numberWithInt:topic], @"topic", [NSNumber numberWithInt:maxId], @"maxId", nil]];
 }
 
 static uint64_t ExteriaNowMs(void) {
@@ -1443,9 +1466,9 @@ static void ExteriaClientNewMessage(void *ctx, const exteria_tl_value *message, 
     }];
 }
 
-static void ExteriaClientReadOutbox(void *ctx, int32_t kind, int64_t peer, int32_t maxId) {
+static void ExteriaClientReadOutbox(void *ctx, int32_t kind, int64_t peer, int32_t topic, int32_t maxId) {
     ExteriaSession *session = (ExteriaSession *)ctx;
-    [session deliverMain:^{ [session noteReadOutbox:maxId ofKind:kind peer:peer]; }];
+    [session deliverMain:^{ [session noteReadOutbox:maxId ofKind:kind peer:peer topic:topic]; }];
 }
 
 static void ExteriaClientUserStatus(void *ctx, int64_t user, exteria_presence presence, int32_t seen) {

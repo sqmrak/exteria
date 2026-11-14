@@ -366,12 +366,16 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 }
 
 /* the other side read our last message here: the double check comes to its row now, as the list under a chat did not draw it until its next reload */
-- (void)outboxRead:(NSNotification *)note {
-    if (ExteriaDialogsApplyingReadOutbox(_dialogs, note.userInfo) && self.isViewLoaded) [self reloadTable];
-}
-
-- (BOOL)playerYielded {
-    return [_chatsDelegate respondsToSelector:@selector(chatsControllerYieldsPlayer:)] && [_chatsDelegate chatsControllerYieldsPlayer:self];
+/* what the other side has read is told once, by an update, and the session keeps the number; a list made later from rows that are older than the update (the rows kept on
+   the disk, a tab shown from its snapshot, the rows of a scan) would keep the single check until the server sent the list again */
+- (BOOL)applyKnownOutboxReadsTo:(NSArray *)dialogs {
+    BOOL changed = NO;
+    for (ExteriaDialog *dialog in dialogs) {
+        if (dialog.folder || dialog.community || dialog.topicId) continue;
+        int32_t known = [self.session readOutboxOfKind:dialog.peerKind peer:dialog.peerId topic:0];
+        if (known > 0 && [dialog applyReadOutboxUpTo:known]) changed = YES;
+    }
+    return changed;
 }
 
 - (void)playerHostChanged {

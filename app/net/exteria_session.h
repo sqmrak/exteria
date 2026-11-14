@@ -161,8 +161,14 @@ extern NSString *const ExteriaOwnProfileDidChangeNotification;
 /* main thread only: the drafts of the account's chats, from the chat lists, the live updates and what the person types */
 @property (nonatomic, readonly) ExteriaDraftBoard *drafts;
 /* the newest id of ours the other side is known to have read in a chat since the app started, zero when no update said; main thread */
-- (int32_t)readOutboxOfKind:(int32_t)kind peer:(long long)peer;
-- (void)noteReadOutbox:(int32_t)maxId ofKind:(int32_t)kind peer:(long long)peer;
+/* topic is 0 for the read mark of a whole chat, and the id of the topic for one topic of a forum */
+- (int32_t)readOutboxOfKind:(int32_t)kind peer:(long long)peer topic:(int32_t)topic;
+- (void)noteReadOutbox:(int32_t)maxId ofKind:(int32_t)kind peer:(long long)peer topic:(int32_t)topic;
+/* main thread only: the messages of a chat whose send failed, kept while its screen is closed so they are there, with their files, when the chat is opened again; they are held
+   until the person sends them again or deletes them, and are lost with the app */
+- (void)keepUnsentMessage:(ExteriaMessage *)message forDialog:(ExteriaDialog *)dialog;
+/* hands them over: the session forgets them, and the screen that takes them is the one that keeps them from then on */
+- (NSArray *)takeUnsentMessagesForDialog:(ExteriaDialog *)dialog;
 /* main thread only: whether the link is up and the server has answered on it since it was opened; screens show
    a connecting title while it is NO */
 @property (nonatomic, readonly) BOOL connected;
