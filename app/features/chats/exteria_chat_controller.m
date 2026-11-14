@@ -117,6 +117,9 @@
 #define BAR_HEIGHT 44.0
 /* what the buttons on the wider side of the classic bar of a chat take of a phone's width: the picture and the dots, or the arrow and a count of three digits */
 #define CLASSIC_BAR_SIDE_WIDTH 96.0
+/* the back plate and the gap before the count beside it; with the count itself they are what the bar gives the left side */
+#define CLASSIC_BACK_PLATE 52.0
+#define CLASSIC_COUNTER_GAP 8.0
 /* what a reaction that is new on a message plays once its chip stands: nothing, the 80 point burst or the large one of the picker */
 #define EXTERIA_BURST_NONE 0
 #define EXTERIA_BURST_SHORT 1
@@ -261,6 +264,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     UILabel *_backBadge;
     /* the classic style: the way back is made here, as an arrow with the count (or the name of the list when nothing is unread), and the system one hidden */
     BOOL _classicBack;
+    /* the width of the count that stands beside the back arrow of the classic bar, zero without one */
+    CGFloat _classicCounterWidth;
     ExteriaAvatarView *_avatar;
     /* the bar of a forum topic shows the icon of the topic where a chat shows the picture of the person or the group */
     UIImageView *_topicIcon;
@@ -826,10 +831,16 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [_subtitle setStatus:line kind:[self statusKind]];
         [self.view setNeedsLayout];
     } else if (ExteriaThemeIsClassic() && [self isViewLoaded]) {
-        self.navigationItem.titleView = ExteriaClassicTitleViewWithStatusWidth(_dialog.title, line, (int)[self statusKind], [self classicTitleWidth]);
-        self.navigationItem.titleView.userInteractionEnabled = YES;
-        [self.navigationItem.titleView addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
+        (void)line;
+        [self installClassicTitleView];
     }
+}
+
+/* the name and the status in the classic bar, as wide as the bar leaves beside the back arrow and its count */
+- (void)installClassicTitleView {
+    self.navigationItem.titleView = ExteriaClassicTitleViewWithStatusWidth(_dialog.title, [self statusLine], (int)[self statusKind], [self classicTitleWidth]);
+    self.navigationItem.titleView.userInteractionEnabled = YES;
+    [self.navigationItem.titleView addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
 }
 
 - (void)loadView {
@@ -1063,15 +1074,14 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }
     if (classic) {
         /* the system's navigation bar carries the name and the status, the person's picture and the back button */
-        self.navigationItem.titleView = ExteriaClassicTitleViewWithStatusWidth(_dialog.title, [self statusLine], (int)[self statusKind], [self classicTitleWidth]);
         _classicBack = !ExteriaIsDetailRoot(self);
         if (_classicBack) {
             self.navigationItem.hidesBackButton = YES;
             [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(unreadTotalChanged:) name:ExteriaUnreadTotalDidChangeNotification object:nil];
+            /* the count is known before the title, so the title is made as wide as the room beside the arrow allows */
             [self refreshBackBadge];
         }
-        self.navigationItem.titleView.userInteractionEnabled = YES;
-        [self.navigationItem.titleView addGestureRecognizer:[[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileGifts)] autorelease]];
+        [self installClassicTitleView];
         ExteriaAvatarView *mini = [[[ExteriaAvatarView alloc] initWithFrame:CGRectMake(0, 0, 32, 32)] autorelease];
         mini.seed = _dialog.avatarSeed;
         mini.initials = _dialog.initials;
@@ -2974,7 +2984,10 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
 - (CGFloat)classicTitleWidth {
     if (ExteriaIsPad()) return 420;
     CGSize screen = [UIScreen mainScreen].bounds.size;
-    return MIN(190, MIN(screen.width, screen.height) - 2 * CLASSIC_BAR_SIDE_WIDTH);
+    /* a long count (999+) makes the left side wider than the default, and the centered name gives up as much on the right, or it would run under the count */
+    CGFloat side = CLASSIC_BAR_SIDE_WIDTH;
+    if (_classicCounterWidth > 0) side = MAX(side, CLASSIC_BACK_PLATE + CLASSIC_COUNTER_GAP + _classicCounterWidth + 12);
+    return MAX(60, MIN(190, MIN(screen.width, screen.height) - 2 * side));
 }
 
 /* the back button of the classic bar is the same bordered item as the dots, so the two plates match; the count of the other unread chats stands in a glossy badge of its own
@@ -2983,13 +2996,23 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     UIBarButtonItem *item = [[[UIBarButtonItem alloc] initWithImage:ExteriaSymbolImage(ExteriaSymbolBack, 22, [UIColor whiteColor])
                                                               style:UIBarButtonItemStyleBordered target:self action:@selector(goBack)] autorelease];
     item.accessibilityLabel = NSLocalizedString(@"phone.back", nil);
+    CGFloat counterWidth = 0;
     if (count <= 0) {
         self.navigationItem.leftBarButtonItems = [NSArray arrayWithObject:item];
-        return;
+    } else {
+        UIView *badge = ExteriaClassicCounterBadge(count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count]);
+        UIBarButtonItem *counter = [[[UIBarButtonItem alloc] initWithCustomView:badge] autorelease];
+        /* the two items are placed edge to edge by the bar, so the plate of the arrow and the count ran together; a gap of its own keeps them apart */
+        UIBarButtonItem *gap = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace target:nil action:NULL] autorelease];
+        gap.width = CLASSIC_COUNTER_GAP;
+        counterWidth = badge.frame.size.width;
+        self.navigationItem.leftBarButtonItems = [NSArray arrayWithObjects:item, gap, counter, nil];
     }
-    UIView *badge = ExteriaClassicCounterBadge(count > 999 ? @"999+" : [NSString stringWithFormat:@"%ld", (long)count]);
-    UIBarButtonItem *counter = [[[UIBarButtonItem alloc] initWithCustomView:badge] autorelease];
-    self.navigationItem.leftBarButtonItems = [NSArray arrayWithObjects:item, counter, nil];
+    if (fabs(counterWidth - _classicCounterWidth) > 0.5) {
+        _classicCounterWidth = counterWidth;
+        /* the name was made for the old count; while the view is still being made it is made once, after this */
+        if ([self isViewLoaded]) [self installClassicTitleView];
+    }
 }
 
 - (void)refreshBackBadge {
