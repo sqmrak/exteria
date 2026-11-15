@@ -1022,6 +1022,10 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     _hold.enabled = YES;
 }
 
+- (CGRect)sendButtonFrameInView:(UIView *)view {
+    return [view convertRect:_send.bounds fromView:_send];
+}
+
 - (void)held:(UILongPressGestureRecognizer *)hold {
     CGFloat x = [hold locationInView:self].x;
     switch (hold.state) {

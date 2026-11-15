@@ -258,6 +258,8 @@ typedef enum {
     NSString *_sendQuote;
     int32_t _sendQuoteOffset;
     BOOL _sendSilent;
+    long long _sendEffect;
+    long long _effectId;
     ExteriaMarkup *_markup;
     BOOL _reactionsPossible;
     BOOL _hasReactions;
@@ -387,6 +389,10 @@ typedef enum {
 @property (nonatomic, assign) int32_t sendQuoteOffset;
 /* the message goes without a sound for the people who get it (silent in messages.sendMessage) */
 @property (nonatomic, assign) BOOL sendSilent;
+/* the effect the server says the message was sent with, zero for none */
+@property (nonatomic, readonly) long long effectId;
+/* the animated effect the message goes with (effect in messages.sendMessage), zero for none; only a private chat takes one */
+@property (nonatomic, assign) long long sendEffect;
 /* the bot whose inline result the message is, zero for any other */
 @property (nonatomic, readonly) long long viaBotId;
 /* the buttons under the message, or the keyboard it brought; nil without any */

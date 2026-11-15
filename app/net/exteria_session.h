@@ -133,6 +133,26 @@ extern NSString *const ExteriaOwnProfileDidChangeNotification;
 
 @class ExteriaStoryAudience;
 
+/* one effect of the list: the id the send request names and the emoji that stands for it */
+@class ExteriaCustomEmojiDocument;
+
+@interface ExteriaMessageEffect : NSObject {
+    long long _effectId;
+    NSString *_emoticon;
+    BOOL _premium;
+    ExteriaCustomEmojiDocument *_animation;
+    ExteriaCustomEmojiDocument *_sticker;
+}
+@property (nonatomic, assign) long long effectId;
+@property (nonatomic, copy) NSString *emoticon;
+@property (nonatomic, assign) BOOL premium;
+/* the lottie that plays over the chat for the effect, nil when the server sent none; the sticker of the effect plays in its place */
+@property (nonatomic, retain) ExteriaCustomEmojiDocument *animation;
+@property (nonatomic, retain) ExteriaCustomEmojiDocument *sticker;
+/* an effect of the list that was loaded, by the id a message names; nil before the list is in */
++ (ExteriaMessageEffect *)effectWithId:(long long)effectId;
+@end
+
 @interface ExteriaSession : NSObject {
     id<ExteriaSessionDelegate> _delegate;
     id<ExteriaCallDelegate> _callDelegate;
@@ -341,6 +361,10 @@ typedef void (^ExteriaSearchCompletion)(NSArray *dialogs, int32_t nextRate, NSSt
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset completion:(ExteriaSendCompletion)completion;
 /* silent sets the silent flag, so the people of the chat get no sound */
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent completion:(ExteriaSendCompletion)completion;
+/* the same with an effect (zero for none) */
+- (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent effect:(long long)effect completion:(ExteriaSendCompletion)completion;
+/* the effects a message of a private chat can go with, as ExteriaMessageEffect items in the order of the server; asked once and kept for the session */
+- (void)loadMessageEffects:(void (^)(NSArray *effects, NSString *errorName))completion;
 - (void)sendSticker:(ExteriaMedia *)sticker toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId completion:(ExteriaSendCompletion)completion;
 /* sends a recorded file as a voice note or a round video: the file goes up in parts, then the message names it */
 - (void)sendVoiceAtPath:(NSString *)path durationMs:(int32_t)durationMs waveform:(NSData *)waveform toDialog:(ExteriaDialog *)dialog

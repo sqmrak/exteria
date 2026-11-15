@@ -304,6 +304,8 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize sendQuote = _sendQuote;
 @synthesize sendQuoteOffset = _sendQuoteOffset;
 @synthesize sendSilent = _sendSilent;
+@synthesize sendEffect = _sendEffect;
+@synthesize effectId = _effectId;
 @synthesize markup = _markup;
 @synthesize hasMarkup = _hasMarkup;
 
@@ -416,6 +418,7 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
     message->_serviceValue = row->service_value;
     message->_serviceCommunity = row->service_community;
     message->_viaBotId = row->via_bot_id;
+    message->_effectId = row->effect_id;
     message->_hasMarkup = row->has_markup;
     message->_reactionsPossible = row->reactions_possible;
     message->_hasReactions = row->has_reactions;

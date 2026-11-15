@@ -857,6 +857,7 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     if (out->forwards < 0) out->forwards = 0;
     read_comments(exteria_tl_get(m, "replies"), out);
     if (exteria_tl_has(m, "via_bot_id")) exteria_tl_get_i64(m, "via_bot_id", &out->via_bot_id);
+    if (exteria_tl_has(m, "effect")) exteria_tl_get_i64(m, "effect", &out->effect_id);
     out->has_markup = exteria_tl_has(m, "reply_markup") ? 1 : 0;
     {
         exteria_peer origin;

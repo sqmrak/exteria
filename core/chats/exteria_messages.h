@@ -182,6 +182,7 @@ typedef struct exteria_message_row {
     exteria_reactions reactions;
     uint8_t reactions_possible;
     int64_t via_bot_id;         /* the bot whose inline result this message is, zero otherwise */
+    int64_t effect_id;          /* the animated effect the message was sent with (see exteria_effects.h), zero for none */
     uint8_t has_markup;         /* buttons or a keyboard came with it; exteria_markup_read of the message's reply_markup tells which */
     uint8_t has_reactions;
     int32_t views;              /* how many saw a channel post, zero when the server did not count */

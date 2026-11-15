@@ -50,6 +50,8 @@ typedef enum { ExteriaBotKeyboardNone, ExteriaBotKeyboardOffered, ExteriaBotKeyb
 /* shows the keyboard glyph on the button while the panel stands in for the keyboard */
 @property (nonatomic, assign) BOOL panelShown;
 @property (nonatomic, readonly) UITextView *textView;
+/* the round send button in the coordinates of view, which a menu that opens over it needs */
+- (CGRect)sendButtonFrameInView:(UIView *)view;
 /* what the field says while it is empty; nil for the usual words */
 @property (nonatomic, copy) NSString *placeholderText;
 /* a pill with this title stands left of the field; nil takes it away */

@@ -68,6 +68,8 @@
 #import "exteria_sticker_pack_sheet.h"
 #import "exteria_media_viewer.h"
 #import "exteria_message_cell.h"
+#import "exteria_send_menu.h"
+#import "exteria_message_effect_player.h"
 #import "exteria_chat_settings.h"
 #import "exteria_music_player.h"
 #import "exteria_round_playback.h"
@@ -343,6 +345,9 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     BOOL _loadedFirst;
     /* what the chat had read when it was opened, or -1 when it had nothing unread: the line of unread messages stays where it was while they are read */
     int32_t _unreadAnchor;
+    /* the effects a message of this private chat can go with, and the one the message being sent takes */
+    NSArray *_messageEffects;
+    long long _nextSendEffect;
     BOOL _openUnread;
     BOOL _loading;
     int32_t _markedRead;
@@ -556,6 +561,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
 }
 
 - (void)dealloc {
+    [_messageEffects release];
     [_commentsPost release];
     [[ExteriaRoundPlayback sharedPlayback] forgetChain:self];
     for (ExteriaMessage *message in _local) {
@@ -1270,6 +1276,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     }
     if (_pinnedList) [self loadPinnedList];
     else [self loadNewest];
+    [self loadMessageEffectsIfPrivate];
     if (_dialog.peerKind == 3) [self loadChannelFull];
     else if (!_pinnedList) [self loadTopicPinned];
     if (!_pinnedList) [self loadPremiumGate];
@@ -3811,6 +3818,8 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
         if (message.messageId > knownTop && message.service == (int)EXTERIA_SERVICE_PIN + 1) pinChanged = YES;
         if (message.messageId > _markedRead && !message.outgoing) newest = YES;
         /* only a message past everything the screen held is news, so a refresh of the page makes no sound */
+        /* an effect plays for a message that comes in while the chat is open, as it does when the other side sends one */
+        if (message.messageId > knownTop && !message.outgoing && message.effectId) [self playMessageEffect:message.effectId];
         if (message.messageId > knownTop && !message.outgoing) {
             arrived = YES;
             if (message.messageId > arrivedId) {
@@ -7970,13 +7979,49 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 - (void)inputBarDidHoldSend:(ExteriaInputBar *)bar {
     if (_editingId || ![[bar trimmedText] length]) return;
     ExteriaWeakReference *weak = _weak;
-    NSArray *titles = [NSArray arrayWithObjects:NSLocalizedString(@"chat.send.silent", nil), NSLocalizedString(@"chat.send.later", nil), nil];
-    [ExteriaSheet presentInView:self.view title:nil message:nil options:titles destructive:nil
-                    cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:^(NSUInteger index) {
+    /* the effects are for a private chat with a person; a Premium effect is offered to a Premium account only */
+    NSMutableArray *effects = nil;
+    if (_dialog.kind == EXTERIA_DIALOG_USER && !_dialog.saved && !_pinnedList) {
+        BOOL premium = [_session ownPerson].premium;
+        effects = [NSMutableArray array];
+        for (ExteriaMessageEffect *effect in _messageEffects) if (premium || !effect.premium) [effects addObject:effect];
+    }
+    /* a sheet from the bottom stands under the keyboard that is up while the words are written, so the card is drawn right over the button */
+    UIView *host = self.view;
+    [ExteriaSendMenu presentAboveRect:[bar sendButtonFrameInView:host] inView:host effects:effects handler:^(ExteriaSendMenuChoice choice, long long effectId) {
         ExteriaChatController *chat = weak.target;
         if (!chat) return;
-        if (index == 0) [chat sendComposedFromBar:bar silent:YES];
-        else [chat chooseTimeToSendFromBar:bar];
+        if (choice == ExteriaSendMenuSilent) {
+            [chat sendComposedFromBar:bar silent:YES];
+        } else if (choice == ExteriaSendMenuLater) {
+            [chat chooseTimeToSendFromBar:bar];
+        } else {
+            chat->_nextSendEffect = effectId;
+            [chat sendComposedFromBar:bar silent:NO];
+            chat->_nextSendEffect = 0;
+        }
+    }];
+}
+
+/* the list of effects is asked for when a private chat opens, so the hold on the send button finds it in */
+- (void)playMessageEffect:(long long)effectId {
+    if (!_visible) return;
+    ExteriaMessageEffect *effect = [ExteriaMessageEffect effectWithId:effectId];
+    if (effect) [ExteriaMessageEffectPlayer playEffect:effect inView:self.view media:_media];
+}
+
+- (void)loadMessageEffectsIfPrivate {
+    if (_dialog.kind != EXTERIA_DIALOG_USER || _dialog.saved || _pinnedList || _messageEffects) return;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadMessageEffects:^(NSArray *effects, NSString *errorName) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat) return;
+        if (errorName) {
+            NSLog(@"exteria: the message effects could not be loaded: %@", errorName);
+            return;
+        }
+        [chat->_messageEffects release];
+        chat->_messageEffects = [effects retain];
     }];
 }
 
@@ -8091,6 +8136,8 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
         ExteriaMessage *message = [ExteriaMessage pendingText:part.text entities:part.entities randomId:[self newRandomId] date:(int32_t)[[NSDate date] timeIntervalSince1970]];
         message.sendReplyTo = replyTo;
         message.sendSilent = silent;
+        /* the effect, like the quote, belongs to the first message only */
+        message.sendEffect = first ? _nextSendEffect : 0;
         /* the quote belongs to the first message only, the others answer the same message */
         message.sendQuote = first ? plannedQuote : nil;
         message.sendQuoteOffset = first ? plannedOffset : -1;
@@ -8189,7 +8236,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     if (out) {
         [_session sendOutgoing:out toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo completion:done];
     } else if (message.media.kind == EXTERIA_PREVIEW_STICKER || message.media.kind == EXTERIA_PREVIEW_GIF) [_session sendSticker:message.media toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo completion:done];
-    else [_session sendText:message.text entities:message.entities toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo quote:message.sendQuote quoteOffset:message.sendQuoteOffset silent:message.sendSilent completion:done];
+    else [_session sendText:message.text entities:message.entities toDialog:_dialog randomId:message.randomId replyTo:message.sendReplyTo quote:message.sendQuote quoteOffset:message.sendQuoteOffset silent:message.sendSilent effect:message.sendEffect completion:done];
 }
 
 - (void)didSend:(ExteriaMessage *)message messageId:(int32_t)messageId error:(NSString *)errorName {
@@ -8218,6 +8265,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     } else {
         message.state = ExteriaMessageStateSent;
         message.messageId = messageId;
+        if (message.sendEffect) [self playMessageEffect:message.sendEffect];
         ExteriaOutgoing *sent = message.pendingSend;
         if (sent && sent->temporary && sent->path && (sent->viewOnce || sent->kind == ExteriaOutgoingPhoto))
             [[NSFileManager defaultManager] removeItemAtPath:sent->path error:NULL];
@@ -8678,6 +8726,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     again.sendQuote = message.sendQuote;
     again.sendQuoteOffset = message.sendQuoteOffset;
     again.sendSilent = message.sendSilent;
+    again.sendEffect = message.sendEffect;
     [_local removeObject:message];
     [self afterAppendingLocal:again];
     [self dispatchLocal:again];

@@ -24,6 +24,7 @@
 #include "exteria_profile.h"
 #include "exteria_stories.h"
 #include "exteria_bots.h"
+#include "exteria_effects.h"
 #import "exteria_rpc.h"
 
 /* the newest page of a chat the store is asked for on every change */
@@ -212,6 +213,25 @@ static NSString *ExteriaSetDocumentFields(exteria_upload_spec *spec, NSString *n
     }
     return nil;
 }
+
+@implementation ExteriaMessageEffect
+@synthesize effectId = _effectId, emoticon = _emoticon, premium = _premium, animation = _animation, sticker = _sticker;
+- (void)dealloc {
+    [_emoticon release];
+    [_animation release];
+    [_sticker release];
+    [super dealloc];
+}
+
+static NSArray *ExteriaKeptEffects;
+static NSMutableDictionary *ExteriaEffectsById;
+
++ (ExteriaMessageEffect *)effectWithId:(long long)effectId {
+    @synchronized ([ExteriaSession class]) {
+        return [[[ExteriaEffectsById objectForKey:[NSNumber numberWithLongLong:effectId]] retain] autorelease];
+    }
+}
+@end
 
 @implementation ExteriaSession (Chat)
 
@@ -1604,6 +1624,11 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
 
 - (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo
            quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent completion:(ExteriaSendCompletion)completion {
+    [self sendText:text entities:entities toDialog:dialog randomId:randomId replyTo:replyTo quote:quote quoteOffset:quoteOffset silent:silent effect:0 completion:completion];
+}
+
+- (void)sendText:(NSString *)text entities:(NSArray *)entities toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId replyTo:(int32_t)replyTo
+           quote:(NSString *)quote quoteOffset:(int32_t)quoteOffset silent:(BOOL)silent effect:(long long)effect completion:(ExteriaSendCompletion)completion {
     ExteriaSendCompletion done = [completion copy];
     NSString *quoted = [quote copy];
     exteria_peer_ref peer = ExteriaPeerRefOfDialog(dialog);
@@ -1623,12 +1648,62 @@ NSMutableData *ExteriaPackSendEntities(NSArray *entities, NSMutableData **string
         if (status == EXTERIA_OK && quoted.length && replyTo > 0) status = exteria_set_reply_quote(arena, *request, &peer, replyTo, quoted.UTF8String, quoteOffset);
         if (status == EXTERIA_OK && noPreview && !thrown) status = exteria_tl_set_flag(*request, "no_webpage");
         if (status == EXTERIA_OK && silent) status = exteria_tl_set_flag(*request, "silent");
+        /* a dice thrown by messages.sendMedia has no effect field */
+        if (status == EXTERIA_OK && effect && !thrown) status = exteria_set_effect(arena, *request, effect);
         return status == EXTERIA_OK ? ExteriaApplySendAs(self, &peer, arena, *request) : status;
     } handler:^(const exteria_mt_rpc_result *result) {
         [self finishSend:result randomId:randomId completion:done];
     }];
     [body release];
     [quoted release];
+}
+
+/* the list comes once per run: the effects of Telegram change rarely, and the hold on the send button must not wait for the network every time */
+- (void)loadMessageEffects:(void (^)(NSArray *, NSString *))completion {
+    void (^done)(NSArray *, NSString *) = [completion copy];
+    if (ExteriaKeptEffects) {
+        NSArray *kept = ExteriaKeptEffects;
+        [self deliverMain:^{ done(kept, nil); [done release]; }];
+        return;
+    }
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_effects_request(arena, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSArray *effects = nil;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) {
+            error = ExteriaRpcErrorName(result);
+        } else {
+            exteria_effect rows[EXTERIA_EFFECTS_MAX];
+            size_t count = 0;
+            if (exteria_effects_parse(result->value, rows, EXTERIA_EFFECTS_MAX, &count) != EXTERIA_OK) {
+                error = @"MALFORMED";
+            } else {
+                NSMutableArray *list = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) {
+                    ExteriaMessageEffect *effect = [[[ExteriaMessageEffect alloc] init] autorelease];
+                    effect.effectId = rows[i].id;
+                    effect.emoticon = [NSString stringWithUTF8String:rows[i].emoticon];
+                    effect.premium = rows[i].premium != 0;
+                    if (rows[i].animation.id) effect.animation = [[[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].animation] autorelease];
+                    if (rows[i].sticker.id) effect.sticker = [[[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].sticker] autorelease];
+                    [list addObject:effect];
+                }
+                effects = list;
+            }
+        }
+        [self noteRpcError:error];
+        NSArray *delivered = [[effects copy] autorelease];
+        NSString *problem = [[error copy] autorelease];
+        @synchronized ([ExteriaSession class]) {
+            if (delivered && !ExteriaKeptEffects) {
+                ExteriaKeptEffects = [delivered retain];
+                ExteriaEffectsById = [[NSMutableDictionary alloc] init];
+                for (ExteriaMessageEffect *item in delivered) [ExteriaEffectsById setObject:item forKey:[NSNumber numberWithLongLong:item.effectId]];
+            }
+        }
+        [self deliverMain:^{ done(delivered, problem); [done release]; }];
+    }];
 }
 
 - (void)sendSticker:(ExteriaMedia *)sticker toDialog:(ExteriaDialog *)dialog randomId:(long long)randomId completion:(ExteriaSendCompletion)completion {
