@@ -1729,8 +1729,9 @@
 "privacy.blocked.none" = "None";
 "privacy.blocked.block" = "Block a user";
 "privacy.blocked.unblock" = "Unblock";
+"privacy.blocked.profile" = "Open profile";
 "privacy.blocked.since" = "Since %@";
-"privacy.blocked.hint" = "Blocked people cannot write to you or call you. Tap a person to unblock them.";
+"privacy.blocked.hint" = "Blocked people cannot write to you or call you. Tap a person to open the profile or unblock them.";
 "privacy.blocked.empty" = "You have blocked nobody.";
 "privacy.autodelete" = "Auto-delete messages";
 "privacy.autodelete.info" = "New chats will delete their messages after the chosen time.";

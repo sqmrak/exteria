@@ -1,6 +1,8 @@
 #import "exteria_privacy_controller.h"
 
 #import "exteria_alert.h"
+#import "exteria_channel_profile_controller.h"
+#import "exteria_user_profile_controller.h"
 #import "exteria_classic_devices_controller.h"
 #import "exteria_contact_picker_controller.h"
 #import "exteria_devices_controller.h"
@@ -909,13 +911,29 @@ static UIImage *ExteriaPrivacyCircle(UIImage *image) {
     [self.navigationController pushViewController:picker animated:YES];
 }
 
+/* a blocked user opens as a profile, a blocked channel (a sender that wrote as one) as a channel; the access hash of the list is all the screen needs to ask for the rest */
+- (void)openProfileOfPeer:(ExteriaBlockedPeer *)peer {
+    BOOL channel = peer.kind == 3;
+    ExteriaDialog *dialog = [ExteriaDialog dialogWithPeerKind:peer.kind peerId:peer.identifier accessHash:peer.accessHash
+                                                         kind:channel ? EXTERIA_DIALOG_CHANNEL : EXTERIA_DIALOG_USER title:peer.name];
+    if (!dialog) return;
+    UIViewController *screen = channel ? (UIViewController *)[[[ExteriaChannelProfileController alloc] initWithSession:_session dialog:dialog avatars:_avatars media:_media stickers:nil] autorelease]
+                                       : (UIViewController *)[[[ExteriaUserProfileController alloc] initWithSession:_session dialog:dialog avatars:_avatars media:_media stickers:nil] autorelease];
+    [self.navigationController pushViewController:screen animated:YES];
+}
+
 - (void)confirmUnblock:(ExteriaBlockedPeer *)peer {
     ExteriaWeakReference *weak = _weak;
-    [ExteriaSheet presentInView:self.view title:peer.name message:nil options:[NSArray arrayWithObject:NSLocalizedString(@"privacy.blocked.unblock", nil)]
+    NSArray *options = [NSArray arrayWithObjects:NSLocalizedString(@"privacy.blocked.profile", nil), NSLocalizedString(@"privacy.blocked.unblock", nil), nil];
+    [ExteriaSheet presentInView:self.view title:peer.name message:nil options:options
                     destructive:nil cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:^(NSUInteger index) {
-        (void)index;
         ExteriaBlockedController *me = weak.target;
-        if (!me || me->_working) return;
+        if (!me) return;
+        if (index == 0) {
+            [me openProfileOfPeer:peer];
+            return;
+        }
+        if (me->_working) return;
         me->_working = YES;
         [me->_session setBlocked:NO kind:peer.kind identifier:peer.identifier hash:peer.accessHash completion:^(NSString *error) {
             ExteriaBlockedController *again = weak.target;

@@ -1735,8 +1735,9 @@
 "privacy.blocked.none" = "нет";
 "privacy.blocked.block" = "заблокировать пользователя";
 "privacy.blocked.unblock" = "разблокировать";
+"privacy.blocked.profile" = "открыть профиль";
 "privacy.blocked.since" = "с %@";
-"privacy.blocked.hint" = "заблокированные не смогут писать вам и звонить. нажмите на человека, чтобы разблокировать.";
+"privacy.blocked.hint" = "заблокированные не смогут писать вам и звонить. нажмите на человека, чтобы открыть профиль или разблокировать.";
 "privacy.blocked.empty" = "вы никого не блокировали :3";
 "privacy.autodelete" = "автоудаление сообщений";
 "privacy.autodelete.info" = "новые чаты будут удалять сообщения через выбранное время :D";
