@@ -92,6 +92,7 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
 @implementation ExteriaReactionsView
 
 @synthesize pickHandler = _pickHandler;
+@synthesize holdHandler = _holdHandler;
 @synthesize alignRight = _alignRight;
 @synthesize inBubble = _inBubble;
 @synthesize outgoing = _outgoing;
@@ -107,6 +108,7 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
     [_reactions release];
     [_buttons release];
     [_pickHandler release];
+    [_holdHandler release];
     [super dealloc];
 }
 
@@ -306,6 +308,9 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
             button.layer.borderWidth = r.chosen || _inBubble ? 0 : 0.5;
         }
         [button addTarget:self action:@selector(picked:) forControlEvents:UIControlEventTouchUpInside];
+        UILongPressGestureRecognizer *hold = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(held:)] autorelease];
+        hold.minimumPressDuration = 0.4;
+        [button addGestureRecognizer:hold];
         button.accessibilityLabel = ExteriaReactionText(r, counts);
         button.accessibilityTraits = UIAccessibilityTraitButton | (r.chosen ? UIAccessibilityTraitSelected : 0);
         ExteriaEmojiLabel *label = [[[ExteriaEmojiLabel alloc] init] autorelease];
@@ -353,6 +358,20 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
         return [self convertRect:[(UIView *)[_buttons objectAtIndex:i] frame] toView:view];
     }
     return CGRectZero;
+}
+
+- (BOOL)chipContainsPoint:(CGPoint)point {
+    for (UIView *button in _buttons) if (!button.hidden && CGRectContainsPoint(button.frame, point)) return YES;
+    return NO;
+}
+
+- (void)held:(UILongPressGestureRecognizer *)press {
+    if (press.state != UIGestureRecognizerStateBegan || !_holdHandler) return;
+    NSUInteger index = (NSUInteger)press.view.tag;
+    if (index >= _reactions.count) return;
+    ExteriaReaction *reaction = [[_reactions objectAtIndex:index] retain];
+    _holdHandler(reaction);
+    [reaction release];
 }
 
 - (void)picked:(UIButton *)button {

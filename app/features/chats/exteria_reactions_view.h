@@ -16,6 +16,7 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
     BOOL _inBubble;
     BOOL _outgoing;
     void (^_pickHandler)(ExteriaReaction *reaction);
+    void (^_holdHandler)(ExteriaReaction *reaction);
     ExteriaAvatarCache *_avatars;
 }
 @property (nonatomic, assign) BOOL alignRight;
@@ -26,6 +27,10 @@ CGFloat ExteriaReactionsMetrics(NSArray *reactions, CGFloat width, BOOL counts, 
 /* where the pictures of the faces on the chips come from; without it a chip with faces shows the colors and initials */
 @property (nonatomic, assign) ExteriaAvatarCache *avatars;
 @property (nonatomic, copy) void (^pickHandler)(ExteriaReaction *reaction);
+/* a hold on a chip; the chat decides what it shows (the time of a reaction in a private chat) */
+@property (nonatomic, copy) void (^holdHandler)(ExteriaReaction *reaction);
+/* whether a point of this view is on a chip, so a hold there is not a hold on the bubble under it */
+- (BOOL)chipContainsPoint:(CGPoint)point;
 - (void)setReactions:(NSArray *)reactions counts:(BOOL)counts;
 /* animated: a chip that is new, or whose count changed since the last call, pops in with an overshoot */
 - (void)setReactions:(NSArray *)reactions counts:(BOOL)counts animated:(BOOL)animated;

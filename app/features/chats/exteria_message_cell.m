@@ -1065,6 +1065,10 @@ static float ExteriaSpoilerRandom(void) {
         ExteriaMessageCell *cell = weak.target;
         if (cell) [cell.delegate messageCell:cell didTapReaction:reaction];
     };
+    _reactions.holdHandler = ^(ExteriaReaction *reaction) {
+        ExteriaMessageCell *cell = weak.target;
+        if (cell && [cell reactionTimeShown]) [cell.delegate messageCell:cell didHoldReaction:reaction];
+    };
     [self.contentView addSubview:_reactions];
     UILongPressGestureRecognizer *press = [[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPressed:)] autorelease];
     [self.contentView addGestureRecognizer:press];
@@ -3042,6 +3046,12 @@ static void ExteriaSwipeTick(void) {
     return [_reactions frameOfReaction:reaction inView:view];
 }
 
+/* whether the chat shows the time of a reaction on a hold of its chip, and then the hold is the chip's and not the bubble's */
+- (BOOL)reactionTimeShown {
+    return [_delegate respondsToSelector:@selector(messageCellShowsReactionTime:)] && [_delegate messageCellShowsReactionTime:self] &&
+           [_delegate respondsToSelector:@selector(messageCell:didHoldReaction:)];
+}
+
 - (void)longPressed:(UIGestureRecognizer *)press {
     /* the controller knows what can be done to the message, so a message that offers nothing just shows no menu */
     if (press.state != UIGestureRecognizerStateBegan || !_item.message || _item.kind == ExteriaChatItemPill) return;
@@ -3049,6 +3059,7 @@ static void ExteriaSwipeTick(void) {
     UIGestureRecognizer *other = press == _forcePress ? _longPress : _forcePress;
     if (other.state == UIGestureRecognizerStateBegan || other.state == UIGestureRecognizerStateChanged) return;
     CGPoint point = [press locationInView:self.contentView];
+    if (!_reactions.hidden && [self reactionTimeShown] && [_reactions chipContainsPoint:[self.contentView convertPoint:point toView:_reactions]]) return;
     _pressPoint = [press locationInView:_body];
     if (CGRectContainsPoint(_item.bubbleFrame, point)) [_delegate messageCellDidLongPress:self];
 }

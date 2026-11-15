@@ -14,6 +14,11 @@
 /* the red mark of a message that did not go out was tapped */
 - (void)messageCellDidLongPress:(ExteriaMessageCell *)cell;
 - (void)messageCell:(ExteriaMessageCell *)cell didTapReaction:(ExteriaReaction *)reaction;
+@optional
+/* whether a hold on a reaction chip shows when it was put (a private chat); where it does not, a hold on the chip is a hold on the message as before */
+- (BOOL)messageCellShowsReactionTime:(ExteriaMessageCell *)cell;
+- (void)messageCell:(ExteriaMessageCell *)cell didHoldReaction:(ExteriaReaction *)reaction;
+@required
 - (void)messageCellDidTapFailed:(ExteriaMessageCell *)cell;
 @optional
 /* the part of the words the person selected in the bubble is to be quoted by an answer; offset counts UTF-16 units of the text */

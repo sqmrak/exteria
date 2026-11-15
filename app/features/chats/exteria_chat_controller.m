@@ -68,6 +68,7 @@
 #import "exteria_sticker_pack_sheet.h"
 #import "exteria_media_viewer.h"
 #import "exteria_message_cell.h"
+#import "exteria_reaction_time_popup.h"
 #import "exteria_send_menu.h"
 #import "exteria_message_effect_player.h"
 #import "exteria_chat_settings.h"
@@ -5956,6 +5957,45 @@ static void ExteriaRedrawTree(UIView *view) {
     });
 }
 
+/* a private chat has two people, so who reacted needs no list: the hold on a chip tells when it was put, as Telegram does */
+- (BOOL)messageCellShowsReactionTime:(ExteriaMessageCell *)cell {
+    (void)cell;
+    return (_dialog.kind == EXTERIA_DIALOG_USER || _dialog.kind == EXTERIA_DIALOG_BOT) && !_dialog.saved;
+}
+
+- (void)messageCell:(ExteriaMessageCell *)cell didHoldReaction:(ExteriaReaction *)reaction {
+    ExteriaMessage *message = cell.item.message;
+    if (!message || message.messageId <= 0) return;
+    ExteriaWeakReference *weak = _weak;
+    NSString *key = [[reaction.key copy] autorelease];
+    ExteriaReaction *shown = [reaction retain];
+    [_session loadReactorsOfMessageId:message.messageId ofDialog:_dialog offset:nil completion:^(NSArray *items, NSDictionary *people, NSString *next, NSString *errorName) {
+        (void)next;
+        ExteriaChatController *chat = weak.target;
+        [shown autorelease];
+        if (!chat) return;
+        if (errorName) {
+            ExteriaShowNotice(nil, [chat failureTextForError:errorName]);
+            return;
+        }
+        NSMutableArray *entries = [NSMutableArray array];
+        for (NSDictionary *item in items) {
+            if (![[(ExteriaReaction *)[item objectForKey:@"reaction"] key] isEqualToString:key]) continue;
+            NSNumber *peer = [item objectForKey:@"peer"];
+            ExteriaPerson *person = [people objectForKey:peer];
+            if (!person) person = [chat->_people objectForKey:peer];
+            if (!person) {
+                ExteriaPerson *own = [chat->_session ownPerson];
+                if (own && own.userId == peer.longLongValue) person = own;
+            }
+            if (!person) continue;
+            [entries addObject:[NSDictionary dictionaryWithObjectsAndKeys:person, @"person", [item objectForKey:@"date"], @"date", nil]];
+        }
+        if (!entries.count) return;
+        [ExteriaReactionTimePopup presentReaction:shown entries:entries avatars:chat->_avatars inView:ExteriaOverlayHost()];
+    }];
+}
+
 - (void)messageCell:(ExteriaMessageCell *)cell didTapReaction:(ExteriaReaction *)reaction {
     /* the chip is already there, so the burst starts at once from its picture */
     [self playReactionEffectFor:reaction messageId:cell.item.message.messageId longBurst:NO chip:[cell chipFrameOfReaction:reaction inView:self.view]];
@@ -6339,7 +6379,8 @@ static NSArray *ExteriaMenuItems(const ExteriaMessageActionRow *table, size_t co
     if (message.deletedLocally) mask = (mask & (EXTERIA_ACTION_COPY | EXTERIA_ACTION_DETAILS | EXTERIA_ACTION_TRANSLATE)) | EXTERIA_ACTION_DELETE;
     /* the server refuses the list of who reacted in a broadcast channel (BROADCAST_FORBIDDEN, so that readers cannot be told apart), so the entry is not offered there */
     /* the post that heads its comments is that same post, forwarded into the discussion group, and the server refuses the list for it as well: it comes from a channel (its origin is one), or it is the root of the thread */
-    else if (message.messageId > 0 && message.reactions.count && _dialog.kind != EXTERIA_DIALOG_CHANNEL && !message.post && message.forwardKey >= 0 &&
+    else if (message.messageId > 0 && message.reactions.count && _dialog.kind != EXTERIA_DIALOG_CHANNEL && _dialog.kind != EXTERIA_DIALOG_USER && _dialog.kind != EXTERIA_DIALOG_BOT &&
+             !message.post && message.forwardKey >= 0 &&
              !(_dialog.topicId > 0 && message.messageId == _dialog.topicId)) mask |= EXTERIA_ACTION_REACTORS;
     /* a one-time file must not be kept, sent on or sent again by this client */
     if (ExteriaMessageIsViewOnce(message)) mask &= ~(uint32_t)(EXTERIA_ACTION_FORWARD | EXTERIA_ACTION_FORWARD_HIDDEN | EXTERIA_ACTION_SAVE | EXTERIA_ACTION_GALLERY |
