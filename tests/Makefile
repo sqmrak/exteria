@@ -37,13 +37,18 @@ CORE_OBJ := $(patsubst $(ROOT)/%.c,$(BUILD)/%.o,$(CORE_SRC))
 # build/python/host from scripts/build_python.sh is such a prefix
 PYHOST_TEST := $(if $(EXTERIA_PYTHON_HOST_PREFIX),$(BUILD)/test_pyhost)
 
-.PHONY: test sanitize test-pyhost test-python
+.PHONY: test sanitize test-pyhost test-python test-localization
 
 
 test: $(addprefix $(BUILD)/,$(TESTS)) $(PYHOST_TEST)
 	@set -e; for t in $(TESTS); do $(BUILD)/$$t; done
+	@$(MAKE) test-localization
 	@$(if $(PYHOST_TEST),$(PYHOST_TEST),echo "test_pyhost skipped: set EXTERIA_PYTHON_HOST_PREFIX and EXTERIA_PYTHON_STDLIB")
 	@$(if $(EXTERIA_PYTHON_HOST),$(MAKE) test-python,echo "python tests skipped: set EXTERIA_PYTHON_HOST to a python3.11")
+
+# the .strings files only need a plain python 3: a line that does not parse makes the old parser of ios 5 and 6 drop the whole language, and every text of it shows as its key
+test-localization:
+	python3 -I -m unittest discover -s python -p "test_localization.py"
 
 # the plugin sdk, the shims and the plugins of this repository, run by cpython 3.11 with a stand-in for the app (tests/python/fakeapp.py)
 test-python:

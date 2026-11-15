@@ -75,10 +75,13 @@ static NSBundle *ExteriaEnglishBundle;
 @implementation ExteriaLocalizedBundle
 - (NSString *)localizedStringForKey:(NSString *)key value:(NSString *)value table:(NSString *)table {
     NSBundle *chosen = ExteriaChosenBundle;
-    if (!chosen) return [super localizedStringForKey:key value:value table:table];
-    NSString *text = [chosen localizedStringForKey:key value:value table:table];
-    /* a text the chosen language lacks (a custom one translates what it can) is the English one, not the bare key */
-    if ((!text.length || [text isEqualToString:key]) && ExteriaEnglishBundle && chosen != ExteriaEnglishBundle) return [ExteriaEnglishBundle localizedStringForKey:key value:value table:table];
+    NSString *text = chosen ? [chosen localizedStringForKey:key value:value table:table] : [super localizedStringForKey:key value:value table:table];
+    /* a text the language of the bundle or of the phone lacks (a custom pack translates what it can, an lproj of another build may lack a newer key, an lproj that
+       does not parse has none) is the English one, never the bare key */
+    if ((!text.length || [text isEqualToString:key]) && ExteriaEnglishBundle && chosen != ExteriaEnglishBundle) {
+        NSString *english = [ExteriaEnglishBundle localizedStringForKey:key value:value table:table];
+        if (english.length) return english;
+    }
     return text;
 }
 @end
@@ -91,26 +94,25 @@ NSString *ExteriaInterfaceLanguageVariant(void) {
 void ExteriaApplyInterfaceLanguage(void) {
     NSString *choice = ExteriaInterfaceLanguageChoice();
     NSBundle *main = [NSBundle mainBundle];
-    if (!choice.length) {
-        [ExteriaChosenBundle release];
-        ExteriaChosenBundle = nil;
-        return;
-    }
     if (!ExteriaEnglishBundle) {
         NSString *english = [main pathForResource:@"en" ofType:@"lproj"];
         ExteriaEnglishBundle = english ? [[NSBundle bundleWithPath:english] retain] : nil;
+        if (!ExteriaEnglishBundle) NSLog(@"exteria: the bundle has no en.lproj, texts that are missing show as their keys");
     }
+    /* the fallback to English works with no choice made too, so the swap is made at every launch */
+    if (object_getClass(main) != [ExteriaLocalizedBundle class]) object_setClass(main, [ExteriaLocalizedBundle class]);
+    [ExteriaChosenBundle release];
+    ExteriaChosenBundle = nil;
+    if (!choice.length) return;
     NSString *path = ExteriaIsCustomLanguage(choice) ? ExteriaCustomBundlePath(choice) : [main pathForResource:choice ofType:@"lproj"];
     NSBundle *bundle = path ? [NSBundle bundleWithPath:path] : nil;
-    if (!bundle) {
-        NSLog(@"exteria: no texts for the language %@", choice);
-        [ExteriaChosenBundle release];
-        ExteriaChosenBundle = nil;
+    /* a stored choice whose texts are gone (a pack deleted by hand, an lproj this build does not ship) must not keep the app on keys: the choice is dropped */
+    if (!bundle || ![bundle pathForResource:@"Localizable" ofType:@"strings"]) {
+        NSLog(@"exteria: no texts for the language %@, back to the language of the phone", choice);
+        [[NSUserDefaults standardUserDefaults] removeObjectForKey:ExteriaLanguageKey];
         return;
     }
-    [ExteriaChosenBundle release];
     ExteriaChosenBundle = [bundle retain];
-    if (object_getClass(main) != [ExteriaLocalizedBundle class]) object_setClass(main, [ExteriaLocalizedBundle class]);
 }
 
 void ExteriaSetInterfaceLanguage(NSString *code) {
