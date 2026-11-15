@@ -440,6 +440,12 @@ static UILabel *ExteriaCellLabel(UIFont *font, UIColor *color, NSInteger alignme
     _preview.text = dialog.preview;
     _preview.entities = dialog.previewEntities;
     _preview.textColor = ExteriaImportedThemeColor("chatList.messageText") ?: ExteriaColorSecondary();
+    /* the chats of the archive are mostly muted, so their grey badge hardly says that something is unread: the name goes bold and the preview takes the color of the name.
+       the archive row of the list, which counts the unread chats inside it, is dressed the same */
+    BOOL archivedUnread = dialog.folderId == 1 && (dialog.unreadCount > 0 || dialog.unread);
+    _title.font = archivedUnread ? ExteriaFontBold(15.5) : ExteriaFontSemibold(15.5);
+    _preview.font = archivedUnread ? ExteriaFontSemibold(14) : ExteriaFontRegular(14);
+    if (archivedUnread) _preview.textColor = ExteriaImportedThemeColor("chatList.title") ?: ExteriaColorTitle();
     [_preview setPrefixLength:0 color:nil];
     _preview.hidden = NO;
     /* the capsule of a forum row has no room for the picture of the sender */
