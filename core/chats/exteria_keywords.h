@@ -8,7 +8,7 @@
 
 /* the words that find an emoji, as the server keeps them for a language (messages.getEmojiKeywords): each keyword lists the emoji it names. the index is kept in memory in
    one block for each keyword, sorted by keyword, and is written to a file as it is so the next launch starts from it and asks the server only for what changed */
-#define EXTERIA_KEYWORD_MAX 64            /* bytes of a keyword */
+#define EXTERIA_KEYWORD_MAX 160           /* bytes of a keyword; the Russian names of emoji run past 64 bytes, two bytes a letter */
 #define EXTERIA_KEYWORD_EMOJI_MAX 32      /* bytes of one emoji: the longest sequences of joiners stay under it */
 #define EXTERIA_KEYWORD_EMOJI_PER 48      /* emoji a keyword lists */
 #define EXTERIA_KEYWORDS_MAX 120000       /* keywords of one language */

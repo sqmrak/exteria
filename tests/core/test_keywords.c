@@ -156,12 +156,31 @@ static void test_refused_answers_change_nothing(void) {
     CHECK_EQ_INT(exteria_keywords_apply(index, "en", difference(&arena, "en", 1, 0, items, 1)), EXTERIA_E_MALFORMED);
     items[0] = entry(&arena, "emojiKeyword", "", CAT, NULL);
     CHECK_EQ_INT(exteria_keywords_apply(index, "en", difference(&arena, "en", 1, 2, items, 1)), EXTERIA_E_MALFORMED);
+    /* a keyword over the cap is left out and the rest of the answer is kept, so one long Russian name does not empty the language */
     {
         char long_word[EXTERIA_KEYWORD_MAX + 2];
+        exteria_keyword_index *fresh = exteria_keyword_index_new();
+        exteria_tl_value *pair[2];
         memset(long_word, 'x', sizeof(long_word) - 1);
         long_word[sizeof(long_word) - 1] = 0;
-        items[0] = entry(&arena, "emojiKeyword", long_word, CAT, NULL);
-        CHECK_EQ_INT(exteria_keywords_apply(index, "en", difference(&arena, "en", 1, 2, items, 1)), EXTERIA_E_MALFORMED);
+        pair[0] = entry(&arena, "emojiKeyword", long_word, CAT, NULL);
+        pair[1] = entry(&arena, "emojiKeyword", "short", FIRE, NULL);
+        CHECK(fresh != NULL);
+        CHECK_EQ_INT(exteria_keywords_apply(fresh, "en", difference(&arena, "en", 0, 1, pair, 2)), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_keyword_index_count(fresh), 1);
+        CHECK_EQ_INT(exteria_keywords_search(fresh, "short", found, 8), 1);
+        exteria_keyword_index_free(fresh);
+    }
+    /* Cyrillic keywords of 40 letters are 80 bytes and fit */
+    {
+        const char *name = "\xd0\xbb\xd0\xb8\xd1\x86\xd0\xbe \xd1\x81 \xd1\x83\xd0\xbb\xd1\x8b\xd0\xb1\xd0\xba\xd0\xbe\xd0\xb9 \xd0\xb8 \xd1\x81\xd0\xbc\xd0\xb5\xd1\x8e\xd1\x89\xd0\xb8\xd0\xbc\xd0\xb8\xd1\x81\xd1\x8f \xd0\xb3\xd0\xbb\xd0\xb0\xd0\xb7\xd0\xb0\xd0\xbc\xd0\xb8 \xd0\xb8 \xd0\xb5\xd1\x89\xd1\x91 \xd1\x81\xd0\xbb\xd0\xbe\xd0\xb2\xd0\xb0";
+        exteria_keyword_index *fresh = exteria_keyword_index_new();
+        exteria_tl_value *one[1];
+        CHECK(strlen(name) > 64 && strlen(name) <= EXTERIA_KEYWORD_MAX);
+        one[0] = entry(&arena, "emojiKeyword", name, CAT, NULL);
+        CHECK_EQ_INT(exteria_keywords_apply(fresh, "ru", difference(&arena, "ru", 0, 1, one, 1)), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_keywords_search(fresh, "\xd0\x9b\xd0\x98\xd0\xa6\xd0\x9e", found, 8), 1);
+        exteria_keyword_index_free(fresh);
     }
     not_a_difference = exteria_tl_new_obj(&arena, "messages.getEmojiKeywords");
     CHECK_EQ_INT(exteria_keywords_apply(index, "en", not_a_difference), EXTERIA_E_MALFORMED);

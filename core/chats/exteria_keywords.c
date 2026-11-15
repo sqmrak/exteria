@@ -222,7 +222,9 @@ static exteria_status check_answer(const char *lang, const exteria_tl_value *ans
         size_t word_len;
         const exteria_tl_value *emoticons;
         if (!item || (!exteria_tl_is(item, EXTERIA_TL_ID_emojiKeyword) && !exteria_tl_is(item, EXTERIA_TL_ID_emojiKeywordDeleted))) return EXTERIA_E_MALFORMED;
-        if (exteria_tl_get_bytes(item, "keyword", &word, &word_len) != EXTERIA_OK || word_len == 0 || word_len > EXTERIA_KEYWORD_MAX || memchr(word, 0, word_len)) return EXTERIA_E_MALFORMED;
+        if (exteria_tl_get_bytes(item, "keyword", &word, &word_len) != EXTERIA_OK || word_len == 0 || memchr(word, 0, word_len)) return EXTERIA_E_MALFORMED;
+        /* a keyword past the limit is skipped when the answer is applied; refusing the answer for it left a whole language without keywords */
+        if (word_len > EXTERIA_KEYWORD_MAX) continue;
         if (exteria_tl_get_vec(item, "emoticons", &emoticons) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
         if (emoticons->u.vec.count > EMOTICONS_PER_ANSWER_MAX) return EXTERIA_E_LIMIT;
     }
@@ -260,6 +262,7 @@ exteria_status exteria_keywords_apply(exteria_keyword_index *index, const char *
         const exteria_tl_value *emoticons;
         char keyword[EXTERIA_KEYWORD_MAX];
         (void)exteria_tl_get_bytes(item, "keyword", &word, &word_len);
+        if (word_len > EXTERIA_KEYWORD_MAX) continue;
         (void)exteria_tl_get_vec(item, "emoticons", &emoticons);
         memcpy(keyword, word, word_len);
         status = exteria_tl_is(item, EXTERIA_TL_ID_emojiKeyword) ? add_emoji(work, keyword, word_len, emoticons) : remove_emoji(work, keyword, word_len, emoticons);
