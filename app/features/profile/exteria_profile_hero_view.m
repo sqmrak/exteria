@@ -261,6 +261,10 @@
     [self goToIndex:[self onPublicPage] ? 0 : (NSInteger)_photos.count - 1];
 }
 
+- (void)reloadPhotos {
+    [self loadList];
+}
+
 - (void)loadList {
     NSUInteger token = _token;
     [_session loadAvatarsOfDialog:_dialog completion:^(NSArray *photos, NSString *errorName) {

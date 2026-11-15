@@ -897,6 +897,7 @@ enum { SectionInfo, SectionLists, SectionSignOut, SectionCount };
             return;
         }
         [self loadProfile];
+        [_hero reloadPhotos];
     };
     if (video) [_session uploadProfileVideoAtPath:path completion:finished];
     else [_session uploadProfilePhotoAtPath:path completion:finished];

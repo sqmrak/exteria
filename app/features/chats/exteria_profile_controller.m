@@ -1010,6 +1010,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
             return;
         }
         [self loadProfile];
+        [_hero reloadPhotos];
     };
     if (video) [_session uploadProfileVideoAtPath:path completion:finished];
     else [_session uploadProfilePhotoAtPath:path completion:finished];

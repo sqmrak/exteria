@@ -30,6 +30,8 @@
 - (void)beginMove;
 /* the words and the strips come in, the pages take the place of the single picture, and the list of the photos is asked for */
 - (void)finishOpen;
+/* asks for the list of photos again and shows it from the first: a photo set while the wide photo is open would stay out of it until it was closed */
+- (void)reloadPhotos;
 /* the words and the strips go, and the single picture takes the place of the pages, before the view shrinks */
 - (void)beginClose;
 /* the corner follows a move of the frame, which a view animation does not carry */
