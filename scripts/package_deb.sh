@@ -29,6 +29,12 @@ done
 find "${STAGE}/var" -type d -exec chmod 755 {} +
 find "${STAGE}/var" -type f -exec chmod 644 {} +
 chmod 755 "${STAGE}/var/jb/Applications/Exteria.app/Exteria" "${STAGE}/var/jb/Applications/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare"
+# a bundle at /var/jb runs inside the jailbreak's own container sandbox, which blocks network like an
+# ordinary contained app unless it carries this entitlement, as senko and rewind already sign their
+# /var/jb builds; the ipa payload stays at /var/containers under the default profile, which allows it
+LDID="${EXTERIA_LDID:-${EXTERIA_TC:?set EXTERIA_TC or EXTERIA_LDID to resign the var/jb payload}/ldid}"
+[[ -x "${LDID}" ]] || { echo "missing ldid at ${LDID}" >&2; exit 1; }
+"${LDID}" -S"${ROOT}/packaging/entitlements-deb.plist" "${STAGE}/var/jb/Applications/Exteria.app/Exteria"
 install -m 755 "${ROOT}/packaging/deb/postinst" "${ROOT}/packaging/deb/postrm" "${STAGE}/DEBIAN/"
 SIZE="$(du -sk "${STAGE}/var" | cut -f1)"
 cat > "${STAGE}/DEBIAN/control" <<CONTROL
