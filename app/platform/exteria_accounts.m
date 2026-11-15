@@ -1,5 +1,7 @@
 #import "exteria_accounts.h"
 
+#import "exteria_avatar_cache.h"
+#import "exteria_person.h"
 #import "exteria_session.h"
 
 NSString *const ExteriaAccountSwitchNotification = @"ExteriaAccountSwitchNotification";
@@ -108,6 +110,23 @@ void ExteriaAccountSetPhoto(NSString *name, UIImage *image) {
     NSString *path = ExteriaAccountPhotoPath(name);
     NSError *error = nil;
     if (!data || ![data writeToFile:path options:NSDataWritingAtomic error:&error]) NSLog(@"exteria: the photo of the account %@ was not kept: %@", name, error);
+}
+
+void ExteriaAccountClearPhoto(NSString *name) {
+    NSString *path = ExteriaAccountPhotoPath(name);
+    NSError *error = nil;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:path] && ![[NSFileManager defaultManager] removeItemAtPath:path error:&error]) {
+        NSLog(@"exteria: the photo of the account %@ stays: %@", name, error);
+    }
+}
+
+void ExteriaAccountKeepPhotoOfPerson(ExteriaPerson *person, ExteriaAvatarCache *avatars) {
+    NSString *name = [[ExteriaAccountActive() copy] autorelease];
+    if (!person.photo) {
+        ExteriaAccountClearPhoto(name);
+        return;
+    }
+    [avatars loadImageForPhoto:person.photo completion:^(UIImage *image) { if (image) ExteriaAccountSetPhoto(name, image); }];
 }
 
 NSString *ExteriaAccountNameOfUser(long long userId, NSString *except) {

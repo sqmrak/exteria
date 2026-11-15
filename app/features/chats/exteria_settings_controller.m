@@ -261,6 +261,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
         [me->_person release];
         me->_person = [[items objectAtIndex:0] retain];
         [me->_avatars pinPhoto:me->_person.photo];
+        ExteriaAccountKeepPhotoOfPerson(me->_person, me->_avatars);
         ExteriaLiteSetPremium(ExteriaPremiumEffective(me->_person.premium));
         [me showPerson];
     }];

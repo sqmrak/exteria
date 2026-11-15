@@ -13,6 +13,7 @@
 
 #import "exteria_avatar_view.h"
 #import "exteria_alert.h"
+#import "exteria_accounts.h"
 #import "exteria_avatar_viewer.h"
 #import "exteria_profile_hero_view.h"
 #import "exteria_channel_card.h"
@@ -517,6 +518,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         }
         [_person release];
         _person = [[items objectAtIndex:0] retain];
+        ExteriaAccountKeepPhotoOfPerson(_person, _avatars);
         [self refreshProfile];
         [self refreshCurrentFeed];
         [self loadFull];

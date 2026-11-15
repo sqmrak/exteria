@@ -21,6 +21,11 @@ void ExteriaAccountSetInfo(NSString *name, NSString *title, NSString *username, 
 /* the profile photo of an account, kept on the phone so the list can show it while the account has no connection; nil when it has none or none was kept */
 UIImage *ExteriaAccountPhoto(NSString *name);
 void ExteriaAccountSetPhoto(NSString *name, UIImage *image);
+/* the account lost its photo: the one kept would show on in the list of accounts */
+void ExteriaAccountClearPhoto(NSString *name);
+/* keeps the photo of the person for the active account, or drops the kept one when the person has none; the list of accounts draws it for an account without a connection */
+@class ExteriaPerson, ExteriaAvatarCache;
+void ExteriaAccountKeepPhotoOfPerson(ExteriaPerson *person, ExteriaAvatarCache *avatars);
 /* the name of another account that is signed in as the same user, or nil */
 NSString *ExteriaAccountNameOfUser(long long userId, NSString *except);
 

@@ -8,6 +8,7 @@
 #import "exteria_chat_settings.h"
 #import "exteria_avatar_viewer.h"
 #import "exteria_avatar_viewer.h"
+#import "exteria_accounts.h"
 #import "exteria_profile_hero_view.h"
 #import "exteria_dialog.h"
 #import "exteria_emoji_label.h"
@@ -686,6 +687,7 @@ static UIFont *ExteriaClassicInfoCaptionFont(void) { return [UIFont systemFontOf
         }
         [_person release];
         _person = [[items objectAtIndex:0] retain];
+        ExteriaAccountKeepPhotoOfPerson(_person, _avatars);
         [self showPerson];
         [self loadFull];
     }];

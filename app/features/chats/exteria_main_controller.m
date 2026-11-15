@@ -442,8 +442,7 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
         ExteriaPerson *person = [items objectAtIndex:0];
         [_avatars pinPhoto:person.photo];
         /* the account list shows this face when the account is not the one in use, and then has no connection to ask for it */
-        NSString *accountName = [[ExteriaAccountActive() copy] autorelease];
-        if (person.photo) [_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) { if (image) ExteriaAccountSetPhoto(accountName, image); }];
+        ExteriaAccountKeepPhotoOfPerson(person, _avatars);
         ExteriaLiteSetPremium(ExteriaPremiumEffective(person.premium));
         if (profileItem != _classicProfileItem) return;
         if (!person.photo) {
@@ -787,8 +786,7 @@ static void ExteriaCollectWaves(UIView *view, NSMutableArray *waves) {
         }
         ExteriaPerson *person = [items objectAtIndex:0];
         [_avatars pinPhoto:person.photo];
-        NSString *accountName = [[ExteriaAccountActive() copy] autorelease];
-        if (person.photo) [_avatars loadImageForPhoto:person.photo completion:^(UIImage *image) { if (image) ExteriaAccountSetPhoto(accountName, image); }];
+        ExteriaAccountKeepPhotoOfPerson(person, _avatars);
         ExteriaLiteSetPremium(ExteriaPremiumEffective(person.premium));
         if (profileIndex >= 0) [_tabBar setAvatarInitials:person.initials seed:(NSUInteger)(person.userId % 1000003) photo:person.photo cache:_avatars
                                                  forIndex:profileIndex];
