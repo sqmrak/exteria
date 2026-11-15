@@ -42,8 +42,32 @@ NSString *const ExteriaMusicPlayerDidTickNotification = @"ExteriaMusicPlayerDidT
 /* back to the start of the song instead of the previous one when this far in */
 #define RESTART_AFTER 3.0
 
-/* the container AVPlayer sniffs by the file's extension on old systems, and the cache names files by key only */
-static NSString *ExteriaAudioExtension(ExteriaMedia *track) {
+/* the container of a file by its first bytes, nil when none is known. a name can say mp3 over an m4a, or say nothing, and AVPlayer of the newer systems refuses a file whose
+   extension names another container than the one inside it (error -11828, "cannot open") */
+static NSString *ExteriaSniffedAudioExtension(NSString *path) {
+    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
+    NSData *head = [handle readDataOfLength:12];
+    [handle closeFile];
+    if (head.length < 4) return nil;
+    const unsigned char *b = head.bytes;
+    if (!memcmp(b, "ID3", 3)) return @"mp3";
+    if (head.length >= 8 && !memcmp(b + 4, "ftyp", 4)) return @"m4a";
+    if (head.length >= 12 && !memcmp(b, "RIFF", 4) && !memcmp(b + 8, "WAVE", 4)) return @"wav";
+    if (head.length >= 12 && !memcmp(b, "FORM", 4) && (!memcmp(b + 8, "AIFF", 4) || !memcmp(b + 8, "AIFC", 4))) return @"aiff";
+    if (!memcmp(b, "caff", 4)) return @"caf";
+    if (!memcmp(b, "#!AM", 4)) return @"amr";
+    if (b[0] == 0xFF && (b[1] & 0xE0) == 0xE0) {
+        /* the layer bits are zero for the ADTS frames of AAC, and 1 to 3 for the frames of MPEG audio */
+        if (((b[1] >> 1) & 3) == 0) return @"aac";
+        if (((b[1] >> 1) & 3) != 1 || ((b[1] >> 3) & 3) != 1) return @"mp3";
+    }
+    return nil;
+}
+
+/* the container AVPlayer sniffs by the file's extension on old systems, and the cache names files by key only: what the bytes say first, then the name */
+static NSString *ExteriaAudioExtension(ExteriaMedia *track, NSString *path) {
+    NSString *sniffed = ExteriaSniffedAudioExtension(path);
+    if (sniffed) return sniffed;
     NSString *name = track.name.pathExtension.lowercaseString;
     if (name.length && name.length <= 5) return name;
     return @"mp3";
@@ -740,7 +764,7 @@ static BOOL ExteriaIsFlac(NSString *path) {
     }
     /* the folder of a link is emptied when the next link is made; two folders in turn keep the file of a player that a plugin took out and fades, until the song after next */
     _slotFlip = !_slotFlip;
-    [self playItemAtURL:ExteriaPlayableLink(path, ExteriaAudioExtension(_track), _slotFlip ? @"music-b" : @"music")];
+    [self playItemAtURL:ExteriaPlayableLink(path, ExteriaAudioExtension(_track, path), _slotFlip ? @"music-b" : @"music")];
 }
 
 - (void)tick:(NSTimer *)timer {
