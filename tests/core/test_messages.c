@@ -1436,6 +1436,20 @@ static void test_requests(void) {
     CHECK_EQ_INT(exteria_tl_id(exteria_tl_get(request, "filter")), EXTERIA_TL_ID_inputMessagesFilterRoundVoice);
     CHECK_EQ_INT(exteria_shared_request(&arena, &channel, EXTERIA_SHARED_VOICE, 50, 30, &request), EXTERIA_OK);
     { int32_t offset = 0; CHECK_EQ_INT(exteria_tl_get_i32(request, "offset_id", &offset), EXTERIA_OK); CHECK_EQ_INT(offset, 50); }
+    CHECK(!exteria_tl_has(request, "top_msg_id"));
+    /* the media tabs of a topic ask for its thread, the general topic and a plain group do not */
+    {
+        exteria_peer_ref topic = {3, 7, 88, 0, 12}, general = {3, 7, 88, 0, 1};
+        int32_t top = 0;
+        CHECK_EQ_INT(exteria_shared_request(&arena, &topic, EXTERIA_SHARED_FILES, 0, 30, &request), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &top), EXTERIA_OK);
+        CHECK_EQ_INT(top, 12);
+        CHECK_EQ_INT(exteria_shared_oldest_request(&arena, &topic, EXTERIA_SHARED_FILES, 1, &request), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_tl_get_i32(request, "top_msg_id", &top), EXTERIA_OK);
+        CHECK_EQ_INT(top, 12);
+        CHECK_EQ_INT(exteria_shared_request(&arena, &general, EXTERIA_SHARED_FILES, 0, 30, &request), EXTERIA_OK);
+        CHECK(!exteria_tl_has(request, "top_msg_id"));
+    }
     CHECK_EQ_INT(exteria_history_request(&arena, &chat, 120, 40, &request), EXTERIA_OK);
     check_encodes(request, EXTERIA_TL_ID_messages_getHistory);
     CHECK_EQ_INT(exteria_history_request(&arena, &channel, 120, 40, &request), EXTERIA_OK);
