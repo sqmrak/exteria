@@ -31,6 +31,33 @@ static CGFloat ExteriaInputIdleHeight(void) {
     return ExteriaThemeIsClassic() ? ExteriaClassicTabBarHeight() : [ExteriaTabBar barHeight];
 }
 
+/* the height of the lines the text container holds, laid out to the end. the layout manager is reached by key and invocation, the 6.1 sdk of the armv7 slice has no declaration of
+   it or of the rects it returns; 0 when the runtime has none (before ios 7) */
+static CGFloat ExteriaInputLaidOutHeight(UITextView *view) {
+    id manager = [view valueForKey:@"layoutManager"];
+    id container = [view valueForKey:@"textContainer"];
+    SEL ensure = NSSelectorFromString(@"ensureLayoutForTextContainer:");
+    SEL used = NSSelectorFromString(@"usedRectForTextContainer:");
+    SEL extra = NSSelectorFromString(@"extraLineFragmentUsedRect");
+    if (!manager || !container || ![manager respondsToSelector:ensure] || ![manager respondsToSelector:used]) return 0;
+    [manager performSelector:ensure withObject:container];
+    CGFloat bottom = 0;
+    SEL rects[2] = { used, extra };
+    for (int i = 0; i < 2; ++i) {
+        if (![manager respondsToSelector:rects[i]]) continue;
+        NSMethodSignature *signature = [manager methodSignatureForSelector:rects[i]];
+        NSInvocation *call = [NSInvocation invocationWithMethodSignature:signature];
+        call.target = manager;
+        call.selector = rects[i];
+        if (i == 0) [call setArgument:&container atIndex:2];
+        [call invoke];
+        CGRect rect = CGRectZero;
+        [call getReturnValue:&rect];
+        if (!CGRectIsNull(rect) && !CGRectIsInfinite(rect) && rect.size.height > 0) bottom = MAX(bottom, CGRectGetMaxY(rect));
+    }
+    return bottom;
+}
+
 static CGFloat ExteriaInputVerticalMargin(void) {
     /* a half point puts the bitmap of the round button between two pixels of a screen without retina, which drew its top and bottom row cut */
     return ExteriaIsPad() ? floor((ExteriaInputIdleHeight() - FIELD_MIN) / 2) : MARGIN;
@@ -679,18 +706,15 @@ static NSString *const ExteriaRecordModeKey = @"ExteriaRecordMode";
     if (_text.bounds.size.width > 0 && _text.bounds.size.width < TEXT_MEASURE_MIN_WIDTH) return 0;
     CGFloat width = _text.bounds.size.width > 0 ? _text.bounds.size.width : 200;
     if ([_text respondsToSelector:@selector(textContainer)]) {
-        /* a view that has a width is measured by where the caret of the end of the text stands, which depends on the words and the width alone, and not by sizeThatFits, which is
-           what the field was sized by when it stretched down the panel on ios 9 with its buttons out of sight; a view with no width yet keeps the old measure */
+        /* a view that has a width is measured by the layout manager: the rect its glyphs use, and the empty line a trailing line break opens. the caret of the end of the text was
+           measured before, and on a view that does not scroll it can stand on a line the layout has not reached, which left the field at one line; sizeThatFits is what the field was
+           sized by when it stretched down the panel on ios 9 with its buttons out of sight; a view with no width yet keeps that measure */
         if (_text.bounds.size.width > 0) {
-            /* the line a new line break opens is laid out lazily on ios 7 and later, so the caret of the end of the text still stood on the line before it when the change was reported, and
-               the field did not grow for the break */
-            /* reached by key, the 6.1 sdk of the armv7 slice has no declaration of them */
-            id manager = [_text valueForKey:@"layoutManager"];
-            SEL ensure = NSSelectorFromString(@"ensureLayoutForTextContainer:");
-            if ([manager respondsToSelector:ensure]) [manager performSelector:ensure withObject:[_text valueForKey:@"textContainer"]];
-            CGRect caret = [_text caretRectForPosition:_text.endOfDocument];
-            UIEdgeInsets inset = [[_text valueForKey:@"textContainerInset"] UIEdgeInsetsValue];
-            if (!CGRectIsNull(caret) && !CGRectIsInfinite(caret) && caret.size.height > 0) return ceil(CGRectGetMaxY(caret) + inset.bottom);
+            CGFloat used = ExteriaInputLaidOutHeight(_text);
+            if (used > 0) {
+                UIEdgeInsets inset = [[_text valueForKey:@"textContainerInset"] UIEdgeInsetsValue];
+                return ceil(used + inset.top + inset.bottom);
+            }
         }
         return ceil([_text sizeThatFits:CGSizeMake(width, CGFLOAT_MAX)].height);
     }
