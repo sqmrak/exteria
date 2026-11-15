@@ -93,7 +93,8 @@ static ExteriaWallpaperSetting ExteriaWallpaperStoredForTone(BOOL dark, int32_t 
     setting.angle = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperAngleKey, source, setting.chatKind, chat, 45), 0, 359);
     setting.pattern = ExteriaToneInteger(ExteriaWallpaperPatternKey, source, setting.chatKind, chat, 1) ? 1 : 0;
     setting.intensity = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperIntensityKey, source, setting.chatKind, chat, 50), 0, 100);
-    setting.blur = ExteriaToneInteger(ExteriaWallpaperBlurKey, source, setting.chatKind, chat, 0) ? 1 : 0;
+    /* a wallpaper whose blur the person never chose takes the setting of the chats, which is on unless it was turned off */
+    setting.blur = ExteriaToneInteger(ExteriaWallpaperBlurKey, source, setting.chatKind, chat, ExteriaChatFlagGet(ExteriaChatFlagBlurWallpaper) ? 1 : 0) ? 1 : 0;
     setting.dim = (int)ExteriaClampInt(ExteriaToneInteger(ExteriaWallpaperDimKey, source, setting.chatKind, chat, 0), 0, 100);
     if (setting.kind == ExteriaWallpaperColors && !ExteriaColorsFitTone(setting.top, setting.bottom, dark)) setting.kind = ExteriaWallpaperStandard;
     /* the photo of the day is the one the app always kept; the night has a file of its own, so legacy keys never lend a photo to it */
@@ -164,7 +165,7 @@ static BOOL ExteriaWallpaperUsePhoto(NSString *path, int32_t chatKind, long long
     }
     ExteriaWallpaperSetting setting = ExteriaWallpaperStoredForChat(chatKind, chat);
     setting.kind = ExteriaWallpaperPhoto;
-    setting.blur = 0;
+    setting.blur = ExteriaChatFlagGet(ExteriaChatFlagBlurWallpaper) ? 1 : 0;
     setting.dim = 0;
     ExteriaWallpaperStore(setting);
     return YES;

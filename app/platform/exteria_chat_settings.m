@@ -392,6 +392,7 @@ static const struct { NSString *key; BOOL fallback; } ExteriaChatFlagTable[Exter
     [ExteriaChatFlagHideAllChatsTab] = {@"exteria.chat.hidealltab", NO},
     [ExteriaChatFlagNoUnarchiveSwipe] = {@"exteria.chat.nounarchiveswipe", NO},
     [ExteriaChatFlagHideVpnButton] = {@"exteria.chat.hidevpn", NO},
+    [ExteriaChatFlagBlurWallpaper] = {@"exteria.chat.blurwallpaper", YES},
 };
 
 BOOL ExteriaChatFlagGet(ExteriaChatFlag flag) {

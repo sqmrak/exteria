@@ -1423,6 +1423,8 @@
 "chatset.wallpaper.colors" = "Обои";
 "chatset.wallpaper.pattern" = "Узор";
 "chatset.wallpaper.intensity" = "Насыщенность узора";
+"chatset.wallpaper.blurdefault" = "Размывать обои";
+"chatset.wallpaper.blurdefault.info" = "Фото в роли обоев размывается, пока вы не выключите размытие в его настройках.";
 "chatset.wallpaper.blur" = "Размытие";
 "chatset.wallpaper.dim" = "Затемнение";
 "chatset.tint.header" = "Цвет приложения";

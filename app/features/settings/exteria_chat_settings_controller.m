@@ -10,6 +10,7 @@
 #import "exteria_app_icon_list_view.h"
 #import "exteria_audio_session.h"
 #import "exteria_chat_settings.h"
+#import "exteria_wallpaper.h"
 #import "exteria_lite_mode_controller.h"
 #import "exteria_night_mode.h"
 #import "exteria_night_mode_controller.h"
@@ -250,6 +251,12 @@ static NSString *ExteriaNightStateText(void) {
     [looks addObject:[ExteriaSettingsRow rowWithSymbol:ExteriaSymbolApps tone:ExteriaSettingsTonePurple title:NSLocalizedString(@"tabedit.title", nil) subtitle:nil value:nil tap:^{
         ExteriaChatSettingsController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaTabEditor alloc] init] autorelease] animated:YES];
+    }]];
+    [looks addObject:[ExteriaSettingsRow switchRowWithTitle:NSLocalizedString(@"chatset.wallpaper.blurdefault", nil) subtitle:NSLocalizedString(@"chatset.wallpaper.blurdefault.info", nil)
+                                                         on:ExteriaChatFlagGet(ExteriaChatFlagBlurWallpaper) toggle:^(BOOL on) {
+        ExteriaChatFlagSet(ExteriaChatFlagBlurWallpaper, on);
+        /* the wallpapers whose blur was never chosen are drawn again */
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaWallpaperDidChangeNotification object:nil];
     }]];
     if (looks.count) [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:looks]];
 

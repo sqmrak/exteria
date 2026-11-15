@@ -240,6 +240,7 @@ typedef enum {
     ExteriaChatFlagShowMessageEmojiStatus,
     ExteriaChatFlagShowReplyCustomEmoji,
     ExteriaChatFlagAyuCopyProtected,
+    ExteriaChatFlagBlurWallpaper,               /* a photo set as the wallpaper of the chats is blurred until the person turns the blur off for that wallpaper; on by default, as in Telegram */
     ExteriaChatFlagForwardAuthor,               /* a message forwarded without its author goes as a copy that opens with the name and @username of whoever wrote it */
     ExteriaChatFlagCount
 } ExteriaChatFlag;

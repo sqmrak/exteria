@@ -1418,6 +1418,8 @@
 "chatset.wallpaper.colors" = "Wallpaper";
 "chatset.wallpaper.pattern" = "Pattern";
 "chatset.wallpaper.intensity" = "Pattern intensity";
+"chatset.wallpaper.blurdefault" = "Blur the wallpaper";
+"chatset.wallpaper.blurdefault.info" = "A photo wallpaper is blurred unless you turn the blur off in its own settings.";
 "chatset.wallpaper.blur" = "Blur";
 "chatset.wallpaper.dim" = "Dimming";
 "chatset.tint.header" = "App color";
