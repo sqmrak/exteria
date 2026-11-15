@@ -213,6 +213,8 @@ static BOOL ExteriaSetPlayerVolume(AVPlayer *player, AVPlayerItem *item, float v
     ExteriaMediaCache *_media;
     ExteriaMusicState _state;
     ExteriaMusicFailure _failure;
+    /* the system's own words for what went wrong, kept whole for the screen */
+    NSString *_failureDetail;
     float _loadProgress;
     AVPlayer *_player;
     AVPlayerItem *_item;
@@ -509,10 +511,18 @@ static BOOL ExteriaSetPlayerVolume(AVPlayer *player, AVPlayerItem *item, float v
     NSLog(@"exteria: song %@ does not play: %@", _track.file.key, reason);
     [self releasePlayer];
     _failure = failure;
+    [_failureDetail release];
+    _failureDetail = [reason copy];
     [self setState:ExteriaMusicStateFailed];
 }
 
+/* the sentence of the failure and under it what the system reported, whole: the screens wrap it instead of cutting it, since the first words alone name no cause */
 - (NSString *)failureText {
+    NSString *base = [self failureSentence];
+    return _failureDetail.length ? [NSString stringWithFormat:@"%@\n%@", base, _failureDetail] : base;
+}
+
+- (NSString *)failureSentence {
     switch (_failure) {
     case ExteriaMusicFailureDownload: return NSLocalizedString(@"music.failed.download", nil);
     case ExteriaMusicFailureOpen: return NSLocalizedString(@"music.failed.open", nil);
@@ -767,11 +777,23 @@ static BOOL ExteriaIsFlac(NSString *path) {
     [self playItemAtURL:ExteriaPlayableLink(path, ExteriaAudioExtension(_track, path), _slotFlip ? @"music-b" : @"music")];
 }
 
+/* domain, code, the description and the reason the system gives, and the error under it when there is one, as one text */
+static NSString *ExteriaFullErrorText(NSError *error) {
+    if (!error) return @"AVPlayerItem failed without an error";
+    NSMutableString *text = [NSMutableString string];
+    for (NSError *current = error; current; current = [[current userInfo] objectForKey:NSUnderlyingErrorKey]) {
+        if (text.length) [text appendString:@"\n"];
+        [text appendFormat:@"%@ %ld: %@", current.domain, (long)current.code, current.localizedDescription];
+        if (current.localizedFailureReason.length) [text appendFormat:@" (%@)", current.localizedFailureReason];
+    }
+    return text;
+}
+
 - (void)tick:(NSTimer *)timer {
     (void)timer;
     if (!_item) return;
     if (_item.status == AVPlayerItemStatusFailed) {
-        [self fail:[_item.error description] failure:ExteriaMusicFailureFormat];
+        [self fail:ExteriaFullErrorText(_item.error) failure:ExteriaMusicFailureFormat];
         return;
     }
     if (_item.status == AVPlayerItemStatusUnknown && ++_waitTicks > READY_TICKS) {
@@ -835,6 +857,8 @@ static BOOL ExteriaIsFlac(NSString *path) {
         return;
     }
     _failure = ExteriaMusicFailureNone;
+    [_failureDetail release];
+    _failureDetail = nil;
     [self setState:ExteriaMusicStateLoading];
     NSUInteger token = _token;
     [_media loadCoverForTrack:track maxSide:COVER_SIDE completion:^(UIImage *image) {

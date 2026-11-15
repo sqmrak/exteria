@@ -205,7 +205,11 @@ static UIButton *SheetButton(ExteriaSymbol symbol, id target, SEL action, NSStri
     ExteriaPlaceView(_panel, CGRectMake((self.bounds.size.width - width) / 2, self.bounds.size.height - height, width, height));
     _cover.frame = CGRectMake(16, 20, 54, 54);
     _title.frame = CGRectMake(82, 23, MAX(0, width - 182), 22);
-    _performer.frame = CGRectMake(82, 47, MAX(0, width - 182), 20);
+    /* a failed song gives its whole reason the room of the slider, which has nothing to show then */
+    BOOL failed = [ExteriaMusicPlayer sharedPlayer].state == ExteriaMusicStateFailed;
+    _performer.numberOfLines = failed ? 0 : 1;
+    _performer.frame = failed ? CGRectMake(82, 47, MAX(0, width - 98), 74) : CGRectMake(82, 47, MAX(0, width - 182), 20);
+    _slider.hidden = _elapsed.hidden = _remaining.hidden = failed;
     [_panel viewWithTag:3].frame = CGRectMake(width - 48, 8, 40, 40);
     [_panel viewWithTag:6].frame = CGRectMake(width - 92, 8, 40, 40);
     _slider.frame = CGRectMake(16, 78, width - 32, 24);
@@ -229,6 +233,7 @@ static NSString *SheetTime(NSTimeInterval value) {
     if (!player.track) { [self dismiss]; return; }
     _title.text = ExteriaTrackTitle(player.track);
     _performer.text = player.state == ExteriaMusicStateFailed ? player.failureText : ExteriaTrackPerformer(player.track);
+    [self setNeedsLayout];
     _cover.image = player.cover ? player.cover : ExteriaSymbolImage(ExteriaSymbolPlayerNote, 28, ExteriaColorAccent());
     _cover.backgroundColor = ExteriaColorField();
     BOOL playing = player.state == ExteriaMusicStatePlaying || player.state == ExteriaMusicStateLoading;
