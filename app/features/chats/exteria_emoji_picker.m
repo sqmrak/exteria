@@ -287,8 +287,11 @@ static const struct { uint32_t points[2]; size_t count; } ExteriaGroupFaces[EXTE
 
 - (void)askQuery {
     ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
-    ExteriaPromptText(NSLocalizedString(@"panel.emoji.search", nil), nil, _query, nil, ^(NSString *text) {
+    ExteriaPromptTextThen(NSLocalizedString(@"panel.emoji.search", nil), nil, _query, nil, ^(NSString *text) {
         [(ExteriaEmojiPicker *)weak.target searchFor:[text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]];
+    }, ^{
+        ExteriaEmojiPicker *picker = weak.target;
+        if (picker) [picker->_delegate emojiPickerDidCloseSearch:picker];
     });
 }
 

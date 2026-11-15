@@ -3409,6 +3409,12 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     else [text becomeFirstResponder];
 }
 
+/* the alert of the search took the focus from the field, and inputBarDidEndEditing put the panel away with it: the panel comes back on the emoji list, with the result of the search */
+- (void)inputPanelDidCloseEmojiSearch:(ExteriaInputPanel *)panel {
+    (void)panel;
+    if (!_panelShown) [self inputBarDidTapPanelButton:_input];
+}
+
 - (void)inputPanel:(ExteriaInputPanel *)panel didPickEmoji:(NSString *)emoji {
     (void)panel;
     [_input insertEmoji:emoji];

@@ -22,6 +22,13 @@ void ExteriaChoose(NSString *title, NSArray *choices, NSInteger destructiveIndex
    phone it is the sheet from the bottom as before */
 void ExteriaChooseFromView(UIView *source, NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index));
 
+/* the choices on the system sheet whatever the style: the system puts it in a window of its own above the keyboard, which the sheet of the application is not, so a choice asked
+   while the emoji and sticker panel stands in the place of the keyboard is seen here and hidden under the panel there */
+void ExteriaChooseWithSystemSheet(UIView *source, NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index));
+
+/* ExteriaPromptText, and dismissed runs once the alert is off the screen whichever button closed it, for a caller that gives the keyboard back to a field the alert took it from */
+void ExteriaPromptTextThen(NSString *title, NSString *message, NSString *initial, NSString *placeholder, void (^handler)(NSString *text), void (^dismissed)(void));
+
 /* the same, and cancelled runs when the question is turned down instead (Cancel, or the application going to the background) */
 void ExteriaPromptTextOrCancel(NSString *title, NSString *message, NSString *initial, NSString *placeholder, void (^handler)(NSString *text), void (^cancelled)(void));
 

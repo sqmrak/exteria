@@ -662,7 +662,8 @@ typedef enum { ExteriaSectionFaved, ExteriaSectionRecent, ExteriaSectionSet } Ex
     if (!sticker || create) return;
     BOOL faved = NO;
     for (ExteriaSticker *known in _faved) if (known.media.ref.id == sticker.media.ref.id) { faved = YES; break; }
-    ExteriaChoose(nil, [NSArray arrayWithObject:NSLocalizedString(faved ? @"chat.stickers.unfave" : @"chat.stickers.fave", nil)], -1, ^(NSInteger index) {
+    /* the panel is the keyboard of the field, in a window above the application's: the sheet of the application came up under it, and the choice was never seen */
+    ExteriaChooseWithSystemSheet(self, nil, [NSArray arrayWithObject:NSLocalizedString(faved ? @"chat.stickers.unfave" : @"chat.stickers.fave", nil)], -1, ^(NSInteger index) {
         (void)index;
         [_library faveSticker:sticker unfave:faved completion:^(NSString *errorName) {
             if (errorName) {

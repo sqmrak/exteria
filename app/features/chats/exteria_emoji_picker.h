@@ -5,6 +5,8 @@
 @protocol ExteriaEmojiPickerDelegate <NSObject>
 /* entry is an index into the emoji table; its string is what goes into the message */
 - (void)emojiPicker:(ExteriaEmojiPicker *)picker didPickEntry:(size_t)entry;
+/* the question of the search is off the screen, answered or turned down; it took the keyboard focus of the message field, which the owner gives back */
+- (void)emojiPickerDidCloseSearch:(ExteriaEmojiPicker *)picker;
 @end
 
 /* the emoji grid: the ones used lately, then the nine groups, with a strip that jumps between them. the magnifier at the head of the strip asks for a word, and the grid shows the

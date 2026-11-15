@@ -303,6 +303,11 @@ typedef enum { ExteriaPageEmoji, ExteriaPageGifs, ExteriaPageStickers, ExteriaPa
     [_delegate inputPanel:self didPickEmoji:ExteriaEmojiString(entry)];
 }
 
+- (void)emojiPickerDidCloseSearch:(ExteriaEmojiPicker *)picker {
+    (void)picker;
+    [_delegate inputPanelDidCloseEmojiSearch:self];
+}
+
 - (void)stickerPicker:(ExteriaStickerPicker *)picker didPickSticker:(ExteriaSticker *)sticker {
     (void)picker;
     [_delegate inputPanel:self didPickSticker:sticker];

@@ -16,6 +16,7 @@
     BOOL plainInput;
     BOOL done;
     NSInteger choiceCount;
+    void (^dismissed)(void);
 }
 @end
 
@@ -24,6 +25,7 @@
 - (void)dealloc {
     [handler release];
     [sheetHandler release];
+    [dismissed release];
     [super dealloc];
 }
 
@@ -44,6 +46,7 @@
 - (void)alertView:(UIAlertView *)alert didDismissWithButtonIndex:(NSInteger)index {
     (void)alert;
     (void)index;
+    if (dismissed) dismissed();
     [self autorelease];
 }
 
@@ -64,8 +67,8 @@
 @end
 
 /* style: 0 none, 1 secure field, 2 plain field with initial and placeholder */
-static void ExteriaPresentAlert(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, int style, NSString *initial, NSString *placeholder,
-                                ExteriaAlertHandler handler) {
+static ExteriaAlertTarget *ExteriaPresentAlert(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, int style, NSString *initial, NSString *placeholder,
+                                               ExteriaAlertHandler handler) {
     Class alertClass = ExteriaAlertClass();
     ExteriaAlertTarget *target = [[ExteriaAlertTarget alloc] init];
     target->handler = [handler copy];
@@ -87,6 +90,8 @@ static void ExteriaPresentAlert(NSString *title, NSString *message, NSArray *but
     }
     [alert show];
     [alert release];
+    /* the alert keeps its delegate unretained and releases the target itself when it is gone, so this pointer stays valid until the dismissal */
+    return target;
 }
 
 void ExteriaShowAlert(NSString *title, NSString *message, NSArray *buttons, NSInteger cancelIndex, BOOL secure, ExteriaAlertHandler handler) {
@@ -104,6 +109,16 @@ void ExteriaPromptText(NSString *title, NSString *message, NSString *initial, NS
         if (index == 1 && done) done(text ? text : @"");
         [done release];
     });
+}
+
+void ExteriaPromptTextThen(NSString *title, NSString *message, NSString *initial, NSString *placeholder, void (^handler)(NSString *text), void (^dismissed)(void)) {
+    void (^done)(NSString *) = [handler copy];
+    ExteriaAlertTarget *target = ExteriaPresentAlert(title, message, [NSArray arrayWithObjects:NSLocalizedString(@"picker.cancel", nil), NSLocalizedString(@"tr.ok", nil), nil], 0, 2,
+                                                     initial, placeholder, ^(NSInteger index, NSString *text) {
+        if (index == 1 && done) done(text ? text : @"");
+        [done release];
+    });
+    target->dismissed = [dismissed copy];
 }
 
 void ExteriaPromptTextOrCancel(NSString *title, NSString *message, NSString *initial, NSString *placeholder, void (^handler)(NSString *text), void (^cancelled)(void)) {
@@ -150,6 +165,10 @@ void ExteriaChooseFromView(UIView *source, NSString *title, NSArray *choices, NS
         }];
         return;
     }
+    ExteriaChooseWithSystemSheet(source, title, choices, destructiveIndex, handler);
+}
+
+void ExteriaChooseWithSystemSheet(UIView *source, NSString *title, NSArray *choices, NSInteger destructiveIndex, void (^handler)(NSInteger index)) {
     Class sheetClass = NSClassFromString(@"UIActionSheet");
     ExteriaAlertTarget *target = [[ExteriaAlertTarget alloc] init];
     target->sheetHandler = [handler copy];

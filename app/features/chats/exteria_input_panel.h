@@ -10,6 +10,8 @@
 @protocol ExteriaInputPanelDelegate <NSObject>
 - (void)inputPanel:(ExteriaInputPanel *)panel didPickEmoji:(NSString *)emoji;
 - (void)inputPanelDidTapBackspace:(ExteriaInputPanel *)panel;
+/* the word question of the emoji search is gone; the field lost its focus to it, so the owner shows the panel again */
+- (void)inputPanelDidCloseEmojiSearch:(ExteriaInputPanel *)panel;
 - (void)inputPanel:(ExteriaInputPanel *)panel didPickSticker:(ExteriaSticker *)sticker;
 - (void)inputPanel:(ExteriaInputPanel *)panel didPickCustomEmoji:(ExteriaCustomEmojiDocument *)emoji;
 - (void)inputPanel:(ExteriaInputPanel *)panel didPickGif:(ExteriaMedia *)gif;
