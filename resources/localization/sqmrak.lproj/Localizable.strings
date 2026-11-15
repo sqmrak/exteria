@@ -2367,6 +2367,7 @@
 "stats.forwards.story" = "история";
 "stats.forwards.views" = "просмотров: %d";
 "stats.forwards.limit" = "показаны первые 300 репостов.";
+"stats.wait" = "telegram просит подождать %d с перед повторной попыткой.";
 "link.error.private" = "это сообщение из чата, в который этот аккаунт не вступил, или ссылка не для него.";
 "developer.manager" = "официальный менеджер @sqmrak";
 "theme.import.title" = "импорт темы";
