@@ -3657,7 +3657,18 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
     [_people addEntriesFromDictionary:people];
     [self mergeMessages:kept];
     [self rebuildItems];
-    if (_stickToBottom && _startMessageId <= 0) [self scrollToBottomAnimated:NO];
+    if (_startMessageId > 0 && _restoringScroll) {
+        /* the place the person left the chat at: the list that is shown from its top and moved to the place when the network answers was seen scrolling up first. the kept page
+           goes straight to the place when it holds it, and when it does not the list stays hidden until the answer finds it */
+        int32_t place = _startMessageId;
+        BOOL held = NO;
+        for (ExteriaChatItem *item in _items) if (item.message.messageId == place) { held = YES; break; }
+        if (!held) return;
+        _startMessageId = 0;
+        [self restoreScrollToMessageId:place];
+    } else if (_stickToBottom && _startMessageId <= 0) {
+        [self scrollToBottomAnimated:NO];
+    }
     _table.hidden = NO;
     /* a network failure can arrive before the cached page */
     [self showStatus:nil retry:NO];
