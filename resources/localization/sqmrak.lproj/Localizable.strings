@@ -1464,6 +1464,8 @@
 "contacts.sort.totime" = "сортировка по времени";
 "contacts.sort.toname" = "сортировка по имени";
 "chat.service.premium" = "%@ подарил(а) premium на %@";
+"chat.service.stars" = "%@ подарил(а) %@";
+"chat.service.stars.unknown" = "%@ подарил(а) звёзды";
 "chat.period.months" = "%d мес.";
 "chat.service.theme" = "%@ сменил(а) тему чата на %@";
 "chat.service.theme.off" = "%@ отключил(а) тему чата";

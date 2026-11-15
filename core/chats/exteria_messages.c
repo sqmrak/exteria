@@ -505,6 +505,7 @@ static exteria_service_kind service_kind(const exteria_tl_value *action) {
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionPollAppendAnswer)) return EXTERIA_SERVICE_POLL_ANSWER_ADDED;
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionPollDeleteAnswer)) return EXTERIA_SERVICE_POLL_ANSWER_REMOVED;
     if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionChangeCommunity)) return EXTERIA_SERVICE_COMMUNITY;
+    if (exteria_tl_is(action, EXTERIA_TL_ID_messageActionGiftStars)) return EXTERIA_SERVICE_STARS_GIFT;
     return EXTERIA_SERVICE_OTHER;
 }
 
@@ -569,6 +570,10 @@ uint8_t exteria_service_summary(const exteria_tl_value *action, char *text, size
             int32_t days = 0;
             if (exteria_tl_get_i32(action, "days", &days) == EXTERIA_OK && days > 0) *value = (days + 15) / 30;
             else exteria_tl_get_i32(action, "months", value);
+        }
+        if (kind == EXTERIA_SERVICE_STARS_GIFT) {
+            int64_t stars = 0;
+            if (exteria_tl_get_i64(action, "stars", &stars) == EXTERIA_OK && stars > 0) *value = stars > INT32_MAX ? INT32_MAX : (int32_t)stars;
         }
         /* no community_id means the chat left its community */
         if (kind == EXTERIA_SERVICE_COMMUNITY && !exteria_tl_has(action, "community_id")) *value |= 1;

@@ -2055,6 +2055,17 @@ static void test_service_summary(void) {
     set_str(action, "title", "a title that does not fit into the small buffer given to the call, which is only sixty-four bytes");
     CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_TOPIC_CREATE + 1);
     CHECK(strlen(text) < sizeof(text));
+    /* a gift of Stars carries the amount; an amount past int32 is capped, and a missing one reads as zero */
+    action = obj("messageActionGiftStars");
+    set_i64(action, "stars", 500);
+    CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_STARS_GIFT + 1);
+    CHECK_EQ_INT(value, 500);
+    set_i64(action, "stars", 5000000000LL);
+    CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_STARS_GIFT + 1);
+    CHECK_EQ_INT(value, INT32_MAX);
+    set_i64(action, "stars", -4);
+    CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_STARS_GIFT + 1);
+    CHECK_EQ_INT(value, 0);
     action = obj("messageActionPaymentSent");
     CHECK_EQ_INT(exteria_service_summary(action, text, sizeof(text), &value, &target), EXTERIA_SERVICE_PAYMENT + 1);
     action = obj("messageActionNoForwardsRequest");

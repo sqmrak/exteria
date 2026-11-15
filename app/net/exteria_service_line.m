@@ -1,5 +1,7 @@
 #import "exteria_service_line.h"
 
+#import "exteria_gift_screen.h"
+
 /* 3600 as "1 h", 172800 as "2 d": the largest unit that divides the period, hours and minutes below a day */
 static NSString *ExteriaPeriodText(int32_t seconds) {
     if (seconds % 604800 == 0) return [NSString stringWithFormat:NSLocalizedString(@"chat.period.weeks", nil), (int)(seconds / 604800)];
@@ -71,6 +73,10 @@ NSString *ExteriaServiceLine(exteria_service_kind kind, NSString *who, NSString 
     case EXTERIA_SERVICE_BOT_ALLOWED: return NSLocalizedString(@"chat.service.botallowed", nil);
     case EXTERIA_SERVICE_PREMIUM_GIFT:
         return [NSString stringWithFormat:NSLocalizedString(@"chat.service.premium", nil), actor, [NSString stringWithFormat:NSLocalizedString(@"chat.period.months", nil), (int)MAX(1, value)]];
+    case EXTERIA_SERVICE_STARS_GIFT:
+        /* a gift whose amount cannot be read still says it was a gift of Stars */
+        if (value <= 0) return [NSString stringWithFormat:NSLocalizedString(@"chat.service.stars.unknown", nil), actor];
+        return [NSString stringWithFormat:NSLocalizedString(@"chat.service.stars", nil), actor, ExteriaStarsText(value)];
     case EXTERIA_SERVICE_THEME:
         if (text.length) return [NSString stringWithFormat:NSLocalizedString(@"chat.service.theme", nil), actor, text];
         return [NSString stringWithFormat:NSLocalizedString(@"chat.service.theme.off", nil), actor];

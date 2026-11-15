@@ -1458,6 +1458,8 @@
 "contacts.sort.totime" = "Sort by time";
 "contacts.sort.toname" = "Sort by name";
 "chat.service.premium" = "%@ gifted Premium for %@";
+"chat.service.stars" = "%@ gifted %@";
+"chat.service.stars.unknown" = "%@ gifted Stars";
 "chat.period.months" = "%d mo.";
 "chat.service.theme" = "%@ changed the chat theme to %@";
 "chat.service.theme.off" = "%@ turned the chat theme off";

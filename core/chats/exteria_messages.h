@@ -121,7 +121,8 @@ typedef enum exteria_service_kind {
     EXTERIA_SERVICE_SHARING_TOGGLE,  /* value bits: previous, new */
     EXTERIA_SERVICE_POLL_ANSWER_ADDED,   /* text is the answer a person added to a poll */
     EXTERIA_SERVICE_POLL_ANSWER_REMOVED, /* text is the answer a person took out of a poll */
-    EXTERIA_SERVICE_COMMUNITY            /* value bits: 1 taken out of the community, 2 no person acted (the chat itself or a channel post); the community is service_community */
+    EXTERIA_SERVICE_COMMUNITY,           /* value bits: 1 taken out of the community, 2 no person acted (the chat itself or a channel post); the community is service_community */
+    EXTERIA_SERVICE_STARS_GIFT           /* value is the number of Stars given, capped at INT32_MAX; the gift of a Stars balance, not a collectible gift */
 } exteria_service_kind;
 
 /* how a call ended, as the server says: nothing for a call that was talked through and hung up */
