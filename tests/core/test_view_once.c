@@ -66,6 +66,18 @@ int main(void) {
     exteria_tl_value *refused = NULL;
     CHECK_EQ_INT(exteria_send_upload_request(&arena, &peer, uploaded_file(&arena), &spec, 52, &refused), EXTERIA_E_ARG);
     CHECK(refused == NULL);
+    /* the office MIME type is longer than the old 47-byte limit */
+    const char *docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const uint8_t *mime_bytes = NULL;
+    size_t mime_length = 0;
+    exteria_tl_value *document_request = NULL;
+    spec.view_once = 0;
+    snprintf(spec.name, sizeof(spec.name), "a.docx");
+    CHECK(strlen(docx_mime) < sizeof(spec.mime));
+    snprintf(spec.mime, sizeof(spec.mime), "%s", docx_mime);
+    CHECK_EQ_INT(exteria_send_upload_request(&arena, &peer, uploaded_file(&arena), &spec, 53, &document_request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_get_bytes(exteria_tl_get(document_request, "media"), "mime_type", &mime_bytes, &mime_length), EXTERIA_OK);
+    CHECK(mime_length == strlen(docx_mime) && !memcmp(mime_bytes, docx_mime, mime_length));
     /* what arrives: the ttl of a photo and a document is kept, an ordinary one has none, and a negative one is not trusted */
     check_read(&arena, "messageMediaPhoto", EXTERIA_VIEW_ONCE_TTL, EXTERIA_VIEW_ONCE_TTL);
     check_read(&arena, "messageMediaPhoto", 10, 10);

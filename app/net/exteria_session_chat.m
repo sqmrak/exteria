@@ -202,6 +202,17 @@ static NSString *ExteriaFittedFileName(NSString *name) {
     return result ? result : name;
 }
 
+static NSString *ExteriaSetDocumentFields(exteria_upload_spec *spec, NSString *name, NSString *mime) {
+    int nameLength = snprintf(spec->name, sizeof(spec->name), "%s", ExteriaFittedFileName(name).UTF8String);
+    int mimeLength = snprintf(spec->mime, sizeof(spec->mime), "%s", mime.length ? mime.UTF8String : "application/octet-stream");
+    if (nameLength < 0 || (size_t)nameLength >= sizeof(spec->name)) return @"FILE_NAME_TOO_LONG";
+    if (mimeLength < 0 || (size_t)mimeLength >= sizeof(spec->mime)) {
+        NSLog(@"exteria: document MIME type is too long");
+        return @"UPLOAD_FAILED";
+    }
+    return nil;
+}
+
 @implementation ExteriaSession (Chat)
 
 - (void)deliverMain:(void (^)(void))block {
@@ -550,15 +561,13 @@ static NSString *ExteriaFittedFileName(NSString *name) {
     ExteriaOutgoing *item = [job->outgoings objectAtIndex:job->next];
     ExteriaUploadJob *upload = [[ExteriaUploadJob alloc] init];
     upload->peer = job->peer;
-    BOOL fits = YES;
+    NSString *fieldError = nil;
     if (item->kind == ExteriaOutgoingVideo) {
         upload->spec = ExteriaSpec(EXTERIA_UPLOAD_VIDEO, item->durationMs, item->width, item->height);
     } else if (item->kind == ExteriaOutgoingFile) {
         /* files sent without compression go out as a group of documents, which the server shows as one album */
         upload->spec = ExteriaSpec(EXTERIA_UPLOAD_FILE, 0, 0, 0);
-        int nameLength = snprintf(upload->spec.name, sizeof(upload->spec.name), "%s", ExteriaFittedFileName(item->name).UTF8String);
-        int mimeLength = snprintf(upload->spec.mime, sizeof(upload->spec.mime), "%s", item->mime.length ? item->mime.UTF8String : "application/octet-stream");
-        fits = nameLength >= 0 && (size_t)nameLength < sizeof(upload->spec.name) && mimeLength >= 0 && (size_t)mimeLength < sizeof(upload->spec.mime);
+        fieldError = ExteriaSetDocumentFields(&upload->spec, item->name, item->mime);
     } else {
         upload->spec = ExteriaSpec(EXTERIA_UPLOAD_PHOTO, 0, 0, 0);
     }
@@ -572,8 +581,8 @@ static NSString *ExteriaFittedFileName(NSString *name) {
         ++job->next;
         [self post:^{ [self albumUploadNext:job]; }];
     } copy];
-    if (!fits) {
-        [self failUpload:upload error:@"FILE_NAME_TOO_LONG"];
+    if (fieldError) {
+        [self failUpload:upload error:fieldError];
         return;
     }
     NSString *file = [item->path copy];
@@ -824,9 +833,8 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
     spec.animated = outgoing->animated && kind == EXTERIA_UPLOAD_FILE ? 1 : 0;
     if (!ExteriaUploadCaption(&spec, outgoing->caption)) { completion(0, @"CAPTION_TOO_LONG"); return; }
     if (kind == EXTERIA_UPLOAD_FILE) {
-        int nameLength = snprintf(spec.name, sizeof(spec.name), "%s", ExteriaFittedFileName(outgoing->name).UTF8String);
-        int mimeLength = snprintf(spec.mime, sizeof(spec.mime), "%s", outgoing->mime.length ? outgoing->mime.UTF8String : "application/octet-stream");
-        if (nameLength < 0 || (size_t)nameLength >= sizeof(spec.name) || mimeLength < 0 || (size_t)mimeLength >= sizeof(spec.mime)) { completion(0, @"FILE_NAME_TOO_LONG"); return; }
+        NSString *fieldError = ExteriaSetDocumentFields(&spec, outgoing->name, outgoing->mime);
+        if (fieldError) { completion(0, fieldError); return; }
         if (outgoing->music) {
             int titleLength = snprintf(spec.title, sizeof(spec.title), "%s", outgoing->title.UTF8String ? outgoing->title.UTF8String : "");
             int performerLength = snprintf(spec.performer, sizeof(spec.performer), "%s", outgoing->performer.UTF8String ? outgoing->performer.UTF8String : "");
@@ -856,8 +864,8 @@ static BOOL ExteriaUploadCaption(exteria_upload_spec *spec, NSString *caption) {
                 completion:(ExteriaSendCompletion)completion {
     exteria_upload_spec spec = ExteriaSpec(EXTERIA_UPLOAD_FILE, 0, 0, 0);
     if (!ExteriaUploadCaption(&spec, caption)) { completion(0, @"CAPTION_TOO_LONG"); return; }
-    snprintf(spec.name, sizeof(spec.name), "%s", name.UTF8String);
-    snprintf(spec.mime, sizeof(spec.mime), "%s", mime.length ? mime.UTF8String : "application/octet-stream");
+    NSString *fieldError = ExteriaSetDocumentFields(&spec, name, mime);
+    if (fieldError) { completion(0, fieldError); return; }
     [self sendUploadAtPath:path spec:spec waveform:nil toDialog:dialog randomId:randomId completion:completion];
 }
 

@@ -11,7 +11,8 @@
 
 #define EXTERIA_MEDIA_NAME_MAX 256
 #define EXTERIA_MEDIA_ALT_MAX 32
-#define EXTERIA_MEDIA_MIME_MAX 48
+/* type and subtype can each hold 127 bytes, plus slash and terminator */
+#define EXTERIA_MEDIA_MIME_MAX 256
 #define EXTERIA_MEDIA_TAG_MAX 96
 /* the packed waveform of a voice note; a longer one than this is dropped, since the picture is only decoration */
 #define EXTERIA_MEDIA_WAVEFORM_MAX 256
