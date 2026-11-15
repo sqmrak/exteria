@@ -131,6 +131,8 @@
     UIImageView *_topicIcon;
     NSInteger _topicMessages;
     BOOL _topicMessagesKnown;
+    /* getFullChannel fails now and then on a bad network, and nothing else fills the sections under the head, so it is asked again a few times */
+    NSUInteger _fullAttempts;
     ExteriaProfileHeroView *_hero;
     /* the photo opened wide in the head: the frame it was a circle in, the height it grows to, and whether it is open */
     CGRect _heroCircle;
@@ -499,22 +501,34 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     return NSLocalizedString(_full.username.length ? @"channel.kind.public" : @"channel.kind.private", nil);
 }
 
+#define FULL_ATTEMPTS 4
+#define FULL_RETRY_DELAY 2.0
+
 - (void)load {
+    [self loadFull];
+    ExteriaWeakReference *me = _weak;
+    [_feed reload:^{ [(ExteriaChannelProfileController *)me.target feedChanged]; }];
+}
+
+- (void)loadFull {
     ExteriaWeakReference *me = _weak;
     [self retain];
+    ++_fullAttempts;
     [self.session loadFullChannelOfDialog:_dialog completion:^(ExteriaFullChannel *channel, NSString *errorName) {
         [self autorelease];
         ExteriaChannelProfileController *profile = me.target;
         if (!profile) return;
         if (!channel) {
-            NSLog(@"exteria: the profile of channel %lld did not load: %@", profile->_dialog.peerId, errorName);
+            NSLog(@"exteria: the profile of channel %lld (topic %d) did not load, attempt %d: %@", profile->_dialog.peerId, (int)profile->_dialog.topicId,
+                  (int)profile->_fullAttempts, errorName);
+            if (profile->_fullAttempts < FULL_ATTEMPTS) [profile performSelector:@selector(loadFull) withObject:nil afterDelay:FULL_RETRY_DELAY];
+            else [profile toast:NSLocalizedString(@"error.internal", nil)];
             return;
         }
         [profile->_full release];
         profile->_full = [channel retain];
         [profile showFull];
     }];
-    [_feed reload:^{ [(ExteriaChannelProfileController *)me.target feedChanged]; }];
 }
 
 #pragma mark content
