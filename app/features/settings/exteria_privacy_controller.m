@@ -67,6 +67,7 @@ static NSString *ExteriaAccountTTLText(int32_t days) {
     if (days == 90) return NSLocalizedString(@"privacy.away.3", nil);
     if (days == 180) return NSLocalizedString(@"privacy.away.6", nil);
     if (days == 365) return NSLocalizedString(@"privacy.away.12", nil);
+    if (days == 730) return NSLocalizedString(@"privacy.away.24", nil);
     /* the server keeps any period from 30 to 730 days, and other apps set ones such as 18 months */
     if (days >= 730) return [NSString stringWithFormat:NSLocalizedString(@"privacy.away.years", nil), 2];
     if (days >= 60) return [NSString stringWithFormat:NSLocalizedString(@"privacy.away.months", nil), (int)((days + 15) / 30)];
@@ -254,11 +255,11 @@ static void ExteriaPrivacyFail(NSString *errorName) {
 
 - (void)chooseAccountTTL {
     ExteriaWeakReference *weak = _weak;
-    static const int32_t values[] = {30, 90, 180, 365};
-    NSArray *options = [NSArray arrayWithObjects:ExteriaAccountTTLText(30), ExteriaAccountTTLText(90), ExteriaAccountTTLText(180), ExteriaAccountTTLText(365), nil];
+    static const int32_t values[] = {30, 90, 180, 365, 730};
+    NSArray *options = [NSArray arrayWithObjects:ExteriaAccountTTLText(30), ExteriaAccountTTLText(90), ExteriaAccountTTLText(180), ExteriaAccountTTLText(365), ExteriaAccountTTLText(730), nil];
     ExteriaSettingsChoose(self, NSLocalizedString(@"privacy.away", nil), options, ^(NSUInteger index) {
         ExteriaPrivacyController *me = weak.target;
-        if (!me || index >= 4) return;
+        if (!me || index >= sizeof(values) / sizeof(values[0])) return;
         int32_t days = values[index];
         int32_t before = me->_accountTTL;
         me->_accountTTL = days;

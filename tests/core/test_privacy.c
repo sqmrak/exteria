@@ -242,6 +242,10 @@ static void test_settings(void) {
     CHECK_EQ_INT(value, 0);
     CHECK_EQ_INT(exteria_account_ttl_set_request(&arena, 365, &request), EXTERIA_OK);
     roundtrip(request, EXTERIA_TL_ID_account_setAccountTTL);
+    CHECK_EQ_INT(exteria_account_ttl_set_request(&arena, 730, &request), EXTERIA_OK);
+    roundtrip(request, EXTERIA_TL_ID_account_setAccountTTL);
+    CHECK_EQ_INT(exteria_tl_get_i32(exteria_tl_get(request, "ttl"), "days", &value), EXTERIA_OK);
+    CHECK_EQ_INT(value, 730);
     CHECK_EQ_INT(exteria_account_ttl_set_request(&arena, 29, &request), EXTERIA_E_ARG);
     CHECK_EQ_INT(exteria_account_ttl_set_request(&arena, 731, &request), EXTERIA_E_ARG);
 

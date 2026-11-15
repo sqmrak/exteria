@@ -1791,6 +1791,7 @@
 "privacy.away.3" = "3 месяца";
 "privacy.away.6" = "6 месяцев";
 "privacy.away.12" = "1 год";
+"privacy.away.24" = "2 года";
 "privacy.contacts.header" = "Контакты";
 "privacy.contacts.delete" = "Удалить синхронизированные контакты";
 "privacy.contacts.confirm" = "Контакты, загруженные с телефона, будут удалены с серверов Telegram.";

@@ -1786,6 +1786,7 @@
 "privacy.away.3" = "3 months";
 "privacy.away.6" = "6 months";
 "privacy.away.12" = "1 year";
+"privacy.away.24" = "2 years";
 "privacy.contacts.header" = "Contacts";
 "privacy.contacts.delete" = "Delete synced contacts";
 "privacy.contacts.confirm" = "The contacts uploaded from your phone will be deleted from the Telegram servers.";
