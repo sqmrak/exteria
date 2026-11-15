@@ -13,6 +13,7 @@
     NSData *_pinned;
     NSData *_original;
     BOOL _shared;
+    NSString *_emoticon;
 }
 @property(nonatomic, assign) int32_t folderId;
 @property(nonatomic, copy) NSString *title;
@@ -22,6 +23,8 @@
 @property(nonatomic, copy) NSData *excluded;
 @property(nonatomic, copy) NSData *pinned;
 @property(nonatomic, readonly) BOOL shared;
+/* the emoji the server keeps with the folder; it names the icon of the tab (see ExteriaFolderIconName), nil when none is set */
+@property(nonatomic, copy) NSString *emoticon;
 @property(nonatomic, readonly, retain) NSData *original;
 + (ExteriaChatFolder *)folderWithValue:(const exteria_tl_value *)value;
 - (exteria_status)buildInArena:(exteria_arena *)arena value:(exteria_tl_value **)value;

@@ -223,7 +223,25 @@
         ExteriaChatFlagSet(ExteriaChatFlagHideAllChatsTab, on);
         [(ExteriaAppearanceSettingsController *)weak.target apply];
     }];
-    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.folders.header", nil) footer:NSLocalizedString(@"look.folders.info", nil) rows:[NSArray arrayWithObject:hide]];
+    NSArray *styles = [NSArray arrayWithObjects:NSLocalizedString(@"look.folders.style.names", nil), NSLocalizedString(@"look.folders.style.icons", nil),
+                       NSLocalizedString(@"look.folders.style.both", nil), nil];
+    ExteriaSettingsRow *style = [ExteriaSettingsRow rowWithTitle:NSLocalizedString(@"look.folders.style", nil)
+                                                           value:[styles objectAtIndex:(NSUInteger)ExteriaFolderTabStyleStored()] tap:^{
+        [(ExteriaAppearanceSettingsController *)weak.target chooseFolderStyle];
+    }];
+    return [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"look.folders.header", nil) footer:NSLocalizedString(@"look.folders.info", nil)
+                                                rows:[NSArray arrayWithObjects:style, hide, nil]];
+}
+
+/* the menu of the three looks of a tab; the bar of folders on the screen changes in place, so the page only has to show the choice */
+- (void)chooseFolderStyle {
+    ExteriaWeakReference *weak = _weak;
+    NSArray *options = [NSArray arrayWithObjects:NSLocalizedString(@"look.folders.style.names", nil), NSLocalizedString(@"look.folders.style.icons", nil),
+                        NSLocalizedString(@"look.folders.style.both", nil), nil];
+    ExteriaSettingsChoose(self, NSLocalizedString(@"look.folders.style", nil), options, ^(NSUInteger index) {
+        ExteriaFolderTabStyleStore((ExteriaFolderTabStyle)index);
+        [(ExteriaAppearanceSettingsController *)weak.target rebuild];
+    });
 }
 
 - (ExteriaSettingsSection *)cardsSection {

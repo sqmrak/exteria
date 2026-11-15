@@ -1925,6 +1925,10 @@
 "look.title.name" = "Name";
 "look.title.custom" = "Custom text";
 "look.title.hint" = "Title";
+"look.folders.style" = "Tabs show";
+"look.folders.style.names" = "Names";
+"look.folders.style.icons" = "Icons";
+"look.folders.style.both" = "Names with icons";
 "look.folders.header" = "Folders";
 "look.hidealltab" = "Hide the \"%@\" tab";
 "look.folders.info" = "The tab hides when at least two folders are left.";

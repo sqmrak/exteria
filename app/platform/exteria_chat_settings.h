@@ -158,6 +158,17 @@ typedef enum {
 } ExteriaChatSwipe;
 ExteriaChatSwipe ExteriaChatSwipeStored(void);
 
+/* what a tab of the folders of the chat list shows: the name, the icon of the folder, or both. exteraGram calls the choices "names only", "icons only" and "names with icons" */
+typedef enum {
+    ExteriaFolderTabsNames = 0,
+    ExteriaFolderTabsIcons,
+    ExteriaFolderTabsNamesWithIcons
+} ExteriaFolderTabStyle;
+ExteriaFolderTabStyle ExteriaFolderTabStyleStored(void);
+void ExteriaFolderTabStyleStore(ExteriaFolderTabStyle style);
+/* posted when the style changes, so the bar of folders that is on the screen changes its tabs in place */
+extern NSString *const ExteriaFolderTabStyleDidChangeNotification;
+
 /* how many seconds a held record button waits before the recording locks by itself; zero never locks it by itself. The choices are 0, 3, 5, 10 and 15, and 5 is the
    default */
 NSInteger ExteriaChatRecordLockSeconds(void);

@@ -504,6 +504,21 @@ ExteriaChatSwipe ExteriaChatSwipeStored(void) {
     return value >= ExteriaChatSwipeArchive && value <= ExteriaChatSwipeFolders ? (ExteriaChatSwipe)value : ExteriaChatSwipeArchive;
 }
 
+static NSString *const ExteriaFolderTabStyleKey = @"exteria.chat.foldertabs";
+NSString *const ExteriaFolderTabStyleDidChangeNotification = @"ExteriaFolderTabStyleDidChange";
+
+ExteriaFolderTabStyle ExteriaFolderTabStyleStored(void) {
+    NSNumber *stored = ExteriaStoredNumber(ExteriaFolderTabStyleKey);
+    NSInteger value = stored ? stored.integerValue : ExteriaFolderTabsNames;
+    return value >= ExteriaFolderTabsNames && value <= ExteriaFolderTabsNamesWithIcons ? (ExteriaFolderTabStyle)value : ExteriaFolderTabsNames;
+}
+
+void ExteriaFolderTabStyleStore(ExteriaFolderTabStyle style) {
+    if (style == ExteriaFolderTabStyleStored()) return;
+    ExteriaStoreNumber(ExteriaFolderTabStyleKey, style);
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaFolderTabStyleDidChangeNotification object:nil];
+}
+
 static NSString *const ExteriaChatRecordLockKey = @"exteria.chat.recordlock";
 
 NSInteger ExteriaChatRecordLockSeconds(void) {

@@ -49,6 +49,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
 }
 
 @implementation ExteriaChatFolder
+@synthesize emoticon = _emoticon;
 @synthesize folderId = _folderId, title = _title, flags = _flags, included = _included, excluded = _excluded, pinned = _pinned, shared = _shared,
             original = _original;
 @synthesize titleEntities = _titleEntities;
@@ -81,6 +82,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
 - (void)dealloc {
     [_title release];
     [_titleEntities release];
+    [_emoticon release];
     [_included release];
     [_excluded release];
     [_pinned release];
@@ -98,6 +100,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
     copy.excluded = _excluded;
     copy.pinned = _pinned;
     copy->_shared = _shared;
+    copy.emoticon = _emoticon;
     copy->_original = [_original retain];
     return copy;
 }
@@ -136,6 +139,7 @@ static NSData *folder_peers(const exteria_tl_value *value, const char *name, BOO
     folder.excluded = excluded;
     folder.pinned = pinned;
     folder->_shared = shared;
+    folder.emoticon = folder_string(value, "emoticon", 32);
     for (NSUInteger i = 0; i < 8; ++i)
         if (exteria_tl_has(value, rule_names[i]))
             folder->_flags |= 1u << i;

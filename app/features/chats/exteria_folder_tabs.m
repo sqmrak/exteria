@@ -6,6 +6,7 @@
 #import "exteria_custom_emoji_loader.h"
 #import "exteria_message.h"
 #import "exteria_weak_reference.h"
+#import "exteria_folder_icon.h"
 
 @interface ExteriaFolderTabs () <ExteriaFilterBarDelegate, UIGestureRecognizerDelegate> {
     ExteriaSession *_session;
@@ -34,6 +35,7 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(rebuild) name:ExteriaChatFoldersDidChangeNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:UIApplicationDidBecomeActiveNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(emojiLoaded:) name:ExteriaCustomEmojiDidLoadNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tabStyleChanged) name:ExteriaFolderTabStyleDidChangeNotification object:nil];
     [self rebuild];
     return self;
 }
@@ -104,6 +106,8 @@
     for (NSUInteger i = 0; i < _folders.count; ++i) {
         ExteriaChatFolder *folder = [_folders objectAtIndex:i];
         [_bar setEntities:folder.titleEntities forIndex:(NSInteger)i];
+        /* the tab of all chats has no emoticon of its own: the server draws it as the speech bubble */
+        [_bar setIconName:ExteriaFolderIconName(folder.folderId ? folder.emoticon : @"\U0001F4AC", folder.flags) forIndex:(NSInteger)i];
         for (ExteriaTextEntity *entity in folder.titleEntities)
             [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
     }
@@ -140,6 +144,10 @@
         }
         [_bar setCount:count forIndex:(NSInteger)i];
     }
+}
+- (void)tabStyleChanged {
+    [_bar setTabStyle:ExteriaFolderTabStyleStored() animated:YES];
+    /* the bar is wider or narrower now, and the list under it does not move */
 }
 - (void)emojiLoaded:(NSNotification *)notification {
     if ([_emojiDocuments containsObject:notification.object]) [_bar redrawTitles];

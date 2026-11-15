@@ -1930,6 +1930,10 @@
 "look.title.name" = "Имя";
 "look.title.custom" = "Свой текст";
 "look.title.hint" = "Заголовок";
+"look.folders.style" = "Вкладки показывают";
+"look.folders.style.names" = "Названия";
+"look.folders.style.icons" = "Значки";
+"look.folders.style.both" = "Названия со значками";
 "look.folders.header" = "Папки";
 "look.hidealltab" = "Скрыть вкладку «%@»";
 "look.folders.info" = "Вкладка прячется, если остаются хотя бы две папки.";
