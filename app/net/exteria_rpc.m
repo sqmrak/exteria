@@ -26,6 +26,9 @@ NSString *ExteriaDownloadErrorName(const exteria_mt_rpc_result *result) {
 }
 
 BOOL ExteriaIsRevokedError(NSString *name) {
+    /* AUTH_KEY_DUPLICATED: the server saw the key on two connections at once (a path that changed, the old link still open there) and destroyed it, so it is as dead as a
+       revoked one and every later request fails the same way; the screens kept offering a retry that could not work */
     return [name isEqualToString:@"AUTH_KEY_UNREGISTERED"] || [name isEqualToString:@"SESSION_REVOKED"] ||
-           [name isEqualToString:@"USER_DEACTIVATED"] || [name isEqualToString:@"SESSION_EXPIRED"];
+           [name isEqualToString:@"USER_DEACTIVATED"] || [name isEqualToString:@"SESSION_EXPIRED"] ||
+           [name isEqualToString:@"AUTH_KEY_DUPLICATED"];
 }
