@@ -620,8 +620,6 @@ static NSString *ExteriaSupportDirectory(void) {
         root = [self makeWelcomeController];
     }
     [_navigation setViewControllers:[NSArray arrayWithObject:root] animated:YES];
-    [self retireSession:retired];
-    [retired release];
 }
 
 - (void)accountSwitchRequested:(NSNotification *)note {
@@ -636,7 +634,12 @@ static NSString *ExteriaSupportDirectory(void) {
     (void)note;
     if (_addSession || _callScreen) return;
     NSString *name = ExteriaAccountMakeNew();
+    /* the connection of the account that leaves is closed before the next one opens, so two clients of one process are never live together and the key files of the two
+       directories are never touched at once */
     if (!name) {
+    _session = nil;
+    [self retireSession:retired];
+    [retired release];
         [self showNoticeTitle:nil message:NSLocalizedString(@"account.add.failed", nil)];
         return;
     }
