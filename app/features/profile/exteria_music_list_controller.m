@@ -35,6 +35,8 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
     ExteriaEmojiLabel *_performer;
     UILabel *_length;
     UIActivityIndicatorView *_spinner;
+    ExteriaMusicState _state;
+    BOOL _current;
 }
 - (void)configureWithTrack:(ExteriaMedia *)track state:(ExteriaMusicState)state current:(BOOL)current media:(ExteriaMediaCache *)media;
 @end
@@ -110,11 +112,25 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
             ExteriaSongCell *cell = self;
             [self retain];
             [media loadCoverForTrack:track maxSide:ICON_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
-                if (image && [key isEqualToString:cell->_coverKey]) cell->_cover.image = image;
+                if (image && [key isEqualToString:cell->_coverKey]) {
+                    cell->_cover.image = image;
+                    [cell showIcon];
+                }
                 [cell autorelease];
             }];
         }
     }
+    _state = state;
+    _current = current;
+    [self showIcon];
+    self.accessibilityLabel = ExteriaTrackLine(track);
+    [self setNeedsLayout];
+}
+
+/* the note, play or pause square follows the cover: a cover that comes in after the row was set up has to take the note's place, or the note stays on top of it */
+- (void)showIcon {
+    BOOL current = _current;
+    ExteriaMusicState state = _state;
     BOOL covered = _cover.image != nil;
     ExteriaSymbol glyph = ExteriaSymbolPlayerNote;
     if (current) glyph = state == ExteriaMusicStatePlaying ? ExteriaSymbolPause : ExteriaSymbolPlay;
@@ -129,8 +145,6 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
     } else {
         [_spinner stopAnimating];
     }
-    self.accessibilityLabel = ExteriaTrackLine(track);
-    [self setNeedsLayout];
 }
 
 - (void)setHighlighted:(BOOL)highlighted animated:(BOOL)animated {
@@ -319,10 +333,23 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
         _card.hidden = YES;
         [root addSubview:_card];
     }
+    UITapGestureRecognizer *open = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openLyrics)];
+    open.delegate = self;
+    [(_card ? (UIView *)_card : _panel) addGestureRecognizer:open];
+    [open release];
 
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(playerChanged:) name:ExteriaMusicPlayerDidChangeNotification object:nil];
     [center addObserver:self selector:@selector(playerTicked:) name:ExteriaMusicPlayerDidTickNotification object:nil];
+}
+
+/* a tap on the plate of the song that plays opens its lyrics over the list, the keys and the slider keep their own taps (iOS 5 lets a recognizer on a parent take them) */
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
+    return ![touch.view isKindOfClass:[UIControl class]];
+}
+
+- (void)openLyrics {
+    [ExteriaLyricsScreen present];
 }
 
 - (void)viewDidLoad {
@@ -333,25 +360,12 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
 
 #pragma mark data
 
-    UITapGestureRecognizer *open = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openLyrics)];
-    open.delegate = self;
-    [(_card ? (UIView *)_card : _panel) addGestureRecognizer:open];
-    [open release];
 - (void)loadMore {
     if (_loading || (_loaded && (NSInteger)_tracks.count >= _total)) return;
     _loading = YES;
     /* the song the profile showed is the first of the list, so a page that comes back with it must not list it twice */
     NSInteger offset = _loaded ? (NSInteger)_tracks.count : 0;
     ExteriaWeakReference *me = _weak;
-/* a tap on the plate of the song that plays opens its lyrics over the list, the keys and the slider keep their own taps (iOS 5 lets a recognizer on a parent take them) */
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
-    return ![touch.view isKindOfClass:[UIControl class]];
-}
-
-- (void)openLyrics {
-    [ExteriaLyricsScreen present];
-}
-
     [self retain];
     [self.session loadSavedMusicOfDialog:_dialog offset:offset completion:^(NSArray *tracks, NSInteger total, NSString *errorName) {
         [self autorelease];
