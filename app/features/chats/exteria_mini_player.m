@@ -515,7 +515,8 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     BOOL narrow = cardWidth < CARD_NARROW;
     CGFloat key = narrow ? KEY_SIDE_NARROW : KEY_SIDE, lead = narrow ? LEAD_SIDE_NARROW : LEAD_SIDE;
     _previous.hidden = NO;
-    CGFloat mid = CARD_HEIGHT / 2 - 1;
+    /* the wave dips to the card's lower edge, so with it the keys stand 3 points higher and the play disc ends above the wave instead of over it */
+    CGFloat mid = CARD_HEIGHT / 2 - (_tone ? 4 : 1);
     CGFloat x = cardWidth - 4;
     x -= key;
     _close.frame = CGRectMake(x, mid - key / 2, key, key);
