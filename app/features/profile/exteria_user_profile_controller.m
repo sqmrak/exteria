@@ -848,9 +848,15 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     return _fullUser.person.username.length ? _fullUser.person.username : nil;
 }
 
+/* the profile of this account, reached by a mention or a link rather than by the saved messages: the server refuses to restrict, block or report oneself (PEER_ID_INVALID) */
+- (BOOL)isOwnAccount {
+    ExteriaPerson *own = [self.session ownPerson];
+    return _dialog.saved || (own && _dialog.peerKind == 1 && _dialog.peerId == own.userId);
+}
+
 /* the saved messages are the account itself, which nobody reports */
 - (BOOL)canReport {
-    return !_dialog.saved;
+    return ![self isOwnAccount];
 }
 
 /* the three dots only show while the menu has something to offer */
@@ -901,13 +907,13 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
     NSMutableArray *titles = [NSMutableArray array];
     NSMutableArray *entries = [NSMutableArray array];
     ExteriaSymbol symbols[7];
-    if (_fullUser && [self canGift] && !_fullUser.person.bot && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
+    if (_fullUser && [self canGift] && ![self isOwnAccount] && !_fullUser.person.bot && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
         symbols[titles.count] = ExteriaSymbolLock;
         [titles addObject:NSLocalizedString(_fullUser.sharingRestricted ? @"chat.sharing.allow" : @"chat.sharing.disable", nil)];
         [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuSharing]];
     }
     /* a person the account can rename: a user with a hash, once the profile is in */
-    if ([self canGift] && _fullUser.person.accessHash && !_fullUser.person.bot) {
+    if ([self canGift] && ![self isOwnAccount] && _fullUser.person.accessHash && !_fullUser.person.bot) {
         symbols[titles.count] = ExteriaSymbolCompose;
         [titles addObject:NSLocalizedString(_fullUser.person.contact ? @"profile.contact.edit" : @"profile.contact.add", nil)];
         [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuEditContact]];
@@ -928,7 +934,7 @@ typedef enum { ExteriaUserMenuCopyLink, ExteriaUserMenuGift, ExteriaUserMenuNoti
         [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuNotifications]];
     }
     /* a person can be blocked or let back in, as in the official clients; not oneself, and not the service account */
-    if (_fullUser && [self canGift] && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
+    if (_fullUser && [self canGift] && ![self isOwnAccount] && _fullUser.person.accessHash && _dialog.peerId != EXTERIA_TELEGRAM_SERVICE_USER_ID) {
         symbols[titles.count] = ExteriaSymbolBlock;
         [titles addObject:NSLocalizedString(_fullUser.blocked ? @"profile.unblock" : @"profile.block", nil)];
         [entries addObject:[NSNumber numberWithInt:ExteriaUserMenuBlock]];
