@@ -243,7 +243,8 @@ static UILabel *ExteriaWelcomeLabel(UIColor *color, NSInteger lines) {
     [_toast refresh];
     CGSize pill = [_vpn preferredSize];
     _vpn.frame = CGRectMake(size.width - insets.right - 16 - pill.width, insets.top + 10, pill.width, pill.height);
-    _proxy.frame = CGRectMake(insets.left + 12, insets.top + 10, 88, 40);
+    /* both buttons stand on one line: the proxy is a taller touch area, so it is centered on the pill and not top aligned with it */
+    _proxy.frame = CGRectMake(insets.left + 12, _vpn ? CGRectGetMidY(_vpn.frame) - 20 : insets.top + 10, 88, 40);
     _scroll.contentSize = CGSizeMake(size.width * EXTERIA_WELCOME_PAGES, size.height);
     for (NSInteger i = 0; i < EXTERIA_WELCOME_PAGES; ++i) {
         ExteriaWelcomePage *page = [_pages objectAtIndex:i];
