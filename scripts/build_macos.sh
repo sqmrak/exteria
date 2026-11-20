@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # builds the core and the ios test binaries from a clean checkout on macOS: a local toolchain,
-# openssl for both slices, then scripts/core-ios.mk. the app bundle needs EXTERIA_API_ID and EXTERIA_API_HASH
+# openssl for both slices, then meow. the core links the video codecs, so EXTERIA_VIDEO_V7 and
+# EXTERIA_VIDEO_V64 name the prefixes of scripts/build_sticker_codecs.sh. the app needs EXTERIA_API_ID and EXTERIA_API_HASH
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,8 +9,11 @@ cd "$ROOT"
 
 LOCAL="${EXTERIA_LOCAL:-$ROOT/local}"
 TC="$LOCAL/toolchain/bin"
-SDK_V7="${EXTERIA_SDK_V7:-$HOME/theos/sdks/iPhoneOS5.1.sdk}"
-SDK_V64="${EXTERIA_SDK_V64:-$HOME/theos/sdks/iPhoneOS15.5.sdk}"
+SDK_V7="${EXTERIA_SDK_V7:?set EXTERIA_SDK_V7 to a legacy iphoneos sdk}"
+SDK_V64="${EXTERIA_SDK_V64:?set EXTERIA_SDK_V64 to an arm64 iphoneos sdk}"
+: "${EXTERIA_VIDEO_V7:?set EXTERIA_VIDEO_V7 to the armv7 ffmpeg and libvpx prefix}"
+: "${EXTERIA_VIDEO_V64:?set EXTERIA_VIDEO_V64 to the arm64 ffmpeg and libvpx prefix}"
+MEOW="${MEOW:-meow}"
 OPENSSL_VERSION="${EXTERIA_OPENSSL_VERSION:-3.5.9}"
 OPENSSL_SHA256="${EXTERIA_OPENSSL_SHA256:-603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a}"
 OPENSSL_URL="${EXTERIA_OPENSSL_URL:-https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz}"
@@ -21,13 +25,12 @@ die() { echo "$*" >&2; exit 1; }
 log "toolchain wrappers"
 CLT_BIN="$(dirname "$(xcrun -f clang)")"
 [[ -x "$CLT_BIN/clang" ]] || die "no clang in $CLT_BIN, install the command line tools"
-LDID="${EXTERIA_LDID:-$HOME/theos/bin/ldid}"
-[[ -x "$LDID" ]] || LDID="$(command -v ldid || true)"
+LDID="${EXTERIA_LDID:-$(command -v ldid || true)}"
 mkdir -p "$TC"
 for tool in clang clang++ lipo otool nm; do
     [[ -e "$CLT_BIN/$tool" ]] && ln -sfn "$CLT_BIN/$tool" "$TC/$tool"
 done
-# the makefiles call llvm-ar, the system one is ar
+# meow calls llvm-ar, the system one is ar
 ln -sfn "$CLT_BIN/ar" "$TC/llvm-ar"
 if [[ -x "$LDID" ]]; then ln -sfn "$LDID" "$TC/ldid"; else echo "note: no ldid, the app bundle cannot be signed here"; fi
 
@@ -91,4 +94,9 @@ export EXTERIA_SDK_V7="$SDK_V7"
 export EXTERIA_SDK_V64="$SDK_V64"
 export EXTERIA_OPENSSL_V7="$LOCAL/openssl/armv7"
 export EXTERIA_OPENSSL_V64="$LOCAL/openssl/arm64"
-make -f scripts/core-ios.mk inspect -j"$JOBS"
+command -v "$MEOW" >/dev/null || die "meow is required, see tools/meow"
+"$MEOW" build core-fat test-mt-client -j"$JOBS"
+"$TC/lipo" -info build/ios/libexteria-core.a
+for slice in armv7 arm64; do
+    "$TC/otool" -L "build/$slice/test_mt_client"
+done

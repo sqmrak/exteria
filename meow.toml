@@ -1,0 +1,416 @@
+# parallel incremental build of exteria, see tools/meow
+# the compile graph, the ipa, the deb and their checks live here, the host tests are in tests/Makefile.
+# dependency builds (openssl, cpython, ffmpeg and libvpx) stay in scripts/ and are read as prebuilt prefixes
+
+# `meow build` with no name builds the ipa and the deb
+default = ["ipa-sha256", "deb"]
+
+[vars]
+TC = "${EXTERIA_TC:-${MEOW_TC}}"
+SDK_V7 = "${EXTERIA_SDK_V7}"
+SDK_V64 = "${EXTERIA_SDK_V64}"
+# ios 5 needs the crt1.3.1.o start file, ld64 picks it by name only with the default start files
+CRT_V7 = "${EXTERIA_CRT_V7:-${SDK_V7}/usr/lib/crt1.3.1.o}"
+PY_BUNDLE = "${EXTERIA_PYTHON_BUNDLE}"
+# the ios 6.1 sdk is the oldest that has the availability marks `check-compat` needs
+SDK_COMPAT = "${EXTERIA_SDK_V6:-}"
+
+[slice.armv7]
+cc = "${TC}/clang"
+ar = "${TC}/llvm-ar"
+flags = ["-target", "armv7-apple-ios5.0", "-B", "${TC}", "-isysroot", "${SDK}", "-I${OSSL}/include"]
+[slice.armv7.vars]
+SDK = "${SDK_V7}"
+OSSL = "${EXTERIA_OPENSSL_V7}"
+VIDEO = "${EXTERIA_VIDEO_V7}"
+PY = "${EXTERIA_PYTHON_V7}"
+
+[slice.arm64]
+cc = "${TC}/clang"
+ar = "${TC}/llvm-ar"
+flags = ["-target", "arm64-apple-ios7.0", "-B", "${TC}", "-isysroot", "${SDK}", "-I${OSSL}/include"]
+[slice.arm64.vars]
+SDK = "${SDK_V64}"
+OSSL = "${EXTERIA_OPENSSL_V64}"
+VIDEO = "${EXTERIA_VIDEO_V64}"
+PY = "${EXTERIA_PYTHON_V64}"
+
+# the api id and hash come from the environment, see local/credentials.env, and never enter the repository
+[step.credentials]
+run = [["bash", "scripts/gen_credentials.sh", "build/generated/exteria_credentials.h"]]
+env = { EXTERIA_API_ID = "${EXTERIA_API_ID}", EXTERIA_API_HASH = "${EXTERIA_API_HASH}" }
+outputs = ["build/generated/exteria_credentials.h"]
+
+# libwebp is vendored as upstream ships it, so it builds without the project's strict warnings
+[target.webp]
+slices = ["armv7", "arm64"]
+link = "none"
+cflags = ["-std=c99", "-O2", "-g", "-w", "-Ithird_party/libwebp"]
+[[target.webp.src]]
+files = ["third_party/libwebp/src/*/*.c"]
+
+# opus is the fixed point build without asm, so both slices run the same portable code; ogg needs no flags of its own
+[target.opus]
+slices = ["armv7", "arm64"]
+link = "none"
+cflags = ["-std=c99", "-O2", "-g", "-w", "-DOPUS_BUILD", "-DFIXED_POINT", "-DDISABLE_FLOAT_API", "-DVAR_ARRAYS",
+          "-DPACKAGE_VERSION=\"1.5.2\"",
+          "-Ithird_party/opus/include", "-Ithird_party/opus/celt", "-Ithird_party/opus/silk",
+          "-Ithird_party/opus/silk/fixed", "-Ithird_party/opus/src", "-Ithird_party/ogg/include"]
+[[target.opus.src]]
+files = ["third_party/opus/celt/*.c", "third_party/opus/silk/*.c", "third_party/opus/silk/fixed/*.c",
+         "third_party/opus/src/*.c", "third_party/ogg/src/*.c"]
+
+# the QR reader of the devices screen: the listed files of zbar are its QR-only build, vendored as upstream
+# ships it; SENKO_ZBAR_IOS keeps its timer off the POSIX timers ios lacks
+[target.zbar]
+slices = ["armv7", "arm64"]
+link = "none"
+cflags = ["-std=gnu99", "-O2", "-g", "-w", "-DSENKO_ZBAR_IOS",
+          "-Ithird_party/zbar/include", "-Ithird_party/zbar/zbar", "-Ithird_party/zbar/zbar/decoder",
+          "-Ithird_party/zbar/zbar/qrcode"]
+[[target.zbar.src]]
+files = [
+  "third_party/zbar/zbar/config.c",
+  "third_party/zbar/zbar/error.c",
+  "third_party/zbar/zbar/symbol.c",
+  "third_party/zbar/zbar/image.c",
+  "third_party/zbar/zbar/refcnt.c",
+  "third_party/zbar/zbar/img_scanner.c",
+  "third_party/zbar/zbar/scanner.c",
+  "third_party/zbar/zbar/decoder.c",
+  "third_party/zbar/zbar/misc.c",
+  "third_party/zbar/zbar/decoder/qr_finder.c",
+  "third_party/zbar/zbar/qrcode/qrdec.c",
+  "third_party/zbar/zbar/qrcode/qrdectxt.c",
+  "third_party/zbar/zbar/qrcode/rs.c",
+  "third_party/zbar/zbar/qrcode/isaac.c",
+  "third_party/zbar/zbar/qrcode/bch15_5.c",
+  "third_party/zbar/zbar/qrcode/binarize.c",
+  "third_party/zbar/zbar/qrcode/util.c",
+]
+
+# portable raster path on both slices: the neon asm needs a build of its own. the upstream sources miss includes
+# that the sdk headers used to pull in
+[target.rlottie]
+slices = ["armv7", "arm64"]
+link = "none"
+cflags = ["-std=c++14", "-stdlib=libc++", "-fno-exceptions", "-fno-rtti", "-fvisibility=hidden", "-O2", "-g", "-w",
+          "-U__ARM_NEON__", "-include", "limits", "-include", "cstdint",
+          "-Ithird_party/rlottie/config", "-Ithird_party/rlottie/inc", "-Ithird_party/rlottie/src/vector",
+          "-Ithird_party/rlottie/src/vector/freetype", "-Ithird_party/rlottie/src/vector/pixman",
+          "-Ithird_party/rlottie/src/lottie", "-Ithird_party/rlottie/src/binding/c"]
+[target.rlottie.per_slice.armv7]
+# libc++ of the ios 6.1 sdk marks std::future_error ios 6 only
+cflags = ["-D_LIBCPP_DISABLE_AVAILABILITY"]
+[[target.rlottie.src]]
+files = ["third_party/rlottie/src/*/*.cpp", "third_party/rlottie/src/*/*/*.cpp"]
+
+# the call engine: libtgvoip as vendored, without the webrtc dsp and the other platforms' audio. it throws and
+# casts across its address classes, so it keeps exceptions and rtti on
+[target.tgvoip]
+slices = ["armv7", "arm64"]
+link = "none"
+cflags = ["-std=c++14", "-stdlib=libc++", "-fvisibility=hidden", "-O2", "-g", "-w", "-DTGVOIP_NO_DSP",
+          "-DTGVOIP_LOG_VERBOSITY=2", "-Ithird_party/libtgvoip", "-Ithird_party/opus/include",
+          "-Iapp/net", "-Icore/shiro", "-Icore/base"]
+[target.tgvoip.per_slice.armv7]
+# libc++ of the ios 6.1 sdk marks std::future_error ios 6 only
+cflags = ["-D_LIBCPP_DISABLE_AVAILABILITY"]
+[[target.tgvoip.src]]
+files = ["third_party/libtgvoip/*.cpp", "third_party/libtgvoip/audio/*.cpp",
+         "third_party/libtgvoip/os/posix/*.cpp", "third_party/libtgvoip/os/darwin/*.cpp"]
+
+# the portable c core. the python host links libpython and is built with the app
+[target.core]
+slices = ["armv7", "arm64"]
+link = "archive"
+output = "build/${slice}/libexteria-core.a"
+cflags = ["-std=c99", "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-Wshadow", "-Wstrict-prototypes",
+          "-Wmissing-prototypes", "-Wconversion", "-Wno-sign-conversion", "-isystem", "${VIDEO}/include",
+          "-Icore/auth", "-Icore/base", "-Icore/calls", "-Icore/chats", "-Icore/client", "-Icore/crypto",
+          "-Icore/dexnative", "-Icore/emoji", "-Icore/layout", "-Icore/media", "-Icore/mtproto", "-Icore/notify",
+          "-Icore/phone", "-Icore/pyhost", "-Icore/secret_chats", "-Icore/session", "-Icore/shiro",
+          "-Icore/storage", "-Icore/tgcalls", "-Icore/tl", "-Icore/updates", "-Icore/video",
+          "-Icore/tl/generated", "-Ithird_party/opus/include", "-Ithird_party/ogg/include"]
+[[target.core.src]]
+files = ["core/*/*.c", "core/tl/generated/*.c"]
+exclude = ["core/pyhost/*"]
+
+# the core and its codecs linked into one program per slice, the way the app links them
+[target.test-mt-client]
+slices = ["armv7", "arm64"]
+objects_from = ["core", "opus"]
+output = "build/${slice}/test_mt_client"
+cflags = ["-std=c99", "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-Wshadow", "-Wstrict-prototypes",
+          "-Wmissing-prototypes", "-Wconversion", "-Wno-sign-conversion", "-isystem", "${VIDEO}/include",
+          "-Icore/auth", "-Icore/base", "-Icore/calls", "-Icore/chats", "-Icore/client", "-Icore/crypto",
+          "-Icore/dexnative", "-Icore/emoji", "-Icore/layout", "-Icore/media", "-Icore/mtproto", "-Icore/notify",
+          "-Icore/phone", "-Icore/pyhost", "-Icore/secret_chats", "-Icore/session", "-Icore/shiro",
+          "-Icore/storage", "-Icore/tgcalls", "-Icore/tl", "-Icore/updates", "-Icore/video",
+          "-Icore/tl/generated", "-Ithird_party/opus/include", "-Ithird_party/ogg/include"]
+ldflags = ["${OSSL}/lib/libcrypto.a", "-lz", "-lsqlite3"]
+[target.test-mt-client.per_slice.armv7]
+ldflags = ["-nostartfiles", "${CRT_V7}"]
+[[target.test-mt-client.src]]
+files = ["tests/core/test_mt_client.c"]
+
+[fat.core-fat]
+from = "core"
+output = "build/ios/libexteria-core.a"
+
+[target.app]
+slices = ["armv7", "arm64"]
+objects_from = ["core", "webp", "opus", "zbar", "rlottie", "tgvoip"]
+needs = ["credentials"]
+output = "build/${slice}/Exteria"
+cflags = ["-O2", "-g", "-Wall", "-Wextra", "-isystem", "${VIDEO}/include", "-isystem", "${PY}/include/python3.11",
+          "-Iapp/features/auth", "-Iapp/features/bots", "-Iapp/features/calls", "-Iapp/features/chats",
+          "-Iapp/features/classic", "-Iapp/features/gifts", "-Iapp/features/profile", "-Iapp/features/settings",
+          "-Iapp/features/shiro", "-Iapp/features/stories", "-Iapp/lifecycle", "-Iapp/media", "-Iapp/net",
+          "-Iapp/platform", "-Iapp/translate", "-Iapp/ui/classic", "-Iapp/ui/shared",
+          "-Icore/auth", "-Icore/base", "-Icore/calls", "-Icore/chats", "-Icore/client", "-Icore/crypto",
+          "-Icore/dexnative", "-Icore/emoji", "-Icore/layout", "-Icore/media", "-Icore/mtproto", "-Icore/notify",
+          "-Icore/phone", "-Icore/pyhost", "-Icore/secret_chats", "-Icore/session", "-Icore/shiro",
+          "-Icore/storage", "-Icore/tgcalls", "-Icore/tl", "-Icore/updates", "-Icore/video",
+          "-Icore/tl/generated", "-Ibuild/generated", "-Ithird_party/rlottie/inc", "-Ithird_party/libwebp",
+          "-Ithird_party/opus/include", "-Ithird_party/ogg/include", "-Ithird_party/libtgvoip",
+          "-Ithird_party/zbar/include"]
+# bzip2, xz and sqlite behind _bz2, _lzma and _sqlite3 sit in libexteria_pyext.a, linked after libpython
+ldflags = ["${PY}/lib/libpython3.11.a", "${PY}/lib/libexteria_pyext.a",
+           "${OSSL}/lib/libssl.a", "${OSSL}/lib/libcrypto.a",
+           "${VIDEO}/lib/libavformat.a", "${VIDEO}/lib/libavcodec.a", "${VIDEO}/lib/libswresample.a",
+           "${VIDEO}/lib/libavutil.a", "${VIDEO}/lib/libvpx.a",
+           "-framework", "UIKit", "-framework", "Foundation", "-framework", "Security",
+           "-framework", "CoreGraphics", "-framework", "QuartzCore", "-weak_framework", "OpenGLES",
+           "-framework", "ImageIO", "-framework", "CoreText", "-framework", "AVFoundation",
+           "-framework", "CoreMedia", "-framework", "CoreVideo", "-framework", "CoreAudio",
+           "-framework", "AudioToolbox", "-framework", "CoreLocation", "-framework", "Accelerate",
+           "-weak_framework", "CoreMotion", "-framework", "MobileCoreServices", "-framework", "CFNetwork",
+           "-weak_framework", "AssetsLibrary", "-weak_framework", "AddressBook",
+           "-weak_framework", "AddressBookUI", "-weak_framework", "MediaPlayer",
+           "-lz", "-lc++", "-lsqlite3", "-liconv", "-Wl,-dead_strip"]
+[target.app.per_slice.armv7]
+ldflags = ["-nostartfiles", "${CRT_V7}"]
+[[target.app.src]]
+files = ["app/*/*.m", "app/*/*/*.m"]
+cflags = ["-std=gnu99", "-fno-objc-arc", "-fblocks", "-Wno-unused-parameter"]
+[[target.app.src]]
+files = ["core/pyhost/*.c"]
+cflags = ["-std=c99", "-Werror", "-Wshadow", "-Wstrict-prototypes", "-Wmissing-prototypes", "-Wconversion",
+          "-Wno-sign-conversion"]
+
+# the share sheet extension is its own small executable. It starts at _NSExtensionMain, which dyld calls as main
+# only from ios 6 on (the older load command starts a program the way crt1 expects), so both slices carry a
+# deployment target of 8.0, the first system with extensions. _NSExtensionMain is in Foundation from ios 8 and
+# not in the stubs of the 6.1 sdk, so it is left to dyld
+[target.share]
+slices = ["armv7", "arm64"]
+output = "build/${slice}/ExteriaShare"
+cflags = ["-std=gnu99", "-fno-objc-arc", "-fblocks", "-fapplication-extension", "-O2", "-g", "-Wall", "-Wextra",
+          "-Werror"]
+ldflags = ["-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics",
+           "-framework", "QuartzCore", "-Wl,-e,_NSExtensionMain", "-Wl,-U,_NSExtensionMain"]
+[target.share.per_slice.armv7]
+# the 6.1 headers and stubs lack objc_alloc, which clang emits for an 8.0 target, so alloc is sent as a plain message
+cflags = ["-target", "armv7-apple-ios8.0", "-fno-objc-convert-messages-to-runtime-calls"]
+ldflags = ["-target", "armv7-apple-ios8.0"]
+[target.share.per_slice.arm64]
+cflags = ["-target", "arm64-apple-ios8.0"]
+ldflags = ["-target", "arm64-apple-ios8.0"]
+[[target.share.src]]
+files = ["extension/share/exteria_share_extension.m"]
+
+# a copy with every symbol names the frames of a crash log, so it is kept before the binary is stripped. the
+# shipped binary keeps only what it exports, and the signature is made last since stripping breaks it
+[fat.app-ipa]
+from = "app"
+output = "build/fat/Exteria"
+post = [["sh", "scripts/keep_symbols.sh", "${TC}", "${out}"], ["${MEOW_STRIP}", "-x", "-S", "${out}"]]
+# both carry the app group, which is how the extension hands what was shared to the app; only the app may write
+# the bundle folders of user apps, for the in-app update
+entitlements = "packaging/entitlements.plist"
+
+# a bundle at /var/jb runs inside the jailbreak's own container sandbox, which blocks network like an ordinary
+# contained app unless it carries this entitlement; the ipa payload stays at /var/containers under the default
+# profile, which allows it
+[fat.app-deb]
+from = "app"
+output = "build/fat/Exteria-deb"
+post = [["${MEOW_STRIP}", "-x", "-S", "${out}"]]
+entitlements = "packaging/entitlements-deb.plist"
+
+[fat.share-fat]
+from = "share"
+output = "build/fat/ExteriaShare"
+entitlements = "packaging/entitlements-share.plist"
+
+# the flat resources of the bundle, the same for the ipa and the deb. a removed resource must not survive a rebuild
+[step.stage]
+run = [["bash", "scripts/stage_bundle.sh", "build/stage/Exteria.app"]]
+inputs = ["resources/**/*"]
+stamp = "build/stamps/stage"
+
+# the version in the control file is the source, the plist release version must agree
+[step.version]
+run = [["${MEOW}", "check-version", "--expect", "${field:packaging/deb/control:Version}",
+        "--plist", "packaging/Info.plist", "CFBundleShortVersionString",
+        "--plist", "extension/share/Info.plist", "CFBundleShortVersionString"]]
+stamp = "build/stamps/version"
+
+# release checks on the finished binaries. the armv7 slice keeps the ios 5 target and may not link a library the
+# old system does not ship
+[verify.check-app]
+file = "build/fat/Exteria"
+slices = ["armv7", "arm64"]
+min_ios = "5.0"
+signed = true
+allow_dylibs = ["/usr/lib/", "/System/Library/Frameworks/"]
+require_symbols = ["_main"]
+needs = ["app-ipa"]
+
+[verify.check-app-deb]
+file = "build/fat/Exteria-deb"
+slices = ["armv7", "arm64"]
+min_ios = "5.0"
+signed = true
+allow_dylibs = ["/usr/lib/", "/System/Library/Frameworks/"]
+require_symbols = ["_main"]
+needs = ["app-deb"]
+
+[verify.check-share]
+file = "build/fat/ExteriaShare"
+slices = ["armv7", "arm64"]
+min_ios = "8.0"
+signed = true
+allow_dylibs = ["/usr/lib/", "/System/Library/Frameworks/"]
+needs = ["share-fat"]
+
+# every symbol the armv7 slice imports must exist in the iOS 5 runtime, or dyld refuses to launch it.
+# needs EXTERIA_SDK_V5, an iphoneos 5.x sdk
+[step.check-symbols]
+run = [["bash", "scripts/check_legacy_symbols.sh", "build/fat/Exteria"]]
+env = { EXTERIA_TC = "${TC}", EXTERIA_SDK_V5 = "${EXTERIA_SDK_V5:-}" }
+stamp = "build/stamps/check-symbols"
+needs = ["app-ipa"]
+
+# the ios 6.1 headers carry availability marks, so anything newer than the 5.0 target is flagged.
+# needs EXTERIA_SDK_V6
+[check.compat]
+slice = "armv7"
+sdk = "${SDK_COMPAT}"
+src = ["app/*/*.m", "app/*/*/*.m"]
+headers = ["app/*/*.h", "app/*/*/*.h"]
+cflags = ["-std=gnu99", "-fno-objc-arc", "-fblocks", "-Wpartial-availability", "-Werror=partial-availability",
+          "-isystem", "${VIDEO}/include",
+          "-Iapp/features/auth", "-Iapp/features/bots", "-Iapp/features/calls", "-Iapp/features/chats",
+          "-Iapp/features/classic", "-Iapp/features/gifts", "-Iapp/features/profile", "-Iapp/features/settings",
+          "-Iapp/features/shiro", "-Iapp/features/stories", "-Iapp/lifecycle", "-Iapp/media", "-Iapp/net",
+          "-Iapp/platform", "-Iapp/translate", "-Iapp/ui/classic", "-Iapp/ui/shared",
+          "-Icore/auth", "-Icore/base", "-Icore/calls", "-Icore/chats", "-Icore/client", "-Icore/crypto",
+          "-Icore/dexnative", "-Icore/emoji", "-Icore/layout", "-Icore/media", "-Icore/mtproto", "-Icore/notify",
+          "-Icore/phone", "-Icore/pyhost", "-Icore/secret_chats", "-Icore/session", "-Icore/shiro",
+          "-Icore/storage", "-Icore/tgcalls", "-Icore/tl", "-Icore/updates", "-Icore/video",
+          "-Icore/tl/generated", "-Ibuild/generated", "-Ithird_party/rlottie/inc", "-Ithird_party/libwebp",
+          "-Ithird_party/opus/include", "-Ithird_party/ogg/include", "-Ithird_party/libtgvoip",
+          "-Ithird_party/zbar/include"]
+needs = ["credentials"]
+
+[ipa.ipa]
+output = "build/ios/Exteria-v${field:packaging/deb/control:Version}.ipa"
+prefix = "Payload/Exteria.app"
+needs = ["version", "stage", "check-app", "check-share"]
+
+[[ipa.ipa.file]]
+from = "build/fat/Exteria"
+to = "Exteria"
+mode = "755"
+
+[[ipa.ipa.file]]
+from = "packaging/Info.plist"
+to = "Info.plist"
+
+[[ipa.ipa.file]]
+from = "build/fat/ExteriaShare"
+to = "PlugIns/ExteriaShare.appex/ExteriaShare"
+mode = "755"
+
+[[ipa.ipa.file]]
+from = "extension/share/Info.plist"
+to = "PlugIns/ExteriaShare.appex/Info.plist"
+
+[[ipa.ipa.tree]]
+from = "build/stage/Exteria.app"
+to = ""
+
+[[ipa.ipa.tree]]
+from = "${PY_BUNDLE}/python"
+to = "python"
+mode = "644"
+
+# the app checks the download against this file, which a release carries next to the ipa
+[step.ipa-sha256]
+run = [["bash", "scripts/ipa_sha256.sh", "build/ios/Exteria-v${field:packaging/deb/control:Version}.ipa"]]
+needs = ["ipa"]
+inputs = ["build/ios/Exteria-v${field:packaging/deb/control:Version}.ipa"]
+outputs = ["build/ios/Exteria-v${field:packaging/deb/control:Version}.ipa.sha256"]
+
+# the payload sits under /var/jb and the postinst puts it where the jailbreak expects it. ios 6 does not mask
+# every icon chosen for an app in /Applications, and the files of the home screen of ios 5 and 6 carry the gloss
+# springboard does not add, so the deb carries its own icons
+[deb.deb]
+output = "build/ios/exteria_${field:packaging/deb/control:Version}.deb"
+control = "packaging/deb/control"
+scripts = { postinst = "packaging/deb/postinst", postrm = "packaging/deb/postrm" }
+prefix = "var/jb"
+needs = ["version", "stage", "check-app-deb", "check-share"]
+forbid_setuid = true
+sh_check = ["DEBIAN/postinst", "DEBIAN/postrm"]
+require = [
+  "var/jb/Applications/Exteria.app/Info.plist",
+  "var/jb/Applications/Exteria.app/Exteria",
+  "var/jb/Applications/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare",
+  "var/jb/Applications/Exteria.app/PlugIns/ExteriaShare.appex/Info.plist",
+]
+require_exec = [
+  "var/jb/Applications/Exteria.app/Exteria",
+  "var/jb/Applications/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare",
+  "DEBIAN/postinst",
+  "DEBIAN/postrm",
+]
+contains = [
+  { file = "DEBIAN/control", text = "Package: com.sqmrak.exteria" },
+  { file = "DEBIAN/control", text = "Depends: firmware (>= 5.0)" },
+]
+
+[[deb.deb.file]]
+from = "build/fat/Exteria-deb"
+to = "Applications/Exteria.app/Exteria"
+mode = "755"
+
+[[deb.deb.file]]
+from = "packaging/Info.plist"
+to = "Applications/Exteria.app/Info.plist"
+
+[[deb.deb.file]]
+from = "build/fat/ExteriaShare"
+to = "Applications/Exteria.app/PlugIns/ExteriaShare.appex/ExteriaShare"
+mode = "755"
+
+[[deb.deb.file]]
+from = "extension/share/Info.plist"
+to = "Applications/Exteria.app/PlugIns/ExteriaShare.appex/Info.plist"
+
+[[deb.deb.tree]]
+from = "build/stage/Exteria.app"
+to = "Applications/Exteria.app"
+
+[[deb.deb.tree]]
+from = "${PY_BUNDLE}/python"
+to = "Applications/Exteria.app/python"
+mode = "644"
+
+[[deb.deb.tree]]
+from = "resources/deb-icons"
+to = "Applications/Exteria.app"
+replace = true

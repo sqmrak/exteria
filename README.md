@@ -86,31 +86,26 @@ the host is `core/pyhost`, the python side is `python/shim` and `third_party/ext
 ```bash
 make test
 bash scripts/build_sticker_codecs.sh
-make ipa
+meow build
 ```
 
-needs `EXTERIA_TC EXTERIA_SDK_V7 EXTERIA_SDK_V64 EXTERIA_OPENSSL_V7 EXTERIA_OPENSSL_V64 EXTERIA_LDID`, optional `EXTERIA_CRT_V7`. api id and hash come from `local/credentials.env` (`EXTERIA_API_ID`, `EXTERIA_API_HASH`). output: `build/ios/Exteria-v<version>.ipa`.
+built with [meow](https://github.com/sqmrak/meow), see `meow.toml`. needs `EXTERIA_TC EXTERIA_SDK_V7 EXTERIA_SDK_V64 EXTERIA_OPENSSL_V7 EXTERIA_OPENSSL_V64 EXTERIA_VIDEO_V7 EXTERIA_VIDEO_V64 EXTERIA_PYTHON_V7 EXTERIA_PYTHON_V64 EXTERIA_PYTHON_BUNDLE`, optional `EXTERIA_CRT_V7` (the `crt1.3.1.o` of the armv7 sdk when left out) and `MEOW_LDID` (the ldid of the toolchain when left out). api id and hash come from `local/credentials.env` (`EXTERIA_API_ID`, `EXTERIA_API_HASH`). output: `build/ios/Exteria-v<version>.ipa`, its `.sha256` and `build/ios/exteria_<version>.deb`.
 
+- `meow doctor`: the toolchain and sdks meow found
+- `meow build check-symbols`: imports of the armv7 slice against the ios 5 runtime, needs `EXTERIA_SDK_V5`
+- `meow build check-compat`: calls newer than ios 5.0 in the ios 6.1 headers, needs `EXTERIA_SDK_V6`
 - `make test-video`: video decoders under asan and ubsan, needs ffmpeg libraries, pkg-config and libvpx
-- `make app-unsigned`, then `make inspect-unsigned`: both slices, deployment targets, frameworks and ios 5 imports; needs `EXTERIA_SDK_V5` and `EXTERIA_SDK_V6`
 - video stickers and calls link static ffmpeg and libvpx: set `EXTERIA_FFMPEG_SOURCE`, `EXTERIA_LIBVPX_SOURCE`, `EXTERIA_VIDEO_V7` and `EXTERIA_VIDEO_V64`, see `resources/licenses/video_stickers.txt`
 
 ## install
 
 ```bash
-scp -r build/ios/Exteria.app root@<device-ip>:/Applications/
-ssh root@<device-ip> 'chown -R mobile:wheel /Applications/Exteria.app && su mobile -c uicache'
+meow install --host <device-ip> --legacy build/ios/exteria_<version>.deb
 ```
 
-the owner must be `mobile:wheel`, or the app cannot change its own icon on ios 6.
+the postinst of the deb copies the bundle to `/Applications` on a rootful system, makes `mobile:wheel` the owner (or the app cannot change its own icon on ios 6) and runs `uicache`.
 
-on ios 5 and 6 an app in `/Applications` gets no banners, no notification center entry and no settings row, because springboard gives notification settings to user apps only. after the copy run
-
-```bash
-ssh root@<device-ip> '/Applications/Exteria.app/Exteria --system-notifications on'
-```
-
-before `uicache`, then respring. it adds the `SBInternalAppTag` to the bundle's `Info.plist` and sets `SBShowInternalApps` in the springboard preferences (without it the icon of an internal app is hidden); `off` takes the preference back. the deb runs this in its postinst and postrm, and the in-app update runs it again after it replaces the files. an ipa installed as a user app (ipainstaller, appsync) and the rootless `/var/jb` install need nothing, and ios 7 and later are left alone by the command.
+on ios 5 and 6 an app in `/Applications` gets no banners, no notification center entry and no settings row, because springboard gives notification settings to user apps only. the postinst runs `/Applications/Exteria.app/Exteria --system-notifications on` for that, and the postrm takes it back with `off`. it adds the `SBInternalAppTag` to the bundle's `Info.plist` and sets `SBShowInternalApps` in the springboard preferences (without it the icon of an internal app is hidden). the in-app update runs it again after it replaces the files. an ipa installed as a user app (ipainstaller, appsync) and the rootless `/var/jb` install need nothing, and ios 7 and later are left alone by the command.
 
 ## updates
 

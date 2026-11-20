@@ -76,9 +76,9 @@ env, all overrideable, none has a default path:
 - `EXTERIA_OPENSSL_V7`, `EXTERIA_OPENSSL_V64`: openssl prefixes
 - `EXTERIA_VIDEO_V7`, `EXTERIA_VIDEO_V64`: ffmpeg and libvpx prefixes (from `EXTERIA_FFMPEG_SOURCE` and `EXTERIA_LIBVPX_SOURCE`, see `resources/licenses/video_stickers.txt`)
 - `EXTERIA_PYTHON_V7`, `EXTERIA_PYTHON_V64`, `EXTERIA_PYTHON_BUNDLE`: made by `scripts/build_python.sh`
-- `EXTERIA_LDID`: set it in its own assignment after `EXTERIA_TC`, since it defaults to `$EXTERIA_TC/ldid`
+- `MEOW_LDID`: optional, meow takes the ldid of the toolchain when it is left out
 - `EXTERIA_CRT_V7`: optional crt for the armv7 link
-- `EXTERIA_API_ID`, `EXTERIA_API_HASH`: from `local/credentials.env`, `source` it before `make`. they go into a generated header in `build/` and never into the repository
+- `EXTERIA_API_ID`, `EXTERIA_API_HASH`: from `local/credentials.env`, `source` it before `meow build`. they go into a generated header in `build/` and never into the repository
 
 order:
 
@@ -86,18 +86,18 @@ order:
 bash scripts/build_python.sh        # cpython, shim, sdk, ca bundle. again after a change in python/ or third_party/exteraless
 bash scripts/build_sticker_codecs.sh
 make test
-make ipa
-make deb                             # optional, wraps the ipa for /var/jb
+meow build                           # the ipa, its sha256 and the deb for /var/jb
 ```
 
-output: `build/ios/Exteria-v<version>.ipa`, `build/ios/exteria_<version>.deb`. a full `make app` after a header change takes about ten minutes.
+the build is [meow](https://github.com/sqmrak/meow), `meow.toml` holds the compile graph, the ipa, the deb and their checks. `meow plan` shows what is stale, `meow why` says why, `meow build ipa` and `meow build deb` build one package. output: `build/ios/Exteria-v<version>.ipa`, `build/ios/Exteria-v<version>.ipa.sha256`, `build/ios/exteria_<version>.deb`. a full build takes about ten minutes, a header change rebuilds only the sources that include it.
 
-after the build, check the artifact and not only the exit code:
+after the build, check the artifact and not only the exit code. meow checks both slices, the deployment targets, the linked libraries and the signature of the binaries before it packs them, and the layout of the ipa and the deb after. also:
 
-- `make app-unsigned`, then `make inspect-unsigned`: both slices, deployment targets, linked frameworks, ios 5 imports (needs `EXTERIA_SDK_V5` and `EXTERIA_SDK_V6`)
-- `lipo -info build/ios/Exteria.app/Exteria` shows armv7 and arm64
+- `meow build check-symbols`: imports of the armv7 slice against the ios 5 runtime (needs `EXTERIA_SDK_V5`)
+- `meow build check-compat`: calls newer than ios 5.0 in the ios 6.1 headers (needs `EXTERIA_SDK_V6`)
+- `lipo -info build/fat/Exteria` shows armv7 and arm64
 - `unzip -l` on the ipa, `dpkg-deb -c` on the deb: layout, permissions, `Info.plist` version
-- the version in `packaging/Info.plist`, the file names and the release tag agree. do not bump it outside a release
+- the version in `packaging/deb/control` is the source, `meow build version` fails when `packaging/Info.plist` or the extension plist differ. the file names and the release tag agree with it. do not bump it outside a release
 
 ## test
 
@@ -131,13 +131,12 @@ make test-icons
 jailbroken devices only. the ipa is signed with ldid.
 
 ```bash
-scp -r build/ios/Exteria.app root@<device-ip>:/Applications/
-ssh root@<device-ip> 'chown -R mobile:wheel /Applications/Exteria.app && su mobile -c uicache'
+meow install --host <device-ip> --legacy build/ios/exteria_<version>.deb
 ```
 
-- the owner is `mobile:wheel`. a root-owned bundle breaks the icon change on ios 6, since the app rewrites its own `Info.plist` as `mobile`
-- on ios 5 and 6 run `/Applications/Exteria.app/Exteria --system-notifications on` before `uicache`, then respring (see the install section of the readme)
-- old sshd needs `-o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group1-sha1,diffie-hellman-group14-sha1 -o Ciphers=+aes128-cbc,aes256-cbc` on the command line, and `scp -O`. keep these out of `~/.ssh/config`
+- the postinst makes `mobile:wheel` the owner of the bundle. a root-owned bundle breaks the icon change on ios 6, since the app rewrites its own `Info.plist` as `mobile`
+- on ios 5 and 6 the postinst runs `/Applications/Exteria.app/Exteria --system-notifications on` before `uicache` (see the install section of the readme)
+- old sshd needs `-o HostKeyAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group1-sha1,diffie-hellman-group14-sha1 -o Ciphers=+aes128-cbc,aes256-cbc` on the command line, and `scp -O`. keep these out of `~/.ssh/config`. `meow install --legacy` passes them for the deb install
 - crash log: `/var/mobile/Library/Caches/exteria-crash.log`. system reports: `/var/mobile/Library/Logs/CrashReporter`
 - a tester's `build <hex>` line is the `LC_UUID` of the slice. match it with `llvm-dwarfdump --uuid` on the binary of that exact build, then `python3 scripts/symbolicate_crash.py crash.log /path/to/Exteria --arch armv7`
 - keep the ipa or deb of every build you hand out, or the crash cannot be named later

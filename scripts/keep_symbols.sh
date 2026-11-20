@@ -2,8 +2,8 @@
 # keeps a copy of a built binary under build/symbols, named by the build ids of its slices, so a crash log that names a build can be read later.
 # the id a crash log prints is the LC_UUID of the slice, as 32 hex digits
 set -eu
-binary="$1"
-toolchain="${EXTERIA_TC:?set EXTERIA_TC}"
+toolchain="${1:?usage: keep_symbols.sh <toolchain bin directory> <binary>}"
+binary="${2:?usage: keep_symbols.sh <toolchain bin directory> <binary>}"
 name=""
 for arch in armv7 arm64; do
     id=$("$toolchain/otool" -arch "$arch" -l "$binary" | awk '/LC_UUID/ {found = 1} found && /uuid/ {print $2; exit}' | tr -d '-' | tr 'A-F' 'a-f')

@@ -1,0 +1,11 @@
+Package: com.sqmrak.exteria
+Name: Exteria
+Version: 3.1.1-stable
+Architecture: all
+Description: native telegram client for jailbroken iOS 5+ (armv7 + arm64)
+Maintainer: sqmrak
+Author: sqmrak
+Section: Messaging
+Priority: optional
+License: GPL-3.0-only
+Depends: firmware (>= 5.0)
