@@ -1108,6 +1108,11 @@ static NSString *ExteriaClassicKey(ExteriaDialog *dialog) {
     [self refreshConnectionTitle];
 }
 
+- (void)scrollToTopAnimated {
+    if (!self.isViewLoaded) return;
+    [self.tableView setContentOffset:CGPointMake(0, -self.tableView.contentInset.top) animated:YES];
+}
+
 /* a reload or a filter rebuilds the rows, which drops the table's own selection */
 - (void)restoreSelection {
     if (!_selection) return;

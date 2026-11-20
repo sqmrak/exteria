@@ -516,6 +516,12 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
 - (BOOL)tabBarController:(UITabBarController *)tabs shouldSelectViewController:(UIViewController *)screen {
     NSUInteger from = tabs.selectedIndex, to = [tabs.viewControllers indexOfObject:screen];
     if (to != NSNotFound && [self pluginTakesTab:(NSInteger)to kind:@"click"]) return NO;
+    if (from == to && to < ExteriaTabCount && _kinds[to] == ExteriaTabChats && [screen isKindOfClass:[UINavigationController class]]) {
+        /* the system pops a tab that is reselected to its root by itself; at the root there is nothing to pop, so the list goes up */
+        UINavigationController *navigation = (UINavigationController *)screen;
+        id root = navigation.viewControllers.count ? [navigation.viewControllers objectAtIndex:0] : nil;
+        if (navigation.viewControllers.count == 1 && [root isKindOfClass:[ExteriaClassicChatsController class]]) [(ExteriaClassicChatsController *)root scrollToTopAnimated];
+    }
     if (from == to || to == NSNotFound) return YES;
     for (UIView *container in tabs.view.subviews) {
         if ([container isKindOfClass:[UITabBar class]]) continue;
@@ -1009,12 +1015,6 @@ static BOOL ExteriaSwipeTabKind(NSInteger kind) {
 - (void)tabBar:(ExteriaTabBar *)tabBar didLongPressIndex:(NSInteger)index frame:(CGRect)frame {
     if ([self pluginTakesTab:index kind:@"hold"]) return;
     if (index < 0 || index >= ExteriaTabCount || _kinds[index] != ExteriaTabProfile) return;
-    NSString *active = ExteriaAccountActive();
-    NSMutableArray *titles = [NSMutableArray array], *names = [NSMutableArray array];
-    NSMutableData *symbols = [NSMutableData data];
-    for (NSString *name in ExteriaAccountNames()) {
-        NSString *title = [ExteriaAccountInfo(name) objectForKey:@"title"];
-        [titles addObject:title.length ? title : NSLocalizedString(@"account.title", nil)];
     [self showAccountsAboveBar:tabBar frame:frame];
 }
 
@@ -1030,6 +1030,12 @@ static BOOL ExteriaSwipeTabKind(NSInteger kind) {
 }
 
 - (void)showAccountsAboveBar:(UIView *)tabBar frame:(CGRect)frame {
+    NSString *active = ExteriaAccountActive();
+    NSMutableArray *titles = [NSMutableArray array], *names = [NSMutableArray array];
+    NSMutableData *symbols = [NSMutableData data];
+    for (NSString *name in ExteriaAccountNames()) {
+        NSString *title = [ExteriaAccountInfo(name) objectForKey:@"title"];
+        [titles addObject:title.length ? title : NSLocalizedString(@"account.title", nil)];
         [names addObject:name];
         ExteriaSymbol symbol = [name isEqualToString:active] ? ExteriaSymbolCheck : ExteriaSymbolPerson;
         [symbols appendBytes:&symbol length:sizeof(symbol)];

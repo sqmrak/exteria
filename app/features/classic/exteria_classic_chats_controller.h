@@ -15,5 +15,7 @@
 /* the unread messages of the chats that are not muted, for the badge on the tab */
 @property (nonatomic, copy) void (^unreadHandler)(NSInteger total);
 
+/* a second tap on the chats tab brings the list back to its top, search bar included, as the modern bar does */
+- (void)scrollToTopAnimated;
 
 @end
