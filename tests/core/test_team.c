@@ -30,6 +30,8 @@ int main(void) {
     CHECK_EQ_INT(exteria_team_marks(INT64_C(1415625115)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(558269829)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(5586697397)), ExteriaMarkOfficialTester | ExteriaMarkFlawSeer);
+    /* merwleem wears the bug hunter in place of the promotion mark */
+    CHECK_EQ_INT(exteria_team_marks(INT64_C(7118797604)), ExteriaMarkOfficialTester | ExteriaMarkManager | ExteriaMarkBugHunter);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(6233584668)), ExteriaMarkDeveloper);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(588487063)), ExteriaMarkDeveloper | ExteriaMarkOfficialTester);
     CHECK_EQ_INT(exteria_team_marks(INT64_C(5805414308)), 0);
