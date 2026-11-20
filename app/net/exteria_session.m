@@ -1781,7 +1781,12 @@ static void ExteriaAuthChanged(void *ctx, exteria_auth_state state, exteria_stat
     }
     _failures = 0;
     _retryAt = 0;
-    if (hadAccount) [self deliverKind:ExteriaAuthEventLoggedOut];
+    if (hadAccount) {
+        /* the app replaces this session with a new one for the directory, which makes its own key. this one must not open a link of its own meanwhile: two connections
+           that make keys into one session file, or one that still holds the old key while the next signs in, are what the server answers with AUTH_KEY_DUPLICATED */
+        _wantLink = NO;
+        [self deliverKind:ExteriaAuthEventLoggedOut];
+    }
 }
 
 /* worker only: tells the main thread when the link starts or stops working */
