@@ -36,7 +36,7 @@ static BOOL ExteriaRowCompact(void) {
 #define ONLINE_BORDER 2.0
 #define SIDE_MARGIN 14.0
 #define BADGE_HEIGHT SCALED(18.0)
-#define ICON_SIZE 14.0
+#define ICON_SIZE 11.0
 #define FORWARD_SIDE 14.0
 #define FORUM_TOPIC_ICON 15.0
 /* a forum row stands taller: the name, a line of topics and the last message, each of the last two in a capsule */
