@@ -596,6 +596,7 @@ static NSURL *ExteriaKeepOpenedFile(NSURL *url, NSString **directory) {
 - (void)session:(ExteriaSession *)session didReceiveAuthEvent:(ExteriaAuthEvent *)event {
     (void)session;
     if (event.kind != ExteriaAuthEventLoggedOut) return;
+    NSLog(@"exteria: account '%@' lost its key on the server, the app moves to the first account that is left and forgets this one", _activeAccount);
     [_notifier stop];
     [_login release];
     _login = nil;
@@ -626,12 +627,21 @@ static NSURL *ExteriaKeepOpenedFile(NSURL *url, NSString **directory) {
 
 /* makes the account the one with the connection, and shows its chats, or the welcome screen for one that is not signed in */
 - (void)activateAccount:(NSString *)name {
-    if (_callScreen || _groupPresenter.callIsShown || _addSession) return;
+    if (_callScreen || _groupPresenter.callIsShown || _addSession) {
+        NSLog(@"exteria: the switch to account '%@' waits for the call or the added account to end (call %d, group call %d, adding %d)", name,
+              _callScreen != nil, _groupPresenter.callIsShown, _addSession != nil);
+        return;
+    }
     UIViewController *shown = _navigation.presentedViewController;
     if (shown) [_navigation dismissViewControllerAnimated:NO completion:nil];
     [_notifier stop];
     [_notifier release];
+    /* the connection of the account that leaves is closed before the next one opens, so two clients of one process are never live together and the key files of the two
+       directories are never touched at once */
     ExteriaSession *retired = _session;
+    _session = nil;
+    [self retireSession:retired];
+    [retired release];
     [_activeAccount release];
     _activeAccount = [name copy];
     ExteriaAccountSetActive(name);
@@ -652,8 +662,14 @@ static NSURL *ExteriaKeepOpenedFile(NSURL *url, NSString **directory) {
 
 - (void)accountSwitchRequested:(NSNotification *)note {
     NSString *name = [note.userInfo objectForKey:@"name"];
-    if (!name || [name isEqualToString:_activeAccount]) return;
-    if (![ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(name)]) return;
+    if (!name || [name isEqualToString:_activeAccount]) {
+        NSLog(@"exteria: the switch to account '%@' is ignored, it is the active one ('%@')", name, _activeAccount);
+        return;
+    }
+    if (![ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(name)]) {
+        NSLog(@"exteria: the switch to account '%@' is ignored, its directory holds no signed in account", name);
+        return;
+    }
     [self activateAccount:name];
 }
 
@@ -662,12 +678,7 @@ static NSURL *ExteriaKeepOpenedFile(NSURL *url, NSString **directory) {
     (void)note;
     if (_addSession || _callScreen) return;
     NSString *name = ExteriaAccountMakeNew();
-    /* the connection of the account that leaves is closed before the next one opens, so two clients of one process are never live together and the key files of the two
-       directories are never touched at once */
     if (!name) {
-    _session = nil;
-    [self retireSession:retired];
-    [retired release];
         [self showNoticeTitle:nil message:NSLocalizedString(@"account.add.failed", nil)];
         return;
     }
