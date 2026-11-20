@@ -389,6 +389,9 @@ static void ExteriaPlaceClassicBadge(UITabBar *bar, CGFloat width, NSInteger ind
     ExteriaClassicStyleTabBar(_classicTabs.tabBar);
     /* the system badge is red on ios 5 to 9 and takes no color before ios 10, so the count is a label of our own in the accent */
     UITabBar *bar = _classicTabs.tabBar;
+    UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(classicBarHeld:)];
+    [bar addGestureRecognizer:hold];
+    [hold release];
     chats.unreadHandler = ^(NSInteger total) {
         [[bar viewWithTag:CLASSIC_BADGE_TAG] removeFromSuperview];
         if (total <= 0) return;
@@ -1012,6 +1015,21 @@ static BOOL ExteriaSwipeTabKind(NSInteger kind) {
     for (NSString *name in ExteriaAccountNames()) {
         NSString *title = [ExteriaAccountInfo(name) objectForKey:@"title"];
         [titles addObject:title.length ? title : NSLocalizedString(@"account.title", nil)];
+    [self showAccountsAboveBar:tabBar frame:frame];
+}
+
+/* the classic bar is the system one, which has no hold of its own: a finger held on the slot of the profile tab gets the same list as the modern bar */
+- (void)classicBarHeld:(UILongPressGestureRecognizer *)hold {
+    if (hold.state != UIGestureRecognizerStateBegan || !_classicTabs) return;
+    UIView *bar = hold.view;
+    CGFloat slot = bar.bounds.size.width / (CGFloat)ExteriaTabCount;
+    NSInteger index = (NSInteger)floor([hold locationInView:bar].x / slot);
+    if ([self pluginTakesTab:index kind:@"hold"]) return;
+    if (index < 0 || index >= ExteriaTabCount || _kinds[index] != ExteriaTabProfile) return;
+    [self showAccountsAboveBar:bar frame:CGRectMake(slot * (CGFloat)index, 0, slot, bar.bounds.size.height)];
+}
+
+- (void)showAccountsAboveBar:(UIView *)tabBar frame:(CGRect)frame {
         [names addObject:name];
         ExteriaSymbol symbol = [name isEqualToString:active] ? ExteriaSymbolCheck : ExteriaSymbolPerson;
         [symbols appendBytes:&symbol length:sizeof(symbol)];
