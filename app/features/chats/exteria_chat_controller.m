@@ -2904,6 +2904,9 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     /* a classic chat sits under the system's own bar, which the view already starts below or reports in the top inset */
     CGFloat headerHeight = ExteriaThemeIsClassic() ? insets.top : insets.top + BAR_HEIGHT;
     CGFloat pinnedHeight = _pinnedBar.hidden || _pinnedBarCollapsing ? 0 : PINNED_HEIGHT;
+    /* ios 5 sometimes loses the announcement of the keyboard going down (a panel or a keyboard taken away while another screen was over the chat), and the field then stays
+       where the keyboard was, in the middle of the screen over an empty bar. with nothing to type in and no slide running, there is no keyboard to make room for */
+    if (_keyboardOverlap > 0 && !_keyboardMoving && !_panelShown && ![_input.textView isFirstResponder]) _keyboardOverlap = 0;
     CGFloat bottomPad = _keyboardOverlap > 0 ? 0 : insets.bottom;
     BOOL hideReadOnly = _dialog.kind == EXTERIA_DIALOG_CHANNEL && !_input.writable && !_input.actionTitle.length;
     BOOL searching = _searchBar != nil;
