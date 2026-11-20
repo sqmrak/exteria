@@ -515,6 +515,7 @@
 "emoji.premium.loading" = "Loading custom emoji…";
 "emoji.premium.failed" = "Could not load custom emoji. Open the tab again to retry.";
 "emoji.premium.none" = "This set has no emoji.";
+"emoji.premium.nosets" = "No emoji sets are added to this account.";
 "profile.bot" = "bot";
 "profile.more" = "More";
 "music.title" = "Music";
@@ -2576,6 +2577,7 @@
 "chats.edit" = "Edit";
 "chats.select.hint" = "Select chats";
 "share.to" = "Send to";
+"share.error.unreadable" = "The file could not be read. Open it from a place Exteria can reach, or copy it first.";
 "chat.msg.details.listened" = "Listened: %@";
 "chat.msg.details.notlistened" = "Not listened yet";
 "chat.msg.details.listenedunknown" = "Listened";

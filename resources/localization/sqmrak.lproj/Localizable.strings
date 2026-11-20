@@ -517,6 +517,7 @@
 "emoji.premium.loading" = "загрузка эмодзи…";
 "emoji.premium.failed" = "не удалось загрузить эмодзи. откройте вкладку ещё раз :#";
 "emoji.premium.none" = "в этом наборе нет эмодзи.";
+"emoji.premium.nosets" = "у вас нет добавленных наборов эмодзи.";
 "profile.bot" = "бот";
 "profile.more" = "ещё";
 "music.title" = "музыка";
@@ -2582,6 +2583,7 @@
 "chats.edit" = "изменить";
 "chats.select.hint" = "выберите чаты";
 "share.to" = "отправить в";
+"share.error.unreadable" = "не удалось прочитать файл. откройте его из места, доступного exteria, или сначала скопируйте.";
 "chat.msg.details.listened" = "прослушано: %@";
 "chat.msg.details.notlistened" = "ещё не прослушано";
 "chat.msg.details.listenedunknown" = "прослушано";

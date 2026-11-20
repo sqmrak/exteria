@@ -2,6 +2,7 @@
 #import "exteria_alert_view.h"
 #import "exteria_power_notice.h"
 #import "exteria_app_delegate.h"
+#import <objc/message.h>
 #import "exteria_quick_actions.h"
 #import "exteria_share_intake.h"
 #import "exteria_window.h"
@@ -164,6 +165,28 @@ static NSString *ExteriaSupportDirectory(void) {
     return YES;
 }
 
+/* copies the file of an "open in" into a folder of the app's own temporary directory, under its own name; nil when it cannot be read, which is logged with the reason */
+static NSURL *ExteriaKeepOpenedFile(NSURL *url, NSString **directory) {
+    NSFileManager *manager = [NSFileManager defaultManager];
+    BOOL scoped = NO;
+    SEL start = NSSelectorFromString(@"startAccessingSecurityScopedResource");
+    if ([url respondsToSelector:start]) scoped = ((BOOL (*)(id, SEL))objc_msgSend)(url, start);
+    NSString *folder = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"exteria-open-%08x%08x", arc4random(), arc4random()]];
+    NSError *error = nil;
+    NSString *name = [url lastPathComponent];
+    NSString *target = [folder stringByAppendingPathComponent:name];
+    BOOL kept = name.length && [manager createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:&error] &&
+                [manager copyItemAtPath:[url path] toPath:target error:&error];
+    if (scoped) ((void (*)(id, SEL))objc_msgSend)(url, NSSelectorFromString(@"stopAccessingSecurityScopedResource"));
+    if (!kept) {
+        NSLog(@"exteria: the opened file %@ could not be copied: %@", name, error);
+        [manager removeItemAtPath:folder error:NULL];
+        return nil;
+    }
+    *directory = folder;
+    return [NSURL fileURLWithPath:target];
+}
+
 /* tg:// links, which the Info.plist hands to the app, and t.me links when something passes them on: they open
    inside the app */
 - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation {
@@ -177,7 +200,12 @@ static NSString *ExteriaSupportDirectory(void) {
     /* a picture, a video or any file from the share sheet or "open in" waits in the inbox of the app until the person picks its chat */
     if ([url isFileURL]) {
         if (![ExteriaSession hasAccountInDirectory:ExteriaAccountDirectory(_activeAccount)]) return NO;
-        NSDictionary *info = [NSDictionary dictionaryWithObject:[NSArray arrayWithObject:url] forKey:@"urls"];
+        /* the file is taken into the app now: a file opened in place from another app (ifile hands over the path of the file itself, a crash log of the system for one) is readable
+           only while this call runs, and the chat is picked later, which made the send fail with SHARE_FILE_UNREADABLE. the copy is what is sent and what is removed afterwards */
+        NSString *directory = nil;
+        NSURL *kept = ExteriaKeepOpenedFile(url, &directory);
+        if (!kept) return NO;
+        NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSArray arrayWithObject:kept], @"urls", directory, @"directory", nil];
         dispatch_async(dispatch_get_main_queue(), ^{
             [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaShareFilesNotification object:self userInfo:info];
         });

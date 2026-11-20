@@ -63,6 +63,7 @@ NSString *ExteriaGiftErrorText(NSString *errorName) {
     if ([errorName isEqualToString:@"CHANNELS_TOO_MUCH"]) return NSLocalizedString(@"channel.join.toomuch", nil);
     if ([errorName isEqualToString:@"USER_BANNED_IN_CHANNEL"] || [errorName isEqualToString:@"CHANNEL_PRIVATE"]) return NSLocalizedString(@"channel.join.denied", nil);
     if ([errorName isEqualToString:@"NOT_REPORTED"]) return NSLocalizedString(@"report.refused", nil);
+    if ([errorName isEqualToString:@"SHARE_FILE_UNREADABLE"]) return NSLocalizedString(@"share.error.unreadable", nil);
     return [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName ? errorName : @"?"];
 }
 
