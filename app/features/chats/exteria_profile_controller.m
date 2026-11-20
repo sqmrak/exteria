@@ -2,6 +2,12 @@
 #import "exteria_alert_view.h"
 #import "exteria_emoji_label.h"
 #import "exteria_gift_folder_bar.h"
+#import "exteria_profile_backdrop_view.h"
+#import "exteria_profile_colors.h"
+#import "exteria_custom_emoji.h"
+#import "exteria_lite_mode.h"
+#import "exteria_image_decoder.h"
+#import "exteria_lottie_view.h"
 #import "exteria_animation.h"
 #import "exteria_text_filter.h"
 #import "exteria_profile_controller.h"
@@ -59,10 +65,13 @@
     UILabel *_caption;
     ExteriaSymbol _symbol;
     BOOL _onPhoto;
+    UIColor *_ink;
 }
 - (id)initWithSymbol:(ExteriaSymbol)symbol title:(NSString *)title;
 /* the card stands on the wide photo: a dark veil for its plate and white for the symbol and the word; NO puts the colors of the screen back */
 - (void)setOnPhoto:(BOOL)onPhoto;
+/* the card on the colored ground of a collectible profile: a dark veil for the plate and the ink of the profile for the symbol and the word; nil puts the colors of the screen back */
+- (void)setInk:(UIColor *)ink;
 @end
 
 @implementation ExteriaProfileAction
@@ -92,12 +101,26 @@
 - (void)setOnPhoto:(BOOL)onPhoto {
     if (onPhoto == _onPhoto) return;
     _onPhoto = onPhoto;
-    self.backgroundColor = onPhoto ? [UIColor colorWithWhite:0 alpha:0.32f] : ExteriaColorCard();
-    _icon.image = ExteriaSymbolImage(_symbol, 24, onPhoto ? [UIColor whiteColor] : ExteriaColorAccent());
-    _caption.textColor = onPhoto ? [UIColor whiteColor] : ExteriaColorTitle();
+    [self applyColors];
+}
+
+- (void)setInk:(UIColor *)ink {
+    if (ink == _ink) return;
+    [_ink release];
+    _ink = [ink retain];
+    [self applyColors];
+}
+
+/* the wide photo and the colored ground both want a veil and light ink, the plain screen the card colors */
+- (void)applyColors {
+    UIColor *ink = _onPhoto ? [UIColor whiteColor] : _ink;
+    self.backgroundColor = ink ? [UIColor colorWithWhite:0 alpha:0.32f] : ExteriaColorCard();
+    _icon.image = ExteriaSymbolImage(_symbol, 24, ink ? ink : ExteriaColorAccent());
+    _caption.textColor = ink ? ink : ExteriaColorTitle();
 }
 
 - (void)dealloc {
+    [_ink release];
     [_icon release];
     [_caption release];
     [super dealloc];
@@ -132,6 +155,13 @@
     ExteriaAvatarCache *_avatars;
     ExteriaMediaCache *_media;
     ExteriaWaveBackgroundView *_backdrop;
+    /* the colored ground behind the head when the account wears a collectible color or status, and the ink the head wears on it */
+    ExteriaProfileBackdropView *_ground;
+    UIColor *_groundInk;
+    /* the emoji status when it moves: drawn over the still picture the name already holds, at the place the name leaves for it */
+    ExteriaLottieView *_statusAnimation;
+    long long _statusAnimationDocument;
+    NSUInteger _statusAnimationToken;
     UIView *_bar;
     BOOL _barFilled;
     UILabel *_titleLabel;
@@ -223,6 +253,7 @@
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setOnPhoto:YES];
         _identity.alpha = 0;
+        _statusAnimation.alpha = 0;
         _titleLabel.alpha = 0;
         [self layoutHead];
     } completion:^(BOOL finished) {
@@ -240,6 +271,7 @@
 /* another tab takes the screen: the photo shrinks back to its circle while the tab slides away, so it is not left wide when the person comes back */
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    [_statusAnimation setPlaying:NO];
     if (_heroOpen && !_heroMoving) [self closeHero];
 }
 
@@ -282,6 +314,7 @@
     [UIView animateWithDuration:motion ? 0.38 : 0 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setOnPhoto:NO];
         _identity.alpha = 1;
+        _statusAnimation.alpha = 1;
         _titleLabel.alpha = 1;
         [self layoutHead];
     } completion:^(BOOL finished) {
@@ -309,6 +342,9 @@
     [_moreButton release];
     [_starsImage release];
     [_backdrop release];
+    [_ground release];
+    [_groundInk release];
+    [_statusAnimation release];
     [_bar release];
     [_titleLabel release];
     [_barName release];
@@ -565,6 +601,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     long long badge = ExteriaBadgeDocument(_person.emojiStatus, ExteriaPremiumEffective(_person.premium));
     _identity.userId = _person.userId;
     [_identity setName:_person.name badge:badge developer:ExteriaPersonIsDeveloper(_person)];
+    [self animateStatus:badge == _person.emojiStatus ? _person.emojiStatus : 0];
+    [self applyBackdropOfPerson:_person];
     if (_person.emojiStatus) {
         ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:_identity];
         ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:_person.emojiStatus]], _session, _media, ^{ [(ExteriaProfileIdentityView *)weak.target redrawName]; });
@@ -596,6 +634,160 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _music.savedTrack = _full.music;
     [self refreshChannelCard];
     [self layoutHead];
+}
+
+/* a status that is an animation (tgs, or a video sticker) is fetched once and plays in place of its still picture; a plain one stays as it is drawn. The same
+   status again only puts the animation back at the place the name now leaves for it */
+- (void)animateStatus:(long long)document {
+    if (document && document == _statusAnimationDocument) {
+        [self placeStatusAnimation];
+        return;
+    }
+    ++_statusAnimationToken;
+    _name.hiddenCustomEmoji = 0;
+    _statusAnimationDocument = 0;
+    [_statusAnimation removeFromSuperview];
+    [_statusAnimation release];
+    _statusAnimation = nil;
+    if (!document || !ExteriaLiteEnabled(EXTERIA_LITE_EMOJI_CHAT)) return;
+    _statusAnimationDocument = document;
+    NSUInteger token = _statusAnimationToken;
+    ExteriaWeakReference *weak = _weak;
+    [_session loadCustomEmojiDocuments:[NSArray arrayWithObject:[NSNumber numberWithLongLong:document]] completion:^(NSArray *documents, NSString *errorName) {
+        ExteriaProfileController *profile = weak.target;
+        if (!profile || token != profile->_statusAnimationToken) return;
+        ExteriaCustomEmojiDocument *found = documents.count ? [documents objectAtIndex:0] : nil;
+        if (!found) {
+            if (errorName) NSLog(@"exteria: the status emoji %lld was not looked up: %@", document, errorName);
+            return;
+        }
+        if (!found.file || (found.format != EXTERIA_STICKER_ANIMATED && found.format != EXTERIA_STICKER_VIDEO)) return;
+        NSString *key = found.file.key;
+        [profile->_media loadDataForFile:found.file completion:^(NSData *data) {
+            ExteriaProfileController *again = weak.target;
+            if (!again || token != again->_statusAnimationToken) return;
+            ExteriaFileFormat format = data ? ExteriaFileFormatOfData(data) : ExteriaFileFormatUnknown;
+            if (format != ExteriaFileFormatGzip && format != ExteriaFileFormatMatroska) {
+                NSLog(@"exteria: the status emoji %@ did not load as tgs or webm", key);
+                return;
+            }
+            [again showStatusAnimation:data key:key];
+        }];
+    }];
+}
+
+- (void)showStatusAnimation:(NSData *)data key:(NSString *)key {
+    ExteriaLottieView *view = [[[ExteriaLottieView alloc] initWithPackedData:data key:key] autorelease];
+    view.userInteractionEnabled = NO;
+    view.backgroundColor = [UIColor clearColor];
+    /* a status that lands while the photo is wide stays hidden with the name */
+    view.alpha = _hero ? 0 : 1;
+    [_statusAnimation removeFromSuperview];
+    [_statusAnimation release];
+    _statusAnimation = [view retain];
+    ExteriaWeakReference *weak = _weak;
+    NSUInteger token = _statusAnimationToken;
+    view.firstFrameHandler = ^{
+        ExteriaProfileController *profile = weak.target;
+        if (profile && token == profile->_statusAnimationToken) profile->_name.hiddenCustomEmoji = profile->_statusAnimationDocument;
+    };
+    [_head addSubview:view];
+    [self placeStatusAnimation];
+    [view setPlaying:self.isViewLoaded && self.view.window != nil && !_hero];
+}
+
+/* the name keeps the still picture until the animation has its first frame */
+- (void)placeStatusAnimation {
+    if (!_statusAnimation) return;
+    CGRect box = [_name customEmojiRect:_statusAnimationDocument];
+    if (CGRectIsNull(box)) {
+        _statusAnimation.hidden = YES;
+        return;
+    }
+    CGFloat side = box.size.width;
+    _statusAnimation.frame = [_head convertRect:CGRectMake(box.origin.x, CGRectGetMidY(box) - side / 2, side, side) fromView:_name];
+    _statusAnimation.hidden = NO;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [_statusAnimation setPlaying:!_hero];
+}
+
+/* the head takes the colors of the account: a collectible's own, or those of the color it picked from the server's list, which are asked for once */
+- (void)applyBackdropOfPerson:(ExteriaPerson *)person {
+    if (person.hasBackdrop) {
+        [self showBackdropCenter:person.backdropCenter edge:person.backdropEdge pattern:person.backdropPattern text:person.backdropText document:person.backdropPatternDocument];
+        return;
+    }
+    if (!person.hasProfileColor) {
+        [self dropBackdrop];
+        return;
+    }
+    ExteriaWeakReference *weak = _weak;
+    int32_t colorId = (int32_t)person.profileColorId;
+    long long emoji = person.profileColorEmoji;
+    [ExteriaProfileColors loadWithSession:_session completion:^{
+        ExteriaProfileController *profile = weak.target;
+        uint32_t center = 0, edge = 0;
+        if (!profile || ![ExteriaProfileColors blendForColorId:colorId dark:ExteriaThemeIsDark() center:&center edge:&edge]) return;
+        [profile showBackdropCenter:center edge:edge pattern:0xFFFFFF text:0xFFFFFF document:emoji];
+    }];
+}
+
+/* the colored ground goes when the account no longer wears a color, and the ink and the bar go back to those of the screen */
+- (void)dropBackdrop {
+    if (!_ground) return;
+    [_ground removeFromSuperview];
+    [_ground release];
+    _ground = nil;
+    [_groundInk release];
+    _groundInk = nil;
+    _bar.backgroundColor = [ExteriaColorScreen() colorWithAlphaComponent:0.94];
+    _name.textColor = ExteriaColorTitle();
+    _status.textColor = ExteriaColorSecondary();
+    for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setInk:nil];
+    _music.patternColor = nil;
+    _music.patternImage = nil;
+    [self.view setNeedsLayout];
+}
+
+/* the blend behind the photo, the text over it, the action cards as veils with the same ink, and the emoji that tiles the ground */
+- (void)showBackdropCenter:(uint32_t)center edge:(uint32_t)edge pattern:(uint32_t)pattern text:(uint32_t)text document:(long long)document {
+    if (!_ground) {
+        _ground = [[ExteriaProfileBackdropView alloc] init];
+        [_head insertSubview:_ground atIndex:0];
+    }
+    _ground.centerColor = ExteriaColorOfRGB(center);
+    _ground.edgeColor = ExteriaColorOfRGB(edge);
+    _ground.patternColor = ExteriaColorOfRGB(pattern);
+    _music.patternColor = ExteriaColorOfRGB(pattern);
+    _ground.photoRadius = _avatar.bounds.size.width / 2;
+    /* the bar fills with the edge of the ground, darker, once the head has scrolled under it */
+    const CGFloat keep = 0.5;
+    _bar.backgroundColor = [UIColor colorWithRed:((edge >> 16) & 0xff) / 255.0 * keep green:((edge >> 8) & 0xff) / 255.0 * keep blue:(edge & 0xff) / 255.0 * keep alpha:0.94];
+    UIColor *ink = ExteriaColorOfRGB(text);
+    [_groundInk release];
+    _groundInk = [ink retain];
+    _name.textColor = ink;
+    _status.textColor = [ink colorWithAlphaComponent:0.78f];
+    for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setInk:ink];
+    if (document > 0) {
+        ExteriaWeakReference *weak = _weak;
+        ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:document]], _session, _media, ^{
+            [(ExteriaProfileController *)weak.target showPatternOfDocument:document];
+        });
+        [self showPatternOfDocument:document];
+    }
+    [self.view setNeedsLayout];
+    [_name setNeedsDisplay];
+}
+
+- (void)showPatternOfDocument:(long long)document {
+    UIImage *picture = [ExteriaCustomEmoji imageForDocument:document];
+    if (!picture) return;
+    _ground.patternImage = picture;
+    _music.patternImage = picture;
 }
 
 - (ExteriaProfileFeed *)feedForTab:(NSUInteger)tab {
@@ -736,6 +928,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     CGFloat wideHeight = _heroOpen ? _heroHeight : 0;
     /* the photo reaches up under the bar and the status bar: its frame begins above the head by the inset of the list */
     if (_hero) _hero.frame = _heroOpen ? CGRectMake(0, -_grid.topInset, width, _grid.topInset + wideHeight) : _heroCircle;
+    [self placeStatusAnimation];
     CGFloat statusWidth = MIN(width - 70, ceil([_status sizeThatFits:CGSizeMake(width - 70, 22)].width));
     _ratingBadge.frame = CGRectMake(floor((width - statusWidth) / 2) - 26, _status.frame.origin.y + 1, 22, 20);
     y += EXTERIA_IDENTITY_HEIGHT + identityExtra + GAP + 4;
@@ -746,6 +939,13 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _editAction.frame = CGRectMake(x + slot + ACTION_GAP, y, slot, ACTION_HEIGHT);
     _settingsAction.frame = CGRectMake(x + 2 * (slot + ACTION_GAP), y, contentWidth - 2 * (slot + ACTION_GAP), ACTION_HEIGHT);
     y += ACTION_HEIGHT + GAP;
+    if (_ground) {
+        /* the ground runs up under the bar and down behind the buttons; the wide photo ends the head itself, so the ground shows no strip under it */
+        CGFloat above = 600;
+        CGFloat groundBottom = _heroOpen ? wideHeight : y - GAP + 6;
+        _ground.frame = CGRectMake(0, -above, width, above + groundBottom);
+        _ground.focus = CGPointMake(width / 2, above + CGRectGetMidY([_identity convertRect:_avatar.frame toView:_head]));
+    }
     if (_heroOpen) y = wideHeight + GAP;
     if (_music.hasContent) {
         CGFloat pillWidth = [_music widthWithin:contentWidth];
