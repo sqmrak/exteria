@@ -35,6 +35,21 @@ class AppIconTests(unittest.TestCase):
                     else:
                         self.assertEqual(after, before)
 
+    def test_flat_deb_icons_are_the_glossed_ones_without_the_highlight(self):
+        root = Path(make_assets.ROOT)
+        with tempfile.TemporaryDirectory() as directory:
+            make_assets.build_flat_deb_icons(root / "resources/icons", directory)
+            names = sorted(path.name for path in Path(directory).iterdir())
+            expected = sorted(name for name, side in make_assets.deb_icon_files() if side in make_assets.LEGACY_ICON_SIDES)
+            self.assertEqual(names, expected)
+            for name, side in make_assets.deb_icon_files():
+                if side not in make_assets.LEGACY_ICON_SIDES:
+                    continue
+                with self.subTest(name=name), Image.open(Path(directory) / name) as flat, Image.open(root / "resources/deb-icons" / name) as glossed:
+                    self.assertEqual(flat.size, (side, side))
+                    top = (side // 2, side // 8)
+                    self.assertLess(sum(flat.convert("RGB").getpixel(top)), sum(glossed.convert("RGB").getpixel(top)))
+
     def assert_launcher_icon(self, path, side=None, rounded=False):
         with Image.open(path) as icon:
             self.assertEqual(icon.format, "PNG")

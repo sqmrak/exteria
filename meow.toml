@@ -414,3 +414,8 @@ mode = "644"
 from = "resources/deb-icons"
 to = "Applications/Exteria.app"
 replace = true
+
+# gloss free copies of the pre-rendered sizes, which postinst moves over the glossed ones on ios 9 and later
+[[deb.deb.tree]]
+from = "resources/deb-icons-flat"
+to = "Applications/Exteria.app/icons-flat"

@@ -409,6 +409,16 @@ def build_deb_icons(source_dir, out_dir):
             write_png(glossed_icon(icon, side) if side in LEGACY_ICON_SIDES else legacy_icon(icon, side, force=True), os.path.join(out_dir, name), launcher=True)
 
 
+def build_flat_deb_icons(source_dir, out_dir):
+    # the glossed files above are right for ios 5 to 8, where the gloss is part of the file. ios 9 and later draw the same 120 and 180 pixel files under their
+    # own mask and light, so the highlight in the file shows as a second one; postinst puts these gloss free copies over them there
+    for name, side in deb_icon_files():
+        if side not in LEGACY_ICON_SIDES:
+            continue
+        with Image.open(os.path.join(source_dir, name)) as icon:
+            write_png(legacy_icon(icon, side, force=True), os.path.join(out_dir, name), launcher=True)
+
+
 def build_qr_logo(rgb, alpha, out_dir):
     # the clean master keeps the icon's own rounded silhouette as alpha, so the code shows its paper through the corners
     master = to_image(rgb, alpha)
@@ -938,6 +948,7 @@ def main():
     args = parser.parse_args()
     if args.part == "debicons":
         build_deb_icons(os.path.join(ROOT, "resources/icons"), os.path.join(args.out, "deb-icons"))
+        build_flat_deb_icons(os.path.join(ROOT, "resources/icons"), os.path.join(args.out, "deb-icons-flat"))
     if args.part in ("icons", "all"):
         rgb, alpha = load_master(args.source)
         build_icons(rgb, os.path.join(args.out, "icons"))

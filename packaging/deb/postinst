@@ -27,6 +27,17 @@ if [ -z "$JBROOT" ]; then
 else
   APP=$PAYLOAD
 fi
+# the icons of the deb are pre-rendered with the gloss for ios 5 to 8. ios 9 and later (Darwin 15) draw the same files under their own mask and light, so they
+# get the gloss free copies; the kernel version is read because the system plist can be binary
+FLAT="$APP/icons-flat"
+if [ -d "$FLAT" ]; then
+  KERNEL=$(uname -r | cut -d. -f1)
+  case "$KERNEL" in ''|*[!0-9]*) KERNEL=0 ;; esac
+  if [ "$KERNEL" -ge 15 ]; then
+    cp -f "$FLAT"/*.png "$APP"/ || echo "exteria: the gloss free icons were not put in place" >&2
+  fi
+  rm -rf "$FLAT"
+fi
 # the app replaces its own files when it updates and changes its icon in Info.plist, which only the owner of the folder may do
 chown -R mobile:wheel "$APP" 2>/dev/null || true
 chmod 755 "$APP" "$APP/Exteria" 2>/dev/null || true
