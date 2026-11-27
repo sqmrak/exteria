@@ -171,6 +171,7 @@ enum {
     UILabel *_customCredit;
     UIButton *_footerLink;
     NSString *_ownerName;
+    ExteriaPhoto *_ownerPhoto;
     ExteriaStickerLibrary *_stickers;
     NSMutableArray *_buttons;
     UIButton *_convertButton;
@@ -195,6 +196,7 @@ enum {
 @synthesize folderDialog = _folderDialog;
 @synthesize pinnedGifts = _pinnedGifts;
 @synthesize ownerName = _ownerName;
+@synthesize ownerPhoto = _ownerPhoto;
 @synthesize stickers = _stickers;
 
 - (void)showInViewController:(UIViewController *)host {
@@ -250,6 +252,7 @@ enum {
     [_customCredit release];
     [_footerLink release];
     [_ownerName release];
+    [_ownerPhoto release];
     [_stickers release];
     [_buttons release];
     [_spinner release];
@@ -374,7 +377,7 @@ static NSString *ExteriaDetailRarity(int32_t permille) {
     /* a gift of the app is a unique one in look only: it says who sent it, when, and the words that came with it, and none of the facts of a collectible */
     if (gift.unique && !_saved.customImageName) {
         NSString *owner = gift.ownerName.length ? gift.ownerName : _ownerName;
-        if (owner.length) [_facts addRow:NSLocalizedString(@"gifts.row.owner", nil) name:owner photo:nil seed:(NSUInteger)gift.ownerId anonymous:NO];
+        if (owner.length) [_facts addRow:NSLocalizedString(@"gifts.row.owner", nil) name:owner photo:_ownerPhoto seed:(NSUInteger)gift.ownerId anonymous:NO];
         if (gift.model.length) [_facts addRow:NSLocalizedString(@"gifts.row.model", nil) text:gift.model pill:ExteriaDetailRarity(gift.modelPermille)];
         if (gift.pattern.length) [_facts addRow:NSLocalizedString(@"gifts.row.pattern", nil) text:gift.pattern pill:ExteriaDetailRarity(gift.patternPermille)];
         if (gift.backdrop.length) [_facts addRow:NSLocalizedString(@"gifts.row.backdrop", nil) text:gift.backdrop pill:ExteriaDetailRarity(gift.backdropPermille)];

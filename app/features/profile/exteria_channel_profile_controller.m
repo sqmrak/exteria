@@ -625,6 +625,7 @@ static UILabel *ExteriaChannelProfileLabel(UIColor *color, UIFont *font, NSInteg
     ExteriaGiftDetailController *detail = [[[ExteriaGiftDetailController alloc] initWithSession:self.session gift:[_feed.items objectAtIndex:index] mine:NO
                                                                                         avatars:self.avatars media:self.media] autorelease];
     detail.ownerName = _dialog.title;
+    detail.ownerPhoto = _dialog.photo;
     detail.stickers = _stickers;
     [detail showInViewController:self];
 }

@@ -237,6 +237,8 @@
     ExteriaGiftDetailController *detail = [[[ExteriaGiftDetailController alloc] initWithSession:self.session gift:[_gifts objectAtIndex:index] mine:_mine
                                                                                         avatars:self.avatars media:self.media] autorelease];
     detail.ownerName = _dialog.saved ? _ownerName : _dialog.title;
+    /* the favorites stand for the account itself, so its own picture is the one of the owner */
+    detail.ownerPhoto = _dialog.saved ? [self.session ownPerson].photo : _dialog.photo;
     detail.stickers = _stickers;
     if (_mine) detail.folderDialog = _dialog;
     detail.pinnedGifts = [_gifts filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"pinned == YES"]];

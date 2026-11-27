@@ -876,6 +876,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
         ExteriaGiftDetailController *detail = [[[ExteriaGiftDetailController alloc] initWithSession:_session gift:[feed.items objectAtIndex:index] mine:YES
                                                                                             avatars:_avatars media:_media] autorelease];
         detail.ownerName = _person.name;
+        detail.ownerPhoto = _person.photo;
         detail.stickers = _stickerLibrary;
         detail.folderDialog = [ExteriaDialog savedMessagesWithPerson:_person];
         detail.pinnedGifts = [feed.items filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"pinned == YES"]];

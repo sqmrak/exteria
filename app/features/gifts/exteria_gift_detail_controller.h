@@ -14,6 +14,8 @@
 
 /* who owns a unique gift when the gift itself does not say, as the profile it was found on knows the name */
 @property (nonatomic, copy) NSString *ownerName;
+/* the picture of that owner, of the profile the gift was opened from; the owner row showed only a letter without it */
+@property (nonatomic, retain) ExteriaPhoto *ownerPhoto;
 
 /* the profile the gift is on, for a gift of ours: with it the screen offers to put the gift in a folder of that profile */
 @property (nonatomic, retain) ExteriaDialog *folderDialog;
