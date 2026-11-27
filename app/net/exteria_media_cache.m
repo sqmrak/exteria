@@ -423,10 +423,16 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     void (^deliverCopy)(UIImage *, BOOL) = [deliver copy];
     /* only a decoded picture is durable; a failed or incomplete read can be tried again */
     void (^settle)(NSData *) = ^(NSData *picture) {
-        dispatch_async(_work, ^{
+        dispatch_async(ExteriaMediaDecodeQueue(), ^{
             NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+            dispatch_semaphore_wait(ExteriaMediaDecodeGate(), DISPATCH_TIME_FOREVER);
             UIImage *image = picture ? ExteriaDecodeImage(picture, maxSide) : nil;
-            if (image && ![picture writeToFile:path atomically:YES]) NSLog(@"exteria: cannot cache the cover of %@", file.key);
+            dispatch_semaphore_signal(ExteriaMediaDecodeGate());
+            if (image) dispatch_async(_work, ^{
+                NSAutoreleasePool *writePool = [[NSAutoreleasePool alloc] init];
+                if (![picture writeToFile:path atomically:YES]) NSLog(@"exteria: cannot cache the cover of %@", file.key);
+                [writePool drain];
+            });
             dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, image == nil); [deliverCopy release]; });
             [pool drain];
         });
@@ -436,8 +442,14 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         NSData *stored = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:NULL];
         if (stored) {
-            UIImage *image = stored.length ? ExteriaDecodeImage(stored, maxSide) : nil;
-            dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, NO); [deliverCopy release]; [settleCopy release]; });
+            dispatch_async(ExteriaMediaDecodeQueue(), ^{
+                NSAutoreleasePool *decodePool = [[NSAutoreleasePool alloc] init];
+                dispatch_semaphore_wait(ExteriaMediaDecodeGate(), DISPATCH_TIME_FOREVER);
+                UIImage *image = stored.length ? ExteriaDecodeImage(stored, maxSide) : nil;
+                dispatch_semaphore_signal(ExteriaMediaDecodeGate());
+                dispatch_async(dispatch_get_main_queue(), ^{ deliverCopy(image, NO); [deliverCopy release]; [settleCopy release]; });
+                [decodePool drain];
+            });
             [pool drain];
             return;
         }
