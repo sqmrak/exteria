@@ -893,14 +893,24 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     });
 }
 
-- (unsigned long long)diskBytes {
-    unsigned long long total = 0;
-    NSFileManager *files = [NSFileManager defaultManager];
-    for (NSString *name in [files contentsOfDirectoryAtPath:_directory error:NULL]) {
-        NSDictionary *attributes = [files attributesOfItemAtPath:[_directory stringByAppendingPathComponent:name] error:NULL];
-        total += [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
-    }
-    return total;
+- (void)loadDiskBytes:(void (^)(unsigned long long bytes))completion {
+    void (^done)(unsigned long long) = [completion copy];
+    NSString *directory = [[_directory copy] autorelease];
+    /* a read only sweep on a queue of its own: the serial work queue holds the loads of the pictures that are on screen, and a cache of thousands of files is thousands of stat calls */
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+        unsigned long long total = 0;
+        NSFileManager *files = [[[NSFileManager alloc] init] autorelease];
+        for (NSString *name in [files contentsOfDirectoryAtPath:directory error:NULL]) {
+            NSDictionary *attributes = [files attributesOfItemAtPath:[directory stringByAppendingPathComponent:name] error:NULL];
+            total += [[attributes objectForKey:NSFileSize] unsignedLongLongValue];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            done(total);
+            [done release];
+        });
+        [pool drain];
+    });
 }
 
 /* the kind of one file by its first bytes; a file that cannot be read counts as other */

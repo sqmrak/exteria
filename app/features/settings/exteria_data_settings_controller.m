@@ -23,6 +23,9 @@ static NSString *ExteriaDataSize(unsigned long long bytes) {
     ExteriaMediaCache *_media;
     ExteriaWeakReference *_weak;
     BOOL _busy;
+    /* the size of the caches as the last sweep found it: the row shows it at once and the sweep corrects it */
+    unsigned long long _cacheBytes;
+    NSUInteger _sweep;
 }
 @end
 
@@ -51,6 +54,23 @@ static NSString *ExteriaDataSize(unsigned long long bytes) {
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self rebuild];
+    [self sweepCaches];
+}
+
+/* the caches hold thousands of files, and a stat of each on the main thread held the page back on every visit */
+- (void)sweepCaches {
+    ExteriaWeakReference *weak = _weak;
+    NSUInteger sweep = ++_sweep;
+    [_avatars loadDiskBytes:^(unsigned long long avatarBytes) {
+        ExteriaDataSettingsController *me = weak.target;
+        if (!me || me->_sweep != sweep) return;
+        [me->_media loadDiskBytes:^(unsigned long long mediaBytes) {
+            ExteriaDataSettingsController *later = weak.target;
+            if (!later || later->_sweep != sweep) return;
+            later->_cacheBytes = avatarBytes + mediaBytes;
+            [later rebuild];
+        }];
+    }];
 }
 
 - (void)themeDidChange {
@@ -83,7 +103,7 @@ static NSString *ExteriaDataSize(unsigned long long bytes) {
     ExteriaTrafficTotals totals = ExteriaTrafficRead();
     unsigned long long network = totals.sent[0] + totals.sent[1] + totals.received[0] + totals.received[1];
     ExteriaSettingsRow *memory = [ExteriaSettingsRow rowWithSymbol:ExteriaSymbolBroom tone:ExteriaSettingsToneBlue title:NSLocalizedString(@"memory.title", nil) subtitle:nil
-                                                             value:ExteriaDataSize([_avatars diskBytes] + [_media diskBytes]) tap:^{
+                                                             value:ExteriaDataSize(_cacheBytes) tap:^{
         ExteriaDataSettingsController *me = weak.target;
         if (me) [me.navigationController pushViewController:[[[ExteriaMemoryController alloc] initWithAvatars:me->_avatars media:me->_media] autorelease] animated:YES];
     }];

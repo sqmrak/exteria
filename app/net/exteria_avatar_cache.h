@@ -22,7 +22,7 @@
 
 /* what the photos on disk take, and a way to drop them all; the memory copies go too, and loads still running finish
    with nil. completion runs on main after the queued files have been removed */
-- (unsigned long long)diskBytes;
+- (void)loadDiskBytes:(void (^)(unsigned long long bytes))completion;
 - (void)clearWithCompletion:(void (^)(BOOL success))completion;
 
 @end

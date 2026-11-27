@@ -162,7 +162,14 @@ static NSString *const ExteriaKeepTitles[] = {@"memory.keep.3", @"memory.keep.7"
 - (void)scanStorage {
     ExteriaWeakReference *weak = _weak;
     NSUInteger scan = ++_scan;
-    _bytes[ExteriaStorageAvatars] = [_avatars diskBytes];
+    [_avatars loadDiskBytes:^(unsigned long long bytes) {
+        ExteriaMemoryController *me = weak.target;
+        if (!me || me->_scan != scan) return;
+        me->_bytes[ExteriaStorageAvatars] = bytes;
+        if (!me->_loaded) return;
+        [me showStorageAnimated:NO];
+        [me reloadSettings];
+    }];
     [_media loadKindBytes:^(const unsigned long long *bytes) {
         ExteriaMemoryController *me = weak.target;
         if (!me || me->_scan != scan) return;

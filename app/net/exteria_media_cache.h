@@ -45,7 +45,8 @@
 /* removes the files nobody has touched for that many days; on the work queue, so a long cache does not hold the
    screen */
 - (void)removeFilesOlderThanDays:(NSInteger)days;
-- (unsigned long long)diskBytes;
+/* what the files take, summed on a background queue; the completion runs on main */
+- (void)loadDiskBytes:(void (^)(unsigned long long bytes))completion;
 /* the bytes on disk by exteria_cache_kind, read from the first bytes of each file; runs on a background queue and the completion on main, since a
    cache of gigabytes holds thousands of files */
 - (void)loadKindBytes:(void (^)(const unsigned long long *bytes))completion;
