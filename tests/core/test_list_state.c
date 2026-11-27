@@ -39,6 +39,10 @@ int main(void) {
     uint32_t seconds = 99;
     all_presentation_states();
     folder_switch_keeps_tabs_reachable();
+    CHECK(exteria_list_title_width(320, 86, 110) == 100);
+    CHECK(exteria_list_title_width(480, 86, 110) == 260);
+    CHECK(exteria_list_title_width(320, 86, 54) == 148);
+    CHECK(exteria_list_title_width(100, 60, 40) == 0);
     CHECK(exteria_list_flood_wait("FLOOD_WAIT_17", &seconds));
     CHECK_EQ_INT(seconds, 17);
     CHECK(exteria_list_flood_wait("FLOOD_PREMIUM_WAIT_120", &seconds));

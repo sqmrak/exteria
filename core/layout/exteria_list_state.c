@@ -51,3 +51,9 @@ uint64_t exteria_list_refresh_delay(uint64_t now, uint64_t last, uint32_t interv
     uint64_t remaining = last && elapsed < interval_ms ? interval_ms - elapsed : 0;
     return remaining > debounce_ms ? remaining : debounce_ms;
 }
+
+double exteria_list_title_width(double bar, double left, double right) {
+    double side = left > right ? left : right;
+    if (side < 0) side = 0;
+    return bar > side * 2 ? bar - side * 2 : 0;
+}
