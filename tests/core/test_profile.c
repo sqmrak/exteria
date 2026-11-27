@@ -463,6 +463,20 @@ static void test_save_music(void) {
     CHECK_EQ_INT(exteria_save_music_request(&arena, &song, 1, &request), EXTERIA_OK);
     CHECK_EQ_INT(exteria_tl_has(request, "unsave"), 1);
     roundtrip(request, EXTERIA_TL_ID_account_saveMusic);
+    exteria_media_ref after = song;
+    after.id = 78;
+    CHECK_EQ_INT(exteria_move_music_request(&arena, &song, NULL, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(request, "after_id"), 0);
+    roundtrip(request, EXTERIA_TL_ID_account_saveMusic);
+    CHECK_EQ_INT(exteria_move_music_request(&arena, &song, &after, &request), EXTERIA_OK);
+    CHECK_EQ_INT(exteria_tl_has(request, "after_id"), 1);
+    roundtrip(request, EXTERIA_TL_ID_account_saveMusic);
+    after.id = song.id;
+    CHECK_EQ_INT(exteria_move_music_request(&arena, &song, &after, &request), EXTERIA_E_ARG);
+    CHECK(request == NULL);
+    after.id = 78;
+    after.ref_len = 0;
+    CHECK_EQ_INT(exteria_move_music_request(&arena, &song, &after, &request), EXTERIA_E_ARG);
     /* a cover of the song, a photo, a song without a reference or without an id cannot be saved */
     song.thumb[0] = 'm';
     CHECK_EQ_INT(exteria_save_music_request(&arena, &song, 0, &request), EXTERIA_E_ARG);

@@ -207,6 +207,26 @@ exteria_status exteria_save_music_request(exteria_arena *arena, const exteria_me
     return status;
 }
 
+exteria_status exteria_move_music_request(exteria_arena *arena, const exteria_media_ref *song, const exteria_media_ref *after, exteria_tl_value **out) {
+    exteria_tl_value *request, *document;
+    exteria_status status;
+    if (!out) return EXTERIA_E_ARG;
+    *out = NULL;
+    if (after && (after->source != EXTERIA_MEDIA_SOURCE_DOCUMENT || after->id == 0 || after->ref_len == 0 || after->thumb[0] || (song && after->id == song->id))) return EXTERIA_E_ARG;
+    status = exteria_save_music_request(arena, song, 0, &request);
+    if (status != EXTERIA_OK) return status;
+    if (after) {
+        document = exteria_tl_new_obj(arena, "inputDocument");
+        if (!document) return EXTERIA_E_NOMEM;
+        status = exteria_tl_set_i64(arena, document, "id", after->id);
+        if (status == EXTERIA_OK) status = exteria_tl_set_i64(arena, document, "access_hash", after->access_hash);
+        if (status == EXTERIA_OK) status = exteria_tl_set_bytes(arena, document, "file_reference", after->file_ref, after->ref_len);
+        if (status == EXTERIA_OK) status = exteria_tl_set(request, "after_id", document);
+    }
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
 exteria_status exteria_saved_music_parse(const exteria_tl_value *answer, exteria_media_info *tracks, size_t cap, size_t *count, int32_t *total) {
     const exteria_tl_value *documents;
     uint32_t i;

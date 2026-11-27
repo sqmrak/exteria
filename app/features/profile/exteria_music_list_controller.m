@@ -203,6 +203,13 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
     UIButton *_next;
     UIButton *_speed;
     BOOL _scrubbing;
+    BOOL _moving;
+    NSArray *_dragOriginal;
+    NSIndexPath *_dragRow;
+    NSInteger _dragStart;
+    UIImageView *_dragView;
+    UILongPressGestureRecognizer *_dragGesture;
+    CADisplayLink *_dragLink;
     ExteriaWeakReference *_weak;
 }
 @end
@@ -225,6 +232,12 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_dragLink invalidate];
+    [_dragLink release];
+    [_dragGesture release];
+    [_dragOriginal release];
+    [_dragRow release];
+    [_dragView release];
     [_weak clear];
     [_weak release];
     _table.dataSource = nil;
@@ -322,6 +335,8 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
     _table.dataSource = self;
     _table.delegate = self;
     [root addSubview:_table];
+    _dragGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(trackHeld:)];
+    [_table addGestureRecognizer:_dragGesture];
     _message = ExteriaListLabel(ExteriaColorSecondary(), ExteriaFontRegular(15), ExteriaTextAlignmentCenter);
     _message.numberOfLines = 0;
     [root addSubview:_message];
@@ -358,10 +373,18 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
     [self refreshPanel];
 }
 
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    if (_dragRow) {
+        _dragGesture.enabled = NO;
+        _dragGesture.enabled = YES;
+    }
+}
+
 #pragma mark data
 
 - (void)loadMore {
-    if (_loading || (_loaded && (NSInteger)_tracks.count >= _total)) return;
+    if (_loading || _moving || _dragRow || (_loaded && (NSInteger)_tracks.count >= _total)) return;
     _loading = YES;
     /* the song the profile showed is the first of the list, so a page that comes back with it must not list it twice */
     NSInteger offset = _loaded ? (NSInteger)_tracks.count : 0;
@@ -416,6 +439,7 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
     static NSString *identifier = @"song";
     ExteriaSongCell *cell = (ExteriaSongCell *)[tableView dequeueReusableCellWithIdentifier:identifier];
     if (!cell) cell = [[[ExteriaSongCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier] autorelease];
+    cell.hidden = _dragRow && [_dragRow isEqual:indexPath];
     ExteriaMedia *track = [_tracks objectAtIndex:(NSUInteger)indexPath.row];
     ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
     [cell configureWithTrack:track state:player.state current:[player isCurrentTrack:track] media:self.media];
@@ -427,7 +451,103 @@ static UIButton *ExteriaPanelButton(ExteriaSymbol symbol, CGFloat size, id targe
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
     (void)tableView;
     (void)indexPath;
-    return _dialog.saved && _loaded;
+    return _dialog.saved && _loaded && !_moving && !_dragRow;
+}
+
+/* the held row follows the finger while the table moves the other rows around it */
+- (void)updateTrackDrag {
+    if (!_dragRow || !_dragView) return;
+    CGPoint point = [_dragGesture locationInView:_table];
+    _dragView.center = CGPointMake(_dragView.center.x, point.y);
+    NSIndexPath *next = [_table indexPathForRowAtPoint:point];
+    if (!next || next.row == _dragRow.row || (NSUInteger)next.row >= _tracks.count) return;
+    UITableViewCell *old = [_table cellForRowAtIndexPath:_dragRow];
+    old.hidden = NO;
+    id song = [[_tracks objectAtIndex:(NSUInteger)_dragRow.row] retain];
+    [_tracks removeObjectAtIndex:(NSUInteger)_dragRow.row];
+    [_tracks insertObject:song atIndex:(NSUInteger)next.row];
+    [song release];
+    [_table moveRowAtIndexPath:_dragRow toIndexPath:next];
+    [_dragRow release];
+    _dragRow = [next retain];
+    [_table cellForRowAtIndexPath:_dragRow].hidden = YES;
+}
+
+- (void)trackDragTick:(CADisplayLink *)link {
+    (void)link;
+    CGPoint point = [_dragGesture locationInView:_table];
+    CGFloat top = _table.contentOffset.y + _table.contentInset.top;
+    CGFloat bottom = _table.contentOffset.y + _table.bounds.size.height - _table.contentInset.bottom;
+    CGFloat delta = point.y < top + 44 ? -6 : (point.y > bottom - 44 ? 6 : 0);
+    CGFloat limit = MAX(-_table.contentInset.top, _table.contentSize.height - _table.bounds.size.height + _table.contentInset.bottom);
+    CGFloat offset = MIN(limit, MAX(-_table.contentInset.top, _table.contentOffset.y + delta));
+    if (offset != _table.contentOffset.y) {
+        _table.contentOffset = CGPointMake(_table.contentOffset.x, offset);
+        [self updateTrackDrag];
+    }
+}
+
+- (void)trackHeld:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        if (!_dialog.saved || !_loaded || _loading || _moving || _tracks.count < 2) return;
+        NSIndexPath *path = [_table indexPathForRowAtPoint:[gesture locationInView:_table]];
+        UITableViewCell *cell = path ? [_table cellForRowAtIndexPath:path] : nil;
+        if (!cell) return;
+        _dragOriginal = [_tracks copy];
+        _dragRow = [path retain];
+        _dragStart = path.row;
+        UIGraphicsBeginImageContextWithOptions(cell.bounds.size, NO, 0);
+        [cell.layer renderInContext:UIGraphicsGetCurrentContext()];
+        UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        _dragView = [[UIImageView alloc] initWithImage:image];
+        _dragView.frame = cell.frame;
+        [_table addSubview:_dragView];
+        cell.hidden = YES;
+        _dragLink = [[CADisplayLink displayLinkWithTarget:self selector:@selector(trackDragTick:)] retain];
+        [_dragLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+        return;
+    }
+    if (!_dragRow) return;
+    if (gesture.state == UIGestureRecognizerStateChanged) {
+        [self updateTrackDrag];
+        return;
+    }
+    if (gesture.state != UIGestureRecognizerStateEnded && gesture.state != UIGestureRecognizerStateCancelled && gesture.state != UIGestureRecognizerStateFailed) return;
+    [_dragLink invalidate];
+    [_dragLink release];
+    _dragLink = nil;
+    [_table cellForRowAtIndexPath:_dragRow].hidden = NO;
+    [_dragView removeFromSuperview];
+    [_dragView release];
+    _dragView = nil;
+    NSInteger destination = _dragRow.row;
+    [_dragRow release];
+    _dragRow = nil;
+    if (gesture.state != UIGestureRecognizerStateEnded || destination == _dragStart) {
+        [_tracks setArray:_dragOriginal];
+        [_dragOriginal release];
+        _dragOriginal = nil;
+        [_table reloadData];
+        return;
+    }
+    ExteriaMedia *song = [_tracks objectAtIndex:(NSUInteger)destination];
+    ExteriaMedia *after = destination ? [_tracks objectAtIndex:(NSUInteger)destination - 1] : nil;
+    _moving = YES;
+    _table.userInteractionEnabled = NO;
+    [self.session moveMusic:song after:after completion:^(NSString *errorName) {
+        _moving = NO;
+        _table.userInteractionEnabled = YES;
+        if (errorName) {
+            NSLog(@"exteria: music order not saved: %@", errorName);
+            [_tracks setArray:_dragOriginal];
+            ExteriaGiftAlert(nil, [errorName isEqualToString:@"TIMEOUT"] ? NSLocalizedString(@"error.offline", nil)
+                                                                        : [NSString stringWithFormat:NSLocalizedString(@"error.unknown", nil), errorName]);
+        }
+        [_dragOriginal release];
+        _dragOriginal = nil;
+        [_table reloadData];
+    }];
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath {

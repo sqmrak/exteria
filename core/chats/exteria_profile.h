@@ -67,6 +67,8 @@ exteria_status exteria_saved_music_request(exteria_arena *arena, const exteria_p
 /* account.saveMusic: puts the song on the signed in profile, or takes it off it when unsave is set; the song is
    the one a reference names (a document with a file reference); EXTERIA_E_ARG for one that cannot be fetched */
 exteria_status exteria_save_music_request(exteria_arena *arena, const exteria_media_ref *song, int unsave, exteria_tl_value **out);
+/* moves a saved song after another, or to the beginning when after is null */
+exteria_status exteria_move_music_request(exteria_arena *arena, const exteria_media_ref *song, const exteria_media_ref *after, exteria_tl_value **out);
 /* a users.savedMusic answer: the songs that have a fetchable file are put in tracks (at most cap), count says how
    many, and total is how many the profile has altogether */
 exteria_status exteria_saved_music_parse(const exteria_tl_value *answer, exteria_media_info *tracks, size_t cap, size_t *count, int32_t *total);

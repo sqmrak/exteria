@@ -2,6 +2,7 @@
 
 #include "exteria_avatars.h"
 #include "exteria_profile.h"
+#include "exteria_tl_ids.h"
 
 #import "exteria_rpc.h"
 #import "exteria_session_profile.h"
@@ -281,6 +282,21 @@ static NSNumber *ExteriaSelfPremium;
     [self runBoolRequest:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         return exteria_save_music_request(arena, &ref, unsave ? 1 : 0, request);
     } completion:completion];
+}
+
+- (void)moveMusic:(ExteriaMedia *)song after:(ExteriaMedia *)after completion:(void (^)(NSString *))completion {
+    exteria_media_ref ref = song.ref;
+    exteria_media_ref previous = after ? after.ref : (exteria_media_ref){0};
+    BOOL hasPrevious = after != nil;
+    void (^done)(NSString *) = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_move_music_request(arena, &ref, hasPrevious ? &previous : NULL, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSString *error = result->status == EXTERIA_OK ? (exteria_tl_is(result->value, EXTERIA_TL_ID_boolTrue) ? nil : @"REFUSED") : ExteriaRpcErrorName(result);
+        [self noteRpcError:error];
+        NSString *delivered = [[error copy] autorelease];
+        [self deliverMain:^{ done(delivered); [done release]; }];
+    }];
 }
 
 - (void)runBoolRequest:(exteria_status (^)(exteria_arena *arena, exteria_tl_value **request))build completion:(void (^)(NSString *))completion {

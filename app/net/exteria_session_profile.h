@@ -106,6 +106,7 @@
 - (void)deleteProfilePhoto:(ExteriaMedia *)photo completion:(void (^)(NSString *errorName))completion;
 /* puts a song on the signed in profile, or takes it off; the song is an ExteriaMedia of kind audio that has a file reference */
 - (void)saveMusic:(ExteriaMedia *)song unsave:(BOOL)unsave completion:(void (^)(NSString *errorName))completion;
+- (void)moveMusic:(ExteriaMedia *)song after:(ExteriaMedia *)after completion:(void (^)(NSString *errorName))completion;
 /* a year of zero hides it; a date the calendar does not have is refused before it is sent and comes back as INTERNAL */
 - (void)setBirthdayDay:(int32_t)day month:(int32_t)month year:(int32_t)year completion:(void (^)(NSString *errorName))completion;
 - (void)clearBirthday:(void (^)(NSString *errorName))completion;
