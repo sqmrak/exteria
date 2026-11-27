@@ -131,6 +131,8 @@
 @synthesize joinsNext = _joinsNext;
 @synthesize read = _read;
 @synthesize textLayout = _textLayout;
+@synthesize richLayout = _richLayout;
+@synthesize richOrigin = _richOrigin;
 @synthesize captionAbove = _captionAbove;
 @synthesize pillLayout = _pillLayout;
 @synthesize pillShift = _pillShift;
@@ -736,6 +738,7 @@ static NSString *ExteriaAlbumKey(NSArray *messages) {
     [_fileTitle release];
     [_fileDetail release];
     [_textLayout release];
+    [_richLayout release];
     [_pillLayout release];
     [_senderLayout release];
     [_forwardLayout release];
@@ -1108,6 +1111,12 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     BOOL poll = _content == ExteriaChatItemContentPoll;
     /* the collage of pictures over a file: the content is the file's, and the pictures come above its row */
     BOOL albumed = file && _albumMessages.count > 0;
+    /* an article takes the place of the words, unless a plugin replaced them, since the blocks would hide what the plugin shows */
+    ExteriaRichDocument *article = !picture && !file && !poll && textSource == _message && _message.rich && [_message.sourceText isEqualToString:_message.text] ? _message.rich : nil;
+    if (article) {
+        hasText = NO;
+        ownText = NO;
+    }
     CGSize pictureSize = CGSizeZero;
     if ((picture && _albumMessages.count > 1) || albumed) {
         CGFloat albumWidth = MIN(maxBubble - 2 * PICTURE_INSET, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : ALBUM_WIDTH_MAX);
@@ -1136,6 +1145,9 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
                                               dropsUndrawable:NO expandedQuotes:textSource.expandedQuotes] retain] : nil;
     _textLayout.spoilersRevealed = textSource.spoilersRevealed;
     _textLayout.highlight = _highlightQuery;
+    [_richLayout release];
+    _richLayout = [[ExteriaRichLayout layoutForDocument:article width:MAX(40, textMax) textSize:textSize color:textColor secondary:ExteriaColorBubbleMeta(outgoing)
+                                              linkColor:linkColor revealed:textSource.spoilersRevealed toggled:_message.toggledDetails] retain];
 
     /* a run of messages from one person names them once, on the first bubble, and the picture stands under the last */
     [_senderLayout release];
@@ -1253,7 +1265,20 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
             y += META_HEIGHT;
         }
     }
-    if (hasText && !_captionAbove && !textPlaced) {
+    if (_richLayout) {
+        _richOrigin = CGPointMake(PAD_X, y);
+        contentWidth = MAX(contentWidth, _richLayout.size.width);
+        y += _richLayout.size.height;
+        CGFloat trailing = _richLayout.trailingLineWidth;
+        if (chipsInside) {
+            /* the time is placed with the chips below */
+        } else if (trailing >= 0 && trailing + TIME_GAP + metaWidth <= MAX(textMax, contentWidth)) {
+            contentWidth = MAX(contentWidth, trailing + TIME_GAP + metaWidth);
+        } else {
+            y += META_HEIGHT - 3;
+            contentWidth = MAX(contentWidth, metaWidth);
+        }
+    } else if (hasText && !_captionAbove && !textPlaced) {
         _textOrigin = CGPointMake(PAD_X, y);
         contentWidth = MAX(contentWidth, _textLayout.size.width);
         y += _textLayout.size.height;

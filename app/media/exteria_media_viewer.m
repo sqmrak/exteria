@@ -40,6 +40,9 @@ static char ExteriaMediaPlayerStatusContext;
 
 @interface ExteriaMediaViewer () <UIScrollViewDelegate, UIGestureRecognizerDelegate, UITextViewDelegate, UIDocumentInteractionControllerDelegate> {
     NSArray *_messages;
+    /* the pictures of the article of the one message in _messages, and the caption under each; nil for a viewer of messages */
+    NSArray *_articleMedia;
+    NSArray *_articleCaptions;
     NSDictionary *_senderNames;
     NSString *_chatTitle;
     NSInteger _index;
@@ -193,11 +196,37 @@ static char ExteriaMediaPlayerStatusContext;
     return self;
 }
 
+- (id)initWithArticleOfMessage:(ExteriaMessage *)message media:(NSArray *)items captions:(NSArray *)captions selected:(NSUInteger)index
+                    mediaCache:(ExteriaMediaCache *)media senderNames:(NSDictionary *)senderNames chatTitle:(NSString *)chatTitle {
+    self = [self initWithMessages:(message ? [NSArray arrayWithObject:message] : nil) selected:message media:media senderNames:senderNames chatTitle:chatTitle];
+    if (self && (!message || index >= items.count || captions.count != items.count)) {
+        [self release];
+        return nil;
+    }
+    if (self) {
+        _articleMedia = [items copy];
+        _articleCaptions = [captions copy];
+        _index = (NSInteger)index;
+    }
+    return self;
+}
+
+/* the message the picture belongs to: in an article every picture belongs to the one message */
 - (ExteriaMessage *)message {
+    if (_articleMedia) return _messages.count ? [_messages objectAtIndex:0] : nil;
     return _index >= 0 && _index < (NSInteger)_messages.count ? [_messages objectAtIndex:(NSUInteger)_index] : nil;
 }
 
-- (BOOL)isVideo { return _localURL || self.message.media.kind == EXTERIA_PREVIEW_VIDEO || self.message.media.kind == EXTERIA_PREVIEW_GIF || (_oneTime && self.message.media.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE); }
+- (NSInteger)itemCount {
+    return (NSInteger)(_articleMedia ? _articleMedia.count : _messages.count);
+}
+
+- (ExteriaMedia *)shownMedia {
+    if (!_articleMedia) return self.message.media;
+    return _index >= 0 && _index < (NSInteger)_articleMedia.count ? [_articleMedia objectAtIndex:(NSUInteger)_index] : nil;
+}
+
+- (BOOL)isVideo { return _localURL || self.shownMedia.kind == EXTERIA_PREVIEW_VIDEO || self.shownMedia.kind == EXTERIA_PREVIEW_GIF || (_oneTime && self.shownMedia.kind == EXTERIA_PREVIEW_VIDEO_MESSAGE); }
 - (BOOL)isSending { return _sendPhoto || _sendVideo; }
 
 - (void)dealloc {
@@ -208,7 +237,7 @@ static char ExteriaMediaPlayerStatusContext;
     [_media cancelPathRequest:_request];
     [self releasePlayer];
     [_senderNames release]; [_chatTitle release];
-    [_messages release]; [_media release]; [_weak release];
+    [_messages release]; [_articleMedia release]; [_articleCaptions release]; [_media release]; [_weak release];
     [_localImage release]; [_localURL release]; [_loadedPath release];
     [_sendPhoto release]; [_sendVideo release]; [_cancelHandler release]; [_showInChatHandler release]; [_openedHandler release];
     _document.delegate = nil; [_document dismissMenuAnimated:NO]; [_document release];
@@ -469,7 +498,7 @@ static char ExteriaMediaPlayerStatusContext;
     _caption.hidden = self.isSending;
     _forward.enabled = NO;
     _captionInput.hidden = _send.hidden = !self.isSending;
-    _caption.text = self.message.text;
+    _caption.text = _articleMedia ? [_articleCaptions objectAtIndex:(NSUInteger)_index] : self.message.text;
     NSString *name = [_senderNames objectForKey:[NSNumber numberWithLongLong:self.message.senderKey]];
     if (!name.length) name = self.message.outgoing ? NSLocalizedString(@"media.you", nil) : _chatTitle;
     if (self.isSending) {
@@ -481,7 +510,7 @@ static char ExteriaMediaPlayerStatusContext;
         ExteriaShowNameWithBadges(_title, name.length ? name : NSLocalizedString(@"chat.someone", nil), sender > 0 ? sender : 0, nil, nil);
     }
     _date.text = ExteriaMediaTimeText(self.message.date);
-    _count.text = [NSString stringWithFormat:NSLocalizedString(@"media.count", nil), (long)(_index + 1), (long)_messages.count];
+    _count.text = [NSString stringWithFormat:NSLocalizedString(@"media.count", nil), (long)(_index + 1), (long)[self itemCount]];
     if (_oneTime) {
         /* nothing here can keep the picture: no menu, no share, no edit, and the line under the title says it goes */
         _more.hidden = _forward.hidden = _headerEdit.hidden = _count.hidden = YES;
@@ -495,7 +524,7 @@ static char ExteriaMediaPlayerStatusContext;
     if (_localURL) { [self playURL:_localURL]; return; }
     /* a one-time file of ours that has not finished going up has no server copy to fetch yet */
     ExteriaOutgoing *pending = self.message.pendingSend;
-    if (_previewOnly && pending && pending->path && !self.message.media.file) {
+    if (_previewOnly && pending && pending->path && !self.shownMedia.file) {
         NSURL *local = [NSURL fileURLWithPath:pending->path];
         if (self.isVideo) { [self playURL:local]; return; }
         UIImage *picture = ExteriaDecodeImageAtURL(local, EXTERIA_VIEWER_PHOTO_SIDE_MAX);
@@ -504,7 +533,7 @@ static char ExteriaMediaPlayerStatusContext;
         _photoReady = YES;
         return;
     }
-    ExteriaMedia *content = self.message.media;
+    ExteriaMedia *content = self.shownMedia;
     if (!content.file) { [self failed]; return; }
     [_spinner startAnimating];
     ExteriaWeakReference *weak = _weak;
@@ -559,7 +588,7 @@ static char ExteriaMediaPlayerStatusContext;
 }
 
 - (void)retry {
-    ExteriaMedia *content = self.message.media;
+    ExteriaMedia *content = self.shownMedia;
     [_media retryFile:content.file]; [_media retryFile:content.fullPhotoFile];
     [self loadCurrent];
 }
@@ -638,7 +667,7 @@ static NSString *ExteriaVideoTime(double seconds) {
 - (void)playbackFailed:(NSNotification *)note { NSLog(@"exteria: video stopped: %@", note.userInfo); [self failed]; }
 - (void)ended:(NSNotification *)note {
     (void)note;
-    if (self.message.media.kind == EXTERIA_PREVIEW_GIF && !_closed && _wantsPlay) {
+    if (self.shownMedia.kind == EXTERIA_PREVIEW_GIF && !_closed && _wantsPlay) {
         [_player seekToTime:kCMTimeZero]; [_player play];
     } else { _wantsPlay = NO; [_player pause]; }
     [self tick];
@@ -774,7 +803,7 @@ static NSString *ExteriaVideoTime(double seconds) {
         if (_zoom.zoomScale > 1.001 || [self videoIsZoomed] || _captionInput.isFirstResponder) return NO;
         exteria_media_drag_direction direction = exteria_media_drag_direction_for(speed.x, speed.y);
         if (gesture == _dismissPan) return direction == EXTERIA_MEDIA_DRAG_VERTICAL;
-        return _messages.count > 1 && direction == EXTERIA_MEDIA_DRAG_HORIZONTAL;
+        return [self itemCount] > 1 && direction == EXTERIA_MEDIA_DRAG_HORIZONTAL;
     }
     return ![gesture isKindOfClass:[UISwipeGestureRecognizer class]] || (_zoom.zoomScale <= 1.001 && !_captionInput.isFirstResponder);
 }
@@ -796,12 +825,12 @@ static NSString *ExteriaVideoTime(double seconds) {
 - (void)toggleChrome { [self.view endEditing:YES]; _chromeHidden = !_chromeHidden; _top.hidden = _bottom.hidden = _chromeHidden; }
 /* with "show next media on tap" a tap near the left or right edge, below the top bar */
 - (void)tapped:(UITapGestureRecognizer *)tap {
-    if (ExteriaChatNextMediaTap() && _messages.count > 1 && !_captionInput.isFirstResponder) {
+    if (ExteriaChatNextMediaTap() && [self itemCount] > 1 && !_captionInput.isFirstResponder) {
         CGPoint point = [tap locationInView:self.view];
         CGFloat width = self.view.bounds.size.width, side = MIN(135.0, width / 8);
         if (point.y > CGRectGetMaxY(_top.frame) + 40) {
             if (point.x < side && _index > 0) { [self previous]; return; }
-            if (point.x > width - side && _index + 1 < (NSInteger)_messages.count) { [self next]; return; }
+            if (point.x > width - side && _index + 1 < [self itemCount]) { [self next]; return; }
         }
     }
     [self toggleChrome];
@@ -847,7 +876,7 @@ static NSString *ExteriaVideoTime(double seconds) {
 }
 
 - (void)pageToIndex:(NSInteger)index {
-    if (_closed || _paging || index < 0 || index >= (NSInteger)_messages.count || index == _index) return;
+    if (_closed || _paging || index < 0 || index >= [self itemCount] || index == _index) return;
     CGFloat direction = index > _index ? 1 : -1;
     UIImageView *old = [[UIImageView alloc] initWithImage:_image.image];
     old.contentMode = UIViewContentModeScaleAspectFit;
@@ -878,7 +907,7 @@ static NSString *ExteriaVideoTime(double seconds) {
 - (void)paged:(UIPanGestureRecognizer *)pan {
     if (_closed || _paging) return;
     CGFloat drag = [pan translationInView:self.view].x;
-    BOOL available = drag < 0 ? _index + 1 < (NSInteger)_messages.count : _index > 0;
+    BOOL available = drag < 0 ? _index + 1 < [self itemCount] : _index > 0;
     if (pan.state == UIGestureRecognizerStateChanged) {
         _page.transform = CGAffineTransformMakeTranslation(available ? drag : drag * 0.25, 0);
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {

@@ -217,6 +217,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize post = _post;
 @synthesize spoilersRevealed = _spoilersRevealed;
 @synthesize expandedQuotes = _expandedQuotes;
+@synthesize toggledDetails = _toggledDetails;
 @synthesize viewOnceOpened = _viewOnceOpened;
 @synthesize forwarded = _forwarded;
 @synthesize edited = _edited;
@@ -307,6 +308,7 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
 @synthesize sendEffect = _sendEffect;
 @synthesize effectId = _effectId;
 @synthesize markup = _markup;
+@synthesize rich = _rich;
 @synthesize hasMarkup = _hasMarkup;
 
 - (NSString *)markupKey {
@@ -524,8 +526,10 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
 
 - (void)dealloc {
     [_expandedQuotes release];
+    [_toggledDetails release];
     [_listenedDate release];
     [_markup release];
+    [_rich release];
     [_pendingSend release];
     [_localPoster release];
     [_replyQuote release];

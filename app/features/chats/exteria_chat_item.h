@@ -6,6 +6,7 @@ NSString *ExteriaFileSizeText(long long bytes);
 #import "exteria_gift_card.h"
 #import "exteria_message.h"
 #import "exteria_person.h"
+#import "exteria_rich_layout.h"
 #import "exteria_text_layout.h"
 
 @class ExteriaDialog;
@@ -108,6 +109,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     BOOL _shownJoinsNext;
     BOOL _shownRead;
     ExteriaTextLayout *_textLayout;
+    ExteriaRichLayout *_richLayout;
     ExteriaTextLayout *_pillLayout;
     CGFloat _pillShift;
     ExteriaTextLayout *_senderLayout;
@@ -151,6 +153,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     CGPoint _forwardOrigin;
     CGPoint _viaOrigin;
     CGPoint _textOrigin;
+    CGPoint _richOrigin;
     BOOL _captionAbove;
     CGPoint _timeOrigin;
     CGSize _timeSize;
@@ -266,6 +269,9 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 /* the other side has read this message of ours */
 @property (nonatomic, assign) BOOL read;
 @property (nonatomic, readonly, retain) ExteriaTextLayout *textLayout;
+/* the article of a message that carries one, drawn in the place of its words; textLayout is nil then */
+@property (nonatomic, readonly, retain) ExteriaRichLayout *richLayout;
+@property (nonatomic, readonly) CGPoint richOrigin;
 /* the short lines of a bubble, laid out like the text so the emoji in a name or a file name are the app's pictures too */
 @property (nonatomic, readonly, retain) ExteriaTextLayout *pillLayout;
 /* how far the centered lines sit right of the layout's own left edge; the capsule is as wide as the text, so draw back by it */

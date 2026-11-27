@@ -529,6 +529,26 @@ static void test_rich_message(void) {
     set(m, "rich_message", rich_message_of(blocks, 1));
     CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
     CHECK(!row->text[0]);
+    /* headings, quotes with blocks, math and button rows are read like the paragraphs around them */
+    {
+        exteria_tl_value *inner[1], *buttons[2], *button_row, *quote;
+        inner[0] = rich_block("pageBlockParagraph", rich_plain("quoted"));
+        quote = obj("pageBlockBlockquoteBlocks");
+        set(quote, "blocks", vec_of(inner, 1));
+        buttons[0] = obj("pageButton");
+        set(buttons[0], "text", rich_plain("yes"));
+        buttons[1] = obj("pageButton");
+        set(buttons[1], "text", rich_plain("no"));
+        button_row = obj("pageBlockButtonRow");
+        set(button_row, "buttons", vec_of(buttons, 2));
+        blocks[0] = rich_block("pageBlockHeading2", rich_plain("title"));
+        blocks[1] = quote;
+        blocks[2] = button_row;
+        m = message(24, "");
+        set(m, "rich_message", rich_message_of(blocks, 3));
+        CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+        CHECK(!strcmp(row->text, "title\n\nquoted\n\nyes  no"));
+    }
     /* nesting past the limit is dropped, not followed */
     deep = rich_plain("deep");
     for (int i = 0; i < 40; ++i) deep = rich_block("textBold", deep);

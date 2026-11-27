@@ -1,4 +1,6 @@
 #import <Foundation/Foundation.h>
+
+@class ExteriaRichDocument;
 @class UIImage;
 #import "exteria_poll_model.h"
 
@@ -217,6 +219,7 @@ typedef enum {
     NSDate *_listenedDate;
     BOOL _spoilersRevealed;
     NSIndexSet *_expandedQuotes;
+    NSIndexSet *_toggledDetails;
     BOOL _viewOnceOpened;
     BOOL _post;
     BOOL _forwarded;
@@ -261,6 +264,7 @@ typedef enum {
     long long _sendEffect;
     long long _effectId;
     ExteriaMarkup *_markup;
+    ExteriaRichDocument *_rich;
     BOOL _reactionsPossible;
     BOOL _hasReactions;
     ExteriaOutgoing *_pendingSend;
@@ -328,6 +332,8 @@ typedef enum {
 @property (nonatomic, assign) BOOL spoilersRevealed;
 /* the collapsed quotes the person opened, each named by the offset where its entity starts; kept here so a rebuilt layout does not fold them again */
 @property (nonatomic, copy) NSIndexSet *expandedQuotes;
+/* the details blocks of the article the reader opened or closed, by block index */
+@property (nonatomic, copy) NSIndexSet *toggledDetails;
 /* the person opened this one-time media on this phone; kept so the row reads as expired at once, before the server's edit of the message arrives */
 @property (nonatomic, assign) BOOL viewOnceOpened;
 @property (nonatomic, readonly) BOOL forwarded;
@@ -397,6 +403,9 @@ typedef enum {
 @property (nonatomic, readonly) long long viaBotId;
 /* the buttons under the message, or the keyboard it brought; nil without any */
 @property (nonatomic, retain) ExteriaMarkup *markup;
+/* the article the message carries (its rich_message), laid out in blocks; nil for an ordinary message. text keeps the article as plain words for the list,
+   search and copying */
+@property (nonatomic, retain) ExteriaRichDocument *rich;
 /* the message carries a reply markup that has not been read yet */
 @property (nonatomic, readonly) BOOL hasMarkup;
 /* a string that differs when what the buttons show differs, empty without markup */

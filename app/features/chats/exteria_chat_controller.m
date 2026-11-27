@@ -5540,6 +5540,63 @@ static void ExteriaRedrawTree(UIView *view) {
     [_table endUpdates];
 }
 
+- (void)messageCell:(ExteriaMessageCell *)cell didToggleArticleDetails:(NSUInteger)block {
+    NSIndexPath *path = [_table indexPathForCell:cell];
+    if (!path || (NSUInteger)path.row >= _items.count) return;
+    ExteriaChatItem *item = [_items objectAtIndex:(NSUInteger)path.row];
+    NSMutableIndexSet *toggled = [[item.message.toggledDetails mutableCopy] autorelease] ?: [NSMutableIndexSet indexSet];
+    if ([toggled containsIndex:block]) [toggled removeIndex:block];
+    else [toggled addIndex:block];
+    item.message.toggledDetails = toggled;
+    CGFloat from = [cell bodyHeight];
+    [item invalidateLayout];
+    [self configureMessageCell:cell forRow:(NSUInteger)path.row];
+    [cell growBodyFromHeight:from];
+    [_table beginUpdates];
+    [_table endUpdates];
+}
+
+/* a map of an article opens the map screen at its point; a picture or a video opens the viewer over all the pictures and videos of the article, with their captions */
+- (void)messageCell:(ExteriaMessageCell *)cell didTapArticleMedia:(NSUInteger)index {
+    ExteriaRichLayout *rich = cell.item.richLayout;
+    ExteriaMessage *message = cell.item.message;
+    ExteriaMedia *tapped = [rich mediaAtIndex:index];
+    if (!tapped || !message) return;
+    [self dismissInput];
+    if (tapped.kind == EXTERIA_PREVIEW_LOCATION) {
+        if (!tapped.location.valid) return;
+        ExteriaLocationController *viewer = [[[ExteriaLocationController alloc] initWithSession:_session dialog:_dialog location:tapped.location selection:nil] autorelease];
+        UINavigationController *navigation = [[[UINavigationController alloc] initWithRootViewController:viewer] autorelease];
+        if (ExteriaThemeIsClassic()) ExteriaClassicStyleNavigationBar(navigation.navigationBar);
+        [self presentViewController:navigation animated:YES completion:nil];
+        return;
+    }
+    NSMutableArray *items = [NSMutableArray array], *captions = [NSMutableArray array];
+    NSUInteger selected = NSNotFound;
+    for (NSUInteger i = 0; i < rich.mediaCount; ++i) {
+        ExteriaMedia *media = [rich mediaAtIndex:i];
+        if (!media.file || !exteria_media_opens_viewer(media.kind)) continue;
+        if (i == index) selected = items.count;
+        [items addObject:media];
+        [captions addObject:[rich captionOfMediaAtIndex:i]];
+    }
+    if (selected == NSNotFound) return;
+    NSMutableDictionary *senderNames = [NSMutableDictionary dictionary];
+    for (NSNumber *key in _people) {
+        ExteriaPerson *person = [_people objectForKey:key];
+        if (person.name.length) [senderNames setObject:person.name forKey:key];
+    }
+    ExteriaMediaViewer *viewer = [[[ExteriaMediaViewer alloc] initWithArticleOfMessage:message media:items captions:captions selected:selected mediaCache:_media
+                                                                         senderNames:senderNames chatTitle:_dialog.title] autorelease];
+    if (!viewer) return;
+    ExteriaWeakReference *weakChat = [ExteriaWeakReference referenceTo:self];
+    viewer.showInChatHandler = ^(ExteriaMessage *shown) {
+        ExteriaChatController *me = (ExteriaChatController *)weakChat.target;
+        if (me) [me jumpToMessageId:shown.messageId];
+    };
+    [self presentViewController:viewer animated:YES completion:nil];
+}
+
 - (void)messageCellDidRevealSpoiler:(ExteriaMessageCell *)cell {
     (void)cell;
     [self refreshAnimations];

@@ -63,6 +63,10 @@
 - (void)messageCell:(ExteriaMessageCell *)cell didTapCode:(ExteriaTextEntity *)entity;
 /* a tap on a collapsed quote that is longer than its fold; quote is the offset where its entity starts, and the chat folds or opens it */
 - (void)messageCell:(ExteriaMessageCell *)cell didToggleQuote:(NSUInteger)quote;
+/* a tap on the summary of a details block of an article, by block index; the chat opens or closes it */
+- (void)messageCell:(ExteriaMessageCell *)cell didToggleArticleDetails:(NSUInteger)block;
+/* a tap on a picture, a video or a map of an article, by its media index in the article */
+- (void)messageCell:(ExteriaMessageCell *)cell didTapArticleMedia:(NSUInteger)index;
 /* a file, a song, a voice note or a video the person asked for has come whole; the chat keeps it in the list of downloads */
 - (void)messageCell:(ExteriaMessageCell *)cell didDownloadMedia:(ExteriaMessage *)message;
 - (void)messageCellDidRevealSpoiler:(ExteriaMessageCell *)cell;

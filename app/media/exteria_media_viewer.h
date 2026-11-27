@@ -5,6 +5,9 @@
 - (id)initWithMessages:(NSArray *)messages selected:(ExteriaMessage *)message media:(ExteriaMediaCache *)media;
 - (id)initWithMessages:(NSArray *)messages selected:(ExteriaMessage *)message media:(ExteriaMediaCache *)media
            senderNames:(NSDictionary *)senderNames chatTitle:(NSString *)chatTitle;
+/* the pictures of the article a message carries, from the one at index; captions holds the words under each, an empty string for none. the menu acts on the message */
+- (id)initWithArticleOfMessage:(ExteriaMessage *)message media:(NSArray *)items captions:(NSArray *)captions selected:(NSUInteger)index
+                    mediaCache:(ExteriaMediaCache *)media senderNames:(NSDictionary *)senderNames chatTitle:(NSString *)chatTitle;
 - (id)initWithImage:(UIImage *)image send:(void (^)(UIImage *image, NSString *caption))send;
 - (id)initWithVideoURL:(NSURL *)url send:(void (^)(NSString *caption))send;
 /* a one-time photo, video or round video of a chat: the viewer has no menu, no forward and no save, tells the owner when the file is on the screen (the moment the

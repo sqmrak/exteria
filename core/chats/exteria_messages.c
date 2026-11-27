@@ -708,8 +708,8 @@ static void rich_text(rich_out *o, const exteria_tl_value *v, unsigned depth) {
         if (exteria_tl_get_bytes(v, "alt", &data, &len) == EXTERIA_OK) rich_put(o, data, len);
     } else if (exteria_tl_is(v, EXTERIA_TL_ID_textMath)) {
         if (exteria_tl_get_bytes(v, "source", &data, &len) == EXTERIA_OK) rich_put(o, data, len);
-    } else if (!exteria_tl_is(v, EXTERIA_TL_ID_textButton) && !exteria_tl_is(v, EXTERIA_TL_ID_textImage)) {
-        /* bold, links, dates and the rest wrap one more text */
+    } else if (!exteria_tl_is(v, EXTERIA_TL_ID_textImage)) {
+        /* bold, links, dates, buttons and the rest wrap one more text */
         rich_text(o, exteria_tl_get(v, "text"), depth + 1);
     }
 }
@@ -738,30 +738,75 @@ static void rich_list(rich_out *o, const exteria_tl_value *items, int ordered, u
     }
 }
 
+static void rich_block(rich_out *o, const exteria_tl_value *b, unsigned depth) {
+    const char *text_field = "text";
+    if (!b || depth > RICH_DEPTH_MAX) return;
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockList)) {
+        rich_list(o, exteria_tl_get(b, "items"), 0, depth);
+        rich_break(o, 2);
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockOrderedList)) {
+        rich_list(o, exteria_tl_get(b, "items"), 1, depth);
+        rich_break(o, 2);
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockDetails)) {
+        rich_text(o, exteria_tl_get(b, "title"), depth + 1);
+        rich_break(o, 1);
+        rich_blocks(o, exteria_tl_get(b, "blocks"), depth + 1);
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockBlockquoteBlocks)) {
+        rich_blocks(o, exteria_tl_get(b, "blocks"), depth + 1);
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockCover)) {
+        rich_block(o, exteria_tl_get(b, "cover"), depth + 1);
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockButtonRow)) {
+        const exteria_tl_value *buttons = exteria_tl_get(b, "buttons");
+        size_t before = o->len;
+        if (!is_vec(buttons)) return;
+        for (uint32_t i = 0; i < buttons->u.vec.count && i < RICH_ITEMS_MAX; ++i) {
+            if (i > 0) rich_put(o, (const uint8_t *)"  ", 2);
+            rich_text(o, exteria_tl_get(buttons->u.vec.items[i], "text"), depth + 1);
+        }
+        if (o->len > before) rich_break(o, 2);
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockMath)) {
+        const uint8_t *data;
+        size_t len;
+        if (exteria_tl_get_bytes(b, "source", &data, &len) == EXTERIA_OK && len > 0) {
+            rich_put(o, data, len);
+            rich_break(o, 2);
+        }
+        return;
+    }
+    if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockAuthorDate)) text_field = "author";
+    else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockTable)) text_field = "title";
+    else if (!(exteria_tl_is(b, EXTERIA_TL_ID_pageBlockTitle) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockSubtitle) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeader) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockSubheader) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeading1) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeading2) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeading3) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeading4) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeading5) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeading6) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockParagraph) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockPreformatted) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockFooter) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockKicker) ||
+               exteria_tl_is(b, EXTERIA_TL_ID_pageBlockBlockquote) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockPullquote))) {
+        return;
+    }
+    {
+        size_t before = o->len;
+        rich_text(o, exteria_tl_get(b, text_field), depth + 1);
+        if (o->len > before) rich_break(o, 2);
+    }
+}
+
 static void rich_blocks(rich_out *o, const exteria_tl_value *blocks, unsigned depth) {
     if (!is_vec(blocks) || depth > RICH_DEPTH_MAX) return;
-    for (uint32_t i = 0; i < blocks->u.vec.count && i < RICH_ITEMS_MAX; ++i) {
-        const exteria_tl_value *b = blocks->u.vec.items[i];
-        if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockList)) {
-            rich_list(o, exteria_tl_get(b, "items"), 0, depth);
-            rich_break(o, 2);
-        } else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockOrderedList)) {
-            rich_list(o, exteria_tl_get(b, "items"), 1, depth);
-            rich_break(o, 2);
-        } else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockDetails)) {
-            rich_text(o, exteria_tl_get(b, "title"), depth + 1);
-            rich_break(o, 1);
-            rich_blocks(o, exteria_tl_get(b, "blocks"), depth + 1);
-        } else if (exteria_tl_is(b, EXTERIA_TL_ID_pageBlockTitle) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockSubtitle) ||
-                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockHeader) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockSubheader) ||
-                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockParagraph) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockPreformatted) ||
-                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockFooter) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockKicker) ||
-                   exteria_tl_is(b, EXTERIA_TL_ID_pageBlockBlockquote) || exteria_tl_is(b, EXTERIA_TL_ID_pageBlockPullquote)) {
-            size_t before = o->len;
-            rich_text(o, exteria_tl_get(b, "text"), depth + 1);
-            if (o->len > before) rich_break(o, 2);
-        }
-    }
+    for (uint32_t i = 0; i < blocks->u.vec.count && i < RICH_ITEMS_MAX; ++i) rich_block(o, blocks->u.vec.items[i], depth);
 }
 
 /* a bot that answers in blocks sends an empty "message" and the words in rich_message; the blocks are shown as plain text, without their styling */

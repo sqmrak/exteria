@@ -1,5 +1,6 @@
 #include "exteria_tl_ids.h"
 #include "exteria_typing.h"
+#import "exteria_rich_document.h"
 #import "exteria_session_drafts.h"
 #import "exteria_session_internal.h"
 #import "exteria_session_sendas.h"
@@ -152,18 +153,20 @@ NSMutableDictionary *ExteriaPeopleOfAnswer(ExteriaSession *session, const exteri
     return people;
 }
 
-/* the buttons or keyboard of the messages an answer carries; a row only says that markup exists; the buttons are
-   read from the message itself, and only for the messages that have some */
-static void ExteriaApplyMarkups(NSArray *messages, const exteria_tl_value *answer) {
+/* the buttons or keyboard and the article of the messages an answer carries; a row only says that markup exists and keeps an article as plain text, so
+   both are read from the message itself, and only for the messages that have them */
+static void ExteriaApplyMarkupsAndArticles(NSArray *messages, const exteria_tl_value *answer) {
     const exteria_tl_value *list = exteria_tl_get(answer, "messages");
     if (!list || list->kind != EXTERIA_TL_V_VEC) return;
     for (uint32_t i = 0; i < list->u.vec.count; ++i) {
         const exteria_tl_value *value = list->u.vec.items[i];
         int32_t id = 0;
-        if (!exteria_tl_has(value, "reply_markup") || exteria_tl_get_i32(value, "id", &id) != EXTERIA_OK) continue;
+        BOOL markup = exteria_tl_has(value, "reply_markup"), article = exteria_tl_get(value, "rich_message") != NULL;
+        if ((!markup && !article) || exteria_tl_get_i32(value, "id", &id) != EXTERIA_OK) continue;
         for (ExteriaMessage *message in messages) {
             if (message.messageId == id) {
-                message.markup = [ExteriaMarkup markupWithValue:exteria_tl_get(value, "reply_markup")];
+                if (markup) message.markup = [ExteriaMarkup markupWithValue:exteria_tl_get(value, "reply_markup")];
+                if (article) message.rich = [ExteriaRichDocument documentOfMessage:value];
                 break;
             }
         }
@@ -987,7 +990,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                     ExteriaMessage *message = [ExteriaMessage messageWithRow:&rows[i]];
                     if (message) [messages addObject:message];
                 }
-                ExteriaApplyMarkups(messages, result->value);
+                ExteriaApplyMarkupsAndArticles(messages, result->value);
                 people = ExteriaPeopleOfAnswer(self, result->value);
             } else {
                 NSLog(@"exteria: messages.getHistory answer rejected");
@@ -1032,7 +1035,7 @@ static void ExteriaKeepTopic(NSMutableArray *messages, int32_t topic, BOOL discu
                 ExteriaMessage *message = [ExteriaMessage messageWithRow:&rows[i]];
                 if (message) [messages addObject:message];
             }
-            ExteriaApplyMarkups(messages, result->value);
+            ExteriaApplyMarkupsAndArticles(messages, result->value);
             people = ExteriaPeopleOfAnswer(self, result->value);
         } else {
             NSLog(@"exteria: messages.search for %s answer rejected", what);
@@ -1814,6 +1817,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
     if (exteria_message_read(value, row) == EXTERIA_OK) {
         ExteriaMessage *message = [ExteriaMessage messageWithRow:row];
         if (message && row->has_markup) message.markup = [ExteriaMarkup markupWithValue:exteria_tl_get(value, "reply_markup")];
+        if (message) message.rich = [ExteriaRichDocument documentOfMessage:value];
         if (message) [messages addObject:message];
     }
     free(row);
@@ -2171,6 +2175,7 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
                 if (status == EXTERIA_OK) {
                     ExteriaMessage *refreshed = [ExteriaMessage messageWithRow:row];
                     if (row->has_markup) refreshed.markup = [ExteriaMarkup markupWithValue:exteria_tl_get(value, "reply_markup")];
+                    refreshed.rich = [ExteriaRichDocument documentOfMessage:value];
                     [messages addObject:refreshed];
                 }
                 else {

@@ -119,8 +119,11 @@ static void ExteriaMirrorCorners(UIView *view, UIView *source) {
     ExteriaBubbleLayer _layerKind;
     CGFloat _tailWidth;
     NSString *_fileProgressText;
+    NSMutableDictionary *_richImages;
 }
 @property (nonatomic, retain) ExteriaChatItem *item;
+/* the pictures of the article in the bubble that have loaded, by media index */
+@property (nonatomic, readonly) NSMutableDictionary *richImages;
 /* the room a classic bubble keeps beside itself for its tail, on the side the bubble leans to; zero without a tail */
 @property (nonatomic, assign) CGFloat tailWidth;
 /* the part of the text that is selected, in the characters of the laid out string; no length when nothing is */
@@ -138,6 +141,12 @@ static void ExteriaMirrorCorners(UIView *view, UIView *source) {
 @synthesize layerKind = _layerKind;
 @synthesize tailWidth = _tailWidth;
 @synthesize pickRange = _pickRange;
+
+- (NSMutableDictionary *)richImages {
+    if (!_richImages) _richImages = [[NSMutableDictionary alloc] init];
+    return _richImages;
+}
+
 @synthesize fileProgressText = _fileProgressText;
 
 - (id)initWithFrame:(CGRect)frame {
@@ -152,6 +161,7 @@ static void ExteriaMirrorCorners(UIView *view, UIView *source) {
 - (void)dealloc {
     [_item release];
     [_fileProgressText release];
+    [_richImages release];
     [super dealloc];
 }
 
@@ -481,6 +491,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
         [_item.textLayout drawAtPoint:_item.textOrigin];
         CGContextRestoreGState(context);
     }
+    if (_item.richLayout) [_item.richLayout drawAtPoint:_item.richOrigin images:_richImages];
     if (_item.textLayout && _pickRange.length) {
         NSArray *boxes = [_item.textLayout rectsForRange:_pickRange];
         if (boxes.count) {
@@ -929,6 +940,11 @@ static float ExteriaSpoilerRandom(void) {
     ExteriaBubbleView *_overlay;
     UIImageView *_picture;
     ExteriaMapView *_map;
+    /* the maps of an article in the bubble, over the boxes the article leaves for them */
+    NSMutableArray *_richMaps;
+    /* the plate of the transcript under a video message, and its words */
+    UIView *_transcriptPlate;
+    ExteriaEmojiLabel *_transcriptLabel;
     UILabel *_gifLabel;
     /* the button over a video, a round message and a picture that is still on its way */
     ExteriaMediaActionView *_play;
@@ -1213,6 +1229,9 @@ static float ExteriaSpoilerRandom(void) {
     [_overlay release];
     [_picture release];
     [_map release];
+    [_richMaps release];
+    [_transcriptPlate release];
+    [_transcriptLabel release];
     [_gifLabel release];
     [_play release];
     [_voiceAction release];
@@ -1812,6 +1831,8 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     CGRect bubble = item.bubbleFrame;
     [self configureAvatarForItem:item bubble:bubble];
     _body.item = item;
+    [self loadRichImagesForItem:item];
+    [self placeRichMapsForItem:item bubble:bubble];
     _replyPreview.item = item;
     _replyPreview.hidden = item.kind == ExteriaChatItemBubble || CGRectIsEmpty(item.replyFrame);
     _replyPreview.frame = CGRectOffset(item.replyFrame, bubble.origin.x, bubble.origin.y);
@@ -3275,12 +3296,24 @@ static void ExteriaSwipeTick(void) {
     if ([url isEqualToString:ExteriaSpoilerTarget]) {
         message.spoilersRevealed = YES;
         _item.textLayout.spoilersRevealed = YES;
+        _item.richLayout.spoilersRevealed = YES;
         [_body setNeedsDisplay];
         return;
     }
     if (url) {
         [_delegate messageCell:self didTapLink:url];
         return;
+    }
+    if (_item.richLayout) {
+        NSUInteger details = [_item.richLayout detailsAtPoint:inRich];
+        if (details != NSNotFound && [_delegate respondsToSelector:@selector(messageCell:didToggleArticleDetails:)]) {
+            [_delegate messageCell:self didToggleArticleDetails:details];
+            return;
+        }
+        if (richMedia != NSNotFound && [_delegate respondsToSelector:@selector(messageCell:didTapArticleMedia:)]) {
+            [_delegate messageCell:self didTapArticleMedia:richMedia];
+            return;
+        }
     }
     if (!_selecting && [_delegate respondsToSelector:@selector(messageCell:didTapCode:)]) {
         ExteriaTextEntity *code = [_item.textLayout codeAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)];
