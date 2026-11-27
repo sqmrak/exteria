@@ -8,7 +8,7 @@ shopt -s nullglob
 
 rm -rf "${dest}"
 mkdir -p "${dest}/exteria-original-icons"
-files=(resources/icons/*.png resources/launch/*.png resources/animations/*.tgs
+files=(resources/icons/*.png resources/launch/*.png resources/animations/*.tgs resources/animations/*.mp4
     resources/phone/*.png resources/phone/*.txt resources/popup/*.jpg resources/popup/*.png
     resources/fonts/*.ttf resources/fonts/*.otf resources/fonts/*.txt
     resources/chat/*.jpg resources/chat/*.png resources/emoji/*.pack resources/emoji/*.txt

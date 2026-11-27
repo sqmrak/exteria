@@ -2,6 +2,7 @@
 #import "exteria_logs_controller.h"
 
 #import "exteria_alert.h"
+#import "exteria_audio_session.h"
 #import "exteria_crash_prompt.h"
 #import "exteria_developer_badges_controller.h"
 #import "exteria_developers.h"
@@ -17,6 +18,8 @@
 #import "exteria_welcome_toast.h"
 #import "exteria_platform.h"
 #import "exteria_weak_reference.h"
+#import <AVFoundation/AVFoundation.h>
+#import <QuartzCore/QuartzCore.h>
 
 NSString *const ExteriaDeveloperModeDidChangeNotification = @"ExteriaDeveloperModeDidChange";
 
@@ -30,11 +33,127 @@ void ExteriaDeveloperModeSet(BOOL enabled) {
     [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:ExteriaDeveloperModeKey];
 }
 
+static char ExteriaDeveloperVideoStatus;
+
+@interface ExteriaDeveloperVideo : UIView {
+    AVPlayer *_player;
+    AVPlayerItem *_item;
+    BOOL _pageVisible;
+    BOOL _onScreen;
+    BOOL _foreground;
+    BOOL _playing;
+    BOOL _failed;
+}
+- (void)setPageVisible:(BOOL)visible onScreen:(BOOL)onScreen;
+@end
+
+@implementation ExteriaDeveloperVideo
+
++ (Class)layerClass { return [AVPlayerLayer class]; }
+
+- (id)init {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) return nil;
+    self.backgroundColor = [UIColor blackColor];
+    self.clipsToBounds = YES;
+    self.layer.cornerRadius = 12;
+    self.userInteractionEnabled = NO;
+    ((AVPlayerLayer *)self.layer).videoGravity = AVLayerVideoGravityResizeAspect;
+    NSString *path = [[NSBundle mainBundle] pathForResource:@"developer-video" ofType:@"mp4"];
+    if (!path) {
+        NSLog(@"exteria: developer video is missing from the bundle");
+        return self;
+    }
+    _item = [[AVPlayerItem playerItemWithURL:[NSURL fileURLWithPath:path]] retain];
+    _player = [[AVPlayer playerWithPlayerItem:_item] retain];
+    _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+    ((AVPlayerLayer *)self.layer).player = _player;
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self selector:@selector(ended:) name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
+    [center addObserver:self selector:@selector(failed:) name:AVPlayerItemFailedToPlayToEndTimeNotification object:_item];
+    [center addObserver:self selector:@selector(backgrounded:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+    [center addObserver:self selector:@selector(foregrounded:) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [_item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionInitial context:&ExteriaDeveloperVideoStatus];
+    _foreground = [UIApplication sharedApplication].applicationState == UIApplicationStateActive;
+    return self;
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    if (_item) [_item removeObserver:self forKeyPath:@"status" context:&ExteriaDeveloperVideoStatus];
+    [_player pause];
+    ((AVPlayerLayer *)self.layer).player = nil;
+    [_player release];
+    [_item release];
+    [super dealloc];
+}
+
+- (void)updatePlayback {
+    BOOL play = _pageVisible && _onScreen && _foreground && self.window && _player && !_failed;
+    if (play == _playing) return;
+    _playing = play;
+    if (play) {
+        /* a silent AVPlayer can still interrupt another app's music on ios 5 */
+        NSString *category = ExteriaAudioSessionCategory();
+        if (![category isEqualToString:ExteriaAudioCategoryPlayAndRecord()] && ![category isEqualToString:ExteriaAudioCategoryPlayback()])
+            ExteriaAudioSessionBeginMixedPlayback();
+        [_player play];
+    } else [_player pause];
+}
+
+- (void)setPageVisible:(BOOL)visible onScreen:(BOOL)onScreen {
+    _pageVisible = visible;
+    _onScreen = onScreen;
+    [self updatePlayback];
+}
+
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    [self updatePlayback];
+}
+
+- (void)ended:(NSNotification *)note {
+    (void)note;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_player seekToTime:kCMTimeZero];
+        if (_playing) [_player play];
+    });
+}
+
+- (void)failed:(NSNotification *)note {
+    NSError *error = [[note userInfo] objectForKey:AVPlayerItemFailedToPlayToEndTimeErrorKey];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSLog(@"exteria: developer video stopped: %@", error);
+        _failed = YES;
+        [self updatePlayback];
+    });
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (context != &ExteriaDeveloperVideoStatus) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_item.status != AVPlayerItemStatusFailed || _failed) return;
+        NSLog(@"exteria: developer video cannot play: %@", _item.error);
+        _failed = YES;
+        [self updatePlayback];
+    });
+}
+
+- (void)backgrounded:(NSNotification *)note { (void)note; _foreground = NO; [self updatePlayback]; }
+- (void)foregrounded:(NSNotification *)note { (void)note; _foreground = YES; [self updatePlayback]; }
+
+@end
+
 @interface ExteriaDeveloperSettingsController () {
     ExteriaSession *_session;
     ExteriaWeakReference *_weak;
     ExteriaSenkoPopup *_senko;
     ExteriaWelcomeToast *_toast;
+    ExteriaDeveloperVideo *_video;
+    BOOL _pageVisible;
 }
 @end
 
@@ -53,6 +172,8 @@ void ExteriaDeveloperModeSet(BOOL enabled) {
     [_weak clear];
     [_weak release];
     [_session release];
+    [_video setPageVisible:NO onScreen:NO];
+    [_video release];
     _senko.dismissHandler = nil;
     [_senko dismiss];
     [_senko release];
@@ -65,6 +186,33 @@ void ExteriaDeveloperModeSet(BOOL enabled) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self rebuild];
+}
+
+- (void)updateVideoVisibility {
+    BOOL onScreen = _video.window && CGRectIntersectsRect([_video convertRect:_video.bounds toView:self.table], self.table.bounds);
+    [_video setPageVisible:_pageVisible onScreen:onScreen];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    _pageVisible = YES;
+    [self updateVideoVisibility];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    _pageVisible = NO;
+    [self updateVideoVisibility];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    [self updateVideoVisibility];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    (void)scrollView;
+    [self updateVideoVisibility];
 }
 
 - (void)themeDidChange {
@@ -183,6 +331,8 @@ static UIView *ExteriaDeveloperHost(void) {
 
 - (void)rebuild {
     ExteriaWeakReference *weak = _weak;
+    if (!_video) _video = [[ExteriaDeveloperVideo alloc] init];
+    ExteriaSettingsRow *video = [ExteriaSettingsRow viewRowWithView:_video height:^CGFloat(CGFloat width) { return MIN(width, 300); }];
 #define ME ((ExteriaDeveloperSettingsController *)weak.target)
 #define POPUP(symbol, titleKey, subtitleKey, body) \
     [ExteriaSettingsRow rowWithSymbol:symbol tone:ExteriaSettingsToneBlack title:NSLocalizedString(titleKey, nil) subtitle:NSLocalizedString(subtitleKey, nil) value:nil tap:^{ body }]
@@ -268,6 +418,7 @@ static UIView *ExteriaDeveloperHost(void) {
         [(ExteriaDeveloperSettingsController *)weak.target rebuild];
     }];
     self.sections = [NSArray arrayWithObjects:
+        [ExteriaSettingsSection sectionWithHeader:nil footer:nil rows:[NSArray arrayWithObject:video]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.interface.header", nil) footer:NSLocalizedString(@"developer.interface.footer", nil) rows:[NSArray arrayWithObjects:classic, pad, phone, nil]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"logs.header", nil) footer:nil rows:[NSArray arrayWithObject:logs]],
         [ExteriaSettingsSection sectionWithHeader:NSLocalizedString(@"developer.readall.header", nil) footer:nil rows:[NSArray arrayWithObject:readAll]],
