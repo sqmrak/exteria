@@ -16,6 +16,8 @@
 /* a drifting wave must never uncover its screen edge, so the layer reaches this far past it */
 #define WAVE_BLEED 0.09
 #define RIPPLE_AMPLITUDE 0.03
+/* the halo of a wave under the oled palette: the outline of the wave stroked this wide, so light seems to spill past its edge */
+#define GLOW_WIDTH 34.0
 
 /* one wave: a gradient seen through a shape; the ripple moves the shape, the drift moves the whole layer */
 @interface ExteriaWaveLayer : CAGradientLayer {
@@ -44,6 +46,13 @@
     return _shape;
 }
 
+/* the mask is the outline of the wave drawn as a wide line with its inside, so the gradient shows as a band around the wave and under it */
+- (void)makeHalo:(CGFloat)width {
+    _shape.strokeColor = [UIColor blackColor].CGColor;
+    _shape.lineWidth = width;
+    _shape.lineJoin = kCALineJoinRound;
+}
+
 @end
 
 @interface ExteriaWaveBackgroundView () {
@@ -52,6 +61,8 @@
     BOOL _scrolling;
     ExteriaWaveLayer *_top;
     ExteriaWaveLayer *_bottom;
+    ExteriaWaveLayer *_topGlow;
+    ExteriaWaveLayer *_bottomGlow;
     CGSize _builtSize;
     BOOL _observing;
     CALayer *_snapshotLayer;
@@ -79,6 +90,12 @@
     self.clipsToBounds = YES;
     _top =[[ExteriaWaveLayer alloc] init];
     _bottom = [[ExteriaWaveLayer alloc] init];
+    _topGlow = [[ExteriaWaveLayer alloc] init];
+    _bottomGlow = [[ExteriaWaveLayer alloc] init];
+    [_topGlow makeHalo:GLOW_WIDTH];
+    [_bottomGlow makeHalo:GLOW_WIDTH];
+    [self.layer addSublayer:_topGlow];
+    [self.layer addSublayer:_bottomGlow];
     [self.layer addSublayer:_top];
     [self.layer addSublayer:_bottom];
     /* the classic style is flat, so the login of that style has no waves either */
@@ -93,6 +110,8 @@
     [_snapshotLayer release];
     [_top release];
     [_bottom release];
+    [_topGlow release];
+    [_bottomGlow release];
     [super dealloc];
 }
 
@@ -113,7 +132,8 @@
 
 - (void)drawRect:(CGRect)rect {
     (void)rect;
-    if (ExteriaThemeIsClassic()) {
+    /* the classic style is flat, and so is the oled one: the purple gradient of the dark palette behind the waves lit the whole screen on black bars */
+    if (ExteriaThemeIsClassic() || ExteriaThemeIsOLED()) {
         [ExteriaColorScreen() setFill];
         UIRectFill(self.bounds);
         return;
@@ -156,8 +176,20 @@
     return path;
 }
 
-/* on the near white lists the corner is a pale lilac wash, so the status bar and title stay readable over it */
 - (NSArray *)colorsForTop:(BOOL)top {
+    if (!ExteriaThemeIsOLED()) return [self paletteColorsForTop:top];
+    /* on black the wave is the one thing that glows: a light core that fades into the dark by its far end, so the edge of the wave reads as light spilling and not as a
+       flat purple plate; the list corner is a little quieter, since the title stands on it */
+    if (top && _plain) {
+        return [NSArray arrayWithObjects:(id)ExteriaThemeTinted([UIColor colorWithRed:0.66 green:0.42 blue:0.94 alpha:0.60]).CGColor,
+                (id)ExteriaThemeTinted([UIColor colorWithRed:0.45 green:0.28 blue:0.78 alpha:0.10]).CGColor, nil];
+    }
+    return [NSArray arrayWithObjects:(id)ExteriaThemeTinted([UIColor colorWithRed:0.76 green:0.52 blue:0.98 alpha:0.95]).CGColor,
+            (id)ExteriaThemeTinted([UIColor colorWithRed:0.52 green:0.32 blue:0.86 alpha:0.35]).CGColor, nil];
+}
+
+/* on the near white lists the corner is a pale lilac wash, so the status bar and title stay readable over it */
+- (NSArray *)paletteColorsForTop:(BOOL)top {
     if (top && _plain && ExteriaThemeIsDark()) {
         return [NSArray arrayWithObjects:(id)ExteriaThemeTinted([UIColor colorWithRed:0.42 green:0.22 blue:0.62 alpha:0.60]).CGColor,
                 (id)ExteriaThemeTinted([UIColor colorWithRed:0.30 green:0.18 blue:0.48 alpha:0.10]).CGColor, nil];
@@ -193,6 +225,33 @@
     CGPathRelease(path);
 }
 
+/* the halo of a wave: a layer a halo wider on every side, with the same outline in it and the same gradient in light, moved and rippled as the wave is */
+- (void)configureGlow:(ExteriaWaveLayer *)glow ofWave:(ExteriaWaveLayer *)wave top:(BOOL)top from:(CGPoint)from to:(CGPoint)to {
+    CGRect box = wave.frame;
+    CGFloat margin = GLOW_WIDTH;
+    glow.frame = CGRectInset(box, -margin, -margin);
+    CGSize size = glow.bounds.size;
+    glow.colors = [self glowColorsForTop:top];
+    glow.startPoint = CGPointMake((from.x - box.origin.x + margin) / size.width, (from.y - box.origin.y + margin) / size.height);
+    glow.endPoint = CGPointMake((to.x - box.origin.x + margin) / size.width, (to.y - box.origin.y + margin) / size.height);
+    glow.shape.frame = CGRectMake(margin, margin, box.size.width, box.size.height);
+    glow.shape.path = wave.shape.path;
+}
+
+/* light of the wave itself, thin, so the halo reads as bloom and the dark of the screen stays dark away from the waves */
+- (NSArray *)glowColorsForTop:(BOOL)top {
+    UIColor *near = ExteriaThemeTinted([UIColor colorWithRed:0.72 green:0.48 blue:0.98 alpha:top && _plain ? 0.16 : 0.24]);
+    UIColor *far = ExteriaThemeTinted([UIColor colorWithRed:0.52 green:0.32 blue:0.86 alpha:0.05]);
+    return [NSArray arrayWithObjects:(id)near.CGColor, (id)far.CGColor, nil];
+}
+
+/* the halos exist under the oled palette only, and follow the waves they belong to */
+- (void)syncGlow {
+    BOOL on = ExteriaThemeIsOLED();
+    _topGlow.hidden = _top.hidden || !on;
+    _bottomGlow.hidden = _bottom.hidden || !on;
+}
+
 - (void)rebuildWaves {
     CGFloat w = self.bounds.size.width;
     CGFloat h = self.bounds.size.height;
@@ -202,6 +261,8 @@
                from:CGPointMake(0, 0) to:CGPointMake(0.4 * w, 0.3 * span)];
     [self configure:_bottom top:NO box:CGRectMake(0.58 * w, h - 0.45 * span, 0.42 * w + bleed, 0.45 * span + bleed)
                from:CGPointMake(w, h) to:CGPointMake(0.6 * w, h - 0.35 * span)];
+    [self configureGlow:_topGlow ofWave:_top top:YES from:CGPointMake(0, 0) to:CGPointMake(0.4 * w, 0.3 * span)];
+    [self configureGlow:_bottomGlow ofWave:_bottom top:NO from:CGPointMake(w, h) to:CGPointMake(0.6 * w, h - 0.35 * span)];
 }
 
 - (void)layoutSubviews {
@@ -240,9 +301,9 @@ static void ExteriaRipple(ExteriaWaveLayer *layer, CGPathRef opposite, CFTimeInt
 }
 
 /* the opposite ripple is the same outline with the ripple amplitude negated */
-- (void)rippleLayer:(ExteriaWaveLayer *)layer seconds:(CFTimeInterval)seconds {
+- (void)rippleLayer:(ExteriaWaveLayer *)layer top:(BOOL)top seconds:(CFTimeInterval)seconds {
     if (!layer.shape.path) return;
-    CGPathRef opposite = [self newPathForTop:layer == _top amplitude:-RIPPLE_AMPLITUDE * _builtSize.width];
+    CGPathRef opposite = [self newPathForTop:top amplitude:-RIPPLE_AMPLITUDE * _builtSize.width];
     ExteriaRipple(layer, opposite, seconds);
     CGPathRelease(opposite);
 }
@@ -277,6 +338,7 @@ static void ExteriaRipple(ExteriaWaveLayer *layer, CGPathRef opposite, CFTimeInt
     BOOL none = ExteriaThemeIsClassic() || ExteriaChatFlagGet(ExteriaChatFlagHideWaves);
     _top.hidden = none;
     _bottom.hidden = none || _plain;
+    [self syncGlow];
 }
 
 /* the setting of the person gives the corners of the screen to boykissers that fall in place of the waves */
@@ -313,17 +375,26 @@ static void ExteriaRipple(ExteriaWaveLayer *layer, CGPathRef opposite, CFTimeInt
     [self applyScrolling];
     [_top removeAnimationForKey:@"drift"];
     [_bottom removeAnimationForKey:@"drift"];
+    [_topGlow removeAnimationForKey:@"drift"];
+    [_bottomGlow removeAnimationForKey:@"drift"];
+    [_topGlow.shape removeAnimationForKey:@"ripple"];
+    [_bottomGlow.shape removeAnimationForKey:@"ripple"];
+    [self syncGlow];
     [_top.shape removeAnimationForKey:@"ripple"];
     [_bottom.shape removeAnimationForKey:@"ripple"];
     if (ExteriaThemeIsClassic() || !_animated || !self.window || ExteriaReduceMotionEnabled() || !ExteriaLiteEnabled(EXTERIA_LITE_CHAT_BACKGROUND) ||
         _builtSize.width <= 0) return;
     CGFloat reach = 0.8 * WAVE_BLEED * _builtSize.width;
     ExteriaDrift(_top, reach, reach, TOP_DRIFT_SECONDS);
-    [self rippleLayer:_top seconds:TOP_RIPPLE_SECONDS];
+    [self rippleLayer:_top top:YES seconds:TOP_RIPPLE_SECONDS];
+    ExteriaDrift(_topGlow, reach, reach, TOP_DRIFT_SECONDS);
+    [self rippleLayer:_topGlow top:YES seconds:TOP_RIPPLE_SECONDS];
     /* the signed in screens keep only the top corner */
     if (_plain) return;
     ExteriaDrift(_bottom, -reach, -reach, BOTTOM_DRIFT_SECONDS);
-    [self rippleLayer:_bottom seconds:BOTTOM_RIPPLE_SECONDS];
+    [self rippleLayer:_bottom top:NO seconds:BOTTOM_RIPPLE_SECONDS];
+    ExteriaDrift(_bottomGlow, -reach, -reach, BOTTOM_DRIFT_SECONDS);
+    [self rippleLayer:_bottomGlow top:NO seconds:BOTTOM_RIPPLE_SECONDS];
 }
 
 /* one wave as it is on the screen at this moment: the shape of its mask now and its place with the drift, filled with its gradient */
