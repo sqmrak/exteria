@@ -26,8 +26,8 @@ static size_t utf16_before(const char *text, size_t bytes) {
     return units;
 }
 
-/* finds the custom emoji of the message where copy_text left them: it collapses runs of spaces, trims the end and cuts at the field size, so the offsets
-   of the server (UTF-16 units of the original) are replayed through the same steps; an emoji that the cut or the trim touched is dropped */
+/* finds the custom emoji and the spoilers of the message where copy_text left them: it collapses runs of spaces, trims the end and cuts at the field size, so the offsets
+   of the server (UTF-16 units of the original) are replayed through the same steps; an entity that the cut or the trim touched is dropped */
 static void read_text_emoji(exteria_dialog_row *row, const exteria_tl_value *message) {
     exteria_entity entities[EXTERIA_MESSAGE_ENTITIES_MAX];
     size_t start_byte[EXTERIA_MESSAGE_ENTITIES_MAX], end_byte[EXTERIA_MESSAGE_ENTITIES_MAX];
@@ -37,6 +37,7 @@ static void read_text_emoji(exteria_dialog_row *row, const exteria_tl_value *mes
     size_t len, i, k, out = 0, units = 0, text_len = strlen(row->text);
     int space = 1;
     row->emoji_count = 0;
+    row->spoiler_count = 0;
     if (!text_len || exteria_tl_get_bytes(message, "message", &data, &len) != EXTERIA_OK) return;
     exteria_entities_read(message, entities, EXTERIA_MESSAGE_ENTITIES_MAX, urls, 0, &found);
     for (k = 0; k < found; ++k) start_byte[k] = end_byte[k] = SIZE_MAX;
@@ -45,7 +46,7 @@ static void read_text_emoji(exteria_dialog_row *row, const exteria_tl_value *mes
         int lead = i == len || (c & 0xC0u) != 0x80u;
         if (lead) {
             for (k = 0; k < found; ++k) {
-                if (entities[k].kind != EXTERIA_ENTITY_CUSTOM_EMOJI) continue;
+                if (entities[k].kind != EXTERIA_ENTITY_CUSTOM_EMOJI && entities[k].kind != EXTERIA_ENTITY_SPOILER) continue;
                 if (start_byte[k] == SIZE_MAX && units >= (size_t)entities[k].offset) start_byte[k] = out;
                 if (end_byte[k] == SIZE_MAX && units >= (size_t)entities[k].offset + (size_t)entities[k].length) end_byte[k] = out;
             }
@@ -62,16 +63,25 @@ static void read_text_emoji(exteria_dialog_row *row, const exteria_tl_value *mes
         }
         ++out;
     }
-    for (k = 0; k < found && row->emoji_count < EXTERIA_DIALOG_EMOJI_MAX; ++k) {
+    for (k = 0; k < found; ++k) {
         size_t first, last;
-        if (entities[k].kind != EXTERIA_ENTITY_CUSTOM_EMOJI || start_byte[k] == SIZE_MAX || end_byte[k] == SIZE_MAX || end_byte[k] > text_len) continue;
+        int spoiler = entities[k].kind == EXTERIA_ENTITY_SPOILER;
+        if ((entities[k].kind != EXTERIA_ENTITY_CUSTOM_EMOJI && !spoiler) || start_byte[k] == SIZE_MAX || end_byte[k] == SIZE_MAX || end_byte[k] > text_len) continue;
         first = utf16_before(row->text, start_byte[k]);
         last = utf16_before(row->text, end_byte[k]);
         if (last <= first) continue;
-        row->emoji[row->emoji_count].offset = (uint16_t)first;
-        row->emoji[row->emoji_count].length = (uint16_t)(last - first);
-        row->emoji[row->emoji_count].document = entities[k].document_id;
-        ++row->emoji_count;
+        if (spoiler) {
+            if (row->spoiler_count >= EXTERIA_DIALOG_SPOILER_MAX) continue;
+            row->spoiler[row->spoiler_count].offset = (uint16_t)first;
+            row->spoiler[row->spoiler_count].length = (uint16_t)(last - first);
+            ++row->spoiler_count;
+        } else {
+            if (row->emoji_count >= EXTERIA_DIALOG_EMOJI_MAX) continue;
+            row->emoji[row->emoji_count].offset = (uint16_t)first;
+            row->emoji[row->emoji_count].length = (uint16_t)(last - first);
+            row->emoji[row->emoji_count].document = entities[k].document_id;
+            ++row->emoji_count;
+        }
     }
 }
 
@@ -305,6 +315,7 @@ static void fill_message(exteria_dialog_row *row, const exteria_tl_value *m, con
         int64_t target = 0;
         row->preview = EXTERIA_PREVIEW_SERVICE;
         row->emoji_count = 0;
+        row->spoiler_count = 0;
         row->service = exteria_service_summary(exteria_tl_get(m, "action"), row->text, sizeof(row->text), &row->service_value, &target);
         row->service_actor_is_target = target > 0 && exteria_peer_from_tl(from, &sender) == EXTERIA_OK && sender.kind == 1 && sender.id == target;
         if (target > 0) {
@@ -603,6 +614,7 @@ exteria_status exteria_topics_parse(const exteria_tl_value *answer, const exteri
         row->preview = EXTERIA_PREVIEW_NONE;
         row->sender[0] = row->text[0] = 0;
         row->emoji_count = 0;
+        row->spoiler_count = 0;
         row->muted = 0;
         copy_text(row->title, sizeof(row->title), t, "title");
         if (exteria_tl_get_i32(t, "icon_color", &value) == EXTERIA_OK) row->topic_icon_color = value & 0xFFFFFF;
@@ -747,6 +759,8 @@ exteria_status exteria_community_previews_apply(const exteria_tl_value *answer, 
             memcpy(row->text, source->text, sizeof(row->text));
             row->emoji_count = source->emoji_count;
             memcpy(row->emoji, source->emoji, sizeof(row->emoji));
+            row->spoiler_count = source->spoiler_count;
+            memcpy(row->spoiler, source->spoiler, sizeof(row->spoiler));
             break;
         }
     }

@@ -218,18 +218,23 @@ static NSString *ExteriaPreviewLabel(exteria_preview_kind kind, NSString *text) 
         _senderPhoto = [[ExteriaPhoto photoWithRef:&row->sender_photo] retain];
     }
     _preview = [body copy];
-    /* the emoji positions belong to the message text as the core cut it, so they hold only while the line still carries that text unchanged */
+    /* the emoji and spoiler positions belong to the message text as the core cut it, so they hold only while the line still carries that text unchanged */
     BOOL captioned = row->preview == EXTERIA_PREVIEW_PHOTO || row->preview == EXTERIA_PREVIEW_VIDEO || row->preview == EXTERIA_PREVIEW_GIF;
-    if (row->emoji_count && (row->preview == EXTERIA_PREVIEW_TEXT || (captioned && row->text[0])) && [body hasSuffix:ExteriaUtf8(row->text)]) {
+    if ((row->emoji_count || row->spoiler_count) && (row->preview == EXTERIA_PREVIEW_TEXT || (captioned && row->text[0])) && [body hasSuffix:ExteriaUtf8(row->text)]) {
         NSString *own = ExteriaUtf8(row->text);
         NSUInteger shift = body.length - own.length;
-        NSMutableArray *entities = [NSMutableArray arrayWithCapacity:row->emoji_count];
+        NSMutableArray *entities = [NSMutableArray arrayWithCapacity:(NSUInteger)row->emoji_count + row->spoiler_count];
         for (uint8_t i = 0; i < row->emoji_count; ++i) {
             if (row->emoji[i].offset + row->emoji[i].length > own.length) continue;
             ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleCustomEmoji
                 range:NSMakeRange(shift + row->emoji[i].offset, row->emoji[i].length) url:nil] autorelease];
             entity.documentId = row->emoji[i].document;
             [entities addObject:entity];
+        }
+        for (uint8_t i = 0; i < row->spoiler_count; ++i) {
+            if (row->spoiler[i].offset + row->spoiler[i].length > own.length) continue;
+            [entities addObject:[[[ExteriaTextEntity alloc] initWithStyle:ExteriaTextStyleSpoiler
+                range:NSMakeRange(shift + row->spoiler[i].offset, row->spoiler[i].length) url:nil] autorelease]];
         }
         if (entities.count) _previewEntities = [entities copy];
     }

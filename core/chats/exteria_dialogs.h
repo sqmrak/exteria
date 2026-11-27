@@ -15,6 +15,7 @@
 #define EXTERIA_DIALOG_SENDER_MAX 64
 #define EXTERIA_DIALOG_TEXT_MAX 4096
 #define EXTERIA_DIALOG_EMOJI_MAX 8
+#define EXTERIA_DIALOG_SPOILER_MAX 8
 
 typedef enum exteria_dialog_kind {
     EXTERIA_DIALOG_USER = 1,
@@ -57,6 +58,11 @@ typedef struct exteria_dialog_emoji {
     uint16_t length;
     int64_t document;
 } exteria_dialog_emoji;
+
+typedef struct exteria_dialog_span {
+    uint16_t offset;
+    uint16_t length;
+} exteria_dialog_span;
 
 typedef struct exteria_dialog_row {
     uint8_t noforwards;
@@ -129,6 +135,9 @@ typedef struct exteria_dialog_row {
     /* the custom emoji inside text, in order; none for a text that is not the message itself */
     uint8_t emoji_count;
     exteria_dialog_emoji emoji[EXTERIA_DIALOG_EMOJI_MAX];
+    /* the spoilers inside text, in order, as UTF-16 units of text; the list shows them covered */
+    uint8_t spoiler_count;
+    exteria_dialog_span spoiler[EXTERIA_DIALOG_SPOILER_MAX];
 } exteria_dialog_row;
 
 /* the last-message part of a row (top_message, date, outgoing, preview, text, sender) made from one live message, for a chat the account already lists; the rest of the row is zero.

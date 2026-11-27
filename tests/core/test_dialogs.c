@@ -176,6 +176,29 @@ static void test_preview_emoji(void) {
     CHECK_EQ_INT(rows[0].emoji_count, 0);
 }
 
+static void test_preview_spoiler(void) {
+    exteria_dialog_row rows[2];
+    size_t count;
+    exteria_tl_value *d[1], *m[1], *u[1], *e[3];
+    d[0] = dialog(peer("peerUser", "user_id", 5), 9, 1);
+    u[0] = user(5, "Ann", NULL);
+    /* the double space after "a" collapses, so the spoiler (units 4 to 7) moves to units 3 to 6 of the preview */
+    m[0] = message(peer("peerUser", "user_id", 5), 9, 1500, "a  hid den");
+    e[0] = obj("messageEntitySpoiler");
+    set_i32(e[0], "offset", 3);
+    set_i32(e[0], "length", 3);
+    /* one that starts past the end of the text is dropped */
+    e[1] = obj("messageEntitySpoiler");
+    set_i32(e[1], "offset", 40);
+    set_i32(e[1], "length", 2);
+    set(m[0], "entities", vec_of(e, 2));
+    CHECK_EQ_INT(exteria_dialogs_parse(answer("messages.dialogs", d, 1, m, 1, NULL, 0, u, 1), SELF, 1000, rows, 2, &count), EXTERIA_OK);
+    CHECK_EQ_INT(rows[0].spoiler_count, 1);
+    CHECK_EQ_INT(rows[0].spoiler[0].offset, 2);
+    CHECK_EQ_INT(rows[0].spoiler[0].length, 3);
+    CHECK_EQ_INT(rows[0].emoji_count, 0);
+}
+
 static void test_user_and_saved(void) {
     exteria_dialog_row rows[4];
     size_t count;
@@ -1382,6 +1405,7 @@ int main(void) {
     test_archive_shortcut();
     test_archive_summary();
     test_preview_emoji();
+    test_preview_spoiler();
     test_user_and_saved();
     test_forwarded_last_message();
     test_mute_expired_and_unread();
