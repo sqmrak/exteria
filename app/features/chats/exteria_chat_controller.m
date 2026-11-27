@@ -8809,13 +8809,18 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
 
 /* the cross on a message that is going up: the upload stops and the pending message goes, as if it was never sent */
 - (void)messageCellDidCancelSending:(ExteriaMessageCell *)cell {
-    ExteriaMessage *message = cell.item.message;
-    if (![_local containsObject:message] || message.state != ExteriaMessageStateSending) return;
-    [_session cancelSendWithRandomId:message.randomId];
-    ExteriaOutgoing *sent = message.pendingSend;
-    if (sent && sent->temporary && sent->path) [[NSFileManager defaultManager] removeItemAtPath:sent->path error:NULL];
-    [_local removeObject:message];
-    [self rebuildItems];
+    /* an album goes out as one request, so its cross takes back every message of it */
+    NSArray *messages = cell.item.albumMessages.count ? cell.item.albumMessages : (cell.item.message ? [NSArray arrayWithObject:cell.item.message] : nil);
+    BOOL removed = NO;
+    for (ExteriaMessage *message in messages) {
+        if (![_local containsObject:message] || message.state != ExteriaMessageStateSending) continue;
+        [_session cancelSendWithRandomId:message.randomId];
+        ExteriaOutgoing *sent = message.pendingSend;
+        if (sent && sent->temporary && sent->path) [[NSFileManager defaultManager] removeItemAtPath:sent->path error:NULL];
+        [_local removeObject:message];
+        removed = YES;
+    }
+    if (removed) [self rebuildItems];
 }
 
 - (void)messageCellDidTapFailed:(ExteriaMessageCell *)cell {

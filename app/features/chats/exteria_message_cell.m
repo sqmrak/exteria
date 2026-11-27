@@ -994,6 +994,8 @@ static float ExteriaSpoilerRandom(void) {
     /* the pictures of an album, one view each, made as albums come and shown as far as the album has pictures */
     NSMutableArray *_albumViews;
     NSMutableArray *_albumMarks;
+    /* the upload ring of each picture of an album that is going up */
+    NSMutableArray *_albumUploads;
     ExteriaMessage *_tappedMedia;
     UITapGestureRecognizer *_doubleTap;
     ExteriaMarkupView *_markupView;
@@ -1216,6 +1218,7 @@ static float ExteriaSpoilerRandom(void) {
     [_reactionsKey release];
     [_albumViews release];
     [_albumMarks release];
+    [_albumUploads release];
     [_tappedMedia release];
     [_spoilerCover release];
     [_doubleTap release];
@@ -2037,6 +2040,20 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 - (void)hideAlbumViews {
     for (UIView *view in _albumViews) view.hidden = YES;
     for (UIView *view in _albumMarks) view.hidden = YES;
+    for (UIView *view in _albumUploads) view.hidden = YES;
+}
+
+/* a photo, video, video message or document of ours that is still going up */
+static BOOL ExteriaMessageUploading(ExteriaMessage *message) {
+    ExteriaOutgoing *pending = message.pendingSend;
+    return message.outgoing && message.state == ExteriaMessageStateSending && pending &&
+           (pending->kind == ExteriaOutgoingPhoto || pending->kind == ExteriaOutgoingVideo || pending->kind == ExteriaOutgoingFile || pending->kind == ExteriaOutgoingRound);
+}
+
+/* the ring of a picture of an album, a little smaller than the picture when the picture is small */
+static CGRect ExteriaAlbumRingFrame(CGRect tile) {
+    CGFloat side = MIN(MEDIA_BUTTON, MIN(tile.size.width, tile.size.height) - 8);
+    return CGRectMake(CGRectGetMidX(tile) - side / 2, CGRectGetMidY(tile) - side / 2, side, side);
 }
 
 /* the picture of a video in an album is its thumbnail, and of a photo the photo; each is its own view cut to its cell of the collage */
@@ -2044,6 +2061,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     if (!_albumViews) {
         _albumViews = [[NSMutableArray alloc] init];
         _albumMarks = [[NSMutableArray alloc] init];
+        _albumUploads = [[NSMutableArray alloc] init];
     }
     NSUInteger token = _token;
     CGFloat radius = ExteriaBubbleRadius();
@@ -2070,6 +2088,11 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
             mark.contentMode = UIViewContentModeCenter;
             [self.contentView insertSubview:mark aboveSubview:view];
             [_albumMarks addObject:mark];
+            ExteriaMediaActionView *ring = [[[ExteriaMediaActionView alloc] initWithFrame:CGRectMake(0, 0, MEDIA_BUTTON, MEDIA_BUTTON)] autorelease];
+            ring.userInteractionEnabled = NO;
+            ring.hidden = YES;
+            [self.contentView insertSubview:ring aboveSubview:mark];
+            [_albumUploads addObject:ring];
         }
         UIImageView *view = [_albumViews objectAtIndex:i], *mark = [_albumMarks objectAtIndex:i];
         ExteriaMessage *message = [item.albumMessages objectAtIndex:i];
@@ -2080,7 +2103,16 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         view.backgroundColor = [self placeholderColor];
         view.layer.cornerRadius = 0;
         mark.frame = frame;
-        mark.hidden = message.media.kind == EXTERIA_PREVIEW_PHOTO;
+        BOOL uploading = ExteriaMessageUploading(message);
+        mark.hidden = message.media.kind == EXTERIA_PREVIEW_PHOTO || uploading;
+        ExteriaMediaActionView *ring = [_albumUploads objectAtIndex:i];
+        ring.hidden = !uploading;
+        if (uploading) {
+            ring.frame = ExteriaAlbumRingFrame(frame);
+            ring.discColor = ExteriaColorBubbleCapsule();
+            [ring setIcon:ExteriaMediaIconCancel animated:NO];
+            [ring setProgress:message.uploadProgress];
+        }
         /* the outer corners of the collage follow the bubble and the corners that meet another picture are small, as in the other clients; a caption under the collage
            makes the bottom corners small too, since the bubble goes on below them */
         BOOL left = frame.origin.x <= bubbleLeft + 0.5, right = CGRectGetMaxX(frame) >= bubbleRight - 0.5;
@@ -2112,6 +2144,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     for (NSUInteger i = shown; i < _albumViews.count; ++i) {
         [[_albumViews objectAtIndex:i] setHidden:YES];
         [[_albumMarks objectAtIndex:i] setHidden:YES];
+        [[_albumUploads objectAtIndex:i] setHidden:YES];
     }
 }
 
@@ -2130,16 +2163,19 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     return kind == EXTERIA_PREVIEW_VOICE || kind == EXTERIA_PREVIEW_AUDIO || kind == EXTERIA_PREVIEW_FILE ? _voiceAction : _play;
 }
 
-/* a photo, video or document of ours that is still going up: its button is a cross with the ring of the upload, not the arrow of a file to fetch */
+/* a file of ours that is still going up: its button is a cross with the ring of the upload, not the arrow of a file to fetch. a video message counts too, since
+   without it the circle showed the arrow and asked for a file the server did not have yet */
 - (BOOL)uploading {
-    ExteriaMessage *message = _item.message;
-    ExteriaOutgoing *pending = message.pendingSend;
-    return message.outgoing && message.state == ExteriaMessageStateSending && pending &&
-           (pending->kind == ExteriaOutgoingPhoto || pending->kind == ExteriaOutgoingVideo || pending->kind == ExteriaOutgoingFile);
+    return ExteriaMessageUploading(_item.message);
 }
 
 - (void)showUploadProgress {
     if ([self uploading]) [[self loadAction] setProgress:_item.message.uploadProgress];
+    NSUInteger shown = MIN(_albumUploads.count, _item.albumMessages.count);
+    for (NSUInteger i = 0; i < shown; ++i) {
+        ExteriaMessage *message = [_item.albumMessages objectAtIndex:i];
+        if (ExteriaMessageUploading(message)) [[_albumUploads objectAtIndex:i] setProgress:message.uploadProgress];
+    }
 }
 
 /* the card burns: sparks over it while it fades, and the owner rebuilds the row as an expired one when the animation is over */
@@ -3450,6 +3486,11 @@ static void ExteriaSwipeTick(void) {
         inBubble.x -= _item.bubbleFrame.origin.x;
         inBubble.y -= _item.bubbleFrame.origin.y;
         ExteriaMessage *picked = [_item albumMessageAtPoint:inBubble];
+        /* the cross on a picture that is going up takes the whole album back, since the album goes out as one */
+        if (picked && ExteriaMessageUploading(picked)) {
+            [self cancelSending];
+            return;
+        }
         if (picked) {
             [_tappedMedia release];
             _tappedMedia = [picked retain];
@@ -3501,6 +3542,11 @@ static void ExteriaSwipeTick(void) {
         return;
     }
     if (_item.kind == ExteriaChatItemRound && CGRectContainsPoint(_picture.frame, [tap locationInView:self.contentView])) {
+        /* a circle that is going up has no file on the server to play; its cross takes it back */
+        if ([self uploading]) {
+            if (!_play.hidden && CGRectContainsPoint(CGRectInset(_play.frame, -8, -8), [tap locationInView:self.contentView])) [self cancelSending];
+            return;
+        }
         [self toggleRound];
         return;
     }

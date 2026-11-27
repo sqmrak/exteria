@@ -68,6 +68,8 @@ typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_audience
     void (^stickerDone)(ExteriaStickerDocument *document, NSString *errorName);
     /* the file is one item of an album: its media, as an NSData of exteria_album_media, or the error */
     void (^albumDone)(NSData *media, NSString *errorName);
+    /* ... and the random ids of all the messages of that album: a cancel of any of them stops the whole album */
+    NSArray *albumIds;
     exteria_upload_spec spec;
     uint8_t waveform[EXTERIA_WAVEFORM_BYTES];
     long long randomId;
@@ -81,6 +83,7 @@ typedef struct { char caption[EXTERIA_STORY_CAPTION_MAX]; exteria_story_audience
     [completion release];
     [stickerDone release];
     [albumDone release];
+    [albumIds release];
     [super dealloc];
 }
 @end
@@ -496,12 +499,20 @@ static NSMutableDictionary *ExteriaEffectsById;
     return job->randomId != 0 && job->completion && !job->albumDone && !job->stickerDone && !job->profilePhoto && !job->storyPhoto;
 }
 
+- (BOOL)albumIsCancelled:(NSArray *)randomIds {
+    for (NSNumber *randomId in randomIds) if ([self workerSendIsCancelled:randomId.longLongValue]) return YES;
+    return NO;
+}
+
 - (BOOL)sendIsCancelled:(ExteriaUploadJob *)job {
+    if (job->albumDone) return [self albumIsCancelled:job->albumIds];
     return [self isMessageUpload:job] && [self workerSendIsCancelled:job->randomId];
 }
 
+/* worker only: an item of an album reports under the random id of its own message, so each picture of the collage shows its own ring */
 - (void)reportProgressOfUpload:(ExteriaUploadJob *)job {
-    if (![self isMessageUpload:job] || job->transfer.size == 0) return;
+    BOOL albumItem = job->albumDone && job->randomId != 0;
+    if ((![self isMessageUpload:job] && !albumItem) || job->transfer.size == 0) return;
     NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithLongLong:job->randomId], @"randomId",
                           [NSNumber numberWithFloat:(float)((double)job->transfer.offset / (double)job->transfer.size)], @"fraction", nil];
     [self deliverMain:^{ [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaUploadProgressNotification object:self userInfo:info]; }];
@@ -569,7 +580,15 @@ static NSMutableDictionary *ExteriaEffectsById;
     }];
 }
 
+/* the set of cancelled sends belongs to the worker, and the answer to an album may come on another thread */
+- (void)forgetAlbumSends:(NSArray *)randomIds {
+    [self post:^{
+        for (NSNumber *randomId in randomIds) [self workerForgetSend:randomId.longLongValue];
+    }];
+}
+
 - (void)failAlbum:(ExteriaAlbumJob *)job error:(NSString *)error {
+    [self forgetAlbumSends:job->randomIds];
     void (^done)(NSArray *, NSString *) = [job->completion retain];
     NSString *delivered = [[error copy] autorelease];
     [self deliverMain:^{ done(nil, delivered); [done release]; }];
@@ -577,6 +596,11 @@ static NSMutableDictionary *ExteriaEffectsById;
 }
 
 - (void)albumUploadNext:(ExteriaAlbumJob *)job {
+    /* the person took the album back between two of its items, or before the last step sends it */
+    if ([self albumIsCancelled:job->randomIds]) {
+        [self failAlbum:job error:@"CANCELLED"];
+        return;
+    }
     if (job->next >= job->outgoings.count) {
         [self albumSend:job];
         return;
@@ -584,6 +608,8 @@ static NSMutableDictionary *ExteriaEffectsById;
     ExteriaOutgoing *item = [job->outgoings objectAtIndex:job->next];
     ExteriaUploadJob *upload = [[ExteriaUploadJob alloc] init];
     upload->peer = job->peer;
+    upload->randomId = [[job->randomIds objectAtIndex:job->next] longLongValue];
+    upload->albumIds = [job->randomIds retain];
     NSString *fieldError = nil;
     if (item->kind == ExteriaOutgoingVideo) {
         upload->spec = ExteriaSpec(EXTERIA_UPLOAD_VIDEO, item->durationMs, item->width, item->height);
@@ -656,6 +682,7 @@ static NSMutableDictionary *ExteriaEffectsById;
             }
         }
         [self noteRpcError:error];
+        [self forgetAlbumSends:job->randomIds];
         void (^done)(NSArray *, NSString *) = [job->completion retain];
         NSArray *deliveredIds = [[messageIds copy] autorelease];
         NSString *deliveredError = [[error copy] autorelease];
