@@ -234,7 +234,7 @@ static void ExteriaFillCapsule(CGContextRef context, CGRect rect, UIColor *color
         /* a read mark is lit: the accent control of an imported theme, else the full ink of the line, while a delivered one stays dimmer beside the time */
         UIColor *lit = ExteriaThemeIsClassic() ? nil : ExteriaImportedThemeColor("chat.message.outgoing.accentControl");
         UIColor *markColor = _item.read ? (lit ? lit : color) : [color colorWithAlphaComponent:0.6f];
-        mark = ExteriaCheckImage(_item.read, 11, markColor);
+        mark = ExteriaCheckImage(_item.read, _item.read && !ExteriaThemeIsClassic() ? 8.5 : 11, markColor);
     }
     /* the slot fits the double check, a single one sits at its right edge */
     CGFloat slot = 11 * 25.0 / 16.0;
