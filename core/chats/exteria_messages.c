@@ -2121,8 +2121,8 @@ exteria_status exteria_shared_request(exteria_arena *arena, const exteria_peer_r
     if (out) *out = NULL;
     if (!arena || !out || (unsigned)kind > EXTERIA_SHARED_VOICE || offset_id < 0) return EXTERIA_E_ARG;
     status = chat_search_request(arena, peer, NULL, "", filters[kind], limit, out);
-    /* a topic of a forum is a thread of the group, so without top_msg_id the tabs list the media of the whole group */
-    if (status == EXTERIA_OK && peer->topic_id > 1) status = exteria_tl_set_i32(arena, *out, "top_msg_id", peer->topic_id);
+    /* a topic of a forum, the general one (id 1) included, is a thread of the group, so without top_msg_id the tabs list the media of the whole group */
+    if (status == EXTERIA_OK && peer->topic_id > 0) status = exteria_tl_set_i32(arena, *out, "top_msg_id", peer->topic_id);
     if (status == EXTERIA_OK && offset_id) status = exteria_tl_set_i32(arena, *out, "offset_id", offset_id);
     if (status != EXTERIA_OK) *out = NULL;
     return status;
