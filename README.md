@@ -89,7 +89,7 @@ bash scripts/build_sticker_codecs.sh
 meow build
 ```
 
-built with [meow](https://github.com/sqmrak/meow), see `meow.toml`. needs `EXTERIA_TC EXTERIA_SDK_V7 EXTERIA_SDK_V64 EXTERIA_OPENSSL_V7 EXTERIA_OPENSSL_V64 EXTERIA_VIDEO_V7 EXTERIA_VIDEO_V64 EXTERIA_PYTHON_V7 EXTERIA_PYTHON_V64 EXTERIA_PYTHON_BUNDLE`, optional `EXTERIA_CRT_V7` (the `crt1.3.1.o` of the armv7 sdk when left out) and `MEOW_LDID` (the ldid of the toolchain when left out). api id and hash come from `local/credentials.env` (`EXTERIA_API_ID`, `EXTERIA_API_HASH`). output: `build/ios/Exteria-v<version>.ipa`, its `.sha256` and `build/ios/exteria_<version>.deb`.
+built with [meow](https://github.com/sqmrak/meow), see `meow.toml`. needs `EXTERIA_TC EXTERIA_SDK_V7 EXTERIA_SDK_V64 EXTERIA_OPENSSL_V7 EXTERIA_OPENSSL_V64 EXTERIA_VIDEO_V7 EXTERIA_VIDEO_V64 EXTERIA_PYTHON_V7 EXTERIA_PYTHON_V64 EXTERIA_PYTHON_BUNDLE`, optional `EXTERIA_CRT_V7` (the `crt1.3.1.o` of the armv7 sdk when left out) and `MEOW_LDID` (the ldid of the toolchain when left out). api id and hash come from `local/credentials.env` (`EXTERIA_API_ID`, `EXTERIA_API_HASH`). output: `build/ios/Exteria-v<version>.ipa`, its `.sha256` and `build/ios/Exteria-v<version>.deb`.
 
 - `meow doctor`: the toolchain and sdks meow found
 - `meow build check-symbols`: imports of the armv7 slice against the ios 5 runtime, needs `EXTERIA_SDK_V5`
@@ -100,7 +100,7 @@ built with [meow](https://github.com/sqmrak/meow), see `meow.toml`. needs `EXTER
 ## install
 
 ```bash
-meow install --host <device-ip> --legacy build/ios/exteria_<version>.deb
+meow install --host <device-ip> --legacy build/ios/Exteria-v<version>.deb
 ```
 
 the postinst of the deb copies the bundle to `/Applications` on a rootful system, makes `mobile:wheel` the owner (or the app cannot change its own icon on ios 6) and runs `uicache`.

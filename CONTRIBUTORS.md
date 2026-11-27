@@ -89,7 +89,7 @@ make test
 meow build                           # the ipa, its sha256 and the deb for /var/jb
 ```
 
-the build is [meow](https://github.com/sqmrak/meow), `meow.toml` holds the compile graph, the ipa, the deb and their checks. `meow plan` shows what is stale, `meow why` says why, `meow build ipa` and `meow build deb` build one package. output: `build/ios/Exteria-v<version>.ipa`, `build/ios/Exteria-v<version>.ipa.sha256`, `build/ios/exteria_<version>.deb`. a full build takes about ten minutes, a header change rebuilds only the sources that include it.
+the build is [meow](https://github.com/sqmrak/meow), `meow.toml` holds the compile graph, the ipa, the deb and their checks. `meow plan` shows what is stale, `meow why` says why, `meow build ipa` and `meow build deb` build one package. output: `build/ios/Exteria-v<version>.ipa`, `build/ios/Exteria-v<version>.ipa.sha256`, `build/ios/Exteria-v<version>.deb`. a full build takes about ten minutes, a header change rebuilds only the sources that include it.
 
 after the build, check the artifact and not only the exit code. meow checks both slices, the deployment targets, the linked libraries and the signature of the binaries before it packs them, and the layout of the ipa and the deb after. also:
 
@@ -131,7 +131,7 @@ make test-icons
 jailbroken devices only. the ipa is signed with ldid.
 
 ```bash
-meow install --host <device-ip> --legacy build/ios/exteria_<version>.deb
+meow install --host <device-ip> --legacy build/ios/Exteria-v<version>.deb
 ```
 
 - the postinst makes `mobile:wheel` the owner of the bundle. a root-owned bundle breaks the icon change on ios 6, since the app rewrites its own `Info.plist` as `mobile`

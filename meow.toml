@@ -359,7 +359,7 @@ outputs = ["build/ios/Exteria-v${field:packaging/deb/control:Version}.ipa.sha256
 # every icon chosen for an app in /Applications, and the files of the home screen of ios 5 and 6 carry the gloss
 # springboard does not add, so the deb carries its own icons
 [deb.deb]
-output = "build/ios/exteria_${field:packaging/deb/control:Version}.deb"
+output = "build/ios/Exteria-v${field:packaging/deb/control:Version}.deb"
 control = "packaging/deb/control"
 scripts = { postinst = "packaging/deb/postinst", postrm = "packaging/deb/postrm" }
 prefix = "var/jb"
