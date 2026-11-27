@@ -264,8 +264,8 @@ static NSString *ExteriaNightStateText(void) {
     {
         ExteriaThemeListView *themes = [[[ExteriaThemeListView alloc] init] autorelease];
         ExteriaWeakReference *shownThemes = [ExteriaWeakReference referenceTo:themes];
-        themes.chooseHandler = ^(BOOL toClassic, BOOL toDark) {
-            [(ExteriaChatSettingsController *)weak.target applyThemeClassic:toClassic dark:toDark from:((ExteriaThemeListView *)shownThemes.target).tapPoint];
+        themes.chooseHandler = ^(BOOL toClassic, BOOL toDark, BOOL toOLED) {
+            [(ExteriaChatSettingsController *)weak.target applyThemeClassic:toClassic dark:toDark oled:toOLED from:((ExteriaThemeListView *)shownThemes.target).tapPoint];
         };
         [themeRows addObject:[ExteriaSettingsRow viewRowWithView:themes height:^CGFloat(CGFloat width) { (void)width; return [ExteriaThemeListView height]; }]];
     }
@@ -578,10 +578,11 @@ static NSString *ExteriaNightStateText(void) {
 
 
 /* the colors spread from the point that was touched */
-- (void)applyThemeClassic:(BOOL)classic dark:(BOOL)dark from:(CGPoint)origin {
+- (void)applyThemeClassic:(BOOL)classic dark:(BOOL)dark oled:(BOOL)oled from:(CGPoint)origin {
     ExteriaImportedThemeUseBuiltin(dark);
     ExteriaThemeStoreClassic(classic);
     ExteriaThemeStoreDark(dark);
+    ExteriaThemeStoreOLED(oled);
     [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaThemeDidChangeNotification object:nil
                                                       userInfo:[NSDictionary dictionaryWithObject:[NSValue valueWithCGPoint:origin] forKey:ExteriaThemeOriginKey]];
 }

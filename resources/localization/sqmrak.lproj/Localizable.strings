@@ -1426,8 +1426,9 @@
 "night.sun.polarday" = "сегодня солнце не заходит, поэтому ночная тема выключена весь день.";
 "night.sun.denied" = "не удалось определить местоположение. разрешите его в настройках устройства и попробуйте ещё раз.";
 "chatset.theme.modern" = "современная";
-"chatset.theme.classic" = "скевоморфическая";
-"chatset.theme.classic.unavailable" = "к сожалению, скевоморфическая тема работает только на ios 10 и ниже :(";
+"chatset.theme.oled" = "современная тёмная (oled)";
+"chatset.theme.classic" = "классическая";
+"chatset.theme.classic.unavailable" = "к сожалению, классическая тема работает только на ios 10 и ниже :(";
 "chatset.theme.day.short" = "светлая";
 "chatset.theme.night.short" = "тёмная";
 "chatset.wallpaper" = "изменить тему и обои";

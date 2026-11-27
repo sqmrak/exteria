@@ -1420,8 +1420,9 @@
 "night.sun.polarday" = "The sun does not set today, so the night theme is off all day.";
 "night.sun.denied" = "The location could not be found. Allow it in the settings of the device and try again.";
 "chatset.theme.modern" = "Modern";
-"chatset.theme.classic" = "Skeuomorphic";
-"chatset.theme.classic.unavailable" = "Unfortunately, the skeuomorphic theme only works on iOS 10 and earlier :(";
+"chatset.theme.oled" = "Modern dark (OLED)";
+"chatset.theme.classic" = "Classic";
+"chatset.theme.classic.unavailable" = "Unfortunately, the classic theme only works on iOS 10 and earlier :(";
 "chatset.theme.day.short" = "Day";
 "chatset.theme.night.short" = "Night";
 "chatset.wallpaper" = "Change Theme and Wallpaper";

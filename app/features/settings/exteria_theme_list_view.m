@@ -17,23 +17,26 @@
 #define SIDE_PAD 16.0
 #define TOP_PAD 14.0
 #define RING 3.0
-#define THEME_COUNT 4
+#define THEME_COUNT 5
 /* the scrolling area stops this far from the edges of the rounded list, so a card that slides out is cut inside the corner and never shows beside it */
 #define EDGE 8.0
 
 @interface ExteriaThemeCard : UIControl {
     BOOL _classic;
     BOOL _dark;
+    BOOL _oled;
 }
-- (id)initWithClassic:(BOOL)classic dark:(BOOL)dark;
+- (id)initWithClassic:(BOOL)classic dark:(BOOL)dark oled:(BOOL)oled;
 @property (nonatomic, readonly) BOOL classic;
 @property (nonatomic, readonly) BOOL dark;
+@property (nonatomic, readonly) BOOL oled;
 @end
 
 @implementation ExteriaThemeCard
 
 @synthesize classic = _classic;
 @synthesize dark = _dark;
+@synthesize oled = _oled;
 
 static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CGFloat radius) {
     UIView *bubble = [[[UIView alloc] initWithFrame:frame] autorelease];
@@ -44,11 +47,12 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
     return bubble;
 }
 
-- (id)initWithClassic:(BOOL)classic dark:(BOOL)dark {
+- (id)initWithClassic:(BOOL)classic dark:(BOOL)dark oled:(BOOL)oled {
     self = [super initWithFrame:CGRectMake(0, 0, CARD_WIDTH, CARD_HEIGHT + LABEL_HEIGHT)];
     if (!self) return nil;
     _classic = classic;
     _dark = dark;
+    _oled = oled;
     UIView *picture = [[[UIView alloc] initWithFrame:CGRectMake(0, 0, CARD_WIDTH, CARD_HEIGHT)] autorelease];
     picture.layer.cornerRadius = CARD_RADIUS;
     picture.layer.masksToBounds = YES;
@@ -61,9 +65,11 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
     UIImageView *wallpaper = [[[UIImageView alloc] initWithFrame:picture.bounds] autorelease];
     ExteriaImportedThemeSuspend(YES);
     ExteriaApplyWallpaperStyle(wallpaper, classic, dark);
+    if (oled) { wallpaper.image = nil; wallpaper.backgroundColor = [UIColor blackColor]; }
     [picture addSubview:wallpaper];
     UIColor *incoming = nil, *outgoing = nil;
     ExteriaThemePreviewColors(classic, dark, &incoming, &outgoing, NULL, NULL);
+    if (oled) incoming = [UIColor colorWithWhite:0.125 alpha:1];
     /* two bubbles of the theme: theirs on the left, ours on the right, and a shorter reply under them */
     ExteriaThemeBubble(picture, incoming, CGRectMake(10, 18, 58, 26), 11);
     ExteriaThemeBubble(picture, outgoing, CGRectMake(CARD_WIDTH - 10 - 62, 52, 62, 26), 11);
@@ -84,7 +90,7 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
     name.numberOfLines = 2;
     name.font = ExteriaFontMedium(12);
     name.tag = 2;
-    name.text = [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(classic ? @"chatset.theme.classic" : @"chatset.theme.modern", nil),
+    name.text = oled ? NSLocalizedString(@"chatset.theme.oled", nil) : [NSString stringWithFormat:@"%@\n%@", NSLocalizedString(classic ? @"chatset.theme.classic" : @"chatset.theme.modern", nil),
                  NSLocalizedString(dark ? @"chatset.theme.night.short" : @"chatset.theme.day.short", nil)];
     [self addSubview:name];
     self.accessibilityLabel = [name.text stringByReplacingOccurrencesOfString:@"\n" withString:@", "];
@@ -111,7 +117,7 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
 @interface ExteriaThemeListView () {
     UIScrollView *_scroll;
     NSMutableArray *_cards;
-    void (^_chooseHandler)(BOOL classic, BOOL dark);
+    void (^_chooseHandler)(BOOL classic, BOOL dark, BOOL oled);
     CGPoint _tapPoint;
 }
 @end
@@ -136,9 +142,9 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
     [self addSubview:_scroll];
     _cards = [[NSMutableArray alloc] init];
     /* modern by day and by night, then classic by day and by night */
-    static const BOOL styles[THEME_COUNT][2] = {{NO, NO}, {NO, YES}, {YES, NO}, {YES, YES}};
+    static const BOOL styles[THEME_COUNT][3] = {{NO, NO, NO}, {NO, YES, NO}, {NO, YES, YES}, {YES, NO, NO}, {YES, YES, NO}};
     for (int i = 0; i < THEME_COUNT; ++i) {
-        ExteriaThemeCard *card = [[[ExteriaThemeCard alloc] initWithClassic:styles[i][0] dark:styles[i][1]] autorelease];
+        ExteriaThemeCard *card = [[[ExteriaThemeCard alloc] initWithClassic:styles[i][0] dark:styles[i][1] oled:styles[i][2]] autorelease];
         [card addTarget:self action:@selector(cardTapped:) forControlEvents:UIControlEventTouchUpInside];
         [_scroll addSubview:card];
         [_cards addObject:card];
@@ -155,7 +161,7 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
 }
 
 - (void)refreshSelection {
-    for (ExteriaThemeCard *card in _cards) [card showSelected:card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark() && (card.classic || !ExteriaImportedThemeSelected(card.dark))];
+    for (ExteriaThemeCard *card in _cards) [card showSelected:card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark() && card.oled == ExteriaThemeIsOLED() && (card.classic || !ExteriaImportedThemeSelected(card.dark))];
 }
 
 - (void)cardTapped:(ExteriaThemeCard *)card {
@@ -164,9 +170,9 @@ static UIView *ExteriaThemeBubble(UIView *host, UIColor *color, CGRect frame, CG
                          [NSArray arrayWithObject:NSLocalizedString(@"notice.ok", nil)], 0, NO, nil);
         return;
     }
-    if (card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark() && (card.classic || !ExteriaImportedThemeSelected(card.dark))) return;
+    if (card.classic == ExteriaThemeIsClassic() && card.dark == ExteriaThemeIsDark() && card.oled == ExteriaThemeIsOLED() && (card.classic || !ExteriaImportedThemeSelected(card.dark))) return;
     _tapPoint = [card.superview convertPoint:card.center toView:nil];
-    if (_chooseHandler) _chooseHandler(card.classic, card.dark);
+    if (_chooseHandler) _chooseHandler(card.classic, card.dark, card.oled);
 }
 
 - (void)layoutSubviews {

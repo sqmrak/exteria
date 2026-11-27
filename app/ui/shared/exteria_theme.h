@@ -17,6 +17,8 @@ BOOL ExteriaThemeIsClassic(void);
 BOOL ExteriaThemeStoredDark(void);
 void ExteriaThemeStoreDark(BOOL dark);
 BOOL ExteriaThemeIsDark(void);
+BOOL ExteriaThemeIsOLED(void);
+void ExteriaThemeStoreOLED(BOOL enabled);
 void ExteriaThemeApply(BOOL dark);
 /* the status bar style of a tone: light content on dark, black content on light */
 UIStatusBarStyle ExteriaStatusBarStyle(BOOL dark);
