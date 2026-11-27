@@ -681,7 +681,10 @@ static NSString *ExteriaDecodeVoice(NSString *path, NSString **error) {
         return;
     }
     [self releasePlayer];
-    _item = [[AVPlayerItem playerItemWithURL:url] retain];
+    /* a vbr mp3 opened without precise timing gets a duration guessed from its first frames, and currentTime stopped at that guess while the sound went on,
+       so the slider froze partway once the item learned the real length */
+    NSDictionary *options = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:YES] forKey:AVURLAssetPreferPreciseDurationAndTimingKey];
+    _item = [[AVPlayerItem playerItemWithAsset:[AVURLAsset URLAssetWithURL:url options:options]] retain];
     _player = [[AVPlayer playerWithPlayerItem:_item] retain];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemEnded:) name:AVPlayerItemDidPlayToEndTimeNotification object:_item];
     [self applyVolume];
