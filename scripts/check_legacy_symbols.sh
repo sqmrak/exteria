@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# every symbol the armv7 slice imports must exist in the iOS 5 runtime, or dyld refuses to launch it
+# every strong symbol the armv7 slice imports must exist in the iOS 5 runtime, or dyld refuses to launch it. a weak import
+# binds to NULL there, so the code guards it at runtime; those are listed and do not fail
 set -euo pipefail
 
 BIN="${1:?usage: check_legacy_symbols.sh <fat executable>}"
@@ -9,11 +10,16 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
 "${TC}/lipo" -thin armv7 "${BIN}" -output "${WORK}/armv7"
-"${TC}/nm" -u "${WORK}/armv7" | awk '{print $NF}' | sort -u > "${WORK}/need"
+"${TC}/nm" -m -u "${WORK}/armv7" > "${WORK}/imports"
+# nm -m prints "(undefined) [weak] external _name (from Library)"
+pick='{ weak = 0; for (i = 1; i < NF; ++i) { if ($i == "weak") weak = 1; if ($i == "external") { if (weak == want) print $(i + 1); break } } }'
+awk -v want=0 "${pick}" "${WORK}/imports" | sort -u > "${WORK}/need"
+awk -v want=1 "${pick}" "${WORK}/imports" | sort -u > "${WORK}/weak"
+[[ -s "${WORK}/need" ]] || { echo "no imports read from the armv7 slice" >&2; exit 1; }
 
 libs=("${SDK5}"/usr/lib/*.dylib "${SDK5}"/usr/lib/system/*.dylib)
 libs+=("${SDK5}/System/Library/Frameworks/Accelerate.framework/Frameworks/vImage.framework/vImage")
-for name in UIKit Foundation Security CoreGraphics QuartzCore CoreFoundation CoreText ImageIO AVFoundation CoreMedia CoreVideo CoreAudio AudioToolbox CoreLocation CoreMotion MobileCoreServices CFNetwork AssetsLibrary AddressBook AddressBookUI; do
+for name in UIKit Foundation Security CoreGraphics QuartzCore CoreFoundation CoreText ImageIO AVFoundation CoreMedia CoreVideo CoreAudio AudioToolbox CoreLocation CoreMotion MobileCoreServices CFNetwork AssetsLibrary AddressBook AddressBookUI OpenGLES MediaPlayer QuickLook; do
     libs+=("${SDK5}/System/Library/Frameworks/${name}.framework/${name}")
 done
 for lib in "${libs[@]}"; do
@@ -28,12 +34,17 @@ if [[ -n "${missing}" ]]; then
     echo "${missing}" >&2
     exit 1
 fi
-echo "armv7 imports: $(wc -l < "${WORK}/need") symbols, all present in ${SDK5##*/}"
+absent_weak="$(comm -23 "${WORK}/weak" "${WORK}/have")"
+if [[ -n "${absent_weak}" ]]; then
+    echo "weak imports that are NULL on iOS 5, each must be guarded where it is used:"
+    echo "${absent_weak}"
+fi
+echo "armv7 imports: $(wc -l < "${WORK}/need") strong symbols, all present in ${SDK5##*/}, $(wc -l < "${WORK}/weak") weak"
 
 # the arm64 slice is built against a newer sdk, which moves classes into frameworks that ios 10 and 11
 # do not have (AVAudioPlayer lives in AVFAudio there)
 "${TC}/lipo" -thin arm64 "${BIN}" -output "${WORK}/arm64"
-allowed=" Accelerate AddressBook AddressBookUI AssetsLibrary AudioToolbox AVFoundation CFNetwork CoreAudio CoreFoundation CoreGraphics CoreLocation CoreMedia CoreMotion CoreText CoreVideo Foundation ImageIO MediaPlayer MobileCoreServices QuartzCore Security UIKit "
+allowed=" Accelerate AddressBook AddressBookUI AssetsLibrary AudioToolbox AVFoundation CFNetwork CoreAudio CoreFoundation CoreGraphics CoreLocation CoreMedia CoreMotion CoreText CoreVideo Foundation ImageIO MediaPlayer MobileCoreServices OpenGLES QuartzCore QuickLook Security UIKit "
 bad=""
 while read -r path _; do
     case "${path}" in
