@@ -66,8 +66,7 @@ checked against a jvm by `tests/fixtures/dex/src/{Streams,Api2,Api3,Api4,Certs}.
 - `SimpleTimeZone` ignores `setStartYear`
 - android classes outside `python/shim/android` do not exist; there is no binder, no google services, no android `.so`
 - `Cipher` and `Signature` are python and suit small data
-- the native machine is compiled for armv7 (ios 5) and arm64 and linked into the app, but its tests ran on the host only
-- nothing of the dex runtime has run on a phone
+- the native machine is compiled for armv7 (ios 5) and arm64 and linked into the app; its tests run on the host
 
 ## tests
 

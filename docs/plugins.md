@@ -2,8 +2,6 @@
 
 a plugin is a python file in the exteraGram plugin format. the app runs it with cpython 3.11 and the sdk of [exteraless](https://github.com/exteraless/exteraless) (`third_party/exteraless`, local changes in its `PATCHES`). the sdk reaches the app through `app.exteraless.plugins.PythonBridge`, `PluginServices` and `java.jclass`. `python/shim` supplies all three for ios, and the android classes a plugin imports.
 
-nothing here has run on a phone unless a line says so. see [not run on a phone](#not-run-on-a-phone).
-
 ## use
 
 - put a `.plugin`, `.py` or `.elyx` file in `Documents/Plugins`, then import it in settings, plugins, or open a `.plugin` from a chat. import copies the file and never turns it on
@@ -183,22 +181,6 @@ with the real plugin file, a local server and the stand-in app of `tests/python/
 - `pixel_eyes`: loads its core from `InMemoryDexClassLoader` and builds its settings page. it failed on `Double.valueOf(String)` until the dex runtime got it (`Float`, `Short` and `Byte` too)
 - `deleted_gift_sender`: loads, and `org.telegram.tgnet.tl.TL_stars` has `TL_starGift`, `TL_starGifts`, `TL_starGiftsNotModified` and `Tl_starsRating` as plain records. the response of `getStarGifts` never reaches python, so the plugin shows no gifts
 - refused: `unlim_accounts` (java bytecode and a native library for the account limit of the android client), `ios_like_selection` (screens of the android client: `ChatActionCell`, `ChannelAdminLogActivity`, `ReactionsContainerLayout`, `ActionRow`), `meeow_reswaga.elyx` (android views, 7.6 MB)
-
-## not run on a phone
-
-host tests and a build for both slices are all that backs these. each needs a device pass:
-
-- `message_cleaner` on a real chat, the bottom bar, `music_tab`
-- `settings_wallpaper`: the page, the picker and the layer
-- `playlist_to_profile`: download by yt-dlp, upload, `saveMusic`
-- `device_fingerprint_spoofer`: whether the server shows the new device in the devices screen
-- `zwyCrossfade`: a second `AVPlayer` next to the first, the volume of `AVPlayer` (ios 7 on), the audio mix that stands in for it on ios 5 and 6, the quiet start of a song while the plugin sets its volume
-- `story_scheduler`: the button and the long press on the story screen, the wheel over it, the publish at the due time, the time zone of the phone in `datetime` (python takes the epoch and the parts from the app, not from its own clock)
-- `audiovizualizer_plugin.elyx`: the drawing of the bars
-- the pickers of zwylib, `onFragmentDestroy`
-- `RenderEffect`, the software rasterizer, `Canvas.drawText` glyph look, dex runtime as a whole
-- `mutagen` and `yt-dlp` import with the device stdlib, no download or tag write was run
-- the static extensions (`pyexpat`, `bz2`, `lzma`, `sqlite3`) are checked for symbols and for the imports of the ios 5 runtime, not run
 
 ## build and test
 

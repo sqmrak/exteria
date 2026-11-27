@@ -114,7 +114,6 @@ make test-icons
 - c tests are `tests/core/test_*.c`, one binary each, built with `-Wall -Wextra -Werror -Wconversion`. they use fake servers (`fake_mt_server.c`, `fake_tcp_server.c`) on local sockets and byte vectors, never a public service
 - python tests are `tests/python`, run by cpython 3.11 against a stand-in for the app (`fakeapp.py`)
 - the iphone toolchain on `PATH` breaks host builds (`gcc` becomes its clang, `--gdwarf-5` fails). run host tests with `PATH=/usr/local/bin:/usr/bin:/bin make CC=gcc -j8 test` from `tests/`
-- tests prove the host side. what needs a real device is said in the commit and in the docs, not assumed
 
 ## add a feature
 

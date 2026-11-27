@@ -89,5 +89,3 @@ plural keys of other forms show up in that diff, which is right.
 
 1. choose the language in the app and walk the screens that have long words: the tab bar, settings rows, the chat input, alerts
 2. a text that is too long for its place is shortened in the translation, not in the layout
-
-nothing in the repository tests the texts. how a script looks in the fonts of an old system has to be seen on a real device.
