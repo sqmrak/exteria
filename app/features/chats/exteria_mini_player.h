@@ -15,6 +15,8 @@
 /* the modern card is a rounded rectangle; as a pill it is rounded to half its height and floats with room around it, so inside a chat it does not hang from the header or the
    pinned message under it */
 @property (nonatomic, assign) BOOL pill;
+/* the strip stands inside a card of the chat together with the pinned message, as in exteraGram: no ground of its own and no room around it, the card behind it is the chat's */
+@property (nonatomic, assign) BOOL embedded;
 /* the strip inside another screen of the player (the lyrics) does not open the sheet of the player on a tap and does not end the music with its last key: when these are set the
    tap on the name and the last key call them instead */
 @property (nonatomic, copy) void (^openHandler)(void);

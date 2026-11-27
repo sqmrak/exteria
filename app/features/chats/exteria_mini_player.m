@@ -59,6 +59,7 @@
     CGFloat _fraction;
     BOOL _showing;
     BOOL _pill;
+    BOOL _embedded;
     UIColor *_surface;
     void (^_changeHandler)(void);
     void (^_openHandler)(void);
@@ -70,6 +71,7 @@
 
 @synthesize showing = _showing;
 @synthesize pill = _pill;
+@synthesize embedded = _embedded;
 @synthesize changeHandler = _changeHandler;
 @synthesize openHandler = _openHandler;
 @synthesize closeHandler = _closeHandler;
@@ -139,14 +141,22 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [self setNeedsLayout];
 }
 
+- (void)setEmbedded:(BOOL)embedded {
+    if (embedded == _embedded) return;
+    _embedded = embedded;
+    [self applyScheme];
+    [self setNeedsLayout];
+}
+
 - (UIColor *)key { return _tone ? ExteriaStripTonalPrimary(_tone) : ExteriaColorAccent(); }
 
 /* the card in the colors of its key: the surface, the tile, the keys, the ring. a tone makes the card a scheme of that color, no tone is the accent of the app */
 - (void)applyScheme {
     if (ExteriaThemeIsClassic()) return;
     UIColor *key = [self key];
-    BOOL wave = _tone != nil;
-    _card.backgroundColor = _surface ? _surface : ExteriaStripContainer(ExteriaColorCard(), key);
+    BOOL toned = _tone != nil;
+    UIColor *ground = _surface ? _surface : ExteriaStripContainer(ExteriaColorCard(), key);
+    _card.backgroundColor = _embedded ? [UIColor clearColor] : ground;
     _lead.backgroundColor = ExteriaStripTile(key);
     _ringArc.strokeColor = key.CGColor;
     _ringTrack.strokeColor = ExteriaMixedColor(ground, key, 0.35).CGColor;
@@ -570,7 +580,7 @@ static void ExteriaRingSetStroke(CAShapeLayer *layer, NSString *keyPath, CGFloat
 /* the card keeps its own height while the owner animates the strip open or shut, and the strip's clipping hides the rest, so the content does not squeeze */
 - (void)layoutCard {
     CGFloat width = self.bounds.size.width;
-    _card.frame = CGRectMake(CARD_SIDE, _pill ? PILL_GAP : 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
+    _card.frame = CGRectMake(CARD_SIDE, _pill && !_embedded ? PILL_GAP : 0, MAX(0, width - 2 * CARD_SIDE), CARD_HEIGHT);
     CAShapeLayer *shape = (CAShapeLayer *)_card.layer.mask;
     if (![shape isKindOfClass:[CAShapeLayer class]]) {
         shape = [CAShapeLayer layer];

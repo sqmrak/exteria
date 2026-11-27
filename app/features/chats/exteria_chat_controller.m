@@ -406,6 +406,8 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     ExteriaAttachFlow *_attach;
     ExteriaFullChannel *_channelFull;
     UIControl *_pinnedBar;
+    /* the modern card under the header that holds the pinned message and the player together, as exteraGram has them; nil in the classic theme */
+    UIView *_dock;
     /* the bar is on its way out: it still draws, and the layout already gives it no height */
     BOOL _pinnedBarCollapsing;
     UIControl *_voiceBar;
@@ -669,6 +671,7 @@ static NSString *ExteriaMessageSummary(ExteriaMessage *message);
     [_selectionBar release];
     [_selectedIds release];
     [_pinnedBar release];
+    [_dock release];
     [_voiceBar release];
     [_voiceTitle release];
     [_voiceInfo release];
@@ -881,6 +884,7 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     /* the song that plays follows the person into the chat, with the buttons to change it; the strip has no height while nothing plays */
     _miniPlayer = [[ExteriaMiniPlayer alloc] init];
     _miniPlayer.pill = YES;
+    _miniPlayer.embedded = !classic;
     ExteriaWeakReference *playerWeak = _weak;
     _miniPlayer.changeHandler = ^{
         ExteriaChatController *chat = playerWeak.target;
@@ -1019,6 +1023,15 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
         [_pinnedBar addSubview:foot];
     }
     [root addSubview:_pinnedBar];
+    if (!classic) {
+        _pinnedBar.backgroundColor = [UIColor clearColor];
+        _dock = [[UIView alloc] init];
+        _dock.backgroundColor = ExteriaColorBar();
+        _dock.layer.cornerRadius = 16;
+        _dock.userInteractionEnabled = NO;
+        _dock.hidden = YES;
+        [root insertSubview:_dock belowSubview:_miniPlayer];
+    }
     /* the voice chat that runs in a group or channel: a bar under the pinned message with who is in it and the way to join */
     _voiceBar = [[UIControl alloc] init];
     _voiceBar.backgroundColor = ExteriaColorBar();
@@ -2949,28 +2962,44 @@ static NSString *ExteriaBareEmoji(NSString *emoji) {
     BOOL wasBottom = _stickToBottom;
     CGRect previousViewport = _table.frame;
     CGFloat previousOffset = _table.contentOffset.y;
-    _pinnedBar.frame = CGRectMake(left, headerHeight, width, pinnedHeight);
+    /* the modern chat holds the pinned message and the player in one card that floats under the header with room around it; the classic one keeps a bar and a strip */
+    CGFloat playerHeight = _miniPlayer.showing ? (_dock ? [ExteriaMiniPlayer height] : [ExteriaMiniPlayer heightForPill:YES]) : 0;
+    CGFloat listTop;
+    if (_dock) {
+        CGFloat side = 8, gap = 6;
+        BOOL any = pinnedHeight > 0 || playerHeight > 0;
+        CGFloat top = headerHeight + (any ? gap : 0);
+        _pinnedBar.frame = CGRectMake(left + side, top, width - 2 * side, pinnedHeight);
+        _miniPlayer.frame = CGRectMake(left, top + pinnedHeight, width, playerHeight);
+        _dock.frame = CGRectMake(left + side, top, width - 2 * side, pinnedHeight + playerHeight);
+        _dock.hidden = !any;
+        /* the list runs under the card, which keeps its first message clear with the inset below */
+        listTop = headerHeight;
+        headerHeight = top + pinnedHeight + playerHeight + (any ? gap : 0);
+    } else {
+        _pinnedBar.frame = CGRectMake(left, headerHeight, width, pinnedHeight);
+        headerHeight += pinnedHeight;
+        /* the pinned message stands right under the header and the strip is a pill under it, over the voice bar, as in the android client, which also gives the chat list beside it on a tablet a strip of its own */
+        listTop = headerHeight;
+        _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
+        headerHeight += playerHeight;
+    }
+    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
+    _miniPlayer.hidden = (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
+    CGFloat pinnedWidth = _pinnedBar.frame.size.width;
     UIView *pinnedFoot = [_pinnedBar viewWithTag:PINNED_FOOT_TAG];
-    pinnedFoot.frame = CGRectMake(0, pinnedHeight - 1.0 / ExteriaScreenScale(), width, 1.0 / ExteriaScreenScale());
+    pinnedFoot.frame = CGRectMake(0, pinnedHeight - 1.0 / ExteriaScreenScale(), pinnedWidth, 1.0 / ExteriaScreenScale());
     _pinnedTitle.font = ExteriaFontSemibold(13);
     _pinnedText.font = ExteriaFontRegular(14);
     CGFloat pinnedX = _pinnedThumb.hidden ? 24 : 24 + 34 + 10;
     CGFloat pinnedRight = _pinnedListButton.hidden ? 12 : 52;
     _pinnedLine.frame = CGRectMake(12, 0, 2, PINNED_HEIGHT);
     _pinnedThumb.frame = CGRectMake(24, (PINNED_HEIGHT - 34) / 2, 34, 34);
-    _pinnedListButton.frame = CGRectMake(width - 48, 0, 44, PINNED_HEIGHT);
-    _pinnedTitle.frame = CGRectMake(pinnedX, 6, width - pinnedX - pinnedRight, 17);
-    _pinnedText.frame = CGRectMake(pinnedX, 24, width - pinnedX - pinnedRight, 18);
+    _pinnedListButton.frame = CGRectMake(pinnedWidth - 48, 0, 44, PINNED_HEIGHT);
+    _pinnedTitle.frame = CGRectMake(pinnedX, 6, pinnedWidth - pinnedX - pinnedRight, 17);
+    _pinnedText.frame = CGRectMake(pinnedX, 24, pinnedWidth - pinnedX - pinnedRight, 18);
     _toEnd.frame = CGRectMake(CGRectGetMaxX(column) - 56, inputY - contextHeight - 56, 44, 44);
     [self placeReactionJump];
-    headerHeight += pinnedHeight;
-    /* the pinned message stands right under the header and the strip is a pill under it, over the voice bar, as in the android client, which also gives the chat list beside it on a tablet a strip of its own */
-    CGFloat listTop = headerHeight;
-    CGFloat playerHeight = _miniPlayer.showing ? [ExteriaMiniPlayer heightForPill:YES] : 0;
-    /* a strip that is collapsing stays in the tree until its height reaches zero, which its own animation finishes */
-    _miniPlayer.hidden = (!_miniPlayer.showing && _miniPlayer.frame.size.height < 1);
-    _miniPlayer.frame = CGRectMake(left, headerHeight, width, playerHeight);
-    headerHeight += playerHeight;
     _toast.frame = CGRectMake(CGRectGetMidX(column) - 60, headerHeight + 10, 120, 28);
     CGFloat voiceHeight = _voiceBar.hidden ? 0 : VOICE_HEIGHT;
     _voiceBar.frame = CGRectMake(left, headerHeight, width, voiceHeight);
