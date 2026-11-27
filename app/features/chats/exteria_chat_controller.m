@@ -877,7 +877,8 @@ static UILabel *ExteriaChatLabel(UIColor *color, NSInteger alignment) {
     self.view = root;
 
     BOOL classic = ExteriaThemeIsClassic();
-    _wallpaper = [[UIImageView alloc] init];
+    /* a channel or chosen wallpaper can be bright even under the oled palette, so the view dims it by its own brightness */
+    _wallpaper = [[ExteriaDimmedWallpaperView alloc] init];
     ExteriaApplyChatWallpaperForChat(_wallpaper, ExteriaThemeIsDark(), _dialog.peerKind, _dialog.peerId);
     [root addSubview:_wallpaper];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wallpaperDidChange) name:ExteriaWallpaperDidChangeNotification object:nil];

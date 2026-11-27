@@ -624,7 +624,9 @@ void ExteriaApplyWallpaperStyle(UIImageView *view, BOOL classic, BOOL dark) {
     int angle = 90;
     NSUInteger importedColors = !classic ? ExteriaImportedThemeWallpaperGradient(values, &angle) : 0;
     BOOL importedBackground = !classic && ExteriaImportedThemeColor("chat.defaultWallpaper") != nil;
-    view.image = classic || importedColors || importedBackground ? nil : ExteriaStandardWallpaperImage(dark);
+    BOOL oled = dark && ExteriaThemeIsOLED();
+    /* the oled chat keeps the doodles of the dark wallpaper as white lines on pure black, with no hue turn since the lines are grey */
+    view.image = classic || importedColors || importedBackground ? nil : (oled ? [UIImage imageNamed:@"chat_bg_oled.jpg"] : ExteriaStandardWallpaperImage(dark));
     if (importedColors) view.image = ExteriaImportedWallpaperGradientImage(values, importedColors, angle, [UIScreen mainScreen].bounds.size);
     /* the classic wallpaper is a linen tile, laid as a pattern so the system repeats it at any size */
     view.backgroundColor = classic ? ExteriaClassicLinenColor(dark) : ExteriaColorChatBackground();
@@ -751,3 +753,69 @@ UIImage *ExteriaChannelWallpaperImage(const exteria_chat_wallpaper *paper, UIIma
     return image;
 }
 
+
+/* the mean brightness of a picture, read from an 8 by 8 redraw so a full screen photo costs nothing; -1 when it cannot be read */
+static CGFloat ExteriaImageMeanBrightness(UIImage *image) {
+    if (!image.CGImage) return -1;
+    enum { side = 8 };
+    uint8_t pixels[side * side * 4];
+    memset(pixels, 0, sizeof(pixels));
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    if (!space) return -1;
+    CGContextRef context = CGBitmapContextCreate(pixels, side, side, 8, side * 4, space, kCGImageAlphaPremultipliedLast);
+    CGColorSpaceRelease(space);
+    if (!context) return -1;
+    CGContextSetInterpolationQuality(context, kCGInterpolationMedium);
+    CGContextDrawImage(context, CGRectMake(0, 0, side, side), image.CGImage);
+    CGContextRelease(context);
+    /* premultiplied, so a transparent pattern tile counts as dark, which is what shows through it on black */
+    double sum = 0;
+    for (int i = 0; i < side * side; i++) sum += 0.299 * pixels[i * 4] + 0.587 * pixels[i * 4 + 1] + 0.114 * pixels[i * 4 + 2];
+    return (CGFloat)(sum / (side * side * 255.0));
+}
+
+/* the shade that brings a picture of this mean brightness down to about 0.12, none for a picture that is darker already (the white doodles of the oled wallpaper would
+   fade under one), and never over 0.85 so that a white one still shows its shape */
+static CGFloat ExteriaWallpaperShadeAlpha(CGFloat brightness) {
+    if (brightness < 0) return 0.55f;
+    CGFloat alpha = brightness > 0.12f ? 1 - 0.12f / brightness : 0;
+    return MIN(0.85f, alpha);
+}
+
+@implementation ExteriaDimmedWallpaperView {
+    UIView *_shade;
+    UIImage *_shadedFor;
+}
+
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    _shade = [[UIView alloc] initWithFrame:self.bounds];
+    _shade.backgroundColor = [UIColor blackColor];
+    _shade.userInteractionEnabled = NO;
+    _shade.alpha = 0;
+    [self addSubview:_shade];
+    return self;
+}
+
+/* the view is made with an empty frame, and autoresizing does not grow a subview from zero */
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    _shade.frame = self.bounds;
+}
+
+- (void)setImage:(UIImage *)image {
+    [super setImage:image];
+    if (image == _shadedFor) return;
+    [_shadedFor release];
+    _shadedFor = [image retain];
+    _shade.alpha = image && ExteriaThemeIsOLED() ? ExteriaWallpaperShadeAlpha(ExteriaImageMeanBrightness(image)) : 0;
+}
+
+- (void)dealloc {
+    [_shade release];
+    [_shadedFor release];
+    [super dealloc];
+}
+
+@end

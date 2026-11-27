@@ -79,3 +79,8 @@ void ExteriaDropChatWallpaper(int32_t peerKind, long long peerId);
 
 /* the background color of the classic chat: the linen of the customization, its tile laid at the chosen strength over the plain color, or the plain color alone */
 UIColor *ExteriaClassicLinenColor(BOOL dark);
+
+/* the wallpaper of a chat under the oled palette: a layer above the picture takes the brightness of a bright one down to what the black bars and the bubbles can sit
+   on, and leaves a dark one nearly as it is. nothing is dimmed outside the oled palette, and a view without a picture stays black */
+@interface ExteriaDimmedWallpaperView : UIImageView
+@end
