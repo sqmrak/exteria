@@ -83,6 +83,7 @@
 @synthesize giftCard = _giftCard;
 @synthesize senderName = _senderName;
 @synthesize transcript = _transcript;
+@synthesize transcriptFrame = _transcriptFrame;
 @synthesize senderTag = _senderTag;
 @synthesize senderTagLayout = _senderTagLayout;
 @synthesize senderTagOrigin = _senderTagOrigin;
@@ -942,6 +943,17 @@ static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
     _timeSize = CGSizeMake(ceil(metaWidth) + 10, 18);
     _timeOrigin = CGPointMake(side - _timeSize.width, side + 2);
     _height = top + side + _timeSize.height + 3;
+    /* a transcribed video message shows its words on a plate of the bubble's color under the time, on the side of the circle, as the other clients do */
+    _transcriptFrame = CGRectZero;
+    if (_transcript.length) {
+        CGFloat room = MIN(width - 2 * SIDE_MARGIN, MAX(side, 260)) - 2 * PAD_X;
+        UIFont *font = ExteriaFontRegular((CGFloat)ExteriaChatTextSize());
+        CGSize words = [ExteriaTextLayout layoutForText:_transcript entities:nil font:font color:ExteriaColorBubbleText(_message.outgoing)
+                                              linkColor:ExteriaColorBubbleText(_message.outgoing) width:MAX(40, room) maxLines:0 flush:0].size;
+        CGFloat plateWidth = ceil(words.width) + 2 * PAD_X, plateHeight = ceil(words.height) + 16;
+        _transcriptFrame = CGRectMake(_message.outgoing ? side - plateWidth : 0, side + _timeSize.height + 6, plateWidth, plateHeight);
+        _height += plateHeight + 6;
+    }
 }
 
 #pragma mark poll

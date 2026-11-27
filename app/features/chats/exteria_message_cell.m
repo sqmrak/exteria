@@ -9,6 +9,7 @@
 #import "exteria_alert.h"
 #import "exteria_avatar_view.h"
 #import "exteria_developers.h"
+#import "exteria_emoji_label.h"
 #import "exteria_emoji_store.h"
 #import "exteria_sticker_library.h"
 #import "exteria_slots_view.h"
@@ -1854,6 +1855,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     [_body setNeedsDisplay];
     _picture.hidden = YES;
     _map.hidden = YES;
+    _transcriptPlate.hidden = YES;
     if (item.message.media.kind != EXTERIA_PREVIEW_LOCATION) [_map cancelTiles];
     _gifLabel.hidden = YES;
     _spoilerCover.hidden = YES;
@@ -1952,6 +1954,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
         [self placeMediaButtonOver:_picture.frame];
         /* a round message starts to come as soon as it is on screen, with the ring turning on its button */
         [self prepareMediaButtonLoading:YES];
+        [self showTranscriptOfItem:item bubble:bubble];
         pictureOnly = YES;
     } else if (item.albumFrames.count) {
         [self showAlbumForItem:item bubble:bubble];

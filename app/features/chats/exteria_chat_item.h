@@ -129,6 +129,7 @@ CGFloat ExteriaPollVotersWidth(NSUInteger count);
     CGRect _commentsFrame;
     CGRect _shareFrame;
     CGRect _pictureFrame;
+    CGRect _transcriptFrame;
     CGRect _fileFrame;
     /* a poll: the question and the line about its kind, an answer per row, the button that votes or takes the vote back, and the count of votes */
     ExteriaTextLayout *_pollQuestionLayout;
@@ -294,6 +295,8 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly) CGRect markupFrame;
 @property (nonatomic, readonly, retain) NSData *markupButtons;
 @property (nonatomic, readonly) CGRect pictureFrame;
+/* the plate under a video message that holds its transcript, in the coordinates of the circle; empty without a transcript */
+@property (nonatomic, readonly) CGRect transcriptFrame;
 @property (nonatomic, readonly) CGRect fileFrame;
 /* a call service message drawn as a bubble of its own */
 @property (nonatomic, readonly) BOOL call;
