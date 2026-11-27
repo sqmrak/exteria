@@ -3,8 +3,16 @@
 #import "exteria_media_cache.h"
 #import "exteria_message.h"
 
+/* where the symbols of the pattern stand, after the places the official clients use: round a gift at the top of its own screen, round the gift on the card of a chat,
+   and round a small gift in a grid */
+typedef enum {
+    ExteriaGiftPatternHeader,
+    ExteriaGiftPatternCard,
+    ExteriaGiftPatternTile
+} ExteriaGiftPatternLayout;
+
 /* a unique gift's background: a radial blend from the center color to the edge color, the pattern symbol repeated
-   in rings around the middle */
+   around the middle */
 @interface ExteriaGiftBackdropView : UIView
 
 @property (nonatomic, assign) uint32_t centerColor;
@@ -17,6 +25,7 @@
 @property (nonatomic, assign) BOOL expressive;
 /* where the gift sits, as a fraction of the bounds */
 @property (nonatomic, assign) CGPoint focus;
+@property (nonatomic, assign) ExteriaGiftPatternLayout patternLayout;
 
 @end
 

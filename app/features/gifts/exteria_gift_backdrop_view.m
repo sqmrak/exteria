@@ -4,18 +4,29 @@
 #import "exteria_string_drawing.h"
 #import "exteria_theme.h"
 
-#define SYMBOL_SIDE 48
-#define RING_COUNT 2
+#define SYMBOL_SIDE 64
 
 UIColor *ExteriaGiftRgb(uint32_t rgb) {
     return [UIColor colorWithRed:((rgb >> 16) & 0xff) / 255.0 green:((rgb >> 8) & 0xff) / 255.0 blue:(rgb & 0xff) / 255.0 alpha:1];
 }
 
-/* radius as a share of the bounds, how many symbols, the turn of the first one in turns, symbol size as a share of
-   the short side and the opacity */
-static const struct { CGFloat radius; int count; CGFloat phase; CGFloat size; CGFloat alpha; } ExteriaRings[RING_COUNT] = {
-    {0.42, 6, 0.08, 0.15, 0.30},
-    {0.74, 10, 0.0, 0.13, 0.20}
+/* the symbols of a pattern as the official clients place them (StarGiftPatterns): x and y in points from the middle of the gift, the side and the opacity of each. points
+   and not shares of the bounds, since the view of the header is far taller than what shows of it, and shares of that height put all but two symbols out of sight */
+static const CGFloat ExteriaPatternHeader[] = {
+    83.33f, 24, 27.33f, .22f,  68.66f, 75.33f, 25.33f, .21f,  0, 86, 25.33f, .12f,  -68.66f, 75.33f, 25.33f, .21f,  -82.66f, 13.66f, 27.33f, .22f,
+    -80, -33.33f, 20, .24f,  -46.5f, -63.16f, 27, .21f,  1, -82.66f, 20, .15f,  46.5f, -63.16f, 27, .21f,  80, -33.33f, 19.33f, .24f,
+    115.66f, -63, 20, .15f,  134, -10.66f, 20, .18f,  118.66f, 55.66f, 20, .15f,  124.33f, 98.33f, 20, .11f,
+    -128, 98.33f, 20, .11f,  -108, 55.66f, 20, .15f,  -123.33f, -10.66f, 20, .18f,  -116, -63.33f, 20, .15f
+};
+static const CGFloat ExteriaPatternCard[] = {
+    27.33f, -57.66f, 20, .12f,  59, -32, 19.33f, .22f,  77, 4.33f, 22.66f, .2f,  100, 40.33f, 18, .12f,  58.66f, 59, 20, .18f,  73.33f, 100.33f, 22.66f, .15f,
+    75, 155, 22, .11f,
+    -27.33f, -57.33f, 20, .12f,  -59, -32.33f, 19.33f, .2f,  -77, 4.66f, 23.33f, .2f,  -98.66f, 41, 18.66f, .12f,  -58, 59.33f, 19.33f, .18f,
+    -73.33f, 100, 22, .15f,  -75.66f, 155, 22, .11f
+};
+static const CGFloat ExteriaPatternTile[] = {
+    -0.83f, -52.16f, 12.33f, .2f,  26.66f, -40.33f, 16, .2f,  44.16f, -20.5f, 12.33f, .2f,  53, 7.33f, 16, .2f,  31, 23.66f, 14.66f, .2f,  0, 32, 13.33f, .2f,
+    -29, 23.66f, 14, .2f,  -53, 7.33f, 16, .2f,  -44.5f, -20.16f, 12.33f, .2f,  -27.33f, -40.33f, 16, .2f,  43.66f, 50, 14.66f, .2f,  -41.66f, 48, 14.66f, .2f
 };
 
 void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *pattern, uint32_t color, void (^completion)(UIImage *symbol)) {
@@ -77,6 +88,7 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
     UIImage *_symbol;
     BOOL _expressive;
     CGPoint _focus;
+    ExteriaGiftPatternLayout _patternLayout;
 }
 @end
 
@@ -88,6 +100,7 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
 @synthesize symbol = _symbol;
 @synthesize expressive = _expressive;
 @synthesize focus = _focus;
+@synthesize patternLayout = _patternLayout;
 
 - (id)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -110,6 +123,7 @@ void ExteriaGiftLoadPatternSymbol(ExteriaMediaCache *media, ExteriaMedia *patter
 - (void)setPatternColor:(uint32_t)color { _patternColor = color; [self setNeedsDisplay]; }
 - (void)setFocus:(CGPoint)focus { _focus = focus; [self setNeedsDisplay]; }
 - (void)setExpressive:(BOOL)expressive { _expressive = expressive; [self setNeedsDisplay]; }
+- (void)setPatternLayout:(ExteriaGiftPatternLayout)layout { _patternLayout = layout; [self setNeedsDisplay]; }
 
 - (void)setSymbol:(UIImage *)symbol {
     if (symbol == _symbol) return;
@@ -145,15 +159,20 @@ static void ExteriaBlend(uint32_t from, uint32_t to, CGFloat amount, CGFloat out
 }
 
 - (void)drawPatternAround:(CGPoint)center size:(CGSize)size {
-    CGFloat shortSide = MIN(size.width, size.height);
-    for (int ring = 0; ring < RING_COUNT; ++ring) {
-        CGFloat side = shortSide * ExteriaRings[ring].size;
-        for (int i = 0; i < ExteriaRings[ring].count; ++i) {
-            CGFloat turn = (ExteriaRings[ring].phase + (CGFloat)i / ExteriaRings[ring].count) * 2 * (CGFloat)M_PI;
-            CGFloat x = center.x + cos(turn) * size.width * ExteriaRings[ring].radius;
-            CGFloat y = center.y + sin(turn) * size.height * ExteriaRings[ring].radius;
-            [_symbol drawInRect:CGRectMake(x - side / 2, y - side / 2, side, side) blendMode:kCGBlendModeNormal alpha:ExteriaRings[ring].alpha];
-        }
+    (void)size;
+    const CGFloat *places = ExteriaPatternHeader;
+    size_t count = sizeof(ExteriaPatternHeader) / sizeof(CGFloat);
+    if (_patternLayout == ExteriaGiftPatternCard) {
+        places = ExteriaPatternCard;
+        count = sizeof(ExteriaPatternCard) / sizeof(CGFloat);
+    } else if (_patternLayout == ExteriaGiftPatternTile) {
+        places = ExteriaPatternTile;
+        count = sizeof(ExteriaPatternTile) / sizeof(CGFloat);
+    }
+    for (size_t i = 0; i + 3 < count; i += 4) {
+        CGFloat side = places[i + 2];
+        CGRect box = CGRectMake(center.x + places[i] - side / 2, center.y + places[i + 1] - side / 2, side, side);
+        [_symbol drawInRect:box blendMode:kCGBlendModeNormal alpha:places[i + 3]];
     }
 }
 

@@ -234,6 +234,7 @@ static UIImage *ExteriaGiftParticleImage(void) {
     self.layer.cornerRadius = CARD_RADIUS;
     self.layer.masksToBounds = YES;
     _backdrop = [[ExteriaGiftBackdropView alloc] init];
+    _backdrop.patternLayout = ExteriaGiftPatternCard;
     [self addSubview:_backdrop];
     _poster = [[UIImageView alloc] init];
     _poster.contentMode = UIViewContentModeScaleAspectFit;

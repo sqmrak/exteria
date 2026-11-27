@@ -98,6 +98,7 @@
     self.layer.cornerRadius = TILE_RADIUS;
     self.layer.masksToBounds = YES;
     _backdrop = [[ExteriaGiftBackdropView alloc] init];
+    _backdrop.patternLayout = ExteriaGiftPatternTile;
     _backdrop.hidden = YES;
     [self addSubview:_backdrop];
     _picture = [[UIImageView alloc] init];
