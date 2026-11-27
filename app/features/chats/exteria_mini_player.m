@@ -22,15 +22,14 @@
 #define LEAD_RADIUS 12.0
 #define KEY_SIDE 36.0
 #define PLAY_SIDE 40.0
-#define PROGRESS_HEIGHT 3.0
-/* the progress of a card in the lyrics is a wavy line in a box 8 points high: the part that is played waves (amplitude 2, 14 points a wave, 4 points thick), a gap of 4 points
-   and the plain track that is left */
-#define WAVE_BOX 8.0
-#define WAVE_STROKE 4.0
-#define WAVE_AMPLITUDE 2.0
-#define WAVE_LENGTH 14.0
-#define WAVE_GAP 4.0
-#define WAVE_PERIOD 1.2
+/* the progress rings the play key as the circular indicator of Material 3: the played arc waves while the sound runs (RING_WAVES whole waves around, so the turn
+   loops without a seam), then a gap and the plain track that is left */
+#define RING_RADIUS 17.0
+#define RING_STROKE 2.2
+#define RING_AMPLITUDE 1.3
+#define RING_WAVES 10
+#define RING_GAP 4.0
+#define RING_PERIOD 2.0
 /* a card narrower than this (a 320 point screen) packs its keys and tile closer, so all four keys still fit beside the text */
 #define CARD_NARROW 330.0
 #define KEY_SIDE_NARROW 32.0
@@ -49,12 +48,11 @@
     UIImageView *_leadGlyph;
     UIImageView *_leadCover;
     ExteriaEmojiLabel *_subtitle;
-    UIView *_track;
-    UIView *_indicator;
-    CALayer *_waveClip;
-    CAShapeLayer *_wave;
-    CALayer *_rest;
-    CGFloat _waveWidth;
+    CALayer *_ring;
+    CAShapeLayer *_ringTrack;
+    CALayer *_ringSpin;
+    CAShapeLayer *_ringArc;
+    BOOL _ringWavy;
     BOOL _waving;
     UIColor *_tone;
     NSTimer *_timer;
@@ -95,9 +93,6 @@ static UIColor *ExteriaStripTile(UIColor *key) {
 }
 static UIColor *ExteriaStripOnTile(UIColor *key) {
     return ExteriaThemeIsDark() ? ExteriaMixedColor(key, [UIColor whiteColor], 0.75) : ExteriaMixedColor(key, [UIColor blackColor], 0.55);
-}
-static UIColor *ExteriaStripOnPrimary(UIColor *key) {
-    return ExteriaThemeIsDark() ? ExteriaMixedColor(key, [UIColor blackColor], 0.78) : [UIColor whiteColor];
 }
 /* the primary of a scheme made from a color of the cover: pale and soft on the dark theme, deep on the light one, whatever the cover's own brightness was */
 static UIColor *ExteriaStripTonalPrimary(UIColor *tone) {
@@ -146,23 +141,19 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
 
 - (UIColor *)key { return _tone ? ExteriaStripTonalPrimary(_tone) : ExteriaColorAccent(); }
 
-/* the card in the colors of its key: the surface, the tile, the keys, the bar. a tone makes the card a scheme of that color and its progress a wave, no tone is the accent of the app */
+/* the card in the colors of its key: the surface, the tile, the keys, the ring. a tone makes the card a scheme of that color, no tone is the accent of the app */
 - (void)applyScheme {
     if (ExteriaThemeIsClassic()) return;
     UIColor *key = [self key];
     BOOL wave = _tone != nil;
     _card.backgroundColor = _surface ? _surface : ExteriaStripContainer(ExteriaColorCard(), key);
     _lead.backgroundColor = ExteriaStripTile(key);
-    _track.backgroundColor = wave ? [UIColor clearColor] : ExteriaStripTile(key);
-    _indicator.backgroundColor = key;
-    _indicator.hidden = wave;
-    _waveClip.hidden = !wave;
-    _rest.hidden = !wave;
-    _wave.strokeColor = key.CGColor;
-    _rest.backgroundColor = ExteriaMixedColor(ExteriaColorCard(), key, 0.35).CGColor;
-    [_toggle setBackgroundImage:ExteriaStripDisc(key) forState:UIControlStateNormal];
-    [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaMixedColor(key, ExteriaStripOnPrimary(key), 0.14)) forState:UIControlStateHighlighted];
-    UIColor *ink = wave ? ExteriaStripOnTile(key) : ExteriaColorSecondary();
+    _ringArc.strokeColor = key.CGColor;
+    _ringTrack.strokeColor = ExteriaMixedColor(ground, key, 0.35).CGColor;
+    /* the ring is the key now, so only a press lights a disc inside it */
+    [_toggle setBackgroundImage:nil forState:UIControlStateNormal];
+    [_toggle setBackgroundImage:ExteriaStripDisc([key colorWithAlphaComponent:0.16]) forState:UIControlStateHighlighted];
+    UIColor *ink = toned ? ExteriaStripOnTile(key) : ExteriaColorSecondary();
     [_previous setImage:ExteriaSymbolImage(ExteriaSymbolPlayerPrevious, 24, ink) forState:UIControlStateNormal];
     [_next setImage:ExteriaSymbolImage(ExteriaSymbolPlayerNext, 24, ink) forState:UIControlStateNormal];
     [_close setImage:ExteriaSymbolImage(ExteriaSymbolPlayerClose, 24, ink) forState:UIControlStateNormal];
@@ -218,27 +209,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
         _subtitle.textColor = ExteriaColorSecondary();
         _subtitle.dropsUndrawable = YES;
         [_card addSubview:_subtitle];
-        _track = [[UIView alloc] init];
-        _track.backgroundColor = ExteriaStripTile(ExteriaColorAccent());
-        _track.layer.cornerRadius = PROGRESS_HEIGHT / 2;
-        [_card addSubview:_track];
-        _indicator = [[UIView alloc] init];
-        _indicator.backgroundColor = ExteriaColorAccent();
-        _indicator.layer.cornerRadius = PROGRESS_HEIGHT / 2;
-        [_track addSubview:_indicator];
-        _waveClip = [[CALayer layer] retain];
-        _waveClip.masksToBounds = YES;
-        _waveClip.hidden = YES;
-        [_track.layer addSublayer:_waveClip];
-        _wave = [[CAShapeLayer layer] retain];
-        _wave.fillColor = NULL;
-        _wave.lineWidth = WAVE_STROKE;
-        _wave.lineCap = kCALineCapRound;
-        [_waveClip addSublayer:_wave];
-        _rest = [[CALayer layer] retain];
-        _rest.cornerRadius = WAVE_STROKE / 2;
-        _rest.hidden = YES;
-        [_track.layer addSublayer:_rest];
+        [self makeRing];
     }
     _title = [[ExteriaEmojiLabel alloc] init];
     _title.font = classic ? [UIFont boldSystemFontOfSize:14] : ExteriaFontSemibold(14);
@@ -256,11 +227,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _next = [ExteriaStripButton(classic ? ExteriaSymbolNext : ExteriaSymbolPlayerNext, self, @selector(nextTapped), @"music.next") retain];
     _close = [ExteriaStripButton(classic ? ExteriaSymbolClose : ExteriaSymbolPlayerClose, self, @selector(closeTapped), @"music.stop") retain];
     for (UIView *view in [NSArray arrayWithObjects:_previous, _toggle, _next, _close, nil]) [classic ? (UIView *)self : _card addSubview:view];
-    if (!classic) {
-        /* the play key is the filled one: the accent with the light or dark ink of the scheme on it */
-        [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaColorAccent()) forState:UIControlStateNormal];
-        [_toggle setBackgroundImage:ExteriaStripDisc(ExteriaMixedColor(ExteriaColorAccent(), ExteriaStripOnPrimary(ExteriaColorAccent()), 0.14)) forState:UIControlStateHighlighted];
-    }
+    if (!classic) [self applyScheme];
     _line = [[UIView alloc] init];
     _line.backgroundColor = classic ? ExteriaClassicStripEdge() : ExteriaColorHairline();
     /* the card floats between its gutters, so it has no line under it */
@@ -277,16 +244,15 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [_timer invalidate];
     [_tone release];
     [_surface release];
-    [_waveClip release];
-    [_wave release];
-    [_rest release];
+    [_ring release];
+    [_ringTrack release];
+    [_ringSpin release];
+    [_ringArc release];
     [_card release];
     [_lead release];
     [_leadGlyph release];
     [_leadCover release];
     [_subtitle release];
-    [_track release];
-    [_indicator release];
     [_title release];
     [_previous release];
     [_toggle release];
@@ -350,7 +316,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _leadCover.hidden = cover == nil;
     _leadGlyph.hidden = cover != nil;
     _leadGlyph.image = ExteriaSymbolImage(round ? ExteriaSymbolMaterialVideocam : (voice ? ExteriaSymbolMaterialMic : ExteriaSymbolPlayerNote), 24, ExteriaStripOnTile([self key]));
-    UIImage *key = ExteriaSymbolImage(playing ? ExteriaSymbolPlayerPause : ExteriaSymbolPlayerPlay, 24, ExteriaStripOnPrimary([self key]));
+    UIImage *key = ExteriaSymbolImage(playing ? ExteriaSymbolPlayerPause : ExteriaSymbolPlayerPlay, 24, [self key]);
     if (_toggle.currentImage != key) {
         BOOL animate = self.window != nil && _showing && !ExteriaReduceMotionEnabled() && _toggle.currentImage;
         if (animate) {
@@ -364,7 +330,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [self updateProgress];
 }
 
-/* the line under the title and the thin bar along the foot of the card follow the sound; a song names its performer, and a voice or video message tells how far it is */
+/* the line under the title and the ring of the play key follow the sound; a song names its performer, and a voice or video message tells how far it is */
 - (void)updateProgress {
     if (ExteriaThemeIsClassic()) return;
     ExteriaMusicPlayer *player = [ExteriaMusicPlayer sharedPlayer];
@@ -393,44 +359,146 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     [self layoutProgress];
 }
 
-- (void)layoutProgress {
-    CGFloat width = _track.bounds.size.width;
-    if (!_tone) {
-        _indicator.frame = CGRectMake(0, 0, width * _fraction, PROGRESS_HEIGHT);
+/* a ring from the top, clockwise, turned twice: the played arc is a stroke range of it, and the range may slide past the first turn while the wave runs */
+static CGPathRef ExteriaRingPath(CGPoint center, BOOL wavy) {
+    CGMutablePathRef path = CGPathCreateMutable();
+    const int steps = 2 * 180;
+    for (int i = 0; i <= steps; ++i) {
+        CGFloat angle = -(CGFloat)M_PI_2 + 4 * (CGFloat)M_PI * i / steps;
+        CGFloat radius = RING_RADIUS + (wavy ? RING_AMPLITUDE * sinf(RING_WAVES * angle) : 0);
+        CGFloat x = center.x + radius * cosf(angle), y = center.y + radius * sinf(angle);
+        if (i == 0) CGPathMoveToPoint(path, NULL, x, y);
+        else CGPathAddLineToPoint(path, NULL, x, y);
+    }
+    return path;
+}
+
+/* a stroke value set with no implicit animation, and the step to it spread over the tick as an additive linear slide. the implicit one eased in and out on every
+   tick, and began from the shown value that already holds the additive wave offset, so the end of the arc jumped back and pulsed four times a second */
+static void ExteriaRingSetStroke(CAShapeLayer *layer, NSString *keyPath, CGFloat value, NSTimeInterval follow) {
+    NSString *key = [@"follow." stringByAppendingString:keyPath];
+    CGFloat old = [[layer valueForKey:keyPath] floatValue];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    [layer setValue:[NSNumber numberWithFloat:(float)value] forKey:keyPath];
+    [CATransaction commit];
+    /* a seek or a new song snaps, a tick of the sound slides */
+    if (follow <= 0 || old == value || fabs(old - value) > 0.05 || !layer.superlayer) {
+        [layer removeAnimationForKey:key];
         return;
     }
-    CGFloat active = width * _fraction;
-    CGFloat restStart = active > 0 ? MIN(width, active + WAVE_GAP) : 0;
-    _waveClip.frame = CGRectMake(0, 0, active, WAVE_BOX);
-    _rest.frame = CGRectMake(restStart, (WAVE_BOX - WAVE_STROKE) / 2, MAX(0, width - restStart), WAVE_STROKE);
-    if (width != _waveWidth) {
-        /* one wave longer than the bar, so sliding it by a wave length loops without a seam */
-        _waveWidth = width;
-        UIBezierPath *path = [UIBezierPath bezierPath];
-        for (CGFloat x = 0; x <= width + WAVE_LENGTH; x += 1) {
-            CGPoint point = CGPointMake(x, WAVE_BOX / 2 + WAVE_AMPLITUDE * sinf(2 * (CGFloat)M_PI * x / WAVE_LENGTH));
-            if (x == 0) [path moveToPoint:point];
-            else [path addLineToPoint:point];
-        }
-        _wave.frame = CGRectMake(0, 0, width + WAVE_LENGTH, WAVE_BOX);
-        _wave.path = path.CGPath;
+    CABasicAnimation *slide = [CABasicAnimation animationWithKeyPath:keyPath];
+    slide.fromValue = [NSNumber numberWithFloat:(float)(old - value)];
+    slide.toValue = [NSNumber numberWithFloat:0];
+    slide.additive = YES;
+    slide.duration = follow;
+    slide.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+    [layer addAnimation:slide forKey:key];
+}
+
+- (void)makeRing {
+    _ring = [[CALayer layer] retain];
+    _ringTrack = [[CAShapeLayer layer] retain];
+    _ringSpin = [[CALayer layer] retain];
+    _ringArc = [[CAShapeLayer layer] retain];
+    for (CAShapeLayer *shape in [NSArray arrayWithObjects:_ringTrack, _ringArc, nil]) {
+        shape.fillColor = NULL;
+        shape.lineWidth = RING_STROKE;
+        shape.lineCap = kCALineCapRound;
+        shape.lineJoin = kCALineJoinRound;
+        shape.strokeStart = 0;
+        shape.strokeEnd = 0;
     }
+    [_ring addSublayer:_ringTrack];
+    [_ring addSublayer:_ringSpin];
+    [_ringSpin addSublayer:_ringArc];
+    [_card.layer insertSublayer:_ring atIndex:0];
+}
+
+- (void)layoutProgress {
+    if (!_ring) return;
+    CGFloat side = 2 * (RING_RADIUS + RING_AMPLITUDE + RING_STROKE);
+    CGRect frame = CGRectMake(CGRectGetMidX(_toggle.frame) - side / 2, CGRectGetMidY(_toggle.frame) - side / 2, side, side);
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (!CGRectEqualToRect(_ring.frame, frame)) {
+        _ring.frame = frame;
+        _ringSpin.frame = _ring.bounds;
+        _ringTrack.frame = _ringArc.frame = _ring.bounds;
+        CGPoint center = CGPointMake(side / 2, side / 2);
+        CGPathRef flat = ExteriaRingPath(center, NO);
+        _ringTrack.path = flat;
+        CGPathRelease(flat);
+    }
+    [self updateRingShape];
+    [CATransaction commit];
+    /* the arc and the track follow the sound smoothly between the ticks, on the strokes alone so the ring itself does not slide */
+    CGFloat played = _fraction > 0.002 ? _fraction : 0;
+    CGFloat gap = (RING_GAP + RING_STROKE) / (2 * (CGFloat)M_PI * RING_RADIUS);
+    /* the slide is as long as a tick of the timer, and none while a card is off screen or reduced motion is on */
+    NSTimeInterval follow = self.window && !ExteriaReduceMotionEnabled() ? 0.25 : 0;
+    ExteriaRingSetStroke(_ringArc, @"strokeEnd", played / 2, follow);
+    _ringArc.hidden = played <= 0;
+    CGFloat restStart = played > 0 ? played + gap : 0, restEnd = played > 0 ? 1 - gap : 1;
+    ExteriaRingSetStroke(_ringTrack, @"strokeStart", restStart / 2, follow);
+    ExteriaRingSetStroke(_ringTrack, @"strokeEnd", restEnd / 2, follow);
+    _ringTrack.hidden = restEnd <= restStart;
     [self updateWave];
 }
 
-/* the wave runs while the sound does and stands still when it is paused or when reduced motion is on */
+/* the played arc waves while the sound runs and lies flat when it is paused, as the wavy indicator of Material 3 does */
+- (void)updateRingShape {
+    BOOL wavy = _waving;
+    if (_ringArc.path && wavy == _ringWavy) return;
+    CGFloat side = _ring.bounds.size.width;
+    CGPathRef path = ExteriaRingPath(CGPointMake(side / 2, side / 2), wavy);
+    CGPathRef shown = _ringArc.path ? CGPathRetain(_ringArc.path) : NULL;
+    _ringArc.path = path;
+    /* the wave rises and settles over a moment, as the Material 3 indicator does, and does not pop when the sound starts or pauses; both paths have the same points */
+    if (shown && self.window && !ExteriaReduceMotionEnabled()) {
+        CABasicAnimation *morph = [CABasicAnimation animationWithKeyPath:@"path"];
+        morph.fromValue = (id)shown;
+        morph.toValue = (id)path;
+        morph.duration = 0.3;
+        morph.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+        [_ringArc addAnimation:morph forKey:@"shape"];
+    }
+    if (shown) CGPathRelease(shown);
+    CGPathRelease(path);
+    _ringWavy = wavy;
+}
+
+/* the wave travels round the ring with no work per frame: the ring turns back by one wave while the stroke range runs forward by one, so the arc stands still and only
+   the wave moves; the motion stops when the sound is paused or reduced motion is on */
 - (void)updateWave {
-    BOOL run = _tone && _waving && self.window && !ExteriaReduceMotionEnabled();
-    BOOL running = [_wave animationForKey:@"wave"] != nil;
+    BOOL run = _ring && _waving && self.window && !ExteriaReduceMotionEnabled();
+    BOOL running = [_ringSpin animationForKey:@"wave"] != nil;
     if (run && !running) {
-        CABasicAnimation *slide = [CABasicAnimation animationWithKeyPath:@"transform.translation.x"];
-        slide.fromValue = [NSNumber numberWithFloat:0];
-        slide.toValue = [NSNumber numberWithFloat:(float)-WAVE_LENGTH];
-        slide.duration = WAVE_PERIOD;
-        slide.repeatCount = HUGE_VALF;
-        [_wave addAnimation:slide forKey:@"wave"];
+        CFTimeInterval begin = [_ringSpin convertTime:CACurrentMediaTime() fromLayer:nil];
+        CABasicAnimation *turn = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
+        turn.fromValue = [NSNumber numberWithFloat:0];
+        turn.toValue = [NSNumber numberWithFloat:(float)(-2 * M_PI / RING_WAVES)];
+        NSMutableArray *animations = [NSMutableArray arrayWithObject:turn];
+        for (NSString *keyPath in [NSArray arrayWithObjects:@"strokeStart", @"strokeEnd", nil]) {
+            CABasicAnimation *slide = [CABasicAnimation animationWithKeyPath:keyPath];
+            slide.fromValue = [NSNumber numberWithFloat:0];
+            slide.toValue = [NSNumber numberWithFloat:(float)(0.5 / RING_WAVES)];
+            slide.additive = YES;
+            [animations addObject:slide];
+        }
+        for (CABasicAnimation *animation in animations) {
+            animation.duration = RING_PERIOD;
+            animation.repeatCount = HUGE_VALF;
+            animation.beginTime = begin;
+            animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+        }
+        [_ringSpin addAnimation:turn forKey:@"wave"];
+        [_ringArc addAnimation:[animations objectAtIndex:1] forKey:@"waveStart"];
+        [_ringArc addAnimation:[animations objectAtIndex:2] forKey:@"waveEnd"];
     } else if (!run && running) {
-        [_wave removeAnimationForKey:@"wave"];
+        [_ringSpin removeAnimationForKey:@"wave"];
+        [_ringArc removeAnimationForKey:@"waveStart"];
+        [_ringArc removeAnimationForKey:@"waveEnd"];
     }
 }
 
@@ -515,8 +583,7 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     BOOL narrow = cardWidth < CARD_NARROW;
     CGFloat key = narrow ? KEY_SIDE_NARROW : KEY_SIDE, lead = narrow ? LEAD_SIDE_NARROW : LEAD_SIDE;
     _previous.hidden = NO;
-    /* the wave dips to the card's lower edge, so with it the keys stand 3 points higher and the play disc ends above the wave instead of over it */
-    CGFloat mid = CARD_HEIGHT / 2 - (_tone ? 4 : 1);
+    CGFloat mid = CARD_HEIGHT / 2;
     CGFloat x = cardWidth - 4;
     x -= key;
     _close.frame = CGRectMake(x, mid - key / 2, key, key);
@@ -535,10 +602,6 @@ static UIButton *ExteriaStripButton(ExteriaSymbol symbol, id target, SEL action,
     _title.frame = CGRectMake(textX, hasLine ? 12 : mid - 10, textWidth, 20);
     _subtitle.frame = CGRectMake(textX, 31, textWidth, 16);
     _subtitle.hidden = !hasLine;
-    /* the track stays clear of the lower edge and, in the pill, of the curve of its end: the pill is rounded to half its height, and a track 16 points from the side ran into
-       that curve near the bottom */
-    CGFloat trackRight = _pill ? 26 : 16;
-    _track.frame = CGRectMake(textX, _tone ? CARD_HEIGHT - 6 - WAVE_BOX : CARD_HEIGHT - 11, MAX(0, cardWidth - textX - trackRight), _tone ? WAVE_BOX : PROGRESS_HEIGHT);
     [self layoutProgress];
 }
 
