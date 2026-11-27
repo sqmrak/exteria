@@ -39,6 +39,8 @@ enum { GrabNone = 0, GrabLeft = 1, GrabRight = 2, GrabTop = 4, GrabBottom = 8, G
     if (!self) return nil;
     self.backgroundColor = [UIColor clearColor];
     self.opaque = NO;
+    /* the frame of the view follows the picture, and a frame that kept the whole picture never set a new crop, so the brackets were not drawn until the crop changed */
+    self.contentMode = UIViewContentModeRedraw;
     _crop = CGRectMake(0, 0, 1, 1);
     UIPanGestureRecognizer *pan = [[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panned:)] autorelease];
     pan.maximumNumberOfTouches = 1;
@@ -64,6 +66,7 @@ enum { GrabNone = 0, GrabLeft = 1, GrabRight = 2, GrabTop = 4, GrabBottom = 8, G
 
 - (void)setPictureSize:(CGSize)size {
     _pictureSize = size;
+    [self setNeedsDisplay];
 }
 
 - (void)setRatio:(CGFloat)ratio {

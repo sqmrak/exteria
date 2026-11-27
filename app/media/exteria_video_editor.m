@@ -379,8 +379,11 @@
     if (!_item) return NO;
     /* the preview has the turns and the mirror and never the crop: the frame over the whole picture shows what the crop keeps, where a picture cut by the composition was drawn
        by the player of an old system stretched over the size of the whole video */
-    AVVideoComposition *composition = _turns || _mirrored ? ExteriaVideoComposition(_item.asset, _turns, _mirrored, CGRectZero) : nil;
-    if ((_turns || _mirrored) && !composition) return NO;
+    BOOL changed = _turns || _mirrored;
+    /* the player kept drawing through the composition it had when it was given nil, so a picture mirrored and mirrored back stayed mirrored; once a composition was set, the
+       plain picture is a composition of its own with no turn and no mirror */
+    AVVideoComposition *composition = changed || _item.videoComposition ? ExteriaVideoComposition(_item.asset, _turns, _mirrored, CGRectZero) : nil;
+    if (changed && !composition) return NO;
     _item.videoComposition = composition;
     return YES;
 }
@@ -463,6 +466,7 @@
     _cropView.pictureSize = picture;
     _cropView.ratio = _cropState >= 2 && _crop.size.height > 0 ? _crop.size.width / _crop.size.height : 0;
     _cropView.crop = _crop;
+    [_cropView setNeedsDisplay];
 }
 - (void)cancel { _closed = YES; [self dismissViewControllerAnimated:YES completion:nil]; }
 - (void)done {
