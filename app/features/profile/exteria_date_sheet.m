@@ -7,6 +7,7 @@
 #import "exteria_dismiss_pan.h"
 #import "exteria_platform.h"
 #import "exteria_theme.h"
+#import "exteria_toggle.h"
 
 #define PANEL_HEIGHT 330.0
 
@@ -14,7 +15,7 @@
     UIView *_dim;
     UIView *_panel;
     UIDatePicker *_picker;
-    UISwitch *_hideYear;
+    ExteriaToggle *_hideYear;
     UILabel *_hideLabel;
     UIButton *_cancel;
     UIButton *_remove;
@@ -69,7 +70,7 @@ static UIButton *ExteriaSheetButton(NSString *title, UIColor *color, BOOL bold) 
     _hideLabel.textColor = ExteriaColorTitle();
     _hideLabel.text = NSLocalizedString(@"profile.birthday.noyear", nil);
     [_panel addSubview:_hideLabel];
-    _hideYear = [[UISwitch alloc] init];
+    _hideYear = [[ExteriaToggle alloc] init];
     _hideYear.on = year == 0;
     [_panel addSubview:_hideYear];
     _cancel = [ExteriaSheetButton(NSLocalizedString(@"picker.cancel", nil), ExteriaColorAccent(), NO) retain];

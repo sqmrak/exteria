@@ -11,6 +11,7 @@
 #import "exteria_platform.h"
 #import "exteria_symbol.h"
 #import "exteria_theme.h"
+#import "exteria_toggle.h"
 
 #include "exteria_folders.h"
 
@@ -38,9 +39,9 @@
     NSMutableArray *_noteEmoji;
     BOOL _emojiOpen;
     UILabel *_hideLabel;
-    UISwitch *_hide;
+    ExteriaToggle *_hide;
     UILabel *_upgradeLabel;
-    UISwitch *_upgrade;
+    ExteriaToggle *_upgrade;
     UIButton *_send;
     UIActivityIndicatorView *_spinner;
     BOOL _working;
@@ -156,14 +157,14 @@ static UILabel *ExteriaComposeLabel(UIColor *color, CGFloat size, BOOL bold) {
     _hideLabel.text = NSLocalizedString(@"gifts.hide", nil);
     _hideLabel.numberOfLines = 0;
     [_card addSubview:_hideLabel];
-    _hide = [[UISwitch alloc] init];
+    _hide = [[ExteriaToggle alloc] init];
     [_card addSubview:_hide];
     if (_gift.upgradeStars > 0) {
         _upgradeLabel = ExteriaComposeLabel(ExteriaColorTitle(), 16, NO);
         _upgradeLabel.text = [NSString stringWithFormat:NSLocalizedString(@"gifts.upgrade.include", nil), ExteriaStarsText(_gift.upgradeStars)];
         _upgradeLabel.numberOfLines = 0;
         [_card addSubview:_upgradeLabel];
-        _upgrade = [[UISwitch alloc] init];
+        _upgrade = [[ExteriaToggle alloc] init];
         [_card addSubview:_upgrade];
     }
     _send = [[UIButton buttonWithType:UIButtonTypeCustom] retain];

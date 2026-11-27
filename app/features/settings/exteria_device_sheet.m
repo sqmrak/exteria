@@ -10,6 +10,7 @@
 #import "exteria_string_drawing.h"
 #import "exteria_theme.h"
 #import "exteria_time.h"
+#import "exteria_toggle.h"
 
 #define CARD_RADIUS 24.0
 #define SIDE 16.0
@@ -78,7 +79,7 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color, NSInteger alignm
     icon.frame = CGRectMake(SIDE + 2, (height - ITEM_ICON) / 2, ITEM_ICON, ITEM_ICON);
     item.frame = CGRectMake(0, top, width, height);
     if (switchOn) {
-        UISwitch *toggleView = [[[UISwitch alloc] init] autorelease];
+        ExteriaToggle *toggleView = [[[ExteriaToggle alloc] init] autorelease];
         toggleView.on = switchOn.boolValue;
         CGSize size = toggleView.frame.size;
         toggleView.frame = CGRectMake(width - SIDE - size.width, (height - size.height) / 2, size.width, size.height);
@@ -99,7 +100,7 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color, NSInteger alignm
     return item;
 }
 
-- (void)switchChanged:(UISwitch *)toggle {
+- (void)switchChanged:(ExteriaToggle *)toggle {
     void (^handler)(BOOL) = objc_getAssociatedObject(toggle, "handler");
     if (handler) handler(toggle.on);
 }
@@ -107,8 +108,8 @@ static UILabel *ExteriaSheetLabel(UIFont *font, UIColor *color, NSInteger alignm
 - (void)rowTapped:(UIControl *)row {
     if (row.tag == 1) {
         for (UIView *view in row.subviews) {
-            if ([view isKindOfClass:[UISwitch class]]) {
-                UISwitch *toggle = (UISwitch *)view;
+            if ([view isKindOfClass:[ExteriaToggle class]]) {
+                ExteriaToggle *toggle = (ExteriaToggle *)view;
                 [toggle setOn:!toggle.on animated:YES];
                 [self switchChanged:toggle];
             }

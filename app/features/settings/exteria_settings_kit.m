@@ -16,6 +16,7 @@
 #import "exteria_imported_theme.h"
 #import "exteria_weak_reference.h"
 #import "exteria_wave_background_view.h"
+#import "exteria_toggle.h"
 
 #define BAR_HEIGHT 56.0
 #define CARD_INSET 12.0
@@ -468,16 +469,10 @@ static UIFont *ExteriaRowTitleFont(ExteriaSettingsRow *row) {
     return row.bold ? ExteriaFontBold(15) : ExteriaFontRegular(16);
 }
 
-/* the width of the system switch, which the cell lays the text out beside; 94 points before ios 7 and 51 from it,
-   so a measure that took one number cut every title on the other system to "Запятая после упо…" */
+/* the width of the switch, which the cell lays the text out beside: 52 in the modern theme, and in the classic one the width of the system switch, 94 points
+   before ios 7 and 51 from it, so a measure that took one number cut every title on the other system to "Запятая после упо…" */
 static CGFloat ExteriaSwitchWidth(void) {
-    static CGFloat width;
-    if (width == 0) {
-        UISwitch *probe = [[UISwitch alloc] init];
-        width = probe.frame.size.width;
-        [probe release];
-    }
-    return width;
+    return [ExteriaToggle controlSize].width;
 }
 
 /* the width the text of a row may take: what is left of the card beside the tile, the value and the switch or check */
@@ -731,7 +726,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     UILabel *_line3;
     UILabel *_value;
     ExteriaEmojiLabel *_emojiValue;
-    UISwitch *_switch;
+    ExteriaToggle *_switch;
     UIImageView *_check;
     ExteriaExpressiveSlider *_slider;
     UILabel *_levelBadge;
@@ -796,7 +791,7 @@ static void ExteriaCardRadii(ExteriaRowPlace place, CGFloat *top, CGFloat *botto
     _emojiValue = [[ExteriaEmojiLabel alloc] init];
     _emojiValue.textAlignment = ExteriaTextAlignmentRight;
     [_card addSubview:_emojiValue];
-    _switch = [[UISwitch alloc] init];
+    _switch = [[ExteriaToggle alloc] init];
     [_switch addTarget:self action:@selector(switched) forControlEvents:UIControlEventValueChanged];
     [_card addSubview:_switch];
     _check = [[UIImageView alloc] init];

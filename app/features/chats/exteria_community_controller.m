@@ -8,6 +8,7 @@
 #import "exteria_draft.h"
 #import "exteria_theme.h"
 #import "exteria_topics_screen.h"
+#import "exteria_toggle.h"
 
 #define HEADER_HEIGHT 52.0
 #define SIDE_MARGIN 16.0
@@ -64,11 +65,11 @@ static ExteriaCardBackdrop *ExteriaCardBackdropOf(ExteriaCardPart part, UIColor 
 @interface ExteriaCommunitySwitchCell : UITableViewCell {
     UILabel *_title;
     UILabel *_hint;
-    UISwitch *_switch;
+    ExteriaToggle *_switch;
 }
 @property (nonatomic, readonly) UILabel *title;
 @property (nonatomic, readonly) UILabel *hint;
-@property (nonatomic, readonly) UISwitch *toggle;
+@property (nonatomic, readonly) ExteriaToggle *toggle;
 + (CGFloat)heightForHint:(NSString *)hint width:(CGFloat)width;
 @end
 
@@ -94,7 +95,7 @@ static ExteriaCardBackdrop *ExteriaCardBackdropOf(ExteriaCardPart part, UIColor 
     _hint.textColor = ExteriaColorSecondary();
     _hint.numberOfLines = 0;
     [self.contentView addSubview:_hint];
-    _switch = [[UISwitch alloc] init];
+    _switch = [[ExteriaToggle alloc] init];
     [self.contentView addSubview:_switch];
     return self;
 }
@@ -294,7 +295,7 @@ enum { SectionSwitch, SectionJoined, SectionViewable, SectionCount };
     return cell;
 }
 
-- (void)collapseChanged:(UISwitch *)sender {
+- (void)collapseChanged:(ExteriaToggle *)sender {
     BOOL collapsed = sender.on;
     _loaded.collapsed = collapsed;
     [self.session setCommunity:_community collapsed:collapsed completion:^(NSString *errorName) {
