@@ -58,6 +58,17 @@ int main(void) {
     CHECK(after > before);
     CHECK(exteria_store_peer_version(s, other) > 0);
 
+    /* a catalog of the whole app keeps under peer {0, 0} and reads back; a kind past the last is refused */
+    {
+        exteria_peer app = {0, 0};
+        exteria_tl_value *read = NULL;
+        int32_t pts = 0;
+        CHECK_EQ_INT(exteria_store_put(s, EXTERIA_RECORD_CATALOG, app, 1, record(&a, 42)), EXTERIA_OK);
+        CHECK_EQ_INT(exteria_store_get(s, EXTERIA_RECORD_CATALOG, app, 1, &a, &read), EXTERIA_OK);
+        CHECK(read != NULL && exteria_tl_get_i32(read, "pts", &pts) == EXTERIA_OK && pts == 42);
+        CHECK_EQ_INT(exteria_store_put(s, (exteria_record_kind)(EXTERIA_RECORD_CATALOG + 1), app, 1, v), EXTERIA_E_ARG);
+    }
+
     CHECK_EQ_INT(exteria_store_close(s), EXTERIA_OK);
     exteria_arena_free(&a);
     return test_finish("test_store_version");

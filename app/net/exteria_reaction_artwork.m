@@ -118,21 +118,32 @@ static NSMutableDictionary *sArt;
     }];
 }
 
++ (void)takeCatalog:(NSArray *)art media:(ExteriaMediaCache *)media {
+    [ExteriaReactionArtwork setCatalog:art];
+    NSMutableArray *icons = [NSMutableArray arrayWithCapacity:art.count];
+    for (ExteriaReactionArtwork *item in art) [icons addObject:item.icon];
+    [ExteriaCustomEmojiLoader loadPicturesOfDocuments:icons media:media picture:nil];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaReactionArtworkDidLoadNotification object:nil];
+}
+
+/* the catalog of the last start comes from the disk first, so no chip shows the emoji of the phone while the server is asked; the answer of the server replaces it once.
+   a file of the old catalog whose reference expired still draws from the image cache, and the fresh catalog brings new references */
 + (void)loadWithSession:(ExteriaSession *)session media:(ExteriaMediaCache *)media {
-    static BOOL loading;
-    if (sArt || loading || !session || !media) return;
+    static BOOL loading, fresh;
+    if (fresh || loading || !session || !media) return;
     loading = YES;
-    [session loadReactionArt:^(NSArray *art, NSString *errorName) {
-        loading = NO;
-        if (!art) {
-            NSLog(@"exteria: reaction art not loaded: %@", errorName);
-            return;
-        }
-        [ExteriaReactionArtwork setCatalog:art];
-        NSMutableArray *icons = [NSMutableArray arrayWithCapacity:art.count];
-        for (ExteriaReactionArtwork *item in art) [icons addObject:item.icon];
-        [ExteriaCustomEmojiLoader loadPicturesOfDocuments:icons media:media picture:nil];
-        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaReactionArtworkDidLoadNotification object:nil];
+    [session loadStoredReactionArt:^(NSArray *stored, NSString *storedError) {
+        if (stored.count && !fresh) [self takeCatalog:stored media:media];
+        else if (![storedError isEqualToString:@"NOT_FOUND"]) NSLog(@"exteria: kept reaction art not read: %@", storedError);
+        [session loadReactionArt:^(NSArray *art, NSString *errorName) {
+            loading = NO;
+            if (!art) {
+                NSLog(@"exteria: reaction art not loaded: %@", errorName);
+                return;
+            }
+            fresh = YES;
+            [self takeCatalog:art media:media];
+        }];
     }];
 }
 

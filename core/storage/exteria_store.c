@@ -71,7 +71,7 @@ static exteria_status bind_key(sqlite3_stmt *q, exteria_store *s, exteria_record
 }
 
 static int valid_key(exteria_store *s, exteria_record_kind kind, exteria_peer peer) {
-    return s && kind >= EXTERIA_RECORD_USER && kind <= EXTERIA_RECORD_MESSAGE_EDIT &&
+    return s && kind >= EXTERIA_RECORD_USER && kind <= EXTERIA_RECORD_CATALOG &&
            peer.kind >= 0 && peer.kind <= 3 && (peer.kind == 0 ? peer.id == 0 : peer.id > 0);
 }
 
@@ -536,7 +536,7 @@ exteria_status exteria_store_count(exteria_store *s, exteria_record_kind kind, i
     exteria_status status;
     int rc;
     if (count) *count = 0;
-    if (!s || !count || kind < EXTERIA_RECORD_USER || kind > EXTERIA_RECORD_MESSAGE_EDIT) return EXTERIA_E_ARG;
+    if (!s || !count || kind < EXTERIA_RECORD_USER || kind > EXTERIA_RECORD_CATALOG) return EXTERIA_E_ARG;
     status = prepare(s, "SELECT COUNT(*) FROM records WHERE account=? AND kind=?", &q);
     if (status != EXTERIA_OK) return status;
     rc = sqlite3_bind_int64(q, 1, s->account);
@@ -550,7 +550,7 @@ exteria_status exteria_store_clear(exteria_store *s, exteria_record_kind kind) {
     sqlite3_stmt *q;
     exteria_status status;
     int rc;
-    if (!s || kind < EXTERIA_RECORD_USER || kind > EXTERIA_RECORD_MESSAGE_EDIT) return EXTERIA_E_ARG;
+    if (!s || kind < EXTERIA_RECORD_USER || kind > EXTERIA_RECORD_CATALOG) return EXTERIA_E_ARG;
     status = prepare(s, "DELETE FROM records WHERE account=? AND kind=?", &q);
     if (status != EXTERIA_OK) return status;
     rc = sqlite3_bind_int64(q, 1, s->account);

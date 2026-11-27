@@ -2251,51 +2251,82 @@ static exteria_status ExteriaCollectMessage(void *ctx, int64_t id, const exteria
     [choices release];
 }
 
+/* worker only: the catalog of the reaction pictures in an answer of messages.getAvailableReactions, nil with the reason in error */
+static NSArray *ExteriaReactionArtOfAnswer(const exteria_tl_value *value, NSString **error) {
+    NSMutableArray *art = nil;
+    /* six documents with a file reference each per reaction, so the rows live on the heap */
+    exteria_reaction_art *rows = calloc(EXTERIA_REACTION_CATALOG_MAX, sizeof(*rows));
+    size_t count = 0;
+    exteria_status status = rows ? exteria_reaction_art_read(value, rows, EXTERIA_REACTION_CATALOG_MAX, &count) : EXTERIA_E_NOMEM;
+    if (status != EXTERIA_OK) {
+        NSLog(@"exteria: reaction art rejected: %s", exteria_status_name(status));
+        if (error) *error = @"INTERNAL";
+    } else {
+        art = [NSMutableArray arrayWithCapacity:count];
+        for (size_t i = 0; i < count; ++i) {
+            /* the catalog is keyed by this emoji, and stringWithUTF8String: answers nil for bytes that are not utf-8, which threw on the nil key in setCatalog: */
+            NSString *emoji = [NSString stringWithUTF8String:rows[i].emoji];
+            if (!emoji.length) {
+                NSLog(@"exteria: reaction art row %lu has no readable emoji and is skipped", (unsigned long)i);
+                continue;
+            }
+            ExteriaCustomEmojiDocument *icon = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].icon];
+            ExteriaCustomEmojiDocument *appear = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].appear];
+            ExteriaCustomEmojiDocument *select = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].select];
+            ExteriaCustomEmojiDocument *activate = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].activate];
+            ExteriaCustomEmojiDocument *effect = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].effect];
+            ExteriaCustomEmojiDocument *around = rows[i].around.id ? [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].around] : nil;
+            ExteriaReactionArtwork *item = [[ExteriaReactionArtwork alloc] initWithEmoji:emoji icon:icon appear:appear
+                                                                          select:select activate:activate effect:effect around:around];
+            [art addObject:item];
+            [item release];
+            [icon release];
+            [appear release];
+            [select release];
+            [activate release];
+            [effect release];
+            [around release];
+        }
+    }
+    free(rows);
+    return art;
+}
+
+/* the catalog the last start kept, so the chips and the menus draw the pictures of Telegram from the first frame instead of the emoji of the phone */
+#define EXTERIA_CATALOG_REACTIONS 1
+
+- (void)loadStoredReactionArt:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    [self post:^{
+        exteria_arena arena;
+        exteria_tl_value *stored = NULL;
+        exteria_peer app = {0, 0};
+        NSArray *art = nil;
+        NSString *error = nil;
+        exteria_arena_init(&arena, 4u * 1024u * 1024u);
+        exteria_status status = [self workerStore] ? exteria_store_get([self workerStore], EXTERIA_RECORD_CATALOG, app, EXTERIA_CATALOG_REACTIONS, &arena, &stored) : EXTERIA_E_NOTFOUND;
+        if (status == EXTERIA_OK) art = ExteriaReactionArtOfAnswer(stored, &error);
+        else error = status == EXTERIA_E_NOTFOUND ? @"NOT_FOUND" : [NSString stringWithUTF8String:exteria_status_name(status)];
+        exteria_arena_free(&arena);
+        [self finishLoad:art error:error completion:done];
+        [done release];
+    }];
+}
+
 - (void)loadReactionArt:(ExteriaListCompletion)completion {
     ExteriaListCompletion done = [completion copy];
     [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
         *request = exteria_tl_new_obj(arena, "messages.getAvailableReactions");
         return *request ? exteria_tl_set_i32(arena, *request, "hash", 0) : EXTERIA_E_NOMEM;
     } handler:^(const exteria_mt_rpc_result *result) {
-        NSMutableArray *art = nil;
+        NSArray *art = nil;
         NSString *error = nil;
         if (result->status != EXTERIA_OK) error = ExteriaRpcErrorName(result);
-        else {
-            /* six documents with a file reference each per reaction, so the rows live on the heap */
-            exteria_reaction_art *rows = calloc(EXTERIA_REACTION_CATALOG_MAX, sizeof(*rows));
-            size_t count = 0;
-            exteria_status status = rows ? exteria_reaction_art_read(result->value, rows, EXTERIA_REACTION_CATALOG_MAX, &count) : EXTERIA_E_NOMEM;
-            if (status != EXTERIA_OK) {
-                NSLog(@"exteria: reaction art rejected: %s", exteria_status_name(status));
-                error = @"INTERNAL";
-            } else {
-                art = [NSMutableArray arrayWithCapacity:count];
-                for (size_t i = 0; i < count; ++i) {
-                    /* the catalog is keyed by this emoji, and stringWithUTF8String: answers nil for bytes that are not utf-8, which threw on the nil key in setCatalog: */
-                    NSString *emoji = [NSString stringWithUTF8String:rows[i].emoji];
-                    if (!emoji.length) {
-                        NSLog(@"exteria: reaction art row %lu has no readable emoji and is skipped", (unsigned long)i);
-                        continue;
-                    }
-                    ExteriaCustomEmojiDocument *icon = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].icon];
-                    ExteriaCustomEmojiDocument *appear = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].appear];
-                    ExteriaCustomEmojiDocument *select = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].select];
-                    ExteriaCustomEmojiDocument *activate = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].activate];
-                    ExteriaCustomEmojiDocument *effect = [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].effect];
-                    ExteriaCustomEmojiDocument *around = rows[i].around.id ? [[ExteriaCustomEmojiDocument alloc] initWithRow:&rows[i].around] : nil;
-                    ExteriaReactionArtwork *item = [[ExteriaReactionArtwork alloc] initWithEmoji:emoji icon:icon appear:appear
-                                                                                  select:select activate:activate effect:effect around:around];
-                    [art addObject:item];
-                    [item release];
-                    [icon release];
-                    [appear release];
-                    [select release];
-                    [activate release];
-                    [effect release];
-                    [around release];
-                }
-            }
-            free(rows);
+        else art = ExteriaReactionArtOfAnswer(result->value, &error);
+        if (art && [self workerStore]) {
+            exteria_peer app = {0, 0};
+            exteria_status kept = exteria_store_put([self workerStore], EXTERIA_RECORD_CATALOG, app, EXTERIA_CATALOG_REACTIONS, result->value);
+            if (kept != EXTERIA_OK) NSLog(@"exteria: reaction art not kept for the next start: %s", exteria_status_name(kept));
         }
         [self finishLoad:art error:error completion:done];
         [done release];

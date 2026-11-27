@@ -17,7 +17,9 @@ typedef enum exteria_record_kind {
     /* a message the other side deleted, kept as it was: the same object as a message, under the same chat and id */
     EXTERIA_RECORD_DELETED_MESSAGE,
     /* what a message said before an edit; the id is the id of the message times a thousand plus the number of the version, 1 for the oldest */
-    EXTERIA_RECORD_MESSAGE_EDIT
+    EXTERIA_RECORD_MESSAGE_EDIT,
+    /* an answer the server gives the whole app, such as the pictures of the reactions, kept so the next start shows it before the server is asked; peer {0, 0} and an id per catalog */
+    EXTERIA_RECORD_CATALOG
 } exteria_record_kind;
 
 #define EXTERIA_EDIT_VERSIONS 1000

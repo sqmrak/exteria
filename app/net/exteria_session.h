@@ -420,6 +420,8 @@ typedef void (^ExteriaReactionChoicesCompletion)(NSArray *choices, BOOL customAl
 - (void)sendPaidReactionOfStars:(int32_t)stars messageId:(int32_t)messageId dialog:(ExteriaDialog *)dialog completion:(ExteriaListCompletion)completion;
 /* the pictures the server draws every ordinary reaction with, as ExteriaReactionArtwork items; nil with an error name when the call or the answer failed */
 - (void)loadReactionArt:(ExteriaListCompletion)completion;
+/* the catalog the last start kept on the disk; NOT_FOUND before the first answer of the server was kept */
+- (void)loadStoredReactionArt:(ExteriaListCompletion)completion;
 /* how many ordinary reactions one account may leave on a message, from help.getAppConfig; the error name is nil when the server's own numbers
    arrived, and the documented 1 and 3 stand in otherwise */
 - (void)loadReactionLimits:(void (^)(int32_t standard, int32_t premium, NSString *errorName))completion;
