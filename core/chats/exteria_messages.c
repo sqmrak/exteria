@@ -394,6 +394,9 @@ static exteria_entity_kind entity_kind(const exteria_tl_value *e) {
     if (exteria_tl_is(e, EXTERIA_TL_ID_messageEntityHashtag)) return EXTERIA_ENTITY_HASHTAG;
     if (exteria_tl_is(e, EXTERIA_TL_ID_messageEntityCustomEmoji)) return EXTERIA_ENTITY_CUSTOM_EMOJI;
     if (exteria_tl_is(e, EXTERIA_TL_ID_messageEntityBotCommand)) return EXTERIA_ENTITY_BOT_COMMAND;
+    if (exteria_tl_is(e, EXTERIA_TL_ID_messageEntityPhone)) return EXTERIA_ENTITY_PHONE;
+    if (exteria_tl_is(e, EXTERIA_TL_ID_messageEntityCashtag)) return EXTERIA_ENTITY_CASHTAG;
+    if (exteria_tl_is(e, EXTERIA_TL_ID_messageEntityBankCard)) return EXTERIA_ENTITY_BANK_CARD;
     return (exteria_entity_kind)0;
 }
 

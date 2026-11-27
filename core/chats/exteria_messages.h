@@ -39,7 +39,11 @@ typedef enum exteria_entity_kind {
     EXTERIA_ENTITY_PRE,         /* a block of code, its language (maybe empty) in the url pool */
     EXTERIA_ENTITY_BLOCKQUOTE,  /* flags: EXTERIA_ENTITY_COLLAPSED */
     EXTERIA_ENTITY_MENTION_NAME, /* a name that opens the profile of user_id, whatever the words say */
-    EXTERIA_ENTITY_FORMATTED_DATE /* the words stand for the moment date, shown as the flags ask */
+    EXTERIA_ENTITY_FORMATTED_DATE, /* the words stand for the moment date, shown as the flags ask */
+    /* found by the server in the text; added last so the kinds already in the message cache keep their numbers */
+    EXTERIA_ENTITY_PHONE,
+    EXTERIA_ENTITY_CASHTAG,
+    EXTERIA_ENTITY_BANK_CARD
 } exteria_entity_kind;
 
 /* flags of an entity: a quote that starts folded, and the shapes a formatted date takes (none set means the plain date and time) */
@@ -488,6 +492,9 @@ exteria_status exteria_custom_emoji_parse(const exteria_tl_value *answer, exteri
 /* messages.getEmojiStickers and its answer; only sets of custom emoji are kept, a set that is archived is left out */
 exteria_status exteria_emoji_sets_request(exteria_arena *arena, exteria_tl_value **out);
 exteria_status exteria_emoji_sets_parse(const exteria_tl_value *answer, exteria_sticker_set_row *sets, size_t cap, size_t *count);
+/* the emoji sets the server recommends, for an account that has none of its own; the same rows as exteria_emoji_sets_parse */
+exteria_status exteria_featured_emoji_sets_request(exteria_arena *arena, exteria_tl_value **out);
+exteria_status exteria_featured_emoji_sets_parse(const exteria_tl_value *answer, exteria_sticker_set_row *sets, size_t cap, size_t *count);
 /* a messages.stickerSet answer of a custom emoji set: the header and one row per emoji, in set order */
 exteria_status exteria_emoji_set_parse(const exteria_tl_value *answer, exteria_sticker_set_row *set, exteria_custom_emoji *rows,
                                        size_t cap, size_t *count);

@@ -11,6 +11,10 @@
 @protocol ExteriaMessageCellDelegate <NSObject>
 /* the address of a link in the text was tapped */
 - (void)messageCell:(ExteriaMessageCell *)cell didTapLink:(NSString *)url;
+@optional
+/* a hold on a link of the text; NO lets the hold open the menu of the message instead */
+- (BOOL)messageCell:(ExteriaMessageCell *)cell didHoldLink:(NSString *)url;
+@required
 /* the red mark of a message that did not go out was tapped */
 - (void)messageCellDidLongPress:(ExteriaMessageCell *)cell;
 - (void)messageCell:(ExteriaMessageCell *)cell didTapReaction:(ExteriaReaction *)reaction;

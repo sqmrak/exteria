@@ -8923,12 +8923,111 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     return found && (current.spoilersRevealed || !exteria_code_has_hidden_spoiler(range.location, range.length, spoilers, count));
 }
 
+/* the digits and the plus of a phone number as the server marked it: the text keeps the spaces and dashes the sender typed, and a tel: address with them does not open */
+static NSString *ExteriaDialablePhone(NSString *shown) {
+    NSMutableString *digits = [NSMutableString stringWithCapacity:shown.length];
+    for (NSUInteger i = 0; i < shown.length; ++i) {
+        unichar c = [shown characterAtIndex:i];
+        if ((c >= '0' && c <= '9') || (c == '+' && !digits.length)) [digits appendFormat:@"%C", c];
+    }
+    return digits;
+}
+
+/* the sheet a held link opens, as in exteraGram: the link itself as the title, then opening it, copying it and, for an address, sharing it. NO for the targets that have
+   nothing to copy (a name over a user, a date, a command), whose hold stays the hold of the message */
+- (BOOL)showMenuOfLink:(NSString *)url cell:(ExteriaMessageCell *)cell {
+    NSString *title = nil, *copied = nil, *copiedNote = NSLocalizedString(@"profile.copied", nil);
+    NSMutableArray *options = [NSMutableArray array];
+    NSMutableArray *actions = [NSMutableArray array];
+    NSString *const actionOpen = @"open", *const actionCopy = @"copy", *const actionShare = @"share", *const actionCall = @"call";
+    if ([url hasPrefix:@"exteria-mention:"]) {
+        title = [@"@" stringByAppendingString:[url substringFromIndex:[@"exteria-mention:" length]]];
+        copied = title;
+        [options addObject:NSLocalizedString(@"chat.ask.link.action", nil)]; [actions addObject:actionOpen];
+        [options addObject:NSLocalizedString(@"chat.link.username.copy", nil)]; [actions addObject:actionCopy];
+    } else if ([url hasPrefix:ExteriaPhoneLinkPrefix]) {
+        title = copied = [url substringFromIndex:ExteriaPhoneLinkPrefix.length];
+        NSURL *dial = [NSURL URLWithString:[ExteriaPhoneLinkPrefix stringByAppendingString:ExteriaDialablePhone(title)]];
+        if (dial && [[UIApplication sharedApplication] canOpenURL:dial]) {
+            [options addObject:NSLocalizedString(@"chat.link.phone.call", nil)]; [actions addObject:actionCall];
+        }
+        [options addObject:NSLocalizedString(@"chat.link.phone.copy", nil)]; [actions addObject:actionCopy];
+    } else if ([url hasPrefix:@"mailto:"]) {
+        title = copied = [url substringFromIndex:[@"mailto:" length]];
+        [options addObject:NSLocalizedString(@"chat.ask.link.action", nil)]; [actions addObject:actionOpen];
+        [options addObject:NSLocalizedString(@"chat.link.email.copy", nil)]; [actions addObject:actionCopy];
+    } else if ([url hasPrefix:ExteriaCardLinkPrefix]) {
+        title = copied = [url substringFromIndex:ExteriaCardLinkPrefix.length];
+        [options addObject:NSLocalizedString(@"chat.link.card.copy", nil)]; [actions addObject:actionCopy];
+    } else if ([url hasPrefix:ExteriaTagLinkPrefix]) {
+        title = copied = [url substringFromIndex:ExteriaTagLinkPrefix.length];
+        [options addObject:NSLocalizedString(@"chat.link.tag.copy", nil)]; [actions addObject:actionCopy];
+    } else if ([url hasPrefix:@"exteria-"]) {
+        return NO;
+    } else {
+        copied = url;
+        /* the title shows the address readable, with its escapes undone; what is copied and opened stays the address as it came */
+        NSString *readable = [url stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+        title = readable.length ? readable : url;
+        copiedNote = NSLocalizedString(@"chat.link.copied", nil);
+        [options addObject:NSLocalizedString(@"chat.ask.link.action", nil)]; [actions addObject:actionOpen];
+        [options addObject:NSLocalizedString(@"chat.link.copy", nil)]; [actions addObject:actionCopy];
+        /* UIActivityViewController came with ios 6 */
+        if (NSClassFromString(@"UIActivityViewController")) { [options addObject:NSLocalizedString(@"chat.link.share", nil)]; [actions addObject:actionShare]; }
+    }
+    if (!copied.length) return NO;
+    ExteriaWeakReference *weak = _weak;
+    ExteriaMessage *message = cell.item.message;
+    [ExteriaSheet presentInView:self.view title:title message:nil options:options destructive:nil cancelTitle:NSLocalizedString(@"picker.cancel", nil) handler:^(NSUInteger index) {
+        ExteriaChatController *chat = weak.target;
+        if (!chat || index >= actions.count) return;
+        NSString *action = [actions objectAtIndex:index];
+        if ([action isEqualToString:actionCopy]) {
+            [UIPasteboard generalPasteboard].string = copied;
+            [chat toast:copiedNote];
+        } else if ([action isEqualToString:actionOpen]) {
+            [chat openTappedLink:url message:message];
+        } else if ([action isEqualToString:actionCall]) {
+            [chat->_bots openLink:[ExteriaPhoneLinkPrefix stringByAppendingString:ExteriaDialablePhone(copied)]];
+        } else if ([action isEqualToString:actionShare]) {
+            [chat shareLinkText:url];
+        }
+    }];
+    return YES;
+}
+
+- (void)shareLinkText:(NSString *)url {
+    Class activityClass = NSClassFromString(@"UIActivityViewController");
+    if (!activityClass) return;
+    id activity = [[[activityClass alloc] initWithActivityItems:[NSArray arrayWithObject:url] applicationActivities:nil] autorelease];
+    /* an iPad on ios 8 and later presents the sheet as a popover, which raises without a place to point at */
+    if ([activity respondsToSelector:NSSelectorFromString(@"popoverPresentationController")]) {
+        id popover = [activity performSelector:NSSelectorFromString(@"popoverPresentationController")];
+        [popover setValue:self.view forKey:@"sourceView"];
+        [popover setValue:[NSValue valueWithCGRect:CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1)] forKey:@"sourceRect"];
+    }
+    [self presentViewController:activity animated:YES completion:nil];
+}
+
+- (BOOL)messageCell:(ExteriaMessageCell *)cell didHoldLink:(NSString *)url {
+    return [self showMenuOfLink:url cell:cell];
+}
+
 - (void)messageCell:(ExteriaMessageCell *)cell didTapLink:(NSString *)url {
+    /* a number, a card and a tag have no page to open, so a tap shows what can be done with them, as the original client does */
+    if ([url hasPrefix:ExteriaPhoneLinkPrefix] || [url hasPrefix:ExteriaCardLinkPrefix] || [url hasPrefix:ExteriaTagLinkPrefix]) {
+        [self showMenuOfLink:url cell:cell];
+        return;
+    }
+    [self openTappedLink:url message:cell.item.message];
+}
+
+- (void)openTappedLink:(NSString *)url message:(ExteriaMessage *)message {
     ExteriaWeakReference *weak = _weak;
     /* a name written over a user opens that user, whatever the words say */
     if ([url hasPrefix:@"exteria-user:"]) {
         long long userId = [[url substringFromIndex:[@"exteria-user:" length]] longLongValue];
-        if (userId > 0) [_router openProfileOfUser:userId inMessage:cell.item.message.messageId dialog:_dialog];
+        if (userId > 0) [_router openProfileOfUser:userId inMessage:message.messageId dialog:_dialog];
         return;
     }
     /* a date is shown whole, in the words of the device, since the text over it is whatever the sender wrote */
@@ -8951,7 +9050,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     BOOL web = [url hasPrefix:@"http://"] || [url hasPrefix:@"https://"];
     NSRange host = [url rangeOfString:@"//t.me/"];
     ExteriaLinkConfirm mode = ExteriaChatLinkConfirm();
-    BOOL ask = web && host.location == NSNotFound && (mode == ExteriaLinkConfirmAlways || (mode == ExteriaLinkConfirmHidden && [self isHiddenLink:url inMessage:cell.item.message]));
+    BOOL ask = web && host.location == NSNotFound && (mode == ExteriaLinkConfirmAlways || (mode == ExteriaLinkConfirmHidden && [self isHiddenLink:url inMessage:message]));
     if (!ask) {
         [_bots openLink:url];
         return;

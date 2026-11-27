@@ -387,6 +387,31 @@ static void test_folder_title_entities(void) {
     CHECK(entities[0].document_id == 5368324170671202286ll);
 }
 
+static void test_found_entities(void) {
+    exteria_message_row *row = calloc(1, sizeof(*row));
+    exteria_tl_value *m = message(11, "+79001234567 $USD 4111111111111111"), *entities[3];
+    CHECK(row != NULL);
+    entities[0] = obj("messageEntityPhone");
+    set_i32(entities[0], "offset", 0);
+    set_i32(entities[0], "length", 12);
+    entities[1] = obj("messageEntityCashtag");
+    set_i32(entities[1], "offset", 13);
+    set_i32(entities[1], "length", 4);
+    entities[2] = obj("messageEntityBankCard");
+    set_i32(entities[2], "offset", 18);
+    set_i32(entities[2], "length", 16);
+    set(m, "entities", vec_of(entities, 3));
+    CHECK_EQ_INT(exteria_message_read(m, row), EXTERIA_OK);
+    CHECK_EQ_INT(row->entity_count, 3);
+    CHECK_EQ_INT(row->entities[0].kind, EXTERIA_ENTITY_PHONE);
+    CHECK_EQ_INT(row->entities[0].length, 12);
+    CHECK_EQ_INT(row->entities[1].kind, EXTERIA_ENTITY_CASHTAG);
+    CHECK_EQ_INT(row->entities[1].offset, 13);
+    CHECK_EQ_INT(row->entities[2].kind, EXTERIA_ENTITY_BANK_CARD);
+    CHECK_EQ_INT(row->entities[2].url_offset, -1);
+    free(row);
+}
+
 static void test_formatting_entities(void) {
     exteria_message_row *row = calloc(1, sizeof(*row));
     exteria_tl_value *m = message(10, "hidden code quote name when"), *entities[7];
@@ -2344,6 +2369,7 @@ int main(void) {
     test_folder_title_entities();
     test_sticker_set_reference();
     test_formatting_entities();
+    test_found_entities();
     test_bot_message();
     test_invoice_message();
     test_rich_message();

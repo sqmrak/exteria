@@ -1300,6 +1300,14 @@
 "chat.ask.link" = "Открыть эту ссылку?";
 "chat.ask.link.action" = "Открыть";
 "chat.link.copied" = "Ссылка скопирована";
+"chat.link.copy" = "Копировать ссылку";
+"chat.link.share" = "Поделиться";
+"chat.link.username.copy" = "Копировать юзернейм";
+"chat.link.phone.call" = "Позвонить";
+"chat.link.phone.copy" = "Копировать номер";
+"chat.link.email.copy" = "Копировать почту";
+"chat.link.card.copy" = "Копировать номер карты";
+"chat.link.tag.copy" = "Копировать";
 "chat.link.failed" = "Ссылку не удалось сделать";
 "sticker.make.row" = "Создать стикер";
 "sticker.make.row.info" = "Из вашей картинки, в новый набор или в созданный здесь";

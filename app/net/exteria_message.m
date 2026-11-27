@@ -333,6 +333,10 @@ static NSMutableDictionary *ExteriaCustomTexts(void) {
     return key;
 }
 
+NSString *const ExteriaPhoneLinkPrefix = @"tel:";
+NSString *const ExteriaCardLinkPrefix = @"exteria-card:";
+NSString *const ExteriaTagLinkPrefix = @"exteria-tag:";
+
 static ExteriaTextStyle ExteriaStyleOfEntity(uint8_t kind, BOOL *link) {
     *link = NO;
     switch (kind) {
@@ -342,7 +346,11 @@ static ExteriaTextStyle ExteriaStyleOfEntity(uint8_t kind, BOOL *link) {
     case EXTERIA_ENTITY_STRIKE: return ExteriaTextStyleStrike;
     case EXTERIA_ENTITY_CODE: return ExteriaTextStyleCode;
     case EXTERIA_ENTITY_MENTION: return ExteriaTextStyleMention;
-    case EXTERIA_ENTITY_HASHTAG: return ExteriaTextStyleHashtag;
+    case EXTERIA_ENTITY_HASHTAG:
+    /* a phone, a cashtag and a card are colored like a tag and never sent back as a text link, since the server finds them in the text */
+    case EXTERIA_ENTITY_PHONE:
+    case EXTERIA_ENTITY_CASHTAG:
+    case EXTERIA_ENTITY_BANK_CARD: return ExteriaTextStyleHashtag;
     case EXTERIA_ENTITY_CUSTOM_EMOJI: return ExteriaTextStyleCustomEmoji;
     case EXTERIA_ENTITY_BOT_COMMAND: return ExteriaTextStyleBotCommand;
     case EXTERIA_ENTITY_SPOILER: return ExteriaTextStyleSpoiler;
@@ -367,6 +375,8 @@ NSArray *ExteriaTextEntities(NSString *text, const exteria_entity *entities, siz
         NSString *url = nil;
         if ((e->kind == EXTERIA_ENTITY_TEXT_URL || e->kind == EXTERIA_ENTITY_PRE) && e->url_offset >= 0 && urls) url = ExteriaUtf8(urls + e->url_offset);
         else if (e->kind == EXTERIA_ENTITY_EMAIL) url = [@"mailto:" stringByAppendingString:[text substringWithRange:NSMakeRange((NSUInteger)e->offset, (NSUInteger)e->length)]];
+        else if (e->kind == EXTERIA_ENTITY_PHONE) url = [ExteriaPhoneLinkPrefix stringByAppendingString:[text substringWithRange:NSMakeRange((NSUInteger)e->offset, (NSUInteger)e->length)]];
+        else if (e->kind == EXTERIA_ENTITY_BANK_CARD) url = [ExteriaCardLinkPrefix stringByAppendingString:[text substringWithRange:NSMakeRange((NSUInteger)e->offset, (NSUInteger)e->length)]];
         ExteriaTextEntity *entity = [[[ExteriaTextEntity alloc] initWithStyle:style range:NSMakeRange((NSUInteger)e->offset, (NSUInteger)e->length) url:url] autorelease];
         entity.documentId = e->document_id;
         entity.userId = e->user_id;

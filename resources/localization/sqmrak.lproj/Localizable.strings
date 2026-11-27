@@ -1301,6 +1301,14 @@
 "chat.ask.link" = "открыть эту ссылку?";
 "chat.ask.link.action" = "открыть";
 "chat.link.copied" = "ссылка скопирована";
+"chat.link.copy" = "скопировать ссылку";
+"chat.link.share" = "поделиться";
+"chat.link.username.copy" = "скопировать юзернейм";
+"chat.link.phone.call" = "позвонить";
+"chat.link.phone.copy" = "скопировать номер";
+"chat.link.email.copy" = "скопировать почту";
+"chat.link.card.copy" = "скопировать номер карты";
+"chat.link.tag.copy" = "скопировать";
 "chat.link.failed" = "ссылку не удалось сделать :P";
 "sticker.make.row" = "создать стикер";
 "sticker.make.row.info" = "из вашей картинки, в новый набор или в созданный здесь :3";

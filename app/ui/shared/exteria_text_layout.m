@@ -83,6 +83,7 @@ static NSString *ExteriaLinkTarget(ExteriaTextEntity *entity, NSString *text) {
     if (entity.style == ExteriaTextStyleBotCommand) return [@"exteria-command:" stringByAppendingString:shown];
     if (entity.style == ExteriaTextStyleMentionName && entity.userId > 0) return [NSString stringWithFormat:@"exteria-user:%lld", entity.userId];
     if (entity.style == ExteriaTextStyleDate && entity.date > 0) return [NSString stringWithFormat:@"exteria-date:%d:%u", (int)entity.date, (unsigned)entity.flags];
+    if (entity.style == ExteriaTextStyleHashtag && shown.length > 1) return [ExteriaTagLinkPrefix stringByAppendingString:shown];
     return nil;
 }
 

@@ -1295,6 +1295,14 @@
 "chat.ask.link" = "Open this link?";
 "chat.ask.link.action" = "Open";
 "chat.link.copied" = "Link copied";
+"chat.link.copy" = "Copy link";
+"chat.link.share" = "Share";
+"chat.link.username.copy" = "Copy username";
+"chat.link.phone.call" = "Call";
+"chat.link.phone.copy" = "Copy number";
+"chat.link.email.copy" = "Copy email";
+"chat.link.card.copy" = "Copy card number";
+"chat.link.tag.copy" = "Copy";
 "chat.link.failed" = "The link was not made";
 "sticker.make.row" = "Create a sticker";
 "sticker.make.row.info" = "From a picture of yours, into a new set or one made here";

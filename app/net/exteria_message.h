@@ -88,6 +88,11 @@ typedef enum {
 } ExteriaTextStyle;
 
 /* a styled run of a message text; the range counts UTF-16 units */
+/* the targets of what the server finds in the text: a phone number, a bank card, and a hashtag or cashtag with its sign */
+extern NSString *const ExteriaPhoneLinkPrefix;
+extern NSString *const ExteriaCardLinkPrefix;
+extern NSString *const ExteriaTagLinkPrefix;
+
 @interface ExteriaTextEntity : NSObject {
     ExteriaTextStyle _style;
     NSRange _range;

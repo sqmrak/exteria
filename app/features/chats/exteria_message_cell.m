@@ -3087,7 +3087,102 @@ static void ExteriaSwipeTick(void) {
     CGPoint point = [press locationInView:self.contentView];
     if (!_reactions.hidden && [self reactionTimeShown] && [_reactions chipContainsPoint:[self.contentView convertPoint:point toView:_reactions]]) return;
     _pressPoint = [press locationInView:_body];
-    if (CGRectContainsPoint(_item.bubbleFrame, point)) [_delegate messageCellDidLongPress:self];
+    if (!CGRectContainsPoint(_item.bubbleFrame, point)) return;
+    /* a hold on an address, a name, a number or a tag offers what can be done with it, as the original client does; the rest of the bubble keeps the message menu */
+    NSString *url = _selecting ? nil : [self linkAtBodyPoint:_pressPoint];
+    if (url && ![url isEqualToString:ExteriaSpoilerTarget] && [_delegate respondsToSelector:@selector(messageCell:didHoldLink:)] &&
+        [_delegate messageCell:self didHoldLink:url]) return;
+    [_delegate messageCellDidLongPress:self];
+}
+
+/* the target of the link under a point of the body view, nil where the words are plain */
+- (NSString *)linkAtBodyPoint:(CGPoint)inBody {
+    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
+    if (_item.richLayout) return [_item.richLayout linkAtPoint:CGPointMake(inBody.x - _item.richOrigin.x, inBody.y - _item.richOrigin.y)];
+    if (!_item.textLayout) return nil;
+    return [_item.textLayout linkAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)];
+}
+
+- (void)showTranscriptOfItem:(ExteriaChatItem *)item bubble:(CGRect)bubble {
+    if (CGRectIsEmpty(item.transcriptFrame) || !item.transcript.length) {
+        _transcriptPlate.hidden = YES;
+        return;
+    }
+    if (!_transcriptPlate) {
+        _transcriptPlate = [[UIView alloc] init];
+        _transcriptPlate.userInteractionEnabled = NO;
+        _transcriptPlate.layer.cornerRadius = 14;
+        _transcriptLabel = [[ExteriaEmojiLabel alloc] init];
+        _transcriptLabel.numberOfLines = 0;
+        [_transcriptPlate addSubview:_transcriptLabel];
+        [self.contentView addSubview:_transcriptPlate];
+    }
+    BOOL outgoing = item.message.outgoing;
+    _transcriptPlate.hidden = NO;
+    _transcriptPlate.backgroundColor = outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn();
+    _transcriptPlate.frame = CGRectOffset(item.transcriptFrame, bubble.origin.x, bubble.origin.y);
+    _transcriptLabel.font = ExteriaFontRegular((CGFloat)ExteriaChatTextSize());
+    _transcriptLabel.textColor = ExteriaColorBubbleText(outgoing);
+    _transcriptLabel.text = item.transcript;
+    _transcriptLabel.frame = CGRectInset(_transcriptPlate.bounds, 11, 8);
+}
+
+/* a map of an article is the tiled map view the location messages use, laid over its box; the views of a cell are kept for the next article it shows */
+- (void)placeRichMapsForItem:(ExteriaChatItem *)item bubble:(CGRect)bubble {
+    ExteriaRichLayout *rich = item.richLayout;
+    NSUInteger used = 0;
+    for (NSUInteger i = 0; i < rich.mediaCount; ++i) {
+        ExteriaMedia *media = [rich mediaAtIndex:i];
+        if (media.kind != EXTERIA_PREVIEW_LOCATION || !media.location.valid) continue;
+        if (!_richMaps) _richMaps = [[NSMutableArray alloc] init];
+        ExteriaMapView *map = used < _richMaps.count ? [_richMaps objectAtIndex:used] : nil;
+        if (!map) {
+            map = [[[ExteriaMapView alloc] initWithFrame:CGRectZero] autorelease];
+            map.compact = YES;
+            map.userInteractionEnabled = NO;
+            map.clipsToBounds = YES;
+            map.layer.cornerRadius = 8;
+            [self.contentView insertSubview:map belowSubview:_overlay];
+            [_richMaps addObject:map];
+        }
+        ++used;
+        CGRect box = [rich frameOfMediaAtIndex:i];
+        map.frame = CGRectMake(bubble.origin.x + item.richOrigin.x + box.origin.x, bubble.origin.y + item.richOrigin.y + box.origin.y, box.size.width, box.size.height);
+        map.hidden = NO;
+        [map showLocation:media.location zoom:[rich zoomOfMediaAtIndex:i]];
+    }
+    for (NSUInteger i = used; i < _richMaps.count; ++i) {
+        ExteriaMapView *map = [_richMaps objectAtIndex:i];
+        [map cancelTiles];
+        map.hidden = YES;
+    }
+}
+
+/* the pictures of an article come from the cache at the size their boxes have; one that is not in memory yet loads and redraws the bubble when it is in */
+- (void)loadRichImagesForItem:(ExteriaChatItem *)item {
+    ExteriaRichLayout *rich = item.richLayout;
+    [_body.richImages removeAllObjects];
+    NSUInteger token = _token;
+    ExteriaWeakReference *weak = _weak;
+    for (NSUInteger i = 0; i < rich.mediaCount; ++i) {
+        ExteriaMedia *media = [rich mediaAtIndex:i];
+        ExteriaRemoteFile *file = media.kind == EXTERIA_PREVIEW_PHOTO ? media.file : media.previewFile;
+        if (!file) continue;
+        CGRect frame = [rich frameOfMediaAtIndex:i];
+        CGFloat side = MAX(frame.size.width, frame.size.height) * ExteriaScreenScale();
+        NSNumber *key = [NSNumber numberWithUnsignedInteger:i];
+        UIImage *ready = [_media cachedImageForFile:file maxSide:side];
+        if (ready) {
+            [_body.richImages setObject:ready forKey:key];
+            continue;
+        }
+        [_media loadImageForFile:file maxSide:side completion:^(UIImage *image) {
+            ExteriaMessageCell *cell = weak.target;
+            if (!cell || !image || token != cell->_token || cell->_item.richLayout != rich) return;
+            [cell->_body.richImages setObject:image forKey:key];
+            [cell->_body setNeedsDisplay];
+        }];
+    }
 }
 
 - (void)doubleTapped:(UITapGestureRecognizer *)tap {
@@ -3290,10 +3385,14 @@ static void ExteriaSwipeTick(void) {
     if (!_reactions.hidden && CGRectContainsPoint(_reactions.frame, point)) return;
     if (_markupView && !_markupView.hidden && CGRectContainsPoint(_markupView.frame, point)) return;
     CGPoint inBody = [tap locationInView:_body];
-    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
     ExteriaMessage *message = _item.message;
-    NSString *url = _item.textLayout ? [_item.textLayout linkAtPoint:CGPointMake(inBody.x - _item.textOrigin.x, inBody.y - _item.textOrigin.y)] : nil;
-    if ([url isEqualToString:ExteriaSpoilerTarget]) {
+    NSString *url = [self linkAtBodyPoint:inBody];
+    if (!_item.message.outgoing) inBody.x -= _body.tailWidth;
+    /* a covered spoiler in the words, or a picture of an article under one, shows on a tap, and the whole message shows with it */
+    CGPoint inRich = CGPointMake(inBody.x - _item.richOrigin.x, inBody.y - _item.richOrigin.y);
+    NSUInteger richMedia = _item.richLayout ? [_item.richLayout mediaIndexAtPoint:inRich] : NSNotFound;
+    BOOL coveredPicture = richMedia != NSNotFound && [_item.richLayout mediaAtIndex:richMedia].spoiler && !_item.richLayout.spoilersRevealed;
+    if ([url isEqualToString:ExteriaSpoilerTarget] || coveredPicture) {
         message.spoilersRevealed = YES;
         _item.textLayout.spoilersRevealed = YES;
         _item.richLayout.spoilersRevealed = YES;
