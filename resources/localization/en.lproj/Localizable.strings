@@ -747,6 +747,8 @@
 "chat.msg.edit.title" = "Edit message";
 "chat.msg.forwarded" = "Forwarded";
 "chat.forward.topic" = "Choose a topic";
+"chat.forward.comment.title" = "Forward";
+"chat.forward.comment.hint" = "Add a comment";
 "chat.msg.pinned" = "Pinned";
 "chat.msg.unpinned" = "Unpinned";
 "chat.msg.details.id" = "ID: %d";

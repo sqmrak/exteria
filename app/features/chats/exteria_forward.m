@@ -3,6 +3,7 @@
 
 #include "exteria_message_actions.h"
 
+#import "exteria_alert_view.h"
 #import "exteria_chat_settings.h"
 #import "exteria_gift_screen.h"
 #import "exteria_message.h"
@@ -184,13 +185,68 @@ static void ExteriaChooseForwardTopic(ExteriaSession *session, ExteriaMediaCache
     }];
 }
 
-void ExteriaForwardMessages(ExteriaSession *session, ExteriaMediaCache *cache, ExteriaDialog *from, BOOL chatRestricted, NSArray *messages, ExteriaDialog *target, BOOL hideAuthor, void (^completion)(NSString *message)) {
+/* the answer of the comment alert goes to a block, since the alert holds its delegate by assignment only */
+@interface ExteriaForwardComment : NSObject <UIAlertViewDelegate> {
+    void (^_block)(BOOL forward, NSString *comment);
+}
+- (id)initWithBlock:(void (^)(BOOL forward, NSString *comment))block;
+@end
+
+@implementation ExteriaForwardComment
+- (id)initWithBlock:(void (^)(BOOL forward, NSString *comment))block {
+    self = [super init];
+    if (self) _block = [block copy];
+    return self;
+}
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)index {
+    BOOL forward = index != alertView.cancelButtonIndex;
+    NSString *comment = forward ? [[alertView textFieldAtIndex:0].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] : nil;
+    void (^block)(BOOL, NSString *) = [_block retain];
+    block(forward, comment);
+    [block release];
+}
+- (void)dealloc { [_block release]; [super dealloc]; }
+@end
+
+/* the words that go before the forwarded messages, as the share sheet of the official clients lets a person add them; the favorites are a place to keep messages,
+   so a forward there goes with no question */
+static void ExteriaAskForwardComment(ExteriaDialog *target, void (^done)(BOOL forward, NSString *comment)) {
+    if (target.saved) { done(YES, nil); return; }
+    ExteriaForwardComment *answer = [[ExteriaForwardComment alloc] initWithBlock:^(BOOL forward, NSString *comment) { done(forward, comment); }];
+    UIAlertView *alert = [[ExteriaAlertClass() alloc] initWithTitle:NSLocalizedString(@"chat.forward.comment.title", nil) message:nil delegate:answer
+                                                  cancelButtonTitle:NSLocalizedString(@"picker.cancel", nil) otherButtonTitles:NSLocalizedString(@"chat.msg.forward", nil), nil];
+    alert.alertViewStyle = UIAlertViewStylePlainTextInput;
+    UITextField *field = [alert textFieldAtIndex:0];
+    field.placeholder = NSLocalizedString(@"chat.forward.comment.hint", nil);
+    field.autocapitalizationType = UITextAutocapitalizationTypeSentences;
+    objc_setAssociatedObject(alert, "exteria.forward.comment", answer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [answer release];
+    [alert show];
+    [alert release];
+}
+
+void ExteriaForwardMessages(ExteriaSession *session, ExteriaMediaCache *cache, ExteriaDialog *from, BOOL chatRestricted, NSArray *messages, ExteriaDialog *target, BOOL hideAuthor, void (^completion)(NSString *)) {
     void (^finish)(NSString *) = [completion copy];
     ExteriaChooseForwardTopic(session, cache, target, ^(ExteriaDialog *chosen) {
         /* nothing was chosen: the list was cancelled, and nothing goes */
         if (!chosen) { [finish release]; return; }
-        ExteriaForwardMessagesNow(session, cache, from, chatRestricted, messages, chosen, hideAuthor, finish);
-        [finish release];
+        ExteriaAskForwardComment(chosen, ^(BOOL forward, NSString *comment) {
+            if (!forward) { [finish release]; return; }
+            if (!comment.length) {
+                ExteriaForwardMessagesNow(session, cache, from, chatRestricted, messages, chosen, hideAuthor, finish);
+                [finish release];
+                return;
+            }
+            /* the comment goes first and the messages after it; when the comment fails, the messages stay behind and the error is shown */
+            long long randomId;
+            do { randomId = (long long)(((uint64_t)arc4random() << 32 | arc4random()) & 0x7fffffffffffffffULL); } while (randomId == 0);
+            [session sendText:comment entities:nil toDialog:chosen randomId:randomId completion:^(int32_t messageId, NSString *errorName) {
+                (void)messageId;
+                if (errorName) { finish(ExteriaGiftErrorText(errorName)); [finish release]; return; }
+                ExteriaForwardMessagesNow(session, cache, from, chatRestricted, messages, chosen, hideAuthor, finish);
+                [finish release];
+            }];
+        });
     });
 }
 

@@ -750,6 +750,8 @@
 "chat.msg.edit.title" = "изменение сообщения";
 "chat.msg.forwarded" = "переслано";
 "chat.forward.topic" = "выберите тему";
+"chat.forward.comment.title" = "переслать";
+"chat.forward.comment.hint" = "добавьте комментарий";
 "chat.msg.pinned" = "закреплено";
 "chat.msg.unpinned" = "откреплено";
 "chat.msg.details.id" = "id: %d";
