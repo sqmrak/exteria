@@ -10,6 +10,7 @@
 #import "exteria_status_label.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import <QuickLook/QuickLook.h>
 
 #import "exteria_alert.h"
 #import "exteria_senko_popup.h"
@@ -8795,7 +8796,10 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     [_document release];
     _document = [[UIDocumentInteractionController interactionControllerWithURL:url] retain];
     _document.delegate = self;
-    if ([_document presentPreviewAnimated:YES]) return;
+    /* a file that quick look cannot show (an ipa) still gets a preview from presentPreviewAnimated: on ios 5 to 7, a bare page with an Open in button inside the
+       preview, and that button did nothing; those files go straight to the menu of apps */
+    Class previewClass = NSClassFromString(@"QLPreviewController");
+    if (previewClass && [previewClass canPreviewItem:url] && [_document presentPreviewAnimated:YES]) return;
     if (![_document presentOpenInMenuFromRect:cell.bounds inView:cell animated:YES]) ExteriaGiftAlert(nil, NSLocalizedString(@"chat.file.open.failed", nil));
 }
 

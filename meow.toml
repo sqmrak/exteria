@@ -189,6 +189,7 @@ ldflags = ["${PY}/lib/libpython3.11.a", "${PY}/lib/libexteria_pyext.a",
            "-weak_framework", "CoreMotion", "-framework", "MobileCoreServices", "-framework", "CFNetwork",
            "-weak_framework", "AssetsLibrary", "-weak_framework", "AddressBook",
            "-weak_framework", "AddressBookUI", "-weak_framework", "MediaPlayer",
+           "-weak_framework", "QuickLook",
            "-lz", "-lc++", "-lsqlite3", "-liconv", "-Wl,-dead_strip"]
 [target.app.per_slice.armv7]
 ldflags = ["-nostartfiles", "${CRT_V7}"]
