@@ -4228,24 +4228,23 @@ static int ExteriaCompareMessageOrder(const void *first, const void *second) {
     NSArray *server = [_server allValues];
     /* a message on its way belongs to the end of the chat, which a window around an old message does not show */
     NSArray *local = _window ? [NSArray array] : [self localWithoutServerTwins];
-    NSUInteger count = server.count + local.count;
+    NSUInteger serverCount = server.count, count = serverCount + local.count;
     ExteriaMessageOrder *order = malloc(sizeof(ExteriaMessageOrder) * (count ? count : 1));
-    NSMutableArray *all = [NSMutableArray arrayWithCapacity:count];
     if (!order) {
         NSLog(@"exteria: no memory to order %lu messages", (unsigned long)count);
-        return all;
+        return [NSMutableArray array];
     }
-    [all addObjectsFromArray:server];
-    [all addObjectsFromArray:local];
+    /* the server list and the local one are read where they are: a third array holding both was a copy of every message of the chat on each rebuild */
     for (NSUInteger i = 0; i < count; ++i) {
-        ExteriaMessage *message = [all objectAtIndex:i];
+        ExteriaMessage *message = i < serverCount ? [server objectAtIndex:i] : [local objectAtIndex:i - serverCount];
         order[i].index = i;
-        order[i].key = message.messageId > 0 ? message.messageId : INT64_MAX / 2 + (int64_t)(i - server.count);
+        order[i].key = message.messageId > 0 ? message.messageId : INT64_MAX / 2 + (int64_t)(i - serverCount);
     }
     qsort(order, count, sizeof(*order), ExteriaCompareMessageOrder);
     NSMutableArray *sorted = [NSMutableArray arrayWithCapacity:count];
     for (NSUInteger i = 0; i < count; ++i) {
-        ExteriaMessage *message = [all objectAtIndex:order[i].index];
+        NSUInteger at = order[i].index;
+        ExteriaMessage *message = at < serverCount ? [server objectAtIndex:at] : [local objectAtIndex:at - serverCount];
         /* a message of someone else whose text a filter of the person matches is not shown */
         if (message.messageId > 0 && !message.outgoing && (ExteriaAyuHidesText(message.text) || ExteriaPluginsHidesMessage(message, _dialog.peerId))) continue;
         [sorted addObject:message];
@@ -4325,7 +4324,8 @@ static NSInteger ExteriaDayKey(NSCalendar *calendar, int32_t date, ExteriaDaySpa
         if (message.randomId != randomId) continue;
         message.uploadProgress = fraction;
         for (ExteriaMessageCell *cell in _table.visibleCells) {
-            if ([cell isKindOfClass:[ExteriaMessageCell class]] && cell.item.message == message) [cell showUploadProgress];
+            if (![cell isKindOfClass:[ExteriaMessageCell class]]) continue;
+            if (cell.item.message == message || [cell.item.albumMessages indexOfObjectIdenticalTo:message] != NSNotFound) [cell showUploadProgress];
         }
         return;
     }
@@ -4623,7 +4623,8 @@ static void ExteriaRedrawTree(UIView *view) {
             NSTimeInterval deadline = (NSTimeInterval)message.date + _sharingPeriod + 1;
             if (deadline > serverNow && (!nextExpiry || deadline < nextExpiry)) nextExpiry = deadline;
         }
-        if (message.messageId > 0 && [_openedOnce containsObject:[NSNumber numberWithInt:message.messageId]]) message.viewOnceOpened = YES;
+        /* most chats have no opened view-once message, and a boxed id per message per rebuild is what this check cost */
+        if (_openedOnce.count && message.messageId > 0 && [_openedOnce containsObject:[NSNumber numberWithInt:message.messageId]]) message.viewOnceOpened = YES;
         /* photos and videos sent together are one item: the run of messages that share an album number, from one sender on one day */
         NSMutableArray *album = nil;
         if (message.groupedId && [self isAlbumMember:message]) {
@@ -4665,7 +4666,7 @@ static void ExteriaRedrawTree(UIView *view) {
         [self assignFacesOfMessage:message];
         NSNumber *key = [self cacheKeyForMessage:message];
         ExteriaChatItem *item = [_itemCache objectForKey:key];
-        NSString *role = [_senderRoles objectForKey:[NSNumber numberWithLongLong:message.senderKey]];
+        NSString *role = _senderRoles.count ? [_senderRoles objectForKey:[NSNumber numberWithLongLong:message.senderKey]] : nil;
         int32_t replyId = message.replyTo ? message.replyTo : message.sendReplyTo;
         /* every comment under a post answers that post, which the head of the thread shows already; a quote of it on each comment says nothing, as the root of a topic is not
            quoted either. an answer to another comment keeps its quote */
