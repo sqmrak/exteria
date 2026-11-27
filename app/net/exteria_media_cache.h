@@ -20,6 +20,8 @@
    file, which costs one ranged request of 64 KiB (a second one, up to 1 MiB, when the tag is larger). decoded covers are kept on disk; nil on the main thread's completion
    means the track has no usable cover or the request failed */
 - (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion;
+/* small rows can show Telegram's thumbnail without waiting for the larger picture in the audio tag */
+- (void)loadSmallCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion;
 /* starts the fetch and decode of a picture a row below the fold will ask for, so it is in memory by then */
 - (void)prepareImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide;
 /* the raw bytes, for formats that are not pictures (a lottie sticker); the completion runs on the main thread */

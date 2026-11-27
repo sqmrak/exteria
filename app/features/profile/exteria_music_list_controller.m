@@ -111,7 +111,7 @@ static NSString *ExteriaClock(NSTimeInterval seconds) {
         if (key) {
             ExteriaSongCell *cell = self;
             [self retain];
-            [media loadCoverForTrack:track maxSide:ICON_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
+            [media loadSmallCoverForTrack:track maxSide:ICON_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
                 if (image && [key isEqualToString:cell->_coverKey]) {
                     cell->_cover.image = image;
                     [cell showIcon];

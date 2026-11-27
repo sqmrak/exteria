@@ -175,7 +175,7 @@
     [self setNeedsLayout];
     if (!track || !_media) return;
     ExteriaMedia *requested = track;
-    [_media loadCoverForTrack:track maxSide:MUSIC_COVER * ExteriaScreenScale() completion:^(UIImage *image) {
+    [_media loadSmallCoverForTrack:track maxSide:MUSIC_COVER * ExteriaScreenScale() completion:^(UIImage *image) {
         if (!image || requested != _track) return;
         _cover.image = image;
         _note.hidden = YES;

@@ -490,7 +490,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     });
 }
 
-- (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
+- (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide preferThumbnail:(BOOL)preferThumbnail completion:(void (^)(UIImage *image))completion {
     ExteriaRemoteFile *preview = track.previewFile, *audio = track.file;
     BOOL taggable = audio && track.kind == EXTERIA_PREVIEW_AUDIO;
     void (^done)(UIImage *) = [completion copy];
@@ -515,7 +515,7 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
     [self loadImageForFile:preview maxSide:maxSide completion:^(UIImage *image) {
         /* telegram keeps a thumbnail of ninety pixels or so for many songs, and drawn at the size of the player it was soft while the tag of the file holds the real cover */
         CGFloat longSide = image.CGImage ? (CGFloat)MAX(CGImageGetWidth(image.CGImage), CGImageGetHeight(image.CGImage)) : 0;
-        if (image && !(taggable && longSide < maxSide * 0.75)) {
+        if (image && (preferThumbnail || !(taggable && longSide < maxSide * 0.75))) {
             done(image);
             [done release];
         } else {
@@ -523,6 +523,14 @@ static exteria_status ExteriaCoverOfHead(NSData *head, NSData **picture, size_t 
         }
         [embeddedCopy release];
     }];
+}
+
+- (void)loadCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
+    [self loadCoverForTrack:track maxSide:maxSide preferThumbnail:NO completion:completion];
+}
+
+- (void)loadSmallCoverForTrack:(ExteriaMedia *)track maxSide:(CGFloat)maxSide completion:(void (^)(UIImage *image))completion {
+    [self loadCoverForTrack:track maxSide:maxSide preferThumbnail:YES completion:completion];
 }
 
 - (void)prepareImageForFile:(ExteriaRemoteFile *)file maxSide:(CGFloat)maxSide {

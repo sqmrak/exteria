@@ -305,7 +305,7 @@ static UIColor *ExteriaPlateColor(UIColor *cover) {
     [self setPlate:nil];
     if (!track || !_media) return;
     NSString *requested = _coverKey;
-    [_media loadCoverForTrack:track maxSide:COVER_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
+    [_media loadSmallCoverForTrack:track maxSide:COVER_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
         if (!image || ![requested isEqualToString:_coverKey]) return;
         _cover.image = image;
         _note.hidden = YES;

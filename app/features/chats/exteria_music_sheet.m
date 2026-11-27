@@ -68,7 +68,7 @@
         _cover.image = nil;
         if (key.length) {
             ExteriaWeakReference *weak = _weak;
-            [player.media loadCoverForTrack:track maxSide:COVER_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
+            [player.media loadSmallCoverForTrack:track maxSide:COVER_SIDE * ExteriaScreenScale() completion:^(UIImage *image) {
                 ExteriaQueueCell *cell = weak.target;
                 if (cell && [key isEqualToString:cell->_key]) cell->_cover.image = image ? image : ExteriaSymbolImage(ExteriaSymbolPlayerNote, 24, ExteriaColorAccent());
             }];
