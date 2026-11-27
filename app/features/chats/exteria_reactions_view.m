@@ -316,6 +316,8 @@ static CAMediaTimingFunction *ExteriaReactionCurve(void) {
         ExteriaEmojiLabel *label = [[[ExteriaEmojiLabel alloc] init] autorelease];
         label.text = ExteriaReactionText(r, counts);
         label.entities = r.displayEntities;
+        /* the star of a paid reaction is the emoji itself; every other reaction is drawn with the picture of Telegram only */
+        label.blanksPlainEmoji = r.row.kind != EXTERIA_REACTION_PAID;
         label.font = ExteriaFontMedium(16 * ExteriaReactionScale());
         label.textColor = [self chipTextColorChosen:r.chosen];
         label.textAlignment = ExteriaTextAlignmentCenter;

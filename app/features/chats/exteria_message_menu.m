@@ -457,6 +457,7 @@ static void ExteriaMenuSkin(UIView *view, CGFloat radius) {
         ExteriaEmojiLabel *label = [[[ExteriaEmojiLabel alloc] init] autorelease];
         label.text = reaction.displayText;
         label.entities = reaction.displayEntities;
+        label.blanksPlainEmoji = reaction.row.kind != EXTERIA_REACTION_PAID;
         label.font = ExteriaFontRegular(27);
         label.textAlignment = ExteriaTextAlignmentCenter;
         label.frame = button.bounds;

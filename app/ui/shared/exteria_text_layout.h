@@ -69,6 +69,8 @@ extern NSString *const ExteriaSpoilerTarget;
 /* draws with the top left corner of the text box at origin, in the current UIKit context */
 - (void)drawAtPoint:(CGPoint)origin;
 - (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)document;
+/* blank leaves the room of an emoji empty until the picture of its custom emoji is in, instead of drawing the emoji of the app's set there */
+- (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)document blankingPlainEmoji:(BOOL)blank;
 /* the address of the link under point (relative to the text box), nil when there is none */
 - (NSString *)linkAtPoint:(CGPoint)point;
 /* the original code or pre entity under the point, even when an emoji changed layout offsets */

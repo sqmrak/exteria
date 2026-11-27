@@ -521,6 +521,10 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
 }
 
 - (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)hiddenDocument {
+    [self drawAtPoint:origin hidingCustomEmoji:hiddenDocument blankingPlainEmoji:NO];
+}
+
+- (void)drawAtPoint:(CGPoint)origin hidingCustomEmoji:(long long)hiddenDocument blankingPlainEmoji:(BOOL)blank {
     if (!_lineCount) return;
     CGContextRef context = UIGraphicsGetCurrentContext();
     BOOL covered = _hasSpoilers && !_spoilersRevealed;
@@ -613,7 +617,7 @@ static void ExteriaAddDetectedLinks(NSMutableAttributedString *string, NSString 
             CGRect square = CGRectMake(CGRectGetMidX(rect) - side / 2, CGRectGetMidY(rect) - side / 2, side, side);
             if (picture) {
                 [picture drawInRect:square];
-            } else if (entry) {
+            } else if (entry && !blank) {
                 ExteriaDrawEmoji([entry unsignedIntegerValue], square);
             }
         }

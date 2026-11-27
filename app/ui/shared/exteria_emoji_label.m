@@ -37,6 +37,7 @@
 }
 
 - (void)dealloc {
+    if (_blanksPlainEmoji) [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaCustomEmojiDidLoadNotification object:nil];
     [_text release];
     [_font release];
     [_textColor release];
@@ -113,6 +114,25 @@
 }
 
 - (long long)hiddenCustomEmoji { return _hiddenCustomEmoji; }
+- (BOOL)blanksPlainEmoji { return _blanksPlainEmoji; }
+- (void)setBlanksPlainEmoji:(BOOL)blanks {
+    if (_blanksPlainEmoji == blanks) return;
+    _blanksPlainEmoji = blanks;
+    /* a blank room has nothing that redraws it, so the label listens for its picture */
+    if (blanks) [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(customPictureLoaded:) name:ExteriaCustomEmojiDidLoadNotification object:nil];
+    else [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaCustomEmojiDidLoadNotification object:nil];
+    [self setNeedsDisplay];
+}
+
+- (void)customPictureLoaded:(NSNotification *)note {
+    long long document = [note.object longLongValue];
+    for (ExteriaTextEntity *entity in _entities) {
+        if (entity.documentId == document) {
+            [self setNeedsDisplay];
+            return;
+        }
+    }
+}
 - (void)setHiddenCustomEmoji:(long long)document {
     if (_hiddenCustomEmoji == document) return;
     _hiddenCustomEmoji = document;
@@ -213,7 +233,7 @@ static NSCache *ExteriaLabelLayoutCache(void) {
     CGContextSaveGState(context);
     if (_shadowColor) CGContextSetShadowWithColor(context, _shadowOffset, 0, _shadowColor.CGColor);
     /* the text sits on the vertical middle, as a label's does */
-    [layout drawAtPoint:CGPointMake(0, floor((self.bounds.size.height - layout.size.height) / 2)) hidingCustomEmoji:_hiddenCustomEmoji];
+    [layout drawAtPoint:CGPointMake(0, floor((self.bounds.size.height - layout.size.height) / 2)) hidingCustomEmoji:_hiddenCustomEmoji blankingPlainEmoji:_blanksPlainEmoji];
     CGContextRestoreGState(context);
     if (ExteriaEmojiMissCount() != misses) ExteriaEmojiRedrawWhenLoaded(self);
     if (ExteriaCustomEmojiAnimatedDraws() != animated) [ExteriaCustomEmoji keepAnimatingView:self];

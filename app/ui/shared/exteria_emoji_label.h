@@ -14,6 +14,7 @@
     UIColor *_prefixColor;
     NSUInteger _prefixLength;
     long long _hiddenCustomEmoji;
+    BOOL _blanksPlainEmoji;
 }
 
 @property (nonatomic, copy) NSString *text;
@@ -32,6 +33,8 @@
 @property (nonatomic, assign) CGSize shadowOffset;
 /* leave the emoji's space in the text while an animation draws it */
 @property (nonatomic, assign) long long hiddenCustomEmoji;
+/* a reaction shows only the picture Telegram draws it with: its emoji stays an empty room until that picture is in, so the emoji of the phone does not flash first */
+@property (nonatomic, assign) BOOL blanksPlainEmoji;
 
 /* the first prefixLength characters are drawn in prefixColor, such as the red "Draft:" before the words of a draft; zero length draws one color */
 - (void)setPrefixLength:(NSUInteger)length color:(UIColor *)color;

@@ -272,6 +272,7 @@
     ExteriaEmojiLabel *label = [[[ExteriaEmojiLabel alloc] init] autorelease];
     label.text = reaction.displayText;
     label.entities = reaction.displayEntities;
+    label.blanksPlainEmoji = reaction.row.kind != EXTERIA_REACTION_PAID;
     label.font = ExteriaFontRegular(31);
     label.textAlignment = ExteriaTextAlignmentCenter;
     label.userInteractionEnabled = NO;
