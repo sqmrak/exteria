@@ -106,6 +106,8 @@ void ExteriaLoadQuickReactionPicture(ExteriaSession *session, ExteriaMediaCache 
     _picker = [[ExteriaReactionPicker alloc] initWithFrame:self.view.bounds];
     _picker.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [_picker attachSession:_session media:_media premium:_premium];
+    /* the default reaction may be any custom emoji of a Premium account, so the picker offers the emoji sets; without this it showed the plain reactions only */
+    _picker.customAllowed = YES;
     NSMutableArray *marked = [NSMutableArray array];
     for (ExteriaReaction *choice in _choices) {
         exteria_reaction row = choice.row;

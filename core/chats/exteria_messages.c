@@ -1057,12 +1057,12 @@ exteria_status exteria_emoji_sets_parse(const exteria_tl_value *answer, exteria_
 }
 
 /* the sets of a list of StickerSetCovered, every constructor of which carries its header in "set" */
-static exteria_status covered_parse(const exteria_tl_value *list, exteria_sticker_set_row *sets, size_t cap, size_t *count, int archive) {
+static exteria_status covered_parse(const exteria_tl_value *list, exteria_sticker_set_row *sets, size_t cap, size_t *count, int archive, int emojis) {
     uint32_t i;
     size_t n = 0;
     for (i = 0; i < list->u.vec.count && n < cap; ++i) {
         const exteria_tl_value *s = exteria_tl_get(list->u.vec.items[i], "set");
-        if (!exteria_tl_is(s, EXTERIA_TL_ID_stickerSet) || exteria_tl_has(s, "masks") || exteria_tl_has(s, "emojis")) continue;
+        if (!exteria_tl_is(s, EXTERIA_TL_ID_stickerSet) || exteria_tl_has(s, "masks") || (exteria_tl_has(s, "emojis") ? 1 : 0) != emojis) continue;
         read_set(s, &sets[n]);
         if (sets[n].id == 0) continue;
         /* a set in the archive has an installed date too, and is not among the ones the panel shows */
@@ -1091,7 +1091,7 @@ exteria_status exteria_featured_stickers_parse(const exteria_tl_value *answer, e
     if (!answer || !sets || !count || cap == 0) return EXTERIA_E_ARG;
     if (exteria_tl_is(answer, EXTERIA_TL_ID_messages_featuredStickersNotModified)) return EXTERIA_E_NOTFOUND;
     if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_featuredStickers) || exteria_tl_get_vec(answer, "sets", &list) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
-    return covered_parse(list, sets, cap, count, 0);
+    return covered_parse(list, sets, cap, count, 0, 0);
 }
 
 exteria_status exteria_archived_stickers_request(exteria_arena *arena, int64_t offset_id, int32_t limit, exteria_tl_value **out) {
@@ -1115,7 +1115,7 @@ exteria_status exteria_archived_stickers_parse(const exteria_tl_value *answer, e
     if (total) *total = 0;
     if (!answer || !sets || !count || cap == 0) return EXTERIA_E_ARG;
     if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_archivedStickers) || exteria_tl_get_vec(answer, "sets", &list) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
-    status = covered_parse(list, sets, cap, count, 1);
+    status = covered_parse(list, sets, cap, count, 1, 0);
     if (status == EXTERIA_OK && total) {
         if (exteria_tl_get_i32(answer, "count", &all) != EXTERIA_OK || all < 0) all = (int32_t)*count;
         *total = all;
@@ -1133,6 +1133,27 @@ exteria_status exteria_emoji_sets_request(exteria_arena *arena, exteria_tl_value
     status = exteria_tl_set_i64(arena, request, "hash", 0);
     if (status == EXTERIA_OK) *out = request;
     return status;
+}
+
+exteria_status exteria_featured_emoji_sets_request(exteria_arena *arena, exteria_tl_value **out) {
+    exteria_tl_value *request;
+    exteria_status status;
+    if (out) *out = NULL;
+    if (!arena || !out) return EXTERIA_E_ARG;
+    request = exteria_tl_new_obj(arena, "messages.getFeaturedEmojiStickers");
+    if (!request) return EXTERIA_E_NOMEM;
+    status = exteria_tl_set_i64(arena, request, "hash", 0);
+    if (status == EXTERIA_OK) *out = request;
+    return status;
+}
+
+exteria_status exteria_featured_emoji_sets_parse(const exteria_tl_value *answer, exteria_sticker_set_row *sets, size_t cap, size_t *count) {
+    const exteria_tl_value *list;
+    if (count) *count = 0;
+    if (!answer || !sets || !count || cap == 0) return EXTERIA_E_ARG;
+    if (exteria_tl_is(answer, EXTERIA_TL_ID_messages_featuredStickersNotModified)) return EXTERIA_E_NOTFOUND;
+    if (!exteria_tl_is(answer, EXTERIA_TL_ID_messages_featuredStickers) || exteria_tl_get_vec(answer, "sets", &list) != EXTERIA_OK) return EXTERIA_E_MALFORMED;
+    return covered_parse(list, sets, cap, count, 0, 1);
 }
 
 exteria_status exteria_emoji_set_parse(const exteria_tl_value *answer, exteria_sticker_set_row *set, exteria_custom_emoji *rows,

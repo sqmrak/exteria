@@ -1311,6 +1311,34 @@ static void test_emoji_sets(void) {
     CHECK_EQ_INT(exteria_emoji_sets_parse(obj("messages.allStickersNotModified"), sets, 4, &count), EXTERIA_E_NOTFOUND);
     CHECK_EQ_INT(exteria_emoji_sets_parse(obj("messages.recentStickers"), sets, 4, &count), EXTERIA_E_MALFORMED);
 
+    {
+        /* the recommended emoji sets are covered sets: the ones with the emojis flag, none of the sticker or mask sets */
+        exteria_tl_value *covered[3], *featured, *plain = sticker_set(5, "Pictures", 0), *faces = sticker_set(6, "Faces", 0), *flat = sticker_set(7, "Flat", 1);
+        set_flag(faces, "emojis");
+        covered[0] = obj("stickerSetCovered");
+        set(covered[0], "set", plain);
+        covered[1] = obj("stickerSetCovered");
+        set(covered[1], "set", faces);
+        covered[2] = obj("stickerSetCovered");
+        set(covered[2], "set", flat);
+        featured = obj("messages.featuredStickers");
+        set_i64(featured, "hash", 1);
+        set_i32(featured, "count", 3);
+        set(featured, "sets", vec_of(covered, 3));
+        set(featured, "unread", vec_of(NULL, 0));
+        CHECK_EQ_INT(exteria_featured_emoji_sets_request(&arena, &request), EXTERIA_OK);
+        check_encodes(request, EXTERIA_TL_ID_messages_getFeaturedEmojiStickers);
+        CHECK_EQ_INT(exteria_featured_emoji_sets_request(&arena, NULL), EXTERIA_E_ARG);
+        CHECK_EQ_INT(exteria_featured_emoji_sets_parse(featured, sets, 4, &count), EXTERIA_OK);
+        CHECK_EQ_INT(count, 1);
+        CHECK_EQ_INT(sets[0].id, 6);
+        CHECK_EQ_INT(exteria_featured_stickers_parse(featured, sets, 4, &count), EXTERIA_OK);
+        CHECK_EQ_INT(count, 1);
+        CHECK_EQ_INT(sets[0].id, 5);
+        CHECK_EQ_INT(exteria_featured_emoji_sets_parse(obj("messages.featuredStickersNotModified"), sets, 4, &count), EXTERIA_E_NOTFOUND);
+        CHECK_EQ_INT(exteria_featured_emoji_sets_parse(obj("messages.allStickers"), sets, 4, &count), EXTERIA_E_MALFORMED);
+    }
+
     attributes[0] = obj("documentAttributeCustomEmoji");
     set_str(attributes[0], "alt", "\xF0\x9F\x98\x80");
     docs[0] = document(300, "application/x-tgsticker", attributes, 1);

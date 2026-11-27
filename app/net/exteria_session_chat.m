@@ -2521,6 +2521,32 @@ static NSArray *ExteriaReactionArtOfAnswer(const exteria_tl_value *value, NSStri
     }];
 }
 
+- (void)loadFeaturedEmojiSets:(ExteriaListCompletion)completion {
+    ExteriaListCompletion done = [completion copy];
+    [self invokeBuilt:^exteria_status(exteria_arena *arena, exteria_tl_value **request) {
+        return exteria_featured_emoji_sets_request(arena, request);
+    } handler:^(const exteria_mt_rpc_result *result) {
+        NSMutableArray *sets = nil;
+        NSString *error = nil;
+        if (result->status != EXTERIA_OK) {
+            error = ExteriaRpcErrorName(result);
+        } else {
+            exteria_sticker_set_row *rows = calloc(EXTERIA_STICKER_SETS_MAX, sizeof(*rows));
+            size_t count = 0;
+            if (rows && exteria_featured_emoji_sets_parse(result->value, rows, EXTERIA_STICKER_SETS_MAX, &count) == EXTERIA_OK) {
+                sets = [NSMutableArray arrayWithCapacity:count];
+                for (size_t i = 0; i < count; ++i) [sets addObject:[ExteriaStickerSet setWithRow:&rows[i]]];
+            } else {
+                NSLog(@"exteria: messages.getFeaturedEmojiStickers answer rejected");
+                error = @"INTERNAL";
+            }
+            free(rows);
+        }
+        [self finishLoad:sets error:error completion:done];
+        [done release];
+    }];
+}
+
 - (void)loadEmojiOfSet:(ExteriaStickerSet *)set completion:(ExteriaListCompletion)completion {
     ExteriaListCompletion done = [completion copy];
     exteria_sticker_set_row row = set.row;

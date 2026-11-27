@@ -204,17 +204,33 @@
     [_session loadEmojiSets:^(NSArray *items, NSString *errorName) {
         ExteriaCustomEmojiPicker *picker = weak.target;
         if (!picker) return;
-        picker->_loadingSets = NO;
         if (!items) {
+            picker->_loadingSets = NO;
             NSLog(@"exteria: custom emoji sets not loaded: %@", errorName);
             [picker showStatus:NSLocalizedString(@"emoji.premium.failed", nil)];
             return;
         }
-        picker->_sets = [items retain];
-        [picker buildStrip];
-        if (picker->_leadingSelected) [picker paintTabs];
-        else [picker selectSet:0];
+        if (items.count) {
+            [picker takeSets:items];
+            return;
+        }
+        /* an account with no emoji set of its own has nothing to pick from, so the recommended sets stand in */
+        [picker->_session loadFeaturedEmojiSets:^(NSArray *featured, NSString *featuredError) {
+            ExteriaCustomEmojiPicker *later = weak.target;
+            if (!later) return;
+            if (!featured) NSLog(@"exteria: featured emoji sets not loaded: %@", featuredError);
+            [later takeSets:featured ? featured : items];
+        }];
     }];
+}
+
+- (void)takeSets:(NSArray *)items {
+    _loadingSets = NO;
+    [_sets release];
+    _sets = [items retain];
+    [self buildStrip];
+    if (_leadingSelected) [self paintTabs];
+    else [self selectSet:0];
 }
 
 - (void)buildStrip {
@@ -239,7 +255,8 @@
 
 - (void)selectSet:(NSUInteger)index {
     if (index >= _sets.count) {
-        if (!_leadingSelected) [self showStatus:NSLocalizedString(@"emoji.premium.none", nil)];
+        /* the account lists no emoji sets at all, which is not the same as a set with nothing in it */
+        if (!_leadingSelected) [self showStatus:NSLocalizedString(@"emoji.premium.nosets", nil)];
         return;
     }
     _current = index;

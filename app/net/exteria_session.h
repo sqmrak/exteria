@@ -477,6 +477,8 @@ typedef enum { ExteriaChatCommandPin, ExteriaChatCommandUnpin, ExteriaChatComman
 - (void)loadStickersOfSetNamed:(NSString *)shortName completion:(ExteriaListCompletion)completion;
 /* the custom emoji sets the person has installed as ExteriaStickerSet items, and the ExteriaCustomEmojiDocument items of one */
 - (void)loadEmojiSets:(ExteriaListCompletion)completion;
+/* the emoji sets the server recommends, for an account whose own list is empty */
+- (void)loadFeaturedEmojiSets:(ExteriaListCompletion)completion;
 - (void)loadEmojiOfSet:(ExteriaStickerSet *)set completion:(ExteriaListCompletion)completion;
 - (void)loadRecentStickers:(ExteriaListCompletion)completion;
 /* the stickers the person marked as favorites, and the animations they kept (ExteriaSticker items whose media is a GIF), newest first */

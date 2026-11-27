@@ -3392,12 +3392,8 @@ static NSString *const ExteriaChatScrollKey = @"exteria.chat.scrollpos";
         _panel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         [_panel enableEmojiSearchWithSession:_session];
         [_panel enableGifsWithSession:_session media:_media library:_stickers dialog:_dialog];
-        /* only a Premium account may write custom emoji, so the tab waits for the answer about the signed in user */
-        ExteriaWeakReference *weak = _weak;
-        [self whenPremiumKnown:^(BOOL premium) {
-            ExteriaChatController *chat = weak.target;
-            if (chat && premium) [chat->_panel enableCustomEmojiWithSession:chat->_session media:chat->_media];
-        }];
+        /* saved messages and free emoji sets can accept custom emoji without Premium */
+        [_panel enableCustomEmojiWithSession:_session media:_media];
     }
     return _panel;
 }
