@@ -24,6 +24,8 @@ NSString *ExteriaNameWithBadges(NSString *name, long long document, NSUInteger m
 void ExteriaRedrawVisibleRows(UITableView *table);
 
 void ExteriaLoadBadgePictures(NSArray *documents, ExteriaSession *session, ExteriaMediaCache *media, void (^redraw)(void));
+/* draws a view and all its subviews again, for a row that is not in a table */
+void ExteriaRedrawTreeOfView(UIView *view);
 
 /* sets a label to the name of a person with the marks of Exteria after it at once, and, when the account has a copy of the person (asked for by user id, which a
    screen that only knows a name and an id, such as a call, has), with the emoji status or the Premium star too, which come a moment later. the label is made

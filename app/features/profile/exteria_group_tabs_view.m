@@ -8,6 +8,7 @@
 #import "exteria_symbol.h"
 #import "exteria_time.h"
 #import "exteria_theme.h"
+#import "exteria_name_badge.h"
 #import "exteria_weak_reference.h"
 #import "exteria_music_player.h"
 #import "exteria_dialog_picker_controller.h"
@@ -430,6 +431,10 @@ static ExteriaSymbol ExteriaVoiceRowSymbol(ExteriaMessage *message) {
         }
         cell.developer = ExteriaPersonIsDeveloper(person);
         cell.premium = person.premium;
+        cell.emojiStatus = person.emojiStatus;
+        if (person.emojiStatus) {
+            ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:person.emojiStatus]], _session, _media, ^{ ExteriaRedrawTreeOfView(cell); });
+        }
         [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:color
                        trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:_avatars];
         cell.avatarDeleted = person.deleted;

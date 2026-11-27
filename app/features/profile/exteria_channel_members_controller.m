@@ -13,6 +13,7 @@
 #import "exteria_sheet.h"
 #import "exteria_theme.h"
 #import "exteria_time.h"
+#import "exteria_name_badge.h"
 #import "exteria_weak_reference.h"
 
 #define SEARCH_HEIGHT 52.0
@@ -302,6 +303,11 @@ typedef enum {
     ExteriaPerson *person = member.person;
     cell.developer = ExteriaPersonIsDeveloper(person);
     cell.premium = person.premium;
+    cell.emojiStatus = person.emojiStatus;
+    if (person.emojiStatus) {
+        UITableView *shown = tableView;
+        ExteriaLoadBadgePictures([NSArray arrayWithObject:[NSNumber numberWithLongLong:person.emojiStatus]], self.session, self.media, ^{ ExteriaRedrawVisibleRows(shown); });
+    }
     [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003) subtitle:subtitle subtitleColor:subtitleColor
                    trailing:trailing symbol:ExteriaSymbolChevronRight showsSymbol:NO nameColor:nil photo:person.photo avatars:self.avatars];
     cell.avatarDeleted = person.deleted;

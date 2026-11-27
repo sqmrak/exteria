@@ -26,6 +26,7 @@
     UIView *_line;
     NSUInteger _developer;
     BOOL _premium;
+    long long _emojiStatus;
     UIColor *_trailingTint;
 }
 @end
@@ -38,6 +39,7 @@ UIColor *ExteriaMemberTagColor(BOOL owner) {
 
 @synthesize developer = _developer;
 @synthesize premium = _premium;
+@synthesize emojiStatus = _emojiStatus;
 @synthesize mutual = _mutual;
 @synthesize trailingTint = _trailingTint;
 
@@ -128,11 +130,12 @@ static UILabel *ExteriaPersonLabel(UIFont *font, NSInteger alignment) {
     _avatar.showsSymbol = NO;
     [_avatar setPhoto:photo cache:avatars];
     NSArray *badges = nil;
-    _name.text = ExteriaNameWithBadges(name, ExteriaBadgeDocument(0, _premium), _developer, &badges);
+    _name.text = ExteriaNameWithBadges(name, ExteriaBadgeDocument(_emojiStatus, _premium), _developer, &badges);
     _name.entities = badges;
     _name.dropsUndrawable = YES;
     _developer = 0;
     _premium = NO;
+    _emojiStatus = 0;
     _name.textColor = nameColor ? nameColor : ExteriaColorTitle();
     _subtitle.text = subtitle;
     _subtitle.textColor = subtitleColor ? subtitleColor : ExteriaColorSecondary();

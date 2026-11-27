@@ -15,6 +15,8 @@ UIColor *ExteriaMemberTagColor(BOOL owner);
 /* set just before configureWithName: for a Telegram Premium user: the Premium star stands after the name. The status picture is not fetched by these rows, so the star is
    what shows for them all */
 @property (nonatomic, assign) BOOL premium;
+/* the custom emoji status of the person, the badge in place of the premium star; zero when none. read by the next configure, like premium */
+@property (nonatomic, assign) long long emojiStatus;
 /* set just before configureWithName: for a contact who has the account in the contacts too: two arrows stand at
    the end of the row */
 @property (nonatomic, assign) BOOL mutual;

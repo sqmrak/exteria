@@ -63,7 +63,7 @@ void ExteriaLoadBadgePictures(NSArray *documents, ExteriaSession *session, Exter
     [ExteriaCustomEmojiLoader loadDocuments:wanted session:session media:media documents:nil picture:redraw];
 }
 
-static void ExteriaRedrawTreeOfView(UIView *view) {
+void ExteriaRedrawTreeOfView(UIView *view) {
     [view setNeedsDisplay];
     for (UIView *child in view.subviews) ExteriaRedrawTreeOfView(child);
 }

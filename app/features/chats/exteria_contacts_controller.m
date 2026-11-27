@@ -6,6 +6,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "exteria_chat_controller.h"
+#import "exteria_name_badge.h"
 #import "exteria_weak_reference.h"
 #import "exteria_session_bots.h"
 #import "exteria_alert.h"
@@ -227,6 +228,14 @@ static UIButton *ExteriaContactsBarButton(ExteriaSymbol symbol, id target, SEL a
 
 - (void)didReceiveItems:(NSArray *)items {
     _list.people = items;
+    /* the statuses of the contacts are fetched once for the whole list, and the rows on screen are drawn again as the pictures land */
+    NSMutableArray *documents = [NSMutableArray array];
+    for (ExteriaPerson *person in items) if (person.emojiStatus) [documents addObject:[NSNumber numberWithLongLong:person.emojiStatus]];
+    ExteriaWeakReference *weak = [ExteriaWeakReference referenceTo:self];
+    ExteriaLoadBadgePictures(documents, self.session, _media, ^{
+        ExteriaContactsController *controller = weak.target;
+        if (controller) ExteriaRedrawVisibleRows(controller.table);
+    });
 }
 
 /* the screen is empty when the account has no contacts; a search that finds nobody leaves the field where it is and says so under it */
@@ -301,6 +310,7 @@ static UIButton *ExteriaContactsBarButton(ExteriaSymbol symbol, id target, SEL a
     BOOL online = person.presence == EXTERIA_PRESENCE_ONLINE;
     cell.developer = ExteriaPersonIsDeveloper(person);
     cell.premium = person.premium;
+    cell.emojiStatus = person.emojiStatus;
     cell.mutual = person.mutual;
     [cell configureWithName:person.name initials:person.initials seed:(NSUInteger)(person.userId % 1000003)
                    subtitle:person.bot ? NSLocalizedString(@"seen.bot", nil) : ExteriaLastSeenText(person.presence, person.seen)
