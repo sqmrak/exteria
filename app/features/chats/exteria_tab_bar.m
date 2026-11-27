@@ -20,6 +20,8 @@ static UIColor *ExteriaTabIdleColor(void) {
     if (ExteriaThemeIsClassic()) return ExteriaColorSecondary();
     UIColor *imported = ExteriaImportedThemeColor("root.tabBar.icon");
     if (imported) return imported;
+    /* the lilac of the palette reads as color noise on the black bars of the oled theme, so the idle keys are neutral grey there */
+    if (ExteriaThemeIsOLED()) return ExteriaColorMuted();
     return ExteriaThemeTinted(ExteriaThemeIsDark() ? [UIColor colorWithRed:0.52 green:0.49 blue:0.68 alpha:1] : [UIColor colorWithRed:0.58 green:0.55 blue:0.75 alpha:1]);
 }
 static UIColor *ExteriaTabActiveColor(void) { return ExteriaImportedThemeColor("root.tabBar.selectedIcon") ?: ExteriaColorAccent(); }
