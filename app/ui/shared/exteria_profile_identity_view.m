@@ -1,4 +1,5 @@
 #import "exteria_profile_identity_view.h"
+#import "exteria_title_sheen.h"
 #import "exteria_developers.h"
 #import "exteria_name_badge.h"
 
@@ -21,6 +22,7 @@
     UIView *_progress;
     UIActivityIndicatorView *_spinner;
     ExteriaEmojiLabel *_name;
+    ExteriaTitleSheen *_sheen;
     NSString *_developerName;
     long long _userId;
     UILabel *_line;
@@ -81,6 +83,8 @@
     /* a long name takes two lines and ends in an ellipsis: with no limit it ran down the page over the rows under it */
     _name.numberOfLines = 2;
     [self addSubview:_name];
+    _sheen = [[ExteriaTitleSheen alloc] init];
+    [self addSubview:_sheen];
     UITapGestureRecognizer *hammerTap = [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(nameTapped:)] autorelease];
     hammerTap.delegate = self;
     [self addGestureRecognizer:hammerTap];
@@ -99,12 +103,24 @@
 
 - (void)redrawName {
     [_name setNeedsDisplay];
+    [_sheen invalidateMask];
+    [self setNeedsLayout];
+}
+
+- (void)setSheenEnabled:(BOOL)enabled {
+    _sheen.enabled = enabled;
+}
+
+- (BOOL)sheenEnabled {
+    return _sheen.enabled;
 }
 
 - (void)setName:(NSString *)name badge:(long long)badge developer:(NSUInteger)marks {
     NSArray *entities = nil;
     _name.text = ExteriaNameWithBadges(name, badge, marks, &entities);
     _name.entities = entities;
+    [_sheen invalidateMask];
+    [self setNeedsLayout];
     [_developerName release];
     _developerName = marks ? [name copy] : nil;
 }
@@ -131,6 +147,7 @@
     [_progress release];
     [_spinner release];
     [_name release];
+    [_sheen release];
     [_line release];
     [super dealloc];
 }
@@ -176,6 +193,8 @@
     _badge.frame = CGRectMake(CGRectGetMaxX(_avatar.frame) - BADGE + 4, CGRectGetMaxY(_avatar.frame) - BADGE + 2, BADGE, BADGE);
     _name.frame = CGRectMake(24, CGRectGetMaxY(_avatar.frame) + 22, width - 48, 34 + [self extraHeightForWidth:width]);
     _line.frame = CGRectMake(24, CGRectGetMaxY(_name.frame) + 4, width - 48, 22);
+    _sheen.frame = _name.frame;
+    [_sheen refreshFromView:_name];
 }
 
 @end

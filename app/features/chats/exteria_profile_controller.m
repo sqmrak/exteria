@@ -746,6 +746,7 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     _bar.backgroundColor = [ExteriaColorScreen() colorWithAlphaComponent:0.94];
     _name.textColor = ExteriaColorTitle();
     _status.textColor = ExteriaColorSecondary();
+    _identity.sheenEnabled = YES;
     for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setInk:nil];
     _music.patternColor = nil;
     _music.patternImage = nil;
@@ -770,6 +771,8 @@ static UILabel *ExteriaProfileLabel(UIColor *color, UIFont *font, NSInteger alig
     [_groundInk release];
     _groundInk = [ink retain];
     _name.textColor = ink;
+    /* the accent band over a name in the ink of a backdrop would be a stripe of the wrong color */
+    _identity.sheenEnabled = NO;
     _status.textColor = [ink colorWithAlphaComponent:0.78f];
     for (ExteriaProfileAction *action in [NSArray arrayWithObjects:_photoAction, _editAction, _settingsAction, nil]) [action setInk:ink];
     if (document > 0) {

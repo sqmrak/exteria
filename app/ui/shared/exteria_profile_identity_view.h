@@ -21,6 +21,8 @@
 @property (nonatomic, readonly) UIControl *badge;
 @property (nonatomic, readonly) ExteriaEmojiLabel *name;
 @property (nonatomic, readonly) UILabel *line;
+/* the sheen that crosses the name under the oled theme; off while the name stands on a color of its own */
+@property (nonatomic, assign) BOOL sheenEnabled;
 
 /* the name, with the hammer of the developers after it when the person is one; a tap on the hammer says why it is there */
 /* how much taller than EXTERIA_IDENTITY_HEIGHT the block is at this width: the badges after a long name move to the next line, and the block grows by those lines */
