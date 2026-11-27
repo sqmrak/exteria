@@ -894,7 +894,7 @@
 "plugins.settings.hint" = "Tap for settings";
 "plugins.settings.unsupported" = "This kind of setting is not available here yet";
 "plugins.sheet.loading" = "Loading…";
-"plugins.footer" = "Long press a plugin, or swipe it in the skeuomorphic theme, to remove it.";
+"plugins.footer" = "Long press a plugin, or swipe it in the classic theme, to remove it.";
 "plugins.perm.none" = "no permissions";
 "plugins.import.notplugin" = "This is not a .plugin or .py file.";
 "plugins.perm.messages.read" = "reads chats and messages";
@@ -1345,7 +1345,7 @@
 "chatset.hidestickertime" = "Hide time on stickers";
 "chatset.editedicon" = "Pencil instead of the word \"edited\"";
 "chatset.notail" = "No bubble tail";
-"chatset.notail.info" = "Skeuomorphic theme only";
+"chatset.notail.info" = "Classic theme only";
 "chatset.hideshare" = "Hide the share button on posts";
 "chatset.noreactions.private" = "Hide reactions in private chats";
 "chatset.noreactions.groups" = "Hide reactions in groups";
@@ -2402,9 +2402,9 @@
 "developer.hide" = "Hide the developer settings";
 "developer.readall.header" = "Chats";
 "developer.interface.header" = "Interface";
-"developer.interface.footer" = "The skeuomorphic theme is offered on every ios. The tablet interface is read at launch, so restart the app after changing it.";
-"developer.classic" = "Skeuomorphic theme on any ios";
-"developer.classic.info" = "Lists the skeuomorphic theme on ios 11 and newer";
+"developer.interface.footer" = "The classic theme is offered on every ios. The tablet interface is read at launch, so restart the app after changing it.";
+"developer.classic" = "Classic theme on any ios";
+"developer.classic.info" = "Lists the classic theme on ios 11 and newer";
 "developer.pad" = "Tablet interface on any device";
 "developer.pad.info" = "Split screen and wide columns on a phone, after a restart";
 "developer.phone" = "Phone interface on any device";
@@ -2758,7 +2758,7 @@
 "custom.tab.wallpapers" = "Wallpapers";
 "custom.tab.look" = "Customization";
 "custom.avatars.header" = "Avatar shape";
-"custom.avatars.info" = "The shape applies to the pictures of people and chats, to the rings of stories and, if chosen below, to the send button. The skeuomorphic style keeps its own.";
+"custom.avatars.info" = "The shape applies to the pictures of people and chats, to the rings of stories and, if chosen below, to the send button. The classic style keeps its own.";
 "custom.send.header" = "Send button";
 "custom.send.circle" = "Circle";
 "custom.send.rounded" = "Rounded square";
