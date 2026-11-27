@@ -152,6 +152,8 @@
     BOOL _stopping;
     BOOL _connected;
     BOOL _tunneled;
+    /* main thread: the completions waiting on the own profile request that is in flight */
+    NSMutableArray *_selfWaiters;
 
     /* everything below belongs to the worker thread */
     exteria_client _client;
@@ -1251,6 +1253,16 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
 
 - (void)loadSelf:(ExteriaListCompletion)completion {
     ExteriaListCompletion done = [completion copy];
+    /* the first screen, the profile tab and the settings page all ask at launch, and each answer is a round trip and a file write on slow flash: one request answers
+       every caller that comes while it runs */
+    if (_selfWaiters) {
+        if (done) [_selfWaiters addObject:done];
+        [done release];
+        return;
+    }
+    _selfWaiters = [[NSMutableArray alloc] init];
+    if (done) [_selfWaiters addObject:done];
+    [done release];
     NSString *path = [self ownPersonPath];
     [self load:"users.getUsers" configure:^exteria_status(exteria_arena *arena, exteria_tl_value *request) {
         exteria_tl_value *ids = exteria_tl_new_vec(arena, 1);
@@ -1275,8 +1287,11 @@ static BOOL ExteriaDialogIsPageCursor(ExteriaDialog *item) {
             _ownPerson = [[items objectAtIndex:0] retain];
             _ownPersonRead = YES;
         }
-        if (done) done(items, errorName);
-        [done release];
+        /* the list is detached first, so a caller that asks again from its answer starts a new request */
+        NSArray *waiting = _selfWaiters;
+        _selfWaiters = nil;
+        for (ExteriaListCompletion each in waiting) each(items, errorName);
+        [waiting release];
     }];
 }
 

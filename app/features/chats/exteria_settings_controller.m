@@ -103,6 +103,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     /* the words the classic bar shows now: the title view is made again only when they change */
     NSString *_barHandle;
     BOOL _signingOut;
+    BOOL _builtInLoad;
     CGSize _pluginPageSize;
     UIButton *_more;
     UIButton *_qr;
@@ -200,6 +201,7 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
     }
     [self rebuildRows];
     [self loadPerson];
+    _builtInLoad = YES;
     [self reportPluginPage:@"create"];
 }
 
@@ -238,8 +240,14 @@ static NSString *const ExteriaDevicesCountKey = @"exteria.devices.count";
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self rebuildRows];
-    [self loadPerson];
+    /* the first appearance follows the load of the view at once, and the rows and the profile request it made are current: doing both again redrew the whole table
+       twice on the way in */
+    if (_builtInLoad) {
+        _builtInLoad = NO;
+    } else {
+        [self rebuildRows];
+        [self loadPerson];
+    }
     [self reportPluginPage:@"resume"];
 }
 
