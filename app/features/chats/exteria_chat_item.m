@@ -872,10 +872,12 @@ CGFloat ExteriaAlbumLayout(NSArray *ratios, CGFloat width, NSMutableArray *frame
     return y - ALBUM_GAP;
 }
 
-static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax) {
+/* fill gives the picture the whole widthMax, cut to the height limit, as the wide channel posts of exteraGram do; a capped picture made the caption under it a narrow column */
+static CGSize ExteriaPictureSize(ExteriaMedia *media, CGFloat widthMax, BOOL fill) {
     CGFloat w = media.width > 0 ? media.width : 4, h = media.height > 0 ? media.height : 3;
-    CGFloat limit = MIN(widthMax, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : PHOTO_WIDTH_MAX);
     CGFloat heightMax = ExteriaIsPad() ? PHOTO_HEIGHT_MAX_PAD : PHOTO_HEIGHT_MAX;
+    if (fill) return CGSizeMake(floor(widthMax), ceil(MIN(h * widthMax / w, heightMax)));
+    CGFloat limit = MIN(widthMax, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : PHOTO_WIDTH_MAX);
     CGFloat scale = MIN(limit / w, heightMax / h);
     CGFloat width = MAX(MIN(w * scale, limit), MIN(MAX(PHOTO_WIDTH_MIN, limit * PHOTO_WIDTH_MIN_SHARE), limit));
     CGFloat height = MIN(h * scale, heightMax);
@@ -1111,7 +1113,8 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     CGFloat room = width - (_avatarColumn && !outgoing ? AVATAR_COLUMN : 0) - (_showsShare ? SHARE_ROOM : 0);
     CGFloat maxBubble = floor(MIN(room * MAX_BUBBLE_FRACTION, ExteriaIsPad() ? BUBBLE_CAP_PAD : BUBBLE_CAP_PHONE));
     /* a post of a channel takes the width of the screen, as the wide posts of exteraGram do: a broadcast reads like a feed, not like a chat */
-    if (_message.post && !outgoing) maxBubble = floor(MIN(room - 2 * SIDE_MARGIN, ExteriaIsPad() ? BUBBLE_CAP_PAD * 1.5 : room));
+    BOOL widePost = _message.post && !outgoing;
+    if (widePost) maxBubble = floor(MIN(room - 2 * SIDE_MARGIN, ExteriaIsPad() ? BUBBLE_CAP_PAD * 1.5 : room));
     CGFloat metaWidth = ceil(ExteriaStringSize(_timeText, ExteriaTimeFont()).width) + (outgoing ? CHECK_WIDTH : 0) + _authorWidth + _viewsWidth + _deletedWidth;
     /* a voice message has no words of its own, so what the server heard in it takes their place */
     ExteriaMessage *textSource = _captionMessage ? _captionMessage : _message;
@@ -1131,10 +1134,10 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     }
     CGSize pictureSize = CGSizeZero;
     if ((picture && _albumMessages.count > 1) || albumed) {
-        CGFloat albumWidth = MIN(maxBubble - 2 * PICTURE_INSET, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : ALBUM_WIDTH_MAX);
+        CGFloat albumWidth = widePost ? maxBubble - 2 * PICTURE_INSET : MIN(maxBubble - 2 * PICTURE_INSET, ExteriaIsPad() ? PHOTO_WIDTH_MAX_PAD : ALBUM_WIDTH_MAX);
         pictureSize = CGSizeMake(albumWidth, ExteriaAlbumLayout([self albumRatios], albumWidth, [NSMutableArray array]));
     } else if (picture) {
-        pictureSize = ExteriaPictureSize(media, maxBubble - 2 * PICTURE_INSET);
+        pictureSize = ExteriaPictureSize(media, maxBubble - 2 * PICTURE_INSET, widePost);
     }
     CGFloat textMax = (picture || albumed ? pictureSize.width + 2 * PICTURE_INSET : maxBubble) - 2 * PAD_X;
     CGFloat contentWidth = 0;
