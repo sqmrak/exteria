@@ -196,6 +196,22 @@ static void test_rules(void) {
     c.outgoing = 0;
     c.media = EXTERIA_PREVIEW_STICKER;
     CHECK_EQ_INT(exteria_message_actions_for(&c), (base | EXTERIA_ACTION_REPORT) & ~(EXTERIA_ACTION_COPY | EXTERIA_ACTION_SELECT_TEXT));
+    /* a post of a channel is not outgoing: an admin who may post edits it, a reader and an admin who may not post do not */
+    c = sent_text();
+    c.peer_kind = 3;
+    c.broadcast = 1;
+    c.can_post = 1;
+    c.admin = 1;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_EDIT);
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_REPEAT));
+    c.media = EXTERIA_PREVIEW_PHOTO;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_EDIT);
+    c.media = EXTERIA_PREVIEW_TEXT;
+    c.can_post = 0;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_EDIT));
+    c.can_post = 1;
+    c.admin = 0;
+    CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_EDIT));
     /* a public channel or supergroup gives a link */
     c = sent_text();
     c.peer_kind = 3;
@@ -288,10 +304,12 @@ static void test_bookmark_and_transcribe(void) {
     CHECK_EQ_INT(exteria_message_actions_for(&c), 0);
     c.service = 0;
     c.has_text = 0;
-    /* only a voice message is transcribed */
+    /* only a voice message and a video message are transcribed */
     CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_TRANSCRIBE));
     c.has_text = 0;
     c.media = EXTERIA_PREVIEW_VOICE;
+    CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_TRANSCRIBE);
+    c.media = EXTERIA_PREVIEW_VIDEO_MESSAGE;
     CHECK(exteria_message_actions_for(&c) & EXTERIA_ACTION_TRANSCRIBE);
     c.media = EXTERIA_PREVIEW_AUDIO;
     CHECK(!(exteria_message_actions_for(&c) & EXTERIA_ACTION_TRANSCRIBE));

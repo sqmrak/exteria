@@ -84,7 +84,7 @@ int exteria_copy_forward_allowed(exteria_preview_kind kind, int has_text, int ha
 
 uint32_t exteria_message_actions_for(const exteria_action_context *c) {
     uint32_t mask = 0;
-    int sent, words_only, may_write;
+    int sent, words_only, may_write, may_edit;
     if (!c || c->service) return 0;
     sent = c->message_id > 0;
     if (c->has_text) mask |= EXTERIA_ACTION_COPY | EXTERIA_ACTION_SELECT_TEXT;
@@ -96,7 +96,8 @@ uint32_t exteria_message_actions_for(const exteria_action_context *c) {
     if (!c->saved_chat) mask |= EXTERIA_ACTION_SAVE;
     mask |= EXTERIA_ACTION_SELECT;
     mask |= c->bookmarked ? EXTERIA_ACTION_UNBOOKMARK : EXTERIA_ACTION_BOOKMARK;
-    if (c->media == EXTERIA_PREVIEW_VOICE) mask |= EXTERIA_ACTION_TRANSCRIBE;
+    /* messages.transcribeAudio takes a video message as well as a voice one, as the other clients offer it */
+    if (c->media == EXTERIA_PREVIEW_VOICE || c->media == EXTERIA_PREVIEW_VIDEO_MESSAGE) mask |= EXTERIA_ACTION_TRANSCRIBE;
     if (c->has_text && c->translate_wanted) mask |= EXTERIA_ACTION_TRANSLATE;
     if (c->media_fetchable && (c->media == EXTERIA_PREVIEW_PHOTO || c->media == EXTERIA_PREVIEW_VIDEO || c->media == EXTERIA_PREVIEW_GIF ||
                                c->media == EXTERIA_PREVIEW_VIDEO_MESSAGE)) mask |= EXTERIA_ACTION_GALLERY;
@@ -110,9 +111,13 @@ uint32_t exteria_message_actions_for(const exteria_action_context *c) {
     /* a person's messages are searched in a group; a broadcast channel has one voice, and a private chat only two */
     mask |= EXTERIA_ACTION_REMIND;
     if (c->sender_user && !c->outgoing && (c->peer_kind == 2 || (c->peer_kind == 3 && !c->broadcast))) mask |= EXTERIA_ACTION_HISTORY | EXTERIA_ACTION_REPLY_PRIVATE;
-    if (c->outgoing && c->has_text && !c->has_entities && words_only) mask |= EXTERIA_ACTION_EDIT | EXTERIA_ACTION_REPEAT;
+    /* a post of a channel is never outgoing (the client draws posts as incoming wide ones), so an admin who may post is let edit them; the server refuses a post of
+       another admin when the account lacks the right to edit messages, and the answer is shown */
+    may_edit = c->outgoing || (c->broadcast && c->can_post && c->admin);
+    if (c->outgoing && c->has_text && !c->has_entities && words_only) mask |= EXTERIA_ACTION_REPEAT;
+    if (may_edit && c->has_text && !c->has_entities && words_only) mask |= EXTERIA_ACTION_EDIT;
     /* a picture, a video, an animation, a file or a song carries a caption, which may be written or changed, also when it has none yet; the media itself stays */
-    if (c->outgoing && !c->has_entities && (c->media == EXTERIA_PREVIEW_PHOTO || c->media == EXTERIA_PREVIEW_VIDEO || c->media == EXTERIA_PREVIEW_GIF ||
+    if (may_edit && !c->has_entities && (c->media == EXTERIA_PREVIEW_PHOTO || c->media == EXTERIA_PREVIEW_VIDEO || c->media == EXTERIA_PREVIEW_GIF ||
                                             c->media == EXTERIA_PREVIEW_FILE || c->media == EXTERIA_PREVIEW_AUDIO)) mask |= EXTERIA_ACTION_EDIT;
     if (may_write) mask |= c->pinned_now ? EXTERIA_ACTION_UNPIN : EXTERIA_ACTION_PIN;
     if (c->outgoing || c->saved_chat || (c->broadcast && c->can_post)) mask |= EXTERIA_ACTION_DELETE;
