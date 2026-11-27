@@ -12,6 +12,7 @@
 #import "exteria_shiro_network.h"
 #import "exteria_system_notifications.h"
 #include "exteria_crypto.h"
+#include "exteria_file_server.h"
 #include "exteria_https.h"
 #include "exteria_release.h"
 #include "exteria_update.h"
@@ -23,6 +24,8 @@
 #define REDIRECT_LIMIT 4
 #define DOWNLOAD_SHARE 0.7f
 #define APP_FOLDER "Exteria.app"
+#define SERVED_IPA "Exteria.ipa"
+#define SERVED_MANIFEST "manifest.plist"
 
 extern char **environ;
 
@@ -115,6 +118,11 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
 @interface ExteriaUpdater () {
     NSString *_ipaURL;
     NSString *_digestURL;
+    NSString *_version;
+    NSString *_folder;
+    /* decided on start: YES gives the checked ipa to installd instead of writing the bundle */
+    BOOL _handOff;
+    exteria_file_server *_server;
     void (^_onChange)(void);
     ExteriaUpdaterState _state;
     float _fraction;
@@ -129,6 +137,7 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
 - (void)setInstallFraction:(float)fraction;
 - (BOOL)isCancelled;
 - (exteria_status)runWithIpaPath:(NSString *)ipaPath;
+- (void)stopServing;
 @end
 
 @implementation ExteriaUpdater
@@ -171,6 +180,22 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     return writable;
 }
 
+/* a system app in /Applications is left to the in-place path: installd would put a second copy with the same identifier among the user apps */
++ (BOOL)canInstallThroughInstaller {
+    /* ios 7.1 requires an https manifest, but the local file server only speaks http */
+    NSString *version = [[UIDevice currentDevice] systemVersion];
+    if (!version.length || [version compare:@"7.1" options:NSNumericSearch] != NSOrderedAscending) return NO;
+    NSString *bundle = [[[NSBundle mainBundle] bundlePath] stringByResolvingSymlinksInPath];
+    if ([bundle hasPrefix:@"/Applications/"] || [bundle hasPrefix:@"/var/jb/Applications/"] || [bundle hasPrefix:@"/private/var/jb/Applications/"]) return NO;
+    return access("/Library/MobileSubstrate/DynamicLibraries/AppSyncUnified-installd.dylib", R_OK) == 0 ||
+           access("/var/jb/Library/MobileSubstrate/DynamicLibraries/AppSyncUnified-installd.dylib", R_OK) == 0 ||
+           access("/var/jb/usr/lib/TweakInject/AppSyncUnified-installd.dylib", R_OK) == 0;
+}
+
++ (BOOL)canInstall {
+    return [self canInstallInPlace] || [self canInstallThroughInstaller];
+}
+
 + (BOOL)openDownloadOfIpaURL:(NSString *)ipaURL {
     NSURL *url = ipaURL.length ? [NSURL URLWithString:ipaURL] : nil;
     if (!url) url = [NSURL URLWithString:@"https://github.com/sqmrak/exteria/releases/latest"];
@@ -179,19 +204,24 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
     return opened;
 }
 
-- (id)initWithIpaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size {
+- (id)initWithIpaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size version:(NSString *)version {
     self = [super init];
     if (!self) return nil;
     _ipaURL = [ipaURL copy];
     _digestURL = [digestURL copy];
+    _version = [(version.length > 1 && ([version hasPrefix:@"v"] || [version hasPrefix:@"V"]) ? [version substringFromIndex:1] : version) copy];
+    _folder = [[NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-update"] copy];
     _expected = size;
     _background = UIBackgroundTaskInvalid;
     return self;
 }
 
 - (void)dealloc {
+    [self stopServing];
     [_ipaURL release];
     [_digestURL release];
+    [_version release];
+    [_folder release];
     [_onChange release];
     [super dealloc];
 }
@@ -208,30 +238,102 @@ static exteria_status fetch(NSString *url, NSData *roots, int timeout_ms, size_t
 
 - (void)cancel {
     _cancelled = 1;
+    if (_state != ExteriaUpdaterHandedOff) return;
+    [self stopServing];
+    _state = ExteriaUpdaterCancelled;
+    if (_onChange) _onChange();
+}
+
+/* the files stay served until cancel, the end of the background time or the owner letting go; installd fetches them after the system
+   dialog, which can take the person a while */
+- (void)stopServing {
+    if (_server) {
+        exteria_file_server_stop(_server);
+        _server = NULL;
+        [[NSFileManager defaultManager] removeItemAtPath:_folder error:NULL];
+    }
+    [UIApplication sharedApplication].idleTimerDisabled = NO;
+    if (_background != UIBackgroundTaskInvalid) [[UIApplication sharedApplication] endBackgroundTask:_background];
+    _background = UIBackgroundTaskInvalid;
+}
+
+- (NSString *)escapedQueryValue:(NSString *)text {
+    CFStringRef escaped = CFURLCreateStringByAddingPercentEscapes(NULL, (CFStringRef)text, NULL, CFSTR("!*'();:@&=+$,/?#[]"), kCFStringEncodingUTF8);
+    return [(NSString *)escaped autorelease];
+}
+
+/* writes the manifest for the checked ipa, serves both and opens itms-services on them; the state it leaves is HandedOff or Failed */
+- (exteria_status)handOff {
+    NSString *ipaPath = [_folder stringByAppendingPathComponent:@SERVED_IPA];
+    NSString *manifestPath = [_folder stringByAppendingPathComponent:@SERVED_MANIFEST];
+    NSString *identifier = [[NSBundle mainBundle] bundleIdentifier];
+    exteria_served_file files[2];
+    uint16_t port = 0;
+    exteria_status status;
+    if (!identifier.length) return EXTERIA_E_STATE;
+    memset(files, 0, sizeof(files));
+    files[0].name = SERVED_IPA;
+    files[0].path = ipaPath.fileSystemRepresentation;
+    files[0].content_type = "application/octet-stream";
+    files[1].name = SERVED_MANIFEST;
+    files[1].path = manifestPath.fileSystemRepresentation;
+    files[1].content_type = "text/xml";
+    status = exteria_file_server_start(files, 2, &_server, &port);
+    if (status != EXTERIA_OK) {
+        NSLog(@"exteria: the update file server did not start: %s", exteria_status_name(status));
+        return status;
+    }
+    NSString *base = [NSString stringWithFormat:@"http://127.0.0.1:%u/", (unsigned)port];
+    NSDictionary *asset = [NSDictionary dictionaryWithObjectsAndKeys:@"software-package", @"kind", [base stringByAppendingString:@SERVED_IPA], @"url", nil];
+    NSDictionary *metadata = [NSDictionary dictionaryWithObjectsAndKeys:identifier, @"bundle-identifier", _version.length ? _version : @"0", @"bundle-version",
+                              @"software", @"kind", @"Exteria", @"title", nil];
+    NSDictionary *item = [NSDictionary dictionaryWithObjectsAndKeys:[NSArray arrayWithObject:asset], @"assets", metadata, @"metadata", nil];
+    NSDictionary *manifest = [NSDictionary dictionaryWithObject:[NSArray arrayWithObject:item] forKey:@"items"];
+    NSData *xml = [NSPropertyListSerialization dataWithPropertyList:manifest format:NSPropertyListXMLFormat_v1_0 options:0 error:NULL];
+    if (!xml.length || ![xml writeToFile:manifestPath atomically:YES]) {
+        NSLog(@"exteria: the update manifest could not be written");
+        [self stopServing];
+        return EXTERIA_E_STORAGE;
+    }
+    NSString *link = [@"itms-services://?action=download-manifest&url=" stringByAppendingString:[self escapedQueryValue:[base stringByAppendingString:@SERVED_MANIFEST]]];
+    if (![[UIApplication sharedApplication] openURL:[NSURL URLWithString:link]]) {
+        NSLog(@"exteria: the system did not take the itms-services link of the update");
+        [self stopServing];
+        return EXTERIA_E_STATE;
+    }
+    return EXTERIA_OK;
 }
 
 - (void)start {
     if (_state != ExteriaUpdaterIdle) return;
     _state = ExteriaUpdaterWorking;
+    _handOff = ![ExteriaUpdater canInstallInPlace] && [ExteriaUpdater canInstallThroughInstaller];
     [self retain];
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     _background = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
         /* the time the system grants is over: stop cleanly rather than be killed with a file half moved */
         _cancelled = 1;
+        if (_state == ExteriaUpdaterHandedOff) [self cancel];
     }];
     if (_onChange) _onChange();
-    NSString *ipaPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"exteria-update.ipa"];
+    NSString *ipaPath = [_folder stringByAppendingPathComponent:@SERVED_IPA];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
         exteria_status status = [self runWithIpaPath:ipaPath];
         BOOL cancelled = _cancelled && status != EXTERIA_OK;
         [self changeOnMain:^{
-            _state = status == EXTERIA_OK ? ExteriaUpdaterDone : cancelled ? ExteriaUpdaterCancelled : ExteriaUpdaterFailed;
-            _failure = status;
-            if (status == EXTERIA_OK) _fraction = 1;
-            [UIApplication sharedApplication].idleTimerDisabled = NO;
-            if (_background != UIBackgroundTaskInvalid) [[UIApplication sharedApplication] endBackgroundTask:_background];
-            _background = UIBackgroundTaskInvalid;
+            exteria_status result = status;
+            if (result == EXTERIA_OK && _handOff) {
+                /* a cancel that came after the check but before this block leaves the file unserved */
+                result = _cancelled ? EXTERIA_E_RETRY : [self handOff];
+                if (result == EXTERIA_E_RETRY) [[NSFileManager defaultManager] removeItemAtPath:_folder error:NULL];
+            }
+            BOOL stopped = (cancelled || _cancelled) && result != EXTERIA_OK;
+            _state = result != EXTERIA_OK ? (stopped ? ExteriaUpdaterCancelled : ExteriaUpdaterFailed) : _handOff ? ExteriaUpdaterHandedOff : ExteriaUpdaterDone;
+            _failure = result;
+            if (result == EXTERIA_OK) _fraction = 1;
+            /* after the hand off the background time keeps the file server up while installd fetches the ipa */
+            if (_state != ExteriaUpdaterHandedOff) [self stopServing];
             [self release];
         }];
         [pool drain];
@@ -307,8 +409,14 @@ static void refresh_home_screen(void) {
         return EXTERIA_E_SECURITY;
     }
     if (!_ipaURL.length || !_digestURL.length || !plistExecutable.length) return EXTERIA_E_ARG;
-    if (![ExteriaUpdater canInstallInPlace]) return EXTERIA_E_STATE;
+    if (!_handOff && ![ExteriaUpdater canInstallInPlace]) return EXTERIA_E_STATE;
     if (_expected > IPA_LIMIT) return EXTERIA_E_LIMIT;
+    /* the folder of an earlier run, or of a hand off the system ended by closing the app, starts empty */
+    [[NSFileManager defaultManager] removeItemAtPath:_folder error:NULL];
+    if (![[NSFileManager defaultManager] createDirectoryAtPath:_folder withIntermediateDirectories:YES attributes:nil error:NULL]) {
+        NSLog(@"exteria: the update folder could not be created");
+        return EXTERIA_E_STORAGE;
+    }
 
     memset(&state, 0, sizeof(state));
     state.fd = -1;
@@ -352,6 +460,10 @@ static void refresh_home_screen(void) {
     if (status == EXTERIA_OK) status = exteria_digest_finish(digest, got, sizeof(got));
     exteria_digest_free(digest);
     if (status == EXTERIA_OK && memcmp(got, wanted, sizeof(got)) != 0) status = EXTERIA_E_SECURITY;
+    if (status == EXTERIA_OK && _handOff) {
+        [self setDownloaded:state.received total:0];
+        return EXTERIA_OK;
+    }
     if (status == EXTERIA_OK) {
         [self setDownloaded:state.received total:0];
         [self setInstallFraction:DOWNLOAD_SHARE];

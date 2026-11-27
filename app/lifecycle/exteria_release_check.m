@@ -15,19 +15,18 @@
 #define RELEASE_RESPONSE_LIMIT (64u * 1024u)
 #define RELEASE_TIMEOUT_MS 15000
 
-typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode;
+typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeHandedOff, NoticeFailed } NoticeMode;
 
 @interface ExteriaReleaseNotice : UIView <UIGestureRecognizerDelegate> {
     UIView *_card;
     UIImageView *_picture;
     UILabel *_title;
-    UITextView *_notes;
+    UILabel *_message;
     UILabel *_status;
     ExteriaWaveProgress *_wave;
     UIButton *_primary;
     UIButton *_secondary;
     NSString *_version;
-    NSString *_releaseNotes;
     NSString *_ipaURL;
     NSString *_digestURL;
     uint64_t _size;
@@ -35,7 +34,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     NoticeMode _mode;
     BOOL _leaving;
 }
-- (id)initWithTag:(NSString *)tag notes:(NSString *)notes ipaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size;
+- (id)initWithTag:(NSString *)tag ipaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size;
 @end
 
 @implementation ExteriaReleaseNotice
@@ -46,13 +45,12 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     [_card addSubview:button];
     return button;
 }
-- (id)initWithTag:(NSString *)tag notes:(NSString *)notes ipaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size {
+- (id)initWithTag:(NSString *)tag ipaURL:(NSString *)ipaURL digestURL:(NSString *)digestURL size:(uint64_t)size {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.48];
     self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _version = [([tag hasPrefix:@"v"] || [tag hasPrefix:@"V"] ? tag : [@"v" stringByAppendingString:tag]) copy];
-    _releaseNotes = [(notes.length ? notes : NSLocalizedString(@"release.empty", nil)) copy];
     _ipaURL = [ipaURL copy];
     _digestURL = [digestURL copy];
     _size = size;
@@ -66,10 +64,9 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         _card.clipsToBounds = YES;
     }
     [self addSubview:_card];
-    /* a jpeg of a photo size, with a file for each screen scale */
-    _picture = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"release_meme.jpg"]];
+    /* a sticker keeps its outline: it is drawn whole in its box, with no clip */
+    _picture = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"release_sticker.png"]];
     _picture.contentMode = UIViewContentModeScaleAspectFit;
-    _picture.clipsToBounds = YES;
     [_card addSubview:_picture];
     _title = [[UILabel alloc] init];
     _title.backgroundColor = [UIColor clearColor];
@@ -79,12 +76,13 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _title.textAlignment = ExteriaTextAlignmentCenter;
     _title.numberOfLines = 2;
     [_card addSubview:_title];
-    _notes = [[UITextView alloc] init];
-    _notes.backgroundColor = [UIColor clearColor];
-    _notes.textColor = ExteriaThemeIsClassic() ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.8f] : ExteriaColorMessage();
-    _notes.font = ExteriaFontRegular(14);
-    _notes.editable = NO;
-    [_card addSubview:_notes];
+    _message = [[UILabel alloc] init];
+    _message.backgroundColor = [UIColor clearColor];
+    _message.textColor = ExteriaThemeIsClassic() ? [ExteriaClassicMenuTextColor() colorWithAlphaComponent:0.8f] : ExteriaColorMessage();
+    _message.font = ExteriaFontRegular(14);
+    _message.textAlignment = ExteriaTextAlignmentCenter;
+    _message.numberOfLines = 0;
+    [_card addSubview:_message];
     _status = [[UILabel alloc] init];
     _status.backgroundColor = [UIColor clearColor];
     _status.textColor = ExteriaColorSecondary();
@@ -118,21 +116,21 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     _updater.onChange = nil;
     [_updater cancel];
     [_updater release];
-    [_card release]; [_picture release]; [_title release]; [_notes release]; [_status release]; [_wave release];
+    [_card release]; [_picture release]; [_title release]; [_message release]; [_status release]; [_wave release];
     [_primary release]; [_secondary release];
-    [_version release]; [_releaseNotes release]; [_ipaURL release]; [_digestURL release];
+    [_version release]; [_ipaURL release]; [_digestURL release];
     [super dealloc];
 }
-/* a tap on the dimmed part closes the notice, except while files are being replaced or the app waits for its restart */
+/* a tap on the dimmed part closes the notice, except while files are being replaced, served to the system or the app waits for its restart */
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
     (void)recognizer;
     return (_mode == NoticeOffer || _mode == NoticeFailed) && !CGRectContainsPoint(_card.frame, [touch locationInView:self]);
 }
 - (void)backdropTapped { [self close]; }
 
-/* the notice can install only a release that has the files, into an app folder this process may write */
+/* the notice can install only a release that has the files, into an app folder this process may write or through installd with AppSync */
 - (BOOL)canUpdate {
-    return _ipaURL.length && _digestURL.length && [ExteriaUpdater canInstallInPlace];
+    return _ipaURL.length && _digestURL.length && [ExteriaUpdater canInstall];
 }
 - (NSString *)failureText:(exteria_status)status {
     NSString *key;
@@ -142,7 +140,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     case EXTERIA_E_SECURITY: key = @"release.fail.security"; break;
     case EXTERIA_E_STORAGE: key = @"release.fail.storage"; break;
     case EXTERIA_E_NOTFOUND: key = @"release.fail.missing"; break;
-    case EXTERIA_E_STATE: key = [ExteriaUpdater canInstallInPlace] ? @"release.fail.install" : @"release.fail.readonly"; break;
+    case EXTERIA_E_STATE: key = [ExteriaUpdater canInstall] ? @"release.fail.install" : @"release.fail.readonly"; break;
     case EXTERIA_E_MALFORMED: case EXTERIA_E_UNSUPPORTED: case EXTERIA_E_LIMIT: key = @"release.fail.format"; break;
     default: key = @"release.fail.network"; break;
     }
@@ -151,16 +149,14 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 - (void)showMode:(NoticeMode)mode failure:(exteria_status)failure {
     _mode = mode;
     BOOL offer = mode == NoticeOffer, working = mode == NoticeWorking;
-    _notes.hidden = working;
-    _status.hidden = !working && !(offer && ![self canUpdate]);
+    BOOL can = offer && [self canUpdate];
+    _message.hidden = offer || working;
+    _status.hidden = !working && !(offer && !can);
     _wave.hidden = !working;
-    _primary.hidden = working;
+    _primary.hidden = working || mode == NoticeHandedOff;
     _secondary.hidden = mode == NoticeDone;
     if (offer) {
         _title.text = [NSString stringWithFormat:NSLocalizedString(@"release.title", nil), _version];
-        _notes.text = _releaseNotes;
-        _notes.contentOffset = CGPointZero;
-        BOOL can = [self canUpdate];
         _status.text = can ? @"" : NSLocalizedString(_ipaURL.length && _digestURL.length ? @"release.readonly" : @"release.noasset", nil);
         [_primary setTitle:NSLocalizedString(can ? @"release.update" : @"release.open", nil) forState:UIControlStateNormal];
         [_secondary setTitle:NSLocalizedString(@"release.later", nil) forState:UIControlStateNormal];
@@ -169,11 +165,15 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         [_secondary setTitle:NSLocalizedString(@"release.cancel", nil) forState:UIControlStateNormal];
     } else if (mode == NoticeDone) {
         _title.text = [NSString stringWithFormat:NSLocalizedString(@"release.updated", nil), _version];
-        _notes.text = NSLocalizedString(@"release.restart.note", nil);
+        _message.text = NSLocalizedString(@"release.restart.note", nil);
         [_primary setTitle:NSLocalizedString(@"release.restart", nil) forState:UIControlStateNormal];
+    } else if (mode == NoticeHandedOff) {
+        _title.text = [NSString stringWithFormat:NSLocalizedString(@"release.handoff.title", nil), _version];
+        _message.text = NSLocalizedString(@"release.handoff.note", nil);
+        [_secondary setTitle:NSLocalizedString(@"release.cancel", nil) forState:UIControlStateNormal];
     } else {
         _title.text = NSLocalizedString(@"release.fail.title", nil);
-        _notes.text = [self failureText:failure];
+        _message.text = [self failureText:failure];
         [_primary setTitle:NSLocalizedString(@"release.retry", nil) forState:UIControlStateNormal];
         [_secondary setTitle:NSLocalizedString(@"release.open", nil) forState:UIControlStateNormal];
     }
@@ -181,26 +181,23 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
+    if (_leaving) return;
     CGFloat width = MAX(1, MIN(360, self.bounds.size.width - 32));
-    CGFloat height = MAX(1, MIN(520, self.bounds.size.height - 32));
+    CGFloat height = MAX(1, MIN(400, self.bounds.size.height - 32));
     CGFloat inner = width - 32;
     UIImage *image = _picture.image;
-    /* the picture takes what the notes can spare: a photo of the whole meme on a tall screen, a strip of it on a small one */
+    /* leave room for the buttons on a short landscape screen */
     CGFloat natural = image && image.size.width > 0 ? ceil(inner * image.size.height / image.size.width) : inner;
-    CGFloat pictureHeight = MIN(natural, MAX(96, MIN(190, floor(height * 0.3f))));
+    CGFloat pictureHeight = MIN(natural, MAX(0, MIN(150, height - 230)));
     CGFloat y = 14;
-    /* the card keeps its size while it springs in or out, so the frame is set with the transform put aside */
-    CGAffineTransform held = _card.transform;
-    _card.transform = CGAffineTransformIdentity;
-    _card.frame = CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - height) / 2), width, height);
+    ExteriaPlaceView(_card, CGRectMake(floor((self.bounds.size.width - width) / 2), floor((self.bounds.size.height - height) / 2), width, height));
     if (ExteriaThemeIsClassic()) ExteriaClassicFitPlate(_card, 0);
-    _card.transform = held;
     _picture.frame = CGRectMake(16, y, inner, pictureHeight);
     y += pictureHeight + 8;
     _title.frame = CGRectMake(16, y, inner, 48);
     y += 52;
     CGFloat bottom = height - 108;
-    _notes.frame = CGRectMake(16, y, inner, MAX(0, bottom - y - (_status.hidden || _mode == NoticeWorking ? 0 : 52)));
+    _message.frame = CGRectMake(16, y, inner, MAX(0, bottom - y - (_status.hidden || _mode == NoticeWorking ? 0 : 52)));
     _status.frame = CGRectMake(16, _mode == NoticeWorking ? y + 12 : bottom - 52, inner, _mode == NoticeWorking ? 40 : 50);
     _wave.frame = CGRectMake(16 - ExteriaWaveProgressInset, _mode == NoticeWorking ? y + 56 : 0, inner + 2 * ExteriaWaveProgressInset, ExteriaWaveProgressHeight);
     _primary.frame = CGRectMake(16, height - 104, inner, 44);
@@ -209,24 +206,30 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 /* the notice comes up as the other popups do: the dim fades in and the card springs from a little smaller */
 - (void)presentInView:(UIView *)host {
     self.frame = host.bounds;
+    BOOL animate = !ExteriaReduceMotionEnabled();
+    if (animate) self.alpha = 0;
     [host addSubview:self];
     [self layoutIfNeeded];
-    if (ExteriaReduceMotionEnabled()) return;
-    self.alpha = 0;
+    if (!animate) return;
+    ExteriaCacheForMotion(_card);
     _card.transform = CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale());
     ExteriaAnimateView(self, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
-    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), nil);
+    ExteriaAnimateView(_card, CGAffineTransformIdentity, 1, ExteriaPopupCurve(YES), ^(BOOL done) {
+        if (done && !_leaving) ExteriaUncacheAfterMotion(_card);
+    });
 }
 - (void)close {
     if (_leaving) return;
     _leaving = YES;
+    self.userInteractionEnabled = NO;
     if (ExteriaReduceMotionEnabled() || !self.superview) {
         [self removeFromSuperview];
         return;
     }
     [self retain];
-    ExteriaAnimateView(self, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), nil);
-    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 1, ExteriaPopupCurve(NO), ^(BOOL done) {
+    ExteriaCacheForMotion(_card);
+    ExteriaAnimateView(_card, CGAffineTransformMakeScale(ExteriaPopupScale(), ExteriaPopupScale()), 0, ExteriaPopupCurve(NO), nil);
+    ExteriaAnimateView(self, CGAffineTransformIdentity, 0, ExteriaPopupCurve(NO), ^(BOOL done) {
         (void)done;
         [self removeFromSuperview];
         [self autorelease];
@@ -253,6 +256,10 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         _secondary.enabled = NO;
         return;
     }
+    if (_mode == NoticeHandedOff) {
+        [_updater cancel];
+        return;
+    }
     if (_mode == NoticeFailed) [self openRelease];
     else [self close];
 }
@@ -262,7 +269,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 - (void)startUpdate {
     _updater.onChange = nil;
     [_updater release];
-    _updater = [[ExteriaUpdater alloc] initWithIpaURL:_ipaURL digestURL:_digestURL size:_size];
+    _updater = [[ExteriaUpdater alloc] initWithIpaURL:_ipaURL digestURL:_digestURL size:_size version:_version];
     ExteriaReleaseNotice *notice = self;
     _updater.onChange = ^{ [notice updaterChanged]; };
     _secondary.enabled = YES;
@@ -285,6 +292,10 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         _wave.waving = NO;
         [self showMode:NoticeDone failure:EXTERIA_OK];
         break;
+    case ExteriaUpdaterHandedOff:
+        _wave.waving = NO;
+        [self showMode:NoticeHandedOff failure:EXTERIA_OK];
+        break;
     case ExteriaUpdaterCancelled:
         _secondary.enabled = YES;
         [self showMode:NoticeOffer failure:EXTERIA_OK];
@@ -303,7 +314,6 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 @interface ExteriaReleaseCheck : NSObject {
     UIWindow *_window;
     NSString *_tag;
-    NSString *_notes;
     NSString *_ipaURL;
     NSString *_digestURL;
     uint64_t _size;
@@ -323,7 +333,7 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
 }
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [_window release]; [_tag release]; [_notes release]; [_ipaURL release]; [_digestURL release];
+    [_window release]; [_tag release]; [_ipaURL release]; [_digestURL release];
     [super dealloc];
 }
 - (void)showIfReady {
@@ -331,10 +341,9 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
     if ([[_window.rootViewController presentedViewController] isKindOfClass:[UIViewController class]]) return;
     UIView *host = _window.rootViewController.view;
     if (!host.window) return;
-    ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:_tag notes:_notes ipaURL:_ipaURL digestURL:_digestURL size:_size] autorelease];
+    ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:_tag ipaURL:_ipaURL digestURL:_digestURL size:_size] autorelease];
     [notice presentInView:host];
     [_tag release]; _tag = nil;
-    [_notes release]; _notes = nil;
     [_ipaURL release]; _ipaURL = nil;
     [_digestURL release]; _digestURL = nil;
 }
@@ -353,7 +362,6 @@ typedef enum { NoticeOffer, NoticeWorking, NoticeDone, NoticeFailed } NoticeMode
         if (tag && status != EXTERIA_OK) NSLog(@"exteria: release version rejected: %s", exteria_status_name(status));
         if (status == EXTERIA_OK && newer) {
             _tag = [tag copy];
-            _notes = [[release objectForKey:@"notes"] copy];
             _ipaURL = [[release objectForKey:@"ipa"] copy];
             _digestURL = [[release objectForKey:@"digest"] copy];
             _size = [[release objectForKey:@"size"] unsignedLongLongValue];
@@ -431,7 +439,7 @@ void ExteriaFetchLatestRelease(void (^completion)(NSDictionary *, NSString *)) {
 
 void ExteriaShowReleasePreview(UIView *host) {
     if (!host) return;
-    ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:@"v9.9.9-preview" notes:@"- the notice as the person sees it\n- no file behind it, so nothing is installed" ipaURL:nil digestURL:nil size:0] autorelease];
+    ExteriaReleaseNotice *notice = [[[ExteriaReleaseNotice alloc] initWithTag:@"v9.9.9-preview" ipaURL:nil digestURL:nil size:0] autorelease];
     [notice presentInView:host];
 }
 

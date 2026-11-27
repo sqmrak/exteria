@@ -75,10 +75,11 @@
 - (void)startUpdate {
     if (!_newer || !_release) return;
     NSString *ipa = [_release objectForKey:@"ipa"], *digest = [_release objectForKey:@"digest"];
-    if (!ipa.length || !digest.length || ![ExteriaUpdater canInstallInPlace]) return;
+    if (!ipa.length || !digest.length || ![ExteriaUpdater canInstall]) return;
     _updater.onChange = nil;
     [_updater release];
-    _updater = [[ExteriaUpdater alloc] initWithIpaURL:ipa digestURL:digest size:[[_release objectForKey:@"size"] unsignedLongLongValue]];
+    _updater = [[ExteriaUpdater alloc] initWithIpaURL:ipa digestURL:digest size:[[_release objectForKey:@"size"] unsignedLongLongValue]
+                                              version:[_release objectForKey:@"tag"]];
     ExteriaWeakReference *weak = _weak;
     _updater.onChange = ^{ [(ExteriaUpdateController *)weak.target updateChanged]; };
     _wave.value = 0;
@@ -127,7 +128,7 @@
     if (_error) message = [NSString stringWithFormat:NSLocalizedString(@"update.page.error", nil), _error];
     else if (_release && !_newer) message = NSLocalizedString(@"update.page.current", nil);
     else if (_newer && (![[_release objectForKey:@"ipa"] length] || ![[_release objectForKey:@"digest"] length])) message = NSLocalizedString(@"release.noasset", nil);
-    else if (_newer && ![ExteriaUpdater canInstallInPlace]) message = NSLocalizedString(@"release.readonly", nil);
+    else if (_newer && ![ExteriaUpdater canInstall]) message = NSLocalizedString(@"release.readonly", nil);
     [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:message rows:rows]];
     if (_updater.state == ExteriaUpdaterWorking) {
         ExteriaSettingsRow *progress = [ExteriaSettingsRow viewRowWithView:[self progressCard] height:^CGFloat(CGFloat width) { (void)width; return 76; }];
@@ -139,13 +140,19 @@
     } else if (_updater.state == ExteriaUpdaterDone) {
         ExteriaSettingsRow *restart = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCheckMark() title:NSLocalizedString(@"release.restart", nil) destructive:NO tap:^{ exit(0); }];
         [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"release.restart.note", nil) rows:[NSArray arrayWithObject:restart]]];
+    } else if (_updater.state == ExteriaUpdaterHandedOff) {
+        ExteriaSettingsRow *cancel = [ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolCloseMark() title:NSLocalizedString(@"release.cancel", nil) destructive:NO tap:^{
+            ExteriaUpdateController *controller = weak.target;
+            if (controller) [controller->_updater cancel];
+        }];
+        [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:NSLocalizedString(@"release.handoff.note", nil) rows:[NSArray arrayWithObject:cancel]]];
     } else {
         if (_updater.state == ExteriaUpdaterFailed) {
             NSString *failure = [NSString stringWithFormat:@"%s", exteria_status_name(_updater.failure)];
             [sections addObject:[ExteriaSettingsSection sectionWithHeader:nil footer:failure rows:[NSArray array]]];
         }
         NSMutableArray *actions = [NSMutableArray array];
-        if (_newer && [[_release objectForKey:@"ipa"] length] && [[_release objectForKey:@"digest"] length] && [ExteriaUpdater canInstallInPlace])
+        if (_newer && [[_release objectForKey:@"ipa"] length] && [[_release objectForKey:@"digest"] length] && [ExteriaUpdater canInstall])
             [actions addObject:[ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolArrowDown title:NSLocalizedString(@"release.update", nil) destructive:NO tap:^{ [(ExteriaUpdateController *)weak.target startUpdate]; }]];
         else if (_newer)
             [actions addObject:[ExteriaSettingsRow actionRowWithSymbol:ExteriaSymbolArrowDown title:NSLocalizedString(@"release.open", nil) destructive:NO tap:^{

@@ -132,7 +132,9 @@
 "release.installing" = "Installing...";
 "release.updated" = "%@ is installed";
 "release.restart.note" = "Restart the app to run the new version.";
-"release.readonly" = "Download the IPA and install it yourself. In-place updates require a writable jailbreak installation.";
+"release.handoff.title" = "Installing %@";
+"release.handoff.note" = "Confirm the install in the system dialog. iOS closes Exteria and puts the new version in its place.";
+"release.readonly" = "Download the IPA and install it yourself. Updating from the app needs a writable jailbreak installation, or AppSync on iOS 5 through 7.0.";
 "release.noasset" = "This release has no file the app can install by itself.";
 "release.fail.title" = "The update did not finish";
 "release.fail.network" = "The download failed. Check the connection and try again.";
@@ -140,7 +142,7 @@
 "release.fail.storage" = "Could not write the update files. Check free space and permissions.";
 "release.fail.install" = "Could not install the update. Check free space and permissions.";
 "release.fail.missing" = "The release files were not found on GitHub.";
-"release.fail.readonly" = "The app folder is not writable. Updating needs a jailbreak and write access; otherwise install the update by hand.";
+"release.fail.readonly" = "The app folder is not writable and AppSync is not installed. Install the update by hand.";
 "release.fail.format" = "The update file is damaged or not what the app expects. Nothing was changed.";
 "chat.round.torch" = "Flashlight";
 "chat.round.torch.on" = "On";

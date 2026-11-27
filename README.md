@@ -111,7 +111,8 @@ on ios 5 and 6 an app in `/Applications` gets no banners, no notification center
 
 on start the app asks `api.github.com` for the latest release and shows a notice when its tag is newer. a release needs `Exteria-v<version>.ipa` and `Exteria-v<version>.ipa.sha256`, the tag is `v<version>`.
 
-- the update replaces the files of the running bundle on a writable jailbreak install in `/Applications`, `/var/jb/Applications` or the user app folder `/var/containers/Bundle/Application` (an ipa installed with ldid keeps the entitlement that allows the write; an apple-signed install does not, and its write probe fails); other installs open the release page
+- the update replaces the files of the running bundle on a writable jailbreak install in `/Applications`, `/var/jb/Applications` or the user app folder `/var/containers/Bundle/Application` (an ipa installed with ldid keeps the entitlement that allows the write; an apple-signed install does not, and its write probe fails); before ios 7.1 a user app it cannot write goes to installd: with AppSync Unified installed, the checked ipa and a manifest are served on `127.0.0.1` for as long as the app has background time, `itms-services` opens the manifest, the system asks, installs over the app and closes it. other installs open the release page
+- on ios 7.1 and later an unwritable user app opens the download instead: installd requires an https manifest and the local server cannot provide a trusted one
 - the ipa must match its digest, or nothing is installed
 - limits: 128 MiB, 4096 entries, four https redirects to github hosts
 
