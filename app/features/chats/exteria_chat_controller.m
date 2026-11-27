@@ -8383,6 +8383,7 @@ static UIImage *ExteriaRoundTorchImage(UIColor *color) {
     } else {
         message.state = ExteriaMessageStateSent;
         message.messageId = messageId;
+        [[NSNotificationCenter defaultCenter] postNotificationName:ExteriaMessageDidSendNotification object:_session];
         if (message.sendEffect) [self playMessageEffect:message.sendEffect];
         ExteriaOutgoing *sent = message.pendingSend;
         if (sent && sent->temporary && sent->path && (sent->viewOnce || sent->kind == ExteriaOutgoingPhoto))

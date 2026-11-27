@@ -123,6 +123,9 @@ extern NSString *const ExteriaDialogReadNotification;
 /* posted on the main thread when a message arrives live: the last-message part of its chat row twice over under the keys "user" (a private chat names nobody) and "group" (the
    sender is named), both ExteriaDialog; ExteriaDialogsApplyingNewMessage puts the right one into a list */
 extern NSString *const ExteriaNewMessageDidArriveNotification;
+/* a message of ours was taken by the server from the open chat, on the main thread. the live events do not carry our own sends (the answer to the send is not one), so the copies
+   of a chat folder that are older than the send learn of it here */
+extern NSString *const ExteriaMessageDidSendNotification;
 /* a person came online or left: userInfo has "user" (NSNumber long long), "presence" (NSNumber int) and "seen" (NSNumber int) */
 extern NSString *const ExteriaUserStatusDidChangeNotification;
 /* the parts of a file sent in a message that the server has taken, on the main thread; userInfo has "randomId" (the NSNumber of the pending message)

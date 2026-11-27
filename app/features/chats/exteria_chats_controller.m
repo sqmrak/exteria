@@ -52,6 +52,8 @@
 #define HEADER_HEIGHT (SEARCH_HEIGHT + 12)
 /* a scan of a custom folder younger than this is not repeated; the kept chats are the folder */
 #define FOLDER_KEPT_FRESH_SECONDS 90.0
+/* how many new messages of this run are kept to bring a folder copy up to date */
+#define LIVE_MESSAGES_MAX 200
 /* the room above the folders when the field of search is hidden */
 #define HEADER_HEIGHT_NO_SEARCH 6.0
 
@@ -79,6 +81,10 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     BOOL _moreLoading;
     NSMutableDictionary *_folderSnapshots;
     NSMutableDictionary *_folderSnapshotDates;
+    /* the new messages of this run, oldest first, for the rows of a folder that come from a copy older than they are */
+    NSMutableArray *_liveMessages;
+    /* when the person last sent a message, which the copy of a folder on disk cannot hold if it is older */
+    NSDate *_lastSendAt;
     BOOL _usingFolderSnapshot;
     NSArray *_shown;
     /* the rows the table shows now, named by ExteriaDialogRowKey, so a refresh can move them instead of redrawing the list */
@@ -122,6 +128,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     _dialogs = [[NSArray alloc] init];
     _folderSnapshots = [[NSMutableDictionary alloc] init];
     _folderSnapshotDates = [[NSMutableDictionary alloc] init];
+    _liveMessages = [[NSMutableArray alloc] init];
     _shown = [[NSArray alloc] init];
     _listStyle = ExteriaChatListStyleStored();
     _swipe = ExteriaChatSwipeStored();
@@ -160,6 +167,11 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 /* the list that the server sends takes a round trip after the pause between reloads, and the banner of the message is up before that: the row shows the message and moves up
    at once, and the list that follows says the same */
 - (void)newMessageArrived:(NSNotification *)note {
+    /* a folder tab is shown from a copy of its scan, so a message that lands while another tab is up has to be told to the copy later */
+    if (note.userInfo) {
+        [_liveMessages addObject:note.userInfo];
+        if (_liveMessages.count > LIVE_MESSAGES_MAX) [_liveMessages removeObjectsInRange:NSMakeRange(0, _liveMessages.count - LIVE_MESSAGES_MAX)];
+    }
     if (!self.isViewLoaded) return;
     NSArray *updated = ExteriaDialogsApplyingNewMessage(_dialogs, note.userInfo);
     if (!updated) return;
@@ -172,6 +184,15 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [self refreshCounts];
     [self applyFilters];
     [self reloadTable];
+}
+
+/* the scan of a folder and its copy on disk end before a message the person sends from a chat, and the live events never name that message, so a copy older than the send is not
+   shown as the folder: the scan runs again once, and the copy it saves is newer than the send */
+- (void)messageWasSent:(NSNotification *)note {
+    (void)note;
+    [_lastSendAt release];
+    _lastSendAt = [[NSDate date] retain];
+    [_folderSnapshotDates removeAllObjects];
 }
 
 - (void)refreshLiveDialogs {
@@ -399,6 +420,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(refreshLiveDialogs) object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaSessionDialogsUpdatedNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaNewMessageDidArriveNotification object:self.session];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaMessageDidSendNotification object:self.session];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:ExteriaDialogsChangedNotification object:nil];
     [_badgeWeak clear];
     [_badgeWeak release];
@@ -415,6 +437,8 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [_moreDialogs release];
     [_folderSnapshots release];
     [_folderSnapshotDates release];
+    [_liveMessages release];
+    [_lastSendAt release];
     [_leavingRows removeFromSuperview];
     [_leavingRows release];
     [_shown release];
@@ -659,6 +683,17 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 #pragma mark data
 
+/* a copy of a folder (the kept scan on disk, or a snapshot) is as old as its scan, and the messages that came or were sent since are not in it: showing it as it is put the old
+   last message of a chat back on the screen after the person came back from that chat. a message already in a row changes nothing, so a copy that is up to date passes unchanged */
+- (NSArray *)rowsBroughtUpToDate:(NSArray *)rows {
+    NSArray *current = rows;
+    for (NSDictionary *message in _liveMessages) {
+        NSArray *updated = ExteriaDialogsApplyingNewMessage(current, message);
+        if (updated) current = updated;
+    }
+    return current;
+}
+
 - (void)loadItemsWithCompletion:(ExteriaListCompletion)completion {
     NSUInteger token = ++_folderProgressToken;
     [_folderLoad cancel];
@@ -671,7 +706,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
         NSDate *date = [_folderSnapshotDates objectForKey:key];
         if (snapshot && date && -[date timeIntervalSinceNow] < 60) {
             _usingFolderSnapshot = YES;
-            completion(snapshot, nil);
+            completion([self rowsBroughtUpToDate:snapshot], nil);
             return;
         }
         ExteriaChatFolder *folder = [[_folders.selectedFolder copy] autorelease];
@@ -699,11 +734,12 @@ static CGFloat ExteriaChatsHeaderTop(void) {
            older one is shown from the disk while the scan runs */
         ExteriaListCompletion keptCompletion = [[completion copy] autorelease];
         NSTimeInterval age = [self.session keptAgeOfChatFolder:folder];
-        BOOL fresh = age >= 0 && age < FOLDER_KEPT_FRESH_SECONDS;
+        BOOL fresh = age >= 0 && age < FOLDER_KEPT_FRESH_SECONDS && (!_lastSendAt || age < -[_lastSendAt timeIntervalSinceNow]);
         [self.session loadKeptDialogsForChatFolder:folder completion:^(NSArray *kept, NSString *keptError) {
             (void)keptError;
             ExteriaChatsController *controller = weak.target;
             if (!controller || token != controller->_folderProgressToken) { keptCompletion(nil, @"CANCELLED"); return; }
+            kept = kept ? [controller rowsBroughtUpToDate:kept] : nil;
             if (kept && fresh) {
                 controller->_usingFolderSnapshot = YES;
                 keptCompletion(kept, nil);
