@@ -219,6 +219,32 @@ static void test_by_id(void) {
     CHECK_EQ_INT(exteria_messages_by_id_request(&arena, &channel, ids, 1, NULL), EXTERIA_E_ARG);
 }
 
+static exteria_message_row attached_row;
+
+static void test_attached_media(void) {
+    exteria_tl_value *media = media_poll(vec2(answer("A", 'a'), answer("B", 'b')), NULL);
+    exteria_tl_value *m = obj("message");
+    set_i32(m, "id", 3);
+    set(m, "peer_id", peer_user(5));
+    set_i32(m, "date", 1003);
+    CHECK_EQ_INT(exteria_tl_set_str(&arena, m, "message", "caption"), EXTERIA_OK);
+    set(m, "media", media);
+    /* a poll with no picture keeps the poll kind of media */
+    CHECK_EQ_INT(exteria_message_read(m, &attached_row), EXTERIA_OK);
+    CHECK_EQ_INT(attached_row.poll.present, 1);
+    CHECK_EQ_INT(attached_row.media.kind, EXTERIA_PREVIEW_POLL);
+    /* the picture it carries becomes the media of the message, and the poll stays */
+    set(media, "attached_media", obj("messageMediaPhoto"));
+    CHECK_EQ_INT(exteria_message_read(m, &attached_row), EXTERIA_OK);
+    CHECK_EQ_INT(attached_row.poll.present, 1);
+    CHECK_EQ_INT(attached_row.poll.answer_count, 2);
+    CHECK_EQ_INT(attached_row.media.kind, EXTERIA_PREVIEW_PHOTO);
+    /* attached media the bubble cannot show above a poll leaves the poll kind */
+    set(media, "attached_media", obj("messageMediaGeo"));
+    CHECK_EQ_INT(exteria_message_read(m, &attached_row), EXTERIA_OK);
+    CHECK_EQ_INT(attached_row.media.kind, EXTERIA_PREVIEW_POLL);
+}
+
 int main(void) {
     exteria_arena_init(&arena, 4u * 1024u * 1024u);
     test_read();
@@ -228,6 +254,7 @@ int main(void) {
     test_malformed();
     test_vote();
     test_by_id();
+    test_attached_media();
     exteria_arena_free(&arena);
     return test_finish("test_poll");
 }

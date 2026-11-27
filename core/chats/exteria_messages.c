@@ -938,6 +938,13 @@ exteria_status exteria_message_read(const exteria_tl_value *m, exteria_message_r
     exteria_entities_read(m, out->entities, EXTERIA_MESSAGE_ENTITIES_MAX, out->urls, sizeof(out->urls), &out->entity_count);
     read_invoice(exteria_tl_get(m, "media"), out);
     exteria_poll_read(exteria_tl_get(m, "media"), &out->poll);
+    if (out->poll.present) {
+        /* a poll can carry a picture or a video above its question (attached_media); the bubble shows it as the media of the message, and the poll stays beside it */
+        exteria_media_info attached;
+        memset(&attached, 0, sizeof(attached));
+        exteria_media_classify(exteria_tl_get(exteria_tl_get(m, "media"), "attached_media"), &attached);
+        if (attached.kind == EXTERIA_PREVIEW_PHOTO || attached.kind == EXTERIA_PREVIEW_VIDEO || attached.kind == EXTERIA_PREVIEW_GIF) out->media = attached;
+    }
     return EXTERIA_OK;
 }
 

@@ -474,7 +474,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
     }
     [self drawReply];
     if (_item.content == ExteriaChatItemContentFile) [self drawFileRow:context];
-    if (_item.content == ExteriaChatItemContentPoll) [self drawPoll:context];
+    if (_item.showsPoll) [self drawPoll:context];
     if (_item.textLayout && _pickRange.length) {
         /* a quarter of the text color mixed into the bubble keeps the text readable on any bubble color; an accent at partial alpha turned a custom bubble into a washed patch the text got lost on */
         [ExteriaMixedColor(outgoing ? ExteriaColorBubbleOut() : ExteriaColorBubbleIn(), ExteriaColorBubbleText(outgoing), 0.25) setFill];
@@ -506,7 +506,7 @@ static void ExteriaDrawCallArrow(CGContextRef context, CGPoint origin, BOOL inco
             CGContextFillEllipseInRect(context, CGRectMake(right - 4.5, bottom - 1, 9, 9));
         }
     }
-    BOOL overPicture = _item.content == ExteriaChatItemContentPicture && (!_item.textLayout || _item.captionAbove);
+    BOOL overPicture = _item.content == ExteriaChatItemContentPicture && !_item.showsPoll && (!_item.textLayout || _item.captionAbove);
     /* the time of a call is in its second line */
     if (!overPicture && !_item.call) [self drawMetaAt:_item.timeOrigin color:ExteriaColorBubbleMeta(outgoing) context:context];
     if (_item.commentsText.length) [self drawCommentsRow:context];
@@ -1670,7 +1670,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
 
 /* the pictures of the last voters of a public poll stand before the count of votes, in views made when the first such poll needs them */
 - (void)configurePollVotersForItem:(ExteriaChatItem *)item bubble:(CGRect)bubble {
-    NSUInteger shown = item.content == ExteriaChatItemContentPoll ? MIN(item.pollVoterPeople.count, (NSUInteger)3) : 0;
+    NSUInteger shown = item.showsPoll ? MIN(item.pollVoterPeople.count, (NSUInteger)3) : 0;
     if (shown && !_pollVoters) {
         _pollVoters = [[NSMutableArray alloc] init];
         for (int i = 0; i < 3; ++i) {
@@ -1842,7 +1842,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     _replyPreview.frame = CGRectOffset(item.replyFrame, bubble.origin.x, bubble.origin.y);
     [_replyPreview setNeedsDisplay];
     /* a classic bubble ends its run with a tail, which takes a few points beside it. a picture without words is a frame around the picture, and a tail on it points at nothing */
-    BOOL pictureAlone = item.content == ExteriaChatItemContentPicture && !item.textLayout;
+    BOOL pictureAlone = item.content == ExteriaChatItemContentPicture && !item.showsPoll && !item.textLayout;
     CGFloat tail = ExteriaThemeIsClassic() && item.kind == ExteriaChatItemBubble && !item.bare && !pictureAlone && !item.joinsNext && !ExteriaChatFlagGet(ExteriaChatFlagRemoveTail) ? EXTERIA_CLASSIC_BUBBLE_TAIL : 0;
     _body.tailWidth = tail;
     CGRect bodyFrame = bubble;
@@ -1924,7 +1924,7 @@ static CGFloat ExteriaPictureSide(ExteriaChatItem *item) {
     }
     if (item.kind == ExteriaChatItemPill) return;
     ExteriaMedia *content = item.message.media;
-    BOOL pictureOnly = (item.content == ExteriaChatItemContentPicture && (!item.textLayout || item.captionAbove)) || item.bare;
+    BOOL pictureOnly = (item.content == ExteriaChatItemContentPicture && !item.showsPoll && (!item.textLayout || item.captionAbove)) || item.bare;
     if (item.kind == ExteriaChatItemEmoji) {
         _picture.hidden = _lottie.layer.contents != nil;
         _picture.contentMode = UIViewContentModeScaleAspectFit;
@@ -3409,7 +3409,7 @@ static void ExteriaSwipeTick(void) {
     }
     if (!_item || _item.kind == ExteriaChatItemPill) return;
     CGPoint point = [tap locationInView:self.contentView];
-    if (_item.content == ExteriaChatItemContentPoll && [_delegate respondsToSelector:@selector(messageCell:didTapPollAnswer:)]) {
+    if (_item.showsPoll && [_delegate respondsToSelector:@selector(messageCell:didTapPollAnswer:)]) {
         CGPoint inPoll = CGPointMake(point.x - _item.bubbleFrame.origin.x, point.y - _item.bubbleFrame.origin.y);
         if (_item.pollButtonTitle.length && CGRectContainsPoint(_item.pollButtonFrame, inPoll)) {
             [_delegate messageCell:self didTapPollAnswer:-1];

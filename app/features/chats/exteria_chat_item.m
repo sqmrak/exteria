@@ -115,6 +115,11 @@
 @synthesize pollKindLayout = _pollKindLayout;
 @synthesize pollVoterPeople = _pollVoterPeople;
 @synthesize pollFooterOwnRow = _pollFooterOwnRow;
+
+- (BOOL)showsPoll {
+    return _message.poll && (_content == ExteriaChatItemContentPoll || _content == ExteriaChatItemContentPicture);
+}
+
 @synthesize pollFooterY = _pollFooterY;
 @synthesize pollKindOrigin = _pollKindOrigin;
 @synthesize pollAnswerLayouts = _pollAnswerLayouts;
@@ -1123,7 +1128,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     BOOL hasText = bodyText.length > 0;
     BOOL picture = _content == ExteriaChatItemContentPicture;
     BOOL file = _content == ExteriaChatItemContentFile;
-    BOOL poll = _content == ExteriaChatItemContentPoll;
+    BOOL poll = [self showsPoll];
     /* the collage of pictures over a file: the content is the file's, and the pictures come above its row */
     BOOL albumed = file && _albumMessages.count > 0;
     /* an article takes the place of the words, unless a plugin replaced them, since the blocks would hide what the plugin shows */
@@ -1235,7 +1240,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
     if (picture) {
         /* a picture runs edge to edge, so the lines above it need the text padding and it needs none */
         pictureTop = y == PAD_TOP ? PICTURE_INSET : y;
-        y = pictureTop + pictureSize.height + (hasText && !_captionAbove ? 5 : PICTURE_INSET);
+        y = pictureTop + pictureSize.height + ((hasText && !_captionAbove) || poll ? 5 : PICTURE_INSET);
         contentWidth = MAX(contentWidth, pictureSize.width + 2 * PICTURE_INSET - 2 * PAD_X);
     } else if (file) {
         UIColor *fileTitleColor = ExteriaImportedThemeColor(outgoing ? "chat.message.outgoing.fileTitle" : "chat.message.incoming.fileTitle") ?: textColor;
@@ -1265,7 +1270,7 @@ static NSUInteger ExteriaCustomEmojiOnlyCount(ExteriaMessage *message) {
         contentWidth = MAX(contentWidth, _fileFrame.size.width);
         y += FILE_HEIGHT + 4;
     }
-    BOOL timeOverPicture = picture && (!hasText || _captionAbove);
+    BOOL timeOverPicture = picture && !poll && (!hasText || _captionAbove);
     /* the chips of the reactions stand in the bubble, between the words and the time; a picture with the time over it has no such row, and keeps them under it */
     BOOL chipsInside = [self shownReactions].count && !timeOverPicture;
     _reactionsInside = chipsInside;

@@ -202,6 +202,8 @@ NSString *ExteriaForwardName(ExteriaMessage *message, NSDictionary *people);
 @property (nonatomic, readonly, retain) NSArray *pollVoterPeople;
 /* the count of votes has a row of its own over the chips of the reactions, at pollFooterY; otherwise it shares the row of the time */
 @property (nonatomic, readonly) BOOL pollFooterOwnRow;
+/* a poll is drawn: the content of the bubble, or under the picture a poll carries above its question */
+@property (nonatomic, readonly) BOOL showsPoll;
 @property (nonatomic, readonly) CGFloat pollFooterY;
 @property (nonatomic, readonly) CGPoint pollKindOrigin;
 @property (nonatomic, readonly, retain) NSArray *pollAnswerLayouts;
