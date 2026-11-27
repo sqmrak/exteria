@@ -109,11 +109,13 @@
     [self refreshTitle];
 }
 
-/* the first load replaces the heading, later refreshes leave the current list visible */
+/* the title says "Updating" until a load from the server lands: the list kept from the last run (marked with distantPast) is on screen
+   by then, but it is old, and a slow old device spends the first seconds of a launch before the answer comes */
 - (void)refreshTitle {
     BOOL linked = _session.connected;
     BOOL connecting = _showsConnection && !linked;
-    BOOL updating = _showsConnection && linked && _loading && !_loadedAt;
+    BOOL fresh = _loadedAt && ![_loadedAt isEqualToDate:[NSDate distantPast]];
+    BOOL updating = _showsConnection && linked && _loading && !fresh;
     _titleLabel.updating = updating;
     _titleLabel.connecting = connecting || updating;
     if (!connecting && !updating) _titleLabel.text = _heading;

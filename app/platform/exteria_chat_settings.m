@@ -166,7 +166,7 @@ NSString *ExteriaChatListTitleText(ExteriaChatListTitle mode, ExteriaPerson *per
     case ExteriaChatListTitleCount:
         break;
     }
-    return NSLocalizedString(@"chats.title", nil);
+    return NSLocalizedString(@"look.title.default", nil);
 }
 void ExteriaChatListSetCustomTitle(NSString *text) {
     [[NSUserDefaults standardUserDefaults] setObject:text ? text : @"" forKey:ExteriaChatListCustomTitleKey];

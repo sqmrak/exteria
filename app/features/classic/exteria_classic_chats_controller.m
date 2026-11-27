@@ -31,6 +31,7 @@
 #import "exteria_shiro_button.h"
 #import "exteria_splash_view.h"
 #import "exteria_story_strip.h"
+#import "exteria_string_drawing.h"
 #import "exteria_theme.h"
 #import "exteria_community_screen.h"
 #import "exteria_topics_screen.h"
@@ -76,6 +77,7 @@
     NSArray *_displayedKeys;
     NSDate *_loadedAt;
     BOOL _loading;
+    BOOL _ownTitleLoading;
     BOOL _liveRefreshScheduled;
     BOOL _liveRefreshPending;
     uint64_t _lastLiveRefreshMs;
@@ -309,7 +311,7 @@
     _status.frame = table.backgroundView.bounds;
     _status.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [table.backgroundView addSubview:_status];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshConnectionTitle)
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(connectionChanged)
                                                  name:ExteriaSessionConnectionDidChangeNotification object:_session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogsChanged) name:ExteriaDialogsChangedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(dialogRead:) name:ExteriaDialogReadNotification object:_session];
@@ -378,9 +380,37 @@
 }
 
 /* the system bar shows "Connecting..." in place of the title while the link is down; picked chats put their count there */
+- (void)connectionChanged {
+    [self refreshConnectionTitle];
+    if (_session.connected && ![_session ownPerson]) [self loadOwnTitle];
+}
+
+- (void)layoutConnectionTitle {
+    ExteriaConnectingLabel *label = (ExteriaConnectingLabel *)self.navigationItem.titleView;
+    if (![label isKindOfClass:[ExteriaConnectingLabel class]]) return;
+    CGFloat width = self.navigationController.navigationBar.bounds.size.width;
+    if (width <= 0) return;
+    UIFont *buttonFont = [UIFont boldSystemFontOfSize:12];
+    CGFloat left = MAX(44, ceil(ExteriaStringSize(NSLocalizedString(@"chats.edit", nil), buttonFont).width) + 24) + 10;
+    CGFloat right = 44 + 10;
+    if (!ExteriaChatFlagGet(ExteriaChatFlagHideVpnButton))
+        right += MAX(44, ceil(ExteriaStringSize(NSLocalizedString(@"shiro.button", nil), buttonFont).width) + 24) + 8;
+    CGFloat available = (CGFloat)exteria_list_title_width(width, left, right);
+    NSString *text = label.updating ? ExteriaUpdatingText(3) : ExteriaConnectingText(3);
+    CGFloat fontSize = 20;
+    while (fontSize > 10 && ExteriaStringSize(text, [UIFont boldSystemFontOfSize:fontSize]).width > available) fontSize -= 1;
+    if (label.font.pointSize != fontSize) label.font = [UIFont boldSystemFontOfSize:fontSize];
+    CGFloat fitted = MIN(available, ceil(ExteriaStringSize(text, label.font).width));
+    CGRect frame = label.frame;
+    frame.size = CGSizeMake(fitted, 44);
+    if (!CGRectEqualToRect(label.frame, frame)) label.frame = frame;
+}
+
 - (void)refreshConnectionTitle {
     BOOL linked = _session.connected;
-    BOOL updating = linked && _loading && !_loadedAt;
+    /* a list kept from the last run (distantPast) or marked stale is on screen, but it is old until the server answers */
+    BOOL fresh = _loadedAt && ![_loadedAt isEqualToDate:[NSDate distantPast]];
+    BOOL updating = linked && _loading && !fresh;
     if (_folderId != 0 || _selection || (linked && !updating)) {
         self.navigationItem.titleView = nil;
         return;
@@ -389,7 +419,7 @@
     label.backgroundColor = [UIColor clearColor];
     label.textColor = [UIColor whiteColor];
     label.font = [UIFont boldSystemFontOfSize:20];
-    label.textAlignment = ExteriaTextAlignmentLeft;
+    label.textAlignment = ExteriaTextAlignmentCenter;
     /* the engraved shadow is part of the look of the old bars; the flat ones have none */
     if (!ExteriaClassicIsFlatSystem()) {
         label.shadowColor = [UIColor colorWithWhite:0 alpha:0.45];
@@ -397,9 +427,8 @@
     }
     label.updating = updating;
     label.connecting = YES;
-    CGSize fit = [label sizeThatFits:CGSizeMake(320, 44)];
-    label.frame = CGRectMake(0, 0, fit.width, 44);
     self.navigationItem.titleView = label;
+    [self layoutConnectionTitle];
 }
 
 /* the stories sit under the search bar and push the rows down by their own height */
@@ -425,6 +454,7 @@
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    [self layoutConnectionTitle];
     [self layoutHeader];
     CGSize size = self.tableView.bounds.size;
     CGFloat top = 100;
@@ -660,17 +690,27 @@
     _searchButton.hidden = hideSearch;
     if (_header) [self layoutHeader];
     ExteriaChatListTitle mode = ExteriaChatListTitleStored();
-    self.navigationItem.title = ExteriaChatListTitleText(mode, nil);
-    if (mode != ExteriaChatListTitleUsername && mode != ExteriaChatListTitleName) return;
+    self.navigationItem.title = ExteriaChatListTitleText(mode, [_session ownPerson]);
+    [self loadOwnTitle];
+    [self layoutConnectionTitle];
+}
+
+- (void)loadOwnTitle {
+    ExteriaChatListTitle mode = ExteriaChatListTitleStored();
+    if (_folderId != 0 || _selection || _ownTitleLoading || (mode != ExteriaChatListTitleUsername && mode != ExteriaChatListTitleName)) return;
+    _ownTitleLoading = YES;
     ExteriaWeakReference *weak = _badgeWeak;
     [_session loadSelf:^(NSArray *items, NSString *errorName) {
         ExteriaClassicChatsController *me = weak.target;
         if (!me) return;
+        me->_ownTitleLoading = NO;
         if (!items.count) {
             NSLog(@"exteria: the name for the title of the list did not load: %@", errorName);
             return;
         }
-        if (ExteriaChatListTitleStored() == mode) me.navigationItem.title = ExteriaChatListTitleText(mode, [items objectAtIndex:0]);
+        ExteriaChatListTitle current = ExteriaChatListTitleStored();
+        if (!me->_selection && (current == ExteriaChatListTitleUsername || current == ExteriaChatListTitleName))
+            me.navigationItem.title = ExteriaChatListTitleText(current, [items objectAtIndex:0]);
     }];
 }
 

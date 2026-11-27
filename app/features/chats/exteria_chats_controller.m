@@ -103,6 +103,7 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     ExteriaFallingView *_foxes;
     ExteriaLoginPrompt *_prompt;
     BOOL _liveRefreshScheduled;
+    BOOL _ownTitleLoading;
 }
 @end
 
@@ -124,7 +125,9 @@ static CGFloat ExteriaChatsHeaderTop(void) {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(outboxRead:) name:ExteriaReadOutboxDidChangeNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(liveDialogsChanged:) name:ExteriaSessionDialogsUpdatedNotification object:session];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(newMessageArrived:) name:ExteriaNewMessageDidArriveNotification object:session];
-    self.heading = [self titleForMode:ExteriaChatListTitleStored() person:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(messageWasSent:) name:ExteriaMessageDidSendNotification object:session];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(titleConnectionChanged:) name:ExteriaSessionConnectionDidChangeNotification object:session];
+    self.heading = [self titleForMode:ExteriaChatListTitleStored() person:[session ownPerson]];
     _dialogs = [[NSArray alloc] init];
     _folderSnapshots = [[NSMutableDictionary alloc] init];
     _folderSnapshotDates = [[NSMutableDictionary alloc] init];
@@ -225,16 +228,25 @@ static CGFloat ExteriaChatsHeaderTop(void) {
 
 - (void)loadOwnTitle {
     ExteriaChatListTitle mode = ExteriaChatListTitleStored();
-    if (mode != ExteriaChatListTitleUsername && mode != ExteriaChatListTitleName) return;
+    if (_folderId || self.showsBack || _ownTitleLoading || (mode != ExteriaChatListTitleUsername && mode != ExteriaChatListTitleName)) return;
+    _ownTitleLoading = YES;
     [self retain];
     [self.session loadSelf:^(NSArray *items, NSString *errorName) {
         [self autorelease];
+        _ownTitleLoading = NO;
         if (!items.count) {
             NSLog(@"exteria: the name for the title of the list did not load: %@", errorName);
             return;
         }
-        self.heading = [self titleForMode:mode person:[items objectAtIndex:0]];
+        ExteriaChatListTitle current = ExteriaChatListTitleStored();
+        if (current == ExteriaChatListTitleUsername || current == ExteriaChatListTitleName)
+            self.heading = [self titleForMode:current person:[items objectAtIndex:0]];
     }];
+}
+
+- (void)titleConnectionChanged:(NSNotification *)note {
+    (void)note;
+    if (self.session.connected && ![self.session ownPerson]) [self loadOwnTitle];
 }
 
 /* the stories switch of the settings takes the strip away, or brings it back, without leaving the screen */
