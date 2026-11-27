@@ -43,15 +43,15 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     return peer;
 }
 
-@interface ExteriaFolderNameController : UIViewController <UITextViewDelegate, ExteriaCustomEmojiPickerDelegate> {
-    ExteriaSession *_session;
-    ExteriaMediaCache *_media;
+@interface ExteriaFolderNameController : ExteriaGiftScreen <UITextViewDelegate, ExteriaCustomEmojiPickerDelegate> {
+    UIView *_card;
     ExteriaEmojiTextView *_text;
     ExteriaCustomEmojiPicker *_picker;
     UIButton *_emojiButton;
     NSMutableArray *_entities;
     NSString *_initialTitle;
     BOOL _changed;
+    ExteriaWeakReference *_weak;
     void (^_done)(NSString *, NSArray *, BOOL);
 }
 - (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder done:(void (^)(NSString *, NSArray *, BOOL))done;
@@ -59,23 +59,27 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
 
 @implementation ExteriaFolderNameController
 - (id)initWithSession:(ExteriaSession *)session folder:(ExteriaChatFolder *)folder done:(void (^)(NSString *, NSArray *, BOOL))done {
-    self = [super init];
+    NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+    ExteriaMediaCache *media = [[[ExteriaMediaCache alloc] initWithSession:session directory:[[caches stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"media"]] autorelease];
+    self = [super initWithSession:session avatars:nil media:media];
     if (self) {
-        _session = [session retain];
         _initialTitle = [folder.title copy];
         _entities = [[NSMutableArray alloc] initWithArray:folder.titleEntities ? folder.titleEntities : [NSArray array]];
         _done = [done copy];
-        if ([self respondsToSelector:NSSelectorFromString(@"setEdgesForExtendedLayout:")])
-            [self setValue:[NSNumber numberWithUnsignedInteger:0] forKey:@"edgesForExtendedLayout"];
-        self.title = NSLocalizedString(@"folders.name", nil);
+        _weak = [[ExteriaWeakReference referenceTo:self] retain];
+        self.screenTitle = NSLocalizedString(@"folders.name", nil);
+        /* the modern style hides the system bar of the navigation controller, so the save button lives in the bar of the screen frame */
+        ExteriaWeakReference *weak = _weak;
+        [self setActionTitle:NSLocalizedString(@"folders.save", nil) handler:^{ [(ExteriaFolderNameController *)weak.target done]; }];
     }
     return self;
 }
 - (void)dealloc {
+    [_weak clear];
+    [_weak release];
     _text.delegate = nil;
     _picker.delegate = nil;
-    [_session release];
-    [_media release];
+    [_card release];
     [_text release];
     [_picker release];
     [_emojiButton release];
@@ -84,41 +88,46 @@ static exteria_peer_ref dialog_peer(ExteriaDialog *dialog) {
     [_done release];
     [super dealloc];
 }
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.view.backgroundColor = ExteriaColorScreen();
-    self.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"folders.save", nil)
-        style:UIBarButtonItemStyleDone target:self action:@selector(done)] autorelease];
-    NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-    _media = [[ExteriaMediaCache alloc] initWithSession:_session directory:[[caches stringByAppendingPathComponent:@"Exteria"] stringByAppendingPathComponent:@"media"]];
+- (void)buildBodyInView:(UIView *)root {
+    /* a text view draws a square plate, so the rounded plate is the card under a clear view */
+    _card = [[UIView alloc] init];
+    _card.backgroundColor = ExteriaColorField();
+    _card.layer.cornerRadius = 12;
+    [root addSubview:_card];
     _text = [[ExteriaEmojiTextView alloc] initWithFrame:CGRectZero];
-    _text.backgroundColor = ExteriaColorField();
+    _text.backgroundColor = [UIColor clearColor];
     _text.emojiBackgroundColor = ExteriaColorField();
     _text.textColor = ExteriaColorTitle();
     _text.font = ExteriaFontRegular(18);
+    _text.keyboardAppearance = ExteriaThemeIsDark() ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
     _text.delegate = self;
     _text.text = _initialTitle;
     _text.customEmojiEntities = _entities;
-    [self.view addSubview:_text];
+    [_card addSubview:_text];
     _emojiButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
     [_emojiButton setTitle:NSLocalizedString(@"folders.emoji", nil) forState:UIControlStateNormal];
     [_emojiButton setTitleColor:ExteriaColorAccent() forState:UIControlStateNormal];
     [_emojiButton addTarget:self action:@selector(showEmoji) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:_emojiButton];
-    _picker = [[ExteriaCustomEmojiPicker alloc] initWithSession:_session media:_media];
+    [root addSubview:_emojiButton];
+    _picker = [[ExteriaCustomEmojiPicker alloc] initWithSession:self.session media:self.media];
     _picker.delegate = self;
-    [self.view addSubview:_picker];
+    [root addSubview:_picker];
+}
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = ExteriaColorScreen();
     [_picker prepare];
     NSMutableArray *documents = [NSMutableArray array];
     for (ExteriaTextEntity *entity in _entities) [documents addObject:[NSNumber numberWithLongLong:entity.documentId]];
-    if (documents.count) [ExteriaCustomEmojiLoader loadDocuments:documents session:_session media:_media documents:nil picture:nil];
+    if (documents.count) [ExteriaCustomEmojiLoader loadDocuments:documents session:self.session media:self.media documents:nil picture:nil];
 }
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-    CGFloat width = self.view.bounds.size.width, height = self.view.bounds.size.height;
-    _text.frame = CGRectMake(12, 12, MAX(0, width - 24), 54);
-    _emojiButton.frame = CGRectMake(12, 70, MAX(0, width - 24), 40);
-    _picker.frame = CGRectMake(0, 112, width, MAX(0, height - 112));
+- (void)layoutBody:(CGRect)body {
+    CGFloat width = body.size.width;
+    _card.frame = CGRectMake(12, body.origin.y + 12, MAX(0, width - 24), 54);
+    _text.frame = CGRectMake(8, 6, MAX(0, width - 40), 42);
+    _emojiButton.frame = CGRectMake(12, body.origin.y + 70, MAX(0, width - 24), 40);
+    CGFloat top = body.origin.y + 112;
+    _picker.frame = CGRectMake(0, top, width, MAX(0, CGRectGetMaxY(body) - top));
 }
 - (void)showEmoji {
     [_text resignFirstResponder];
